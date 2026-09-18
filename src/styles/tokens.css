@@ -1,0 +1,86 @@
+/*
+ * Editor chrome tokens.
+ *
+ * These style the editor UI only. The artboard has its own palette, which is
+ * document data (Brand.palette, §5) and never reads from CSS — the renderer
+ * must stay pure (D-001).
+ *
+ * Theme resolution: data-theme on <html> is set pre-paint by the inline script
+ * in index.html, so there is no flash. prefers-color-scheme is the fallback
+ * only when the user has never chosen.
+ */
+
+:root {
+  /* Neutral ramp — light */
+  --c-bg: #f6f6f7;
+  --c-panel: #ffffff;
+  --c-panel-alt: #fbfbfc;
+  --c-edge: #e4e4e8;
+  --c-edge-strong: #d2d2d9;
+  --c-ink: #17171b;
+  --c-ink-muted: #6b6b76;
+  --c-ink-faint: #9a9aa6;
+
+  /* Accent */
+  --c-accent: #4f46e5;
+  --c-accent-hover: #4338ca;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #eeedfd;
+
+  /* Status */
+  --c-pro: #b45309;
+  --c-pro-soft: #fef3c7;
+  --c-danger: #dc2626;
+
+  /* The void around the artboard — deliberately darker than the panels in both
+     themes so the canvas edge reads as an edge. */
+  --c-stage: #e9e9ec;
+
+  /* Geometry */
+  --r-sm: 4px;
+  --r-md: 7px;
+  --r-lg: 11px;
+  --r-xl: 16px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.06);
+
+  /* Chrome layout */
+  --h-topbar: 52px;
+  --w-library: 264px;
+  --w-inspector: 312px;
+
+  /* Motion — chrome only. §13: prefers-reduced-motion suppresses these and
+     never touches the artboard. */
+  --t-fast: 110ms;
+  --t-base: 180ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+:root[data-theme='dark'] {
+  --c-bg: #0d0d10;
+  --c-panel: #151519;
+  --c-panel-alt: #1b1b20;
+  --c-edge: #26262d;
+  --c-edge-strong: #35353e;
+  --c-ink: #f2f2f4;
+  --c-ink-muted: #9b9ba6;
+  --c-ink-faint: #6a6a75;
+
+  --c-accent: #6d64f0;
+  --c-accent-hover: #7d75f5;
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: #211f38;
+
+  --c-pro: #fbbf24;
+  --c-pro-soft: #362a10;
+  --c-danger: #f87171;
+
+  --c-stage: #070709;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.35);
+}
