@@ -37,6 +37,14 @@ async function readStats(page: Page): Promise<Stats> {
   });
 }
 
+async function readTextCacheSize(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const handle = (globalThis as unknown as { __motionStudio?: { textCacheSize: () => number } }).__motionStudio;
+    if (!handle) throw new Error('renderer stats handle is missing');
+    return handle.textCacheSize();
+  });
+}
+
 test.use({ viewport: { width: 1440, height: 900 } });
 
 test.describe('M0 — aspect scaling', () => {
@@ -145,6 +153,22 @@ test.describe('M1 — the render loop', () => {
     const after = await readStats(page);
 
     expect(after.buildCount - before.buildCount).toBe(1);
+  });
+
+  test('does not churn the text cache while letter spacing animates', async ({ page }) => {
+    // The demo scene animates the subhead's tracking. If the animated value
+    // reaches the measurement cache key, every frame is a miss and the whole
+    // string is laid out sixty times a second — §6.3's cache defeated exactly
+    // where it matters. It also re-wraps the text mid-animation.
+    await page.goto('/');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(1800);
+
+    const before = await readTextCacheSize(page);
+    await page.waitForTimeout(1500);
+    const after = await readTextCacheSize(page);
+
+    expect(after - before, `cache grew from ${before} to ${after}`).toBe(0);
   });
 
   test('keeps the frame and build budgets of §14', async ({ page }) => {

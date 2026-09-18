@@ -435,3 +435,76 @@ per-depth prop objects, the 1×1 measurement canvas — is different, and stays 
 module scope. Rendering is synchronous and never re-enters, and preview and
 export run in separate realms with separate module instances. The distinction is
 "does it survive the call", not "is it mutable".
+
+---
+
+## D-026 — Typefaces: Archivo (headline) and Inter (body), both variable
+Resolves D-023. Chosen on your instruction to pick.
+
+**Archivo** for headlines. A grotesque with real presence at heavy weights,
+which is what the display type in these templates needs — "MOTION IN THE
+BROWSER" at 800 has to hold a frame. Less ubiquitous than the obvious
+alternatives, so the product does not look like every other tool built this year.
+
+**Inter** for body. Drawn for screen text at small sizes, which is exactly the
+job: the subhead renders at ~28 design units and below. Its ubiquity matters
+less for body copy — the headline is what carries identity.
+
+Both are SIL OFL 1.1. The licence text ships beside the fonts in `public/fonts`,
+as OFL requires.
+
+**Both are variable, and that is not a stylistic choice.** §8.2 needs five
+weights per family. Ten static files would cost roughly 300KB against §14's
+~500KB cold-load budget. Two variable files cost 83KB and cover the whole
+100–900 axis. Canvas honours weights on multiples of 100, which is precisely
+what the inspector exposes, so nothing is lost.
+
+**Subsets.** `latin` loads eagerly and blocks the first frame per §3E.
+`latin-ext` is deferred — Inter's alone is 85KB, and nothing needs it until the
+user can type (M3). Latin-1 already covers Western European accents.
+`needsExtendedSubset()` and `loadExtendedSubsets()` are in place for M3 to wire
+to the text inspector.
+
+Measured cold load after this change: **145KB on the wire, ~0.72s at fast 3G**,
+against a 2.5s budget.
+
+These are *defaults*. §8.2 gives the user a font picker, so the registry is
+expected to grow to six or so families at M3 — under the same variable-font rule.
+
+---
+
+## D-027 — Animated tracking never reaches the measurement cache key
+M1. Found while wiring the real fonts in.
+
+`letterSpacing` is an animated prop (§6.1) and also a measurement input. Putting
+the resolved value into the text cache key meant every frame of a tracking
+animation was a cache miss that re-laid out the whole string — defeating §6.3's
+cache at precisely the point it exists for — and re-wrapped the text mid-animation.
+
+So the run is measured once at the *static* spacing and the animated boost is
+applied as a per-character offset at paint time, from the cached character
+boxes. A line with no boost still draws in a single `fillText`; only genuinely
+animated tracking pays for per-character drawing.
+
+**The authoring rule this implies**, which templates have to follow: because
+tracking no longer re-wraps, wrap at the *widest* tracking the animation
+reaches and animate up to it, not past it. Otherwise lines grow beyond the
+width they were wrapped for and overrun the safe area. The demo scene does this
+— static spacing is the settled value and the boost runs from negative to zero.
+
+Guarded by a Playwright assertion that the text cache does not grow while the
+subhead's tracking animates.
+
+---
+
+## D-028 — Templates measure their type; they do not assume block heights
+M1.
+
+The demo scene originally assumed the headline and subhead block heights from
+font size. The moment the real typefaces landed, the subhead wrapped to three
+lines instead of two and overran the safe area.
+
+How many lines a string wraps to is a property of the face, so templates measure
+through `BuildContext.measure` and lay out from real heights. This is one reason
+`BuildContext` carries text measurement at all (D-022), and it is cheap: it
+happens inside `build()`, which is memoised.

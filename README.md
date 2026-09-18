@@ -47,6 +47,16 @@ src/
   ui/           all React lives here
 ```
 
+## Fonts
+
+Archivo (headline) and Inter (body), both variable, both SIL OFL 1.1 — licences
+ship in `public/fonts`. They are self-hosted and load through explicit
+`FontFace` objects before the first frame, because a frame measured against the
+wrong face stays wrong for the life of the measurement cache (§3E).
+
+The `latin` subsets block first paint (83KB); `latin-ext` is deferred until the
+user types something that needs it. See DECISIONS.md D-026.
+
 ## Milestone status
 
 - **M0 — done.** Scaffold, design tokens, editor shell, artboard with correct

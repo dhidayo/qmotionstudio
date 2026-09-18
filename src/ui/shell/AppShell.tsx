@@ -46,7 +46,10 @@ export function AppShell(): React.JSX.Element {
   // counters — in particular that build() is not running per frame (§16).
   useEffect(() => {
     if (!import.meta.env.DEV) return;
-    (globalThis as unknown as { __motionStudio?: unknown }).__motionStudio = { stats: rig.stats };
+    (globalThis as unknown as { __motionStudio?: unknown }).__motionStudio = {
+      stats: rig.stats,
+      textCacheSize: () => rig.textCache.size,
+    };
   }, [rig]);
 
   // §13: space toggles playback. Focus-scoped so it does not fight a text field.

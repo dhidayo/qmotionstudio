@@ -1,4 +1,5 @@
 import { colorFill, roleFill, type Keyframe, type Layer } from '@/core/types';
+import { fontString } from '@/fonts/registry';
 import { SPRINGS } from '@/core/anim/spring';
 import type { BuildContext } from '../buildContext';
 
@@ -31,11 +32,53 @@ export function buildDemoScene(ctx: BuildContext): Layer[] {
   // stackDirection, or declare that it does not support an aspect at all.
   const headlineSize = unit * 0.085;
   const subheadSize = unit * 0.028;
-  const headBlock = headlineSize * 2.4;
-  const subBlock = subheadSize * 3.2;
 
-  const bandTop = safe.y + headBlock;
-  const bandBottom = safe.y + safe.h - subBlock;
+  const HEADLINE = 'MOTION IN THE BROWSER';
+  const SUBHEAD = 'Nothing is uploaded. Everything renders on your device.';
+  const headlineWrap = safe.w * 0.82;
+  const subheadWrap = safe.w * 0.66;
+
+  /**
+   * Animated tracking does not re-wrap (see drawText): the run is measured
+   * once and the boost is applied per character at paint time. So the wrap has
+   * to be computed at the *widest* tracking the animation reaches, and the
+   * boost animates up to that rather than past it — otherwise the lines grow
+   * beyond the width they were wrapped for and overrun the safe area.
+   *
+   * Here: the static spacing is the settled value, and the boost runs from
+   * negative to zero.
+   */
+  const subheadTrackingPct = 8;
+
+  // Measured, not guessed. How many lines a string wraps to depends on the
+  // face, and an assumed block height silently overflows the safe area the
+  // moment the typeface changes — which is exactly what happened when the real
+  // fonts landed and the subhead went from two lines to three.
+  const headRun = ctx.measure({
+    text: HEADLINE,
+    font: fontString('headline', headlineSize, 800),
+    fontSizePx: headlineSize,
+    letterSpacingPx: headlineSize * -0.015,
+    lineHeight: 1.08,
+    align: 'center',
+    maxWidthPx: headlineWrap,
+  });
+  const subRun = ctx.measure({
+    text: SUBHEAD,
+    font: fontString('body', subheadSize, 500),
+    fontSizePx: subheadSize,
+    letterSpacingPx: (subheadTrackingPct / 100) * subheadSize,
+    lineHeight: 1.4,
+    align: 'center',
+    maxWidthPx: subheadWrap,
+  });
+
+  const headTop = safe.y + unit * 0.02;
+  const subTop = safe.y + safe.h - subRun.height;
+  const gutter = unit * 0.04;
+
+  const bandTop = headTop + headRun.height + gutter;
+  const bandBottom = subTop - gutter;
   const bandH = Math.max(unit * 0.2, bandBottom - bandTop);
   const bandCentreY = (bandTop + bandBottom) / 2;
 
@@ -191,10 +234,10 @@ export function buildDemoScene(ctx: BuildContext): Layer[] {
     anchorY: 0,
     tracks: {
       x: [kf(0, centreX)],
-      y: [kf(0, safe.y + unit * 0.02)],
+      y: [kf(0, headTop)],
     },
     props: {
-      text: 'MOTION IN THE BROWSER',
+      text: HEADLINE,
       fontId: 'headline',
       fontSizePx: headlineSize,
       weight: 800,
@@ -202,7 +245,7 @@ export function buildDemoScene(ctx: BuildContext): Layer[] {
       lineHeight: 1.08,
       align: 'center',
       fill: roleFill('ink'),
-      maxWidthPx: safe.w * 0.82,
+      maxWidthPx: headlineWrap,
       reveal: { kind: 'perChar', startMs: 260, durationMs: 420, staggerMs: 26 },
     },
   });
@@ -216,19 +259,19 @@ export function buildDemoScene(ctx: BuildContext): Layer[] {
     anchorY: 0,
     tracks: {
       x: [kf(0, centreX)],
-      y: [kf(0, safe.y + safe.h - subBlock * 0.8)],
-      letterSpacing: [kf(1400, 0), kf(2600, subheadSize * 0.22, 'outExpo')],
+      y: [kf(0, subTop)],
+      letterSpacing: [kf(1400, -subheadSize * 0.06), kf(2600, 0, 'outExpo')],
     },
     props: {
-      text: 'Nothing is uploaded. Everything renders on your device.',
+      text: SUBHEAD,
       fontId: 'body',
       fontSizePx: subheadSize,
       weight: 500,
-      letterSpacingPct: 2,
+      letterSpacingPct: subheadTrackingPct,
       lineHeight: 1.4,
       align: 'center',
       fill: roleFill('inkMuted'),
-      maxWidthPx: safe.w * 0.7,
+      maxWidthPx: subheadWrap,
       reveal: { kind: 'maskWipe', dir: 'right', startMs: 1400, durationMs: 900 },
     },
   });

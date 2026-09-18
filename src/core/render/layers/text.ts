@@ -1,6 +1,6 @@
 import type { Ctx2D, Reveal, TextProps } from '@/core/types';
 import { fontString } from '@/fonts/registry';
-import { lineOffsetX, type GlyphRun, type TextAlign, type TextLine, type TextSpec } from '@/core/text/layout';
+import type { GlyphRun, TextAlign, TextLine, TextSpec } from '@/core/text/layout';
 import { progress, roundedRectPath } from '@/core/math/geometry';
 import { resolvePaint } from '../paint';
 import type { DrawContext } from '../drawContext';
@@ -26,11 +26,26 @@ export function drawText(
 ): void {
   const { ctx, palette } = dc;
 
+  const baseSpacingPx = (props.letterSpacingPct / 100) * props.fontSizePx;
+
+  /**
+   * The animated letterSpacing boost is deliberately NOT part of the measured
+   * spec, for two reasons:
+   *
+   *   - it is in the cache key, so animating it would miss the cache on every
+   *     frame and re-lay out the whole string — defeating §6.3's cache at
+   *     exactly the point it exists for;
+   *   - measuring per frame re-wraps the text as the spacing grows, so lines
+   *     reflow mid-animation, which is never what anyone wants.
+   *
+   * Instead the run is measured once at the static spacing and the boost is
+   * applied as a per-character offset at paint time, from the cached boxes.
+   */
   const spec: TextSpec = {
     text: props.text,
     font: fontString(props.fontId, props.fontSizePx, props.weight),
     fontSizePx: props.fontSizePx,
-    letterSpacingPx: (props.letterSpacingPct / 100) * props.fontSizePx + letterSpacingBoostPx,
+    letterSpacingPx: baseSpacingPx,
     lineHeight: props.lineHeight,
     align: props.align,
     maxWidthPx: props.maxWidthPx,
@@ -48,7 +63,11 @@ export function drawText(
   }
 
   const run = dc.measurer.measure({ ...spec, text: displayText });
-  const blockWidth = run.width;
+  const tracked = Math.abs(letterSpacingBoostPx) > 0.01;
+  // Extra tracking widens every line by one gap per character after the first.
+  const blockWidth = tracked
+    ? run.lines.reduce((widest, line) => Math.max(widest, lineWidthWithBoost(line, letterSpacingBoostPx)), 0)
+    : run.width;
 
   if (props.pill) {
     const { paddingX, paddingY, radius } = props.pill;
@@ -82,7 +101,7 @@ export function drawText(
 
   if (swapAlpha < 1) ctx.globalAlpha *= swapAlpha;
 
-  applyReveal(dc, props.reveal, run, x, y, blockWidth, localMs, props, spec.align);
+  applyReveal(dc, props.reveal, run, x, y, blockWidth, localMs, props, spec.align, letterSpacingBoostPx);
 
   ctx.restore();
 }
@@ -105,16 +124,46 @@ function paintLine(
   props: TextProps,
   align: TextAlign,
   outlineStyle: string | null,
+  boostPx: number,
 ): void {
-  const offsetX = x + lineOffsetX(line, blockWidth, align);
   const baseline = y + baselineOf(line, props.fontSizePx);
-  if (outlineStyle !== null && props.outline) {
+  const width = boostPx === 0 ? line.width : lineWidthWithBoost(line, boostPx);
+  const offsetX = x + offsetFor(width, blockWidth, align);
+
+  const stroke = (text: string, at: number): void => {
+    if (outlineStyle === null || !props.outline) return;
     ctx.lineWidth = props.outline.width;
     ctx.strokeStyle = outlineStyle;
     ctx.lineJoin = 'round';
-    ctx.strokeText(line.text, offsetX, baseline);
+    ctx.strokeText(text, at, baseline);
+  };
+
+  // Fast path: one fillText for the whole line. Only animated tracking forces
+  // per-character drawing, and only while it is actually non-zero.
+  if (boostPx === 0) {
+    stroke(line.text, offsetX);
+    ctx.fillText(line.text, offsetX, baseline);
+    return;
   }
-  ctx.fillText(line.text, offsetX, baseline);
+
+  for (let i = 0; i < line.chars.length; i++) {
+    const box = line.chars[i];
+    if (!box) continue;
+    const at = offsetX + box.x + i * boostPx;
+    stroke(box.char, at);
+    ctx.fillText(box.char, at, baseline);
+  }
+}
+
+/** A line's width once an animated tracking boost is added between its characters. */
+function lineWidthWithBoost(line: TextLine, boostPx: number): number {
+  return line.width + Math.max(0, line.chars.length - 1) * boostPx;
+}
+
+function offsetFor(lineWidth: number, blockWidth: number, align: TextAlign): number {
+  if (align === 'left') return 0;
+  if (align === 'right') return blockWidth - lineWidth;
+  return (blockWidth - lineWidth) / 2;
 }
 
 function applyReveal(
@@ -127,6 +176,7 @@ function applyReveal(
   localMs: number,
   props: TextProps,
   align: TextAlign,
+  boostPx: number,
 ): void {
   const { ctx } = dc;
   const outlineStyle =
@@ -135,13 +185,13 @@ function applyReveal(
   switch (reveal.kind) {
     case 'none':
     case 'swap': {
-      for (const line of run.lines) paintLine(ctx, line, x, y, blockWidth, props, align, outlineStyle);
+      for (const line of run.lines) paintLine(ctx, line, x, y, blockWidth, props, align, outlineStyle, boostPx);
       return;
     }
 
     case 'fade': {
       ctx.globalAlpha *= progress(localMs, reveal.startMs, reveal.startMs + reveal.durationMs);
-      for (const line of run.lines) paintLine(ctx, line, x, y, blockWidth, props, align, outlineStyle);
+      for (const line of run.lines) paintLine(ctx, line, x, y, blockWidth, props, align, outlineStyle, boostPx);
       return;
     }
 
@@ -158,14 +208,14 @@ function applyReveal(
       const cy = reveal.dir === 'up' ? y + run.height - h : y;
       ctx.rect(cx, cy, w, h);
       ctx.clip();
-      for (const line of run.lines) paintLine(ctx, line, x, y, blockWidth, props, align, outlineStyle);
+      for (const line of run.lines) paintLine(ctx, line, x, y, blockWidth, props, align, outlineStyle, boostPx);
       ctx.restore();
       return;
     }
 
     case 'perWord': {
       for (const line of run.lines) {
-        const offsetX = x + lineOffsetX(line, blockWidth, align);
+        const offsetX = x + offsetFor(lineWidthWithBoost(line, boostPx), blockWidth, align);
         const baseline = y + baselineOf(line, props.fontSizePx);
         for (const word of line.words) {
           const from = reveal.startMs + word.index * reveal.staggerMs;
@@ -184,16 +234,18 @@ function applyReveal(
 
     case 'perChar': {
       for (const line of run.lines) {
-        const offsetX = x + lineOffsetX(line, blockWidth, align);
+        const offsetX = x + offsetFor(lineWidthWithBoost(line, boostPx), blockWidth, align);
         const baseline = y + baselineOf(line, props.fontSizePx);
-        for (const box of line.chars) {
+        for (let ci = 0; ci < line.chars.length; ci++) {
+          const box = line.chars[ci];
+          if (!box) continue;
           if (box.char.trim().length === 0) continue;
           const from = reveal.startMs + box.index * reveal.staggerMs;
           const alpha = progress(localMs, from, from + reveal.durationMs);
           if (alpha <= 0) continue;
           ctx.save();
           ctx.globalAlpha *= alpha;
-          ctx.fillText(box.char, offsetX + box.x, baseline + (1 - alpha) * props.fontSizePx * 0.3);
+          ctx.fillText(box.char, offsetX + box.x + ci * boostPx, baseline + (1 - alpha) * props.fontSizePx * 0.3);
           ctx.restore();
         }
       }
