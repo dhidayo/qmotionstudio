@@ -321,3 +321,117 @@ that assertable. It also gives the visual regression suite stable baselines.
 free-tier watermark inside the renderer, which cannot call a hook without
 breaking D-001. So `getLimits(tier, mode)` is exported alongside it, and the
 resolved `watermark` flag is threaded into the render call.
+
+---
+
+## D-019 — `Layer` is a discriminated union
+**Refines §6.1.** M1.
+
+§6.1 gives every layer `props: StaticProps`. Modelling that as a union
+discriminated on `type` — `ShapeLayer | TextLayer | ImageLayer | …` — is the
+same idea with the compiler checking it, so a text layer cannot carry an
+image's crop rect and `drawLayer`'s switch is exhaustive by construction.
+`StaticProps` survives as `Layer['props']` for continuity with the spec.
+
+`AnimatedProps` (§5) becomes `PropValues` for the reason given in D-014.
+
+---
+
+## D-020 — Blur is a mip chain, not `ctx.filter`
+M1.
+
+`ctx.filter = 'blur(Npx)'` is not Baseline — Safari is the gap — and where it
+exists it is slow enough that one blurred layer on an eight-photo template
+would miss the 30fps budget by itself.
+
+Instead the layer is drawn offscreen, halved repeatedly to the target scale,
+then doubled repeatedly back up. Each step is a bilinear resample, so a chain
+approximates a Gaussian closely.
+
+**Rejected:** a single large downscale followed by one upscale. Cheaper and
+visibly wrong — it leaves stepped, faceted edges on exactly the soft gradients
+blur is normally used for. This was caught by eye during M1 and is the reason
+the chain exists rather than the one-shot version.
+
+---
+
+## D-021 — Text reveals run on local time, not on `clipProgress`
+**Fills a gap in §6.3.** M1.
+
+§6.1 lists `clipProgress` as an animated prop and §6.3 lists the reveal modes,
+but not how they connect. Staggered modes (`perWord`, `perChar`) need a genuine
+per-item *time* offset; expressing that as a fraction of a normalised progress
+value forces the template to do the conversion backwards and makes `staggerMs`
+mean something different for every layer duration.
+
+So a `Reveal` carries `startMs`, `durationMs` and `staggerMs`, all relative to
+the layer's own start, consistent with D-005. `clipProgress` stays available as
+a general-purpose animated clip.
+
+---
+
+## D-022 — Text is laid out at build time into glyph runs
+M1, foreshadowed in the M0 spec review.
+
+§6.3 requires a measurement cache because per-frame `measureText` is too slow.
+The stronger reason is correctness: per-character positions **cannot** be
+obtained by summing cached glyph widths, because kerning and letter spacing
+mean the sum of the parts is not the width of the whole. Each character's
+position is measured from a prefix, once, and every later frame transforms the
+cached run.
+
+Two consequences:
+- `BuildContext` needs text measurement, which §7 does not mention. It has it.
+- `letterSpacing` is applied through the context, not by hand, so `measureText`
+  accounts for it. §8.2's percentage resolves to px as `fontSize × pct / 100`.
+
+`layoutText` depends on a narrow `TextMeasureContext`, not a full `Ctx2D`, so
+wrapping and indexing are unit-tested in Node against known glyph widths and
+only rasterisation needs a browser.
+
+---
+
+## D-023 — Font *files* are deferred to M2; the §3E pipeline is in place now
+M1.
+
+§3E requires self-hosted WOFF2 through explicit `FontFace` objects, with both
+paths blocked until they resolve. That machinery exists in
+`src/fonts/registry.ts`. What it does not have is typefaces — *which* fonts ship
+is a design decision belonging with the template designs at M2, not with the
+render core.
+
+Until then both roles resolve to system stacks, which are present by definition,
+so nothing is drawn in an unintended fallback and §3E is not violated. Adding a
+real face is one registry entry with a `url`; the measurement cache simply
+re-keys, so nothing architectural changes.
+
+**Open question for you at M2:** which typefaces. Two roles are needed —
+headline and body.
+
+---
+
+## D-024 — §16's "never call build() in the render loop" is asserted, not trusted
+M1.
+
+`RenderStats.buildCount` counts actual `build()` invocations, and the Playwright
+suite asserts it stays flat across 90+ frames and increments by exactly one when
+the aspect changes.
+
+This is the spec's most consequential performance rule and the easiest to
+regress silently — a memo key that accidentally includes a per-frame value costs
+the whole 16ms build budget sixty times a second while still looking correct.
+A convention would not have caught it; a counter does.
+
+---
+
+## D-025 — Module-level scratch is allowed; module-level frame state is not
+M1, clarifying D-001.
+
+D-001 puts the scene buffers in the rig because they hold frame content across
+the composite step, where two concurrent renderers would tear.
+
+Scratch used entirely within one synchronous call — the blur surfaces, the
+per-depth prop objects, the 1×1 measurement canvas — is different, and stays at
+module scope. Rendering is synchronous and never re-enters, and preview and
+export run in separate realms with separate module instances. The distinction is
+"does it survive the call", not "is it mutable".

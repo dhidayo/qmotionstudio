@@ -100,27 +100,141 @@ export type Tracks = Partial<Record<AnimatedProp, readonly Keyframe[]>>;
 
 export type LayerType = 'image' | 'text' | 'shape' | 'gradient' | 'group' | 'mask' | 'video';
 
-/**
- * Per-type static props arrive with the layer implementations in M1. The base
- * shape is fixed now because the memo key and the compositor depend on it.
- */
-export type StaticProps = {
-  readonly anchorX?: number;
-  readonly anchorY?: number;
-  readonly fill?: Paint;
-  readonly blendMode?: GlobalCompositeOperation;
+export type Direction = 'left' | 'right' | 'up' | 'down';
+
+export type Stroke = { readonly paint: Paint; readonly width: number };
+
+export type Shadow = {
+  readonly blur: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly paint: Paint;
 };
 
-export type Layer = {
+/**
+ * Text reveals (§6.3).
+ *
+ * Driven by the layer's own local time rather than by clipProgress: staggered
+ * modes need a per-item time offset, and expressing that as a fraction of a
+ * normalised progress value means the template has to do the conversion
+ * backwards. Times are relative to the layer's startMs, like keyframes (D-005).
+ */
+export type Reveal =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'fade'; readonly startMs: number; readonly durationMs: number }
+  | { readonly kind: 'maskWipe'; readonly dir: Direction; readonly startMs: number; readonly durationMs: number }
+  | { readonly kind: 'perWord'; readonly startMs: number; readonly durationMs: number; readonly staggerMs: number }
+  | { readonly kind: 'perChar'; readonly startMs: number; readonly durationMs: number; readonly staggerMs: number }
+  | { readonly kind: 'swap'; readonly altText: string; readonly atMs: number; readonly durationMs: number };
+
+export type ObjectFit = 'cover' | 'contain';
+
+// Per-type static props. The spec names this StaticProps (§6.1); modelling it
+// as a discriminated union on `type` is the same idea with the compiler
+// checking that a text layer never carries an image's fields.
+
+export type ShapeProps = {
+  readonly shape: 'rect' | 'ellipse';
+  readonly w: number;
+  readonly h: number;
+  readonly fill: Paint;
+  readonly cornerRadius?: number;
+  readonly stroke?: Stroke;
+  readonly shadow?: Shadow;
+};
+
+export type GradientStop = { readonly at: number; readonly paint: Paint };
+
+export type GradientProps = {
+  readonly w: number;
+  readonly h: number;
+  readonly gradient: 'linear' | 'radial';
+  readonly stops: readonly GradientStop[];
+  /** Degrees, clockwise from left-to-right. Linear only. */
+  readonly angle?: number;
+};
+
+export type ImageProps = {
+  readonly mediaId: string;
+  readonly w: number;
+  readonly h: number;
+  readonly fit: ObjectFit;
+  /** Normalised against the source image. */
+  readonly crop?: Rect;
+  readonly cornerRadius?: number;
+  readonly shadow?: Shadow;
+  readonly border?: { readonly inset: number; readonly paint: Paint; readonly width: number };
+  readonly reflection?: { readonly heightPct: number; readonly opacity: number; readonly gapPx: number };
+};
+
+export type TextProps = {
+  readonly text: string;
+  readonly fontId: string;
+  readonly fontSizePx: number;
+  readonly weight: number;
+  /** Percent of font size (§8.2); resolved to px at layout. */
+  readonly letterSpacingPct: number;
+  readonly lineHeight: number;
+  readonly align: 'left' | 'center' | 'right';
+  readonly fill: Paint;
+  /** null disables wrapping. */
+  readonly maxWidthPx: number | null;
+  readonly shadow?: Shadow;
+  readonly outline?: Stroke;
+  readonly pill?: { readonly paint: Paint; readonly paddingX: number; readonly paddingY: number; readonly radius: number };
+  readonly reveal: Reveal;
+};
+
+export type GroupProps = Record<string, never>;
+
+export type MaskProps = {
+  readonly shape: 'rect' | 'ellipse';
+  readonly w: number;
+  readonly h: number;
+  readonly cornerRadius?: number;
+};
+
+export type VideoProps = {
+  readonly mediaId: string;
+  readonly w: number;
+  readonly h: number;
+  readonly fit: ObjectFit;
+  readonly cornerRadius?: number;
+};
+
+type LayerBase = {
   readonly id: string;
-  readonly type: LayerType;
   /** Milliseconds relative to the layer's scene (or its overlay). */
   readonly startMs: number;
   readonly endMs: number;
-  readonly props: StaticProps;
   readonly tracks: Tracks;
-  readonly children?: readonly Layer[];
+  /** Origin for rotation and scale, normalised within the layer's own box. */
+  readonly anchorX?: number;
+  readonly anchorY?: number;
+  readonly blendMode?: GlobalCompositeOperation;
 };
+
+export type ShapeLayer = LayerBase & { readonly type: 'shape'; readonly props: ShapeProps };
+export type GradientLayer = LayerBase & { readonly type: 'gradient'; readonly props: GradientProps };
+export type ImageLayer = LayerBase & { readonly type: 'image'; readonly props: ImageProps };
+export type TextLayer = LayerBase & { readonly type: 'text'; readonly props: TextProps };
+export type VideoLayer = LayerBase & { readonly type: 'video'; readonly props: VideoProps };
+export type GroupLayer = LayerBase & {
+  readonly type: 'group';
+  readonly props: GroupProps;
+  readonly children: readonly Layer[];
+};
+export type MaskLayer = LayerBase & {
+  readonly type: 'mask';
+  readonly props: MaskProps;
+  readonly children: readonly Layer[];
+};
+
+export type Layer =
+  | ShapeLayer | GradientLayer | ImageLayer | TextLayer | VideoLayer | GroupLayer | MaskLayer;
+
+/** Retained for the spec's naming; the union above is the real shape. */
+export type StaticProps = Layer['props'];
 
 // ── Geometry ────────────────────────────────────────────────────────────────
 

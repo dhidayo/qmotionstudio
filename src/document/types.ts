@@ -1,4 +1,4 @@
-import type { Aspect, Palette, PropValues, Rect } from '@/core/types';
+import type { Aspect, Direction, Palette, PropValues, Rect } from '@/core/types';
 
 /**
  * The document model (§5).
@@ -15,10 +15,10 @@ export type MediaRef = { readonly mediaId: string };
 
 export type FontId = string;
 
+export type { Direction };
+
 export type TransitionKind =
   | 'cut' | 'crossFade' | 'push' | 'wipe' | 'zoomBlur' | 'whiteFlash' | 'scale';
-
-export type Direction = 'left' | 'right' | 'up' | 'down';
 
 /**
  * D-004. A transition *overlaps* its two neighbours: it consumes `durationMs`

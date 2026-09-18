@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Aspect } from '@/core/types';
 import type { Project } from '@/document/types';
-import { createProject } from '@/document/defaults';
+import { createProject, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { totalDurationMs } from '@/document/select/timeline';
 
 export type InspectorTab = 'photos' | 'text' | 'logo' | 'look';
@@ -53,8 +53,24 @@ function applyTheme(theme: Theme): void {
   }
 }
 
+/**
+ * `?scene=placeholder` renders the M0 aspect test card instead of the M1 demo
+ * scene, so the M0 visual baselines stay meaningful as the renderer grows.
+ */
+function initialProject(): ReturnType<typeof createProject> {
+  let templateId: string | undefined;
+  try {
+    if (new URLSearchParams(location.search).get('scene') === 'placeholder') {
+      templateId = PLACEHOLDER_TEMPLATE_ID;
+    }
+  } catch {
+    // No location (a test harness, a worker) — the demo scene is the default.
+  }
+  return createProject(templateId === undefined ? {} : { templateId });
+}
+
 export const useEditor = create<EditorState>((set, get) => ({
-  project: createProject(),
+  project: initialProject(),
   playheadMs: 0,
   isPlaying: true,
   inspectorTab: 'photos',

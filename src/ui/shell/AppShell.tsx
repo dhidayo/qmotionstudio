@@ -42,6 +42,13 @@ export function AppShell(): React.JSX.Element {
   }, [clock]);
   useEffect(() => () => { disposeRenderRig(rig); }, [rig]);
 
+  // Dev-only handle so the visual suite can assert on the real renderer's
+  // counters — in particular that build() is not running per frame (§16).
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    (globalThis as unknown as { __motionStudio?: unknown }).__motionStudio = { stats: rig.stats };
+  }, [rig]);
+
   // §13: space toggles playback. Focus-scoped so it does not fight a text field.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {

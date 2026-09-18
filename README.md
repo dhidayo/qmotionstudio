@@ -51,11 +51,20 @@ src/
 
 - **M0 — done.** Scaffold, design tokens, editor shell, artboard with correct
   aspect scaling at all five aspects.
-- M1 — render core: layer types, keyframes, easings, spring, repeaters, text
-  measurement cache.
+- **M1 — done.** Render core: seven layer types, keyframe interpolation,
+  easings, a baked spring solver, repeaters, blur, text layout and measurement
+  cache, and a hand-written scene running at 60fps.
+- M2 — template schema, registry, build context, six templates, thumbnails.
 
 ## Debugging
 
 `?frozen=<ms>` parks the playhead at an exact time instead of playing — used by
 the visual tests, and by M4 to compare preview against export at identical
 times.
+
+`?scene=placeholder` renders the M0 aspect test card instead of the M1 demo
+scene, which is what keeps the M0 aspect-scaling baselines meaningful as the
+renderer grows.
+
+In dev, `window.__motionStudio.stats` exposes the live renderer counters
+(`frameCount`, `buildCount`, `lastFrameMs`, `lastBuildMs`).

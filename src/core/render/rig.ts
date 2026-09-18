@@ -1,4 +1,5 @@
 import type { Layer } from '@/core/types';
+import type { GlyphRun } from '@/core/text/layout';
 import { BufferPool } from './buffers';
 
 /**
@@ -29,14 +30,17 @@ export type RenderStats = {
   frameCount: number;
   lastFrameMs: number;
   lastBuildMs: number;
+  /** How many times build() has actually run. §16 forbids it inside the render
+   *  loop, so this must stay flat while frameCount climbs. */
+  buildCount: number;
 };
 
 export type RenderRig = {
   readonly buffers: BufferPool;
   /** Memoised template output, keyed by (templateId, structural inputs, aspect). §3B. */
   readonly layerCache: Map<string, readonly Layer[]>;
-  /** Text metrics, keyed by (text, font, size, weight, letterSpacing, wrap width). §6.3. */
-  readonly textCache: Map<string, TextMetrics>;
+  /** Laid-out glyph runs, keyed by every field that can change a measurement. §6.3. */
+  readonly textCache: Map<string, GlyphRun>;
   readonly media: MediaResolver;
   readonly stats: RenderStats;
 };
@@ -47,7 +51,7 @@ export function createRenderRig(media: MediaResolver = EMPTY_MEDIA): RenderRig {
     layerCache: new Map(),
     textCache: new Map(),
     media,
-    stats: { frameCount: 0, lastFrameMs: 0, lastBuildMs: 0 },
+    stats: { frameCount: 0, lastFrameMs: 0, lastBuildMs: 0, buildCount: 0 },
   };
 }
 

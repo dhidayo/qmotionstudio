@@ -46,7 +46,19 @@ export function createScene(templateId: string, durationMs = DEFAULT_SCENE_MS): 
   };
 }
 
-export function createProject(options?: { name?: string; aspect?: Aspect }): Project {
+/**
+ * '__demo__' renders the hand-written M1 scene; '__placeholder__' renders the
+ * M0 test card. Both are replaced by real template ids at M2 — they exist so
+ * the render core has something to draw before the registry does.
+ */
+export const DEMO_TEMPLATE_ID = '__demo__';
+export const PLACEHOLDER_TEMPLATE_ID = '__placeholder__';
+
+export function createProject(options?: {
+  name?: string;
+  aspect?: Aspect;
+  templateId?: string;
+}): Project {
   const timestamp = Date.now();
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -54,8 +66,7 @@ export function createProject(options?: { name?: string; aspect?: Aspect }): Pro
     name: options?.name ?? 'Untitled project',
     mode: 'showcase',
     aspect: options?.aspect ?? '9:16',
-    // M2 replaces this with a real template id from the registry.
-    scenes: [createScene('__placeholder__')],
+    scenes: [createScene(options?.templateId ?? DEMO_TEMPLATE_ID)],
     overlays: [],
     audio: [],
     brand: {
