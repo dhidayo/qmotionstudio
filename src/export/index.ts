@@ -7,7 +7,17 @@ import {
   CONTAINER_MIME, exportSize, fileNameFor, VIDEO_CODEC,
   type ExportFormat, type ExportSettings, type FormatAvailability,
 } from './config';
-import type { ExportRequest, ExportStage, WorkerMessage } from './protocol';
+import type { ExportRequest, WorkerMessage } from './protocol';
+import {
+  ExportCancelled,
+  type ExportHandle,
+  type ExportProgress,
+  type ExportResult,
+} from './types';
+import { canUseRealtimeExport, startRealtimeExport } from './fallback/mediaRecorder';
+
+export { ExportCancelled };
+export type { ExportHandle, ExportProgress, ExportResult, ExportPath } from './types';
 
 /**
  * Export orchestration (§11).
@@ -17,28 +27,6 @@ import type { ExportRequest, ExportStage, WorkerMessage } from './protocol';
  * the fallback for browsers without WebCodecs (§11.9), and §3D forbids it from
  * ever being anything else.
  */
-
-export type ExportProgress = {
-  readonly stage: ExportStage;
-  readonly frame: number;
-  readonly totalFrames: number;
-  /** 'offline' is the real path; 'realtime' means the fallback ran. */
-  readonly path: 'offline' | 'realtime';
-};
-
-export type ExportResult = {
-  readonly blob: Blob;
-  readonly fileName: string;
-  readonly path: 'offline' | 'realtime';
-  readonly durationMs: number;
-};
-
-export class ExportCancelled extends Error {
-  constructor() {
-    super('Export cancelled.');
-    this.name = 'ExportCancelled';
-  }
-}
 
 /**
  * §11.1: feature-detect at runtime, never by user agent.
@@ -81,11 +69,12 @@ export function canUseOfflineExport(): boolean {
   return typeof VideoEncoder !== 'undefined' && typeof OffscreenCanvas !== 'undefined';
 }
 
-export type ExportHandle = {
-  readonly result: Promise<ExportResult>;
-  cancel(): void;
-};
-
+/**
+ * Starts an export on the best available path.
+ *
+ * §3D: the offline worker is always preferred. MediaRecorder runs only when
+ * WebCodecs is genuinely absent, never as an optimisation or a shortcut.
+ */
 export function startExport(options: {
   project: Project;
   settings: ExportSettings;
@@ -93,6 +82,20 @@ export function startExport(options: {
   onProgress: (progress: ExportProgress) => void;
 }): ExportHandle {
   const { project, settings, media, onProgress } = options;
+
+  if (!canUseOfflineExport()) {
+    if (!canUseRealtimeExport()) {
+      return {
+        result: Promise.reject(
+          new Error(
+            'This browser cannot export video. It supports neither WebCodecs nor canvas recording.',
+          ),
+        ),
+        cancel: () => undefined,
+      };
+    }
+    return startRealtimeExport(options);
+  }
 
   const size = exportSize(project.aspect, settings);
   const durationMs = totalDurationMs(project);

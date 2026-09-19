@@ -82,8 +82,16 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
   useEffect(() => () => { handle.current?.cancel(); }, []);
 
   const availability = formats?.find((f) => f.format === settings.format);
-  const blocked = availability?.available === false;
+  /*
+   * The codec probe only gates the *offline* path. Without WebCodecs the probe
+   * reports every format unavailable — correctly — and gating on it there
+   * would disable the Export button and make the fallback unreachable, which
+   * is precisely what happened before the fallback had a test.
+   */
+  const blocked = offline && availability?.available === false;
   const running = phase.kind === 'running';
+  // The fallback is WebM only (§11.9), so the format choice is moot there.
+  const formatLocked = !offline;
 
   return (
     <div
@@ -107,21 +115,23 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
         {!offline && (
           <p className="mb-3 rounded-md border border-edge p-2 text-[11px] leading-relaxed text-ink-muted">
             This browser has no WebCodecs support, so export falls back to
-            real-time recording. It takes as long as the clip and the result may
-            drop frames.
+            real-time recording — WebM only. It takes as long as the clip and
+            the result may drop frames.
           </p>
         )}
 
         <Section>
-          <Segmented<ExportFormat>
-            label="Format"
-            value={settings.format}
-            options={[
-              { value: 'mp4', label: 'MP4 · H.264' },
-              { value: 'webm', label: 'WebM · VP9' },
-            ]}
-            onChange={(format) => { setSettings((s) => ({ ...s, format })); }}
-          />
+          {!formatLocked && (
+            <Segmented<ExportFormat>
+              label="Format"
+              value={settings.format}
+              options={[
+                { value: 'mp4', label: 'MP4 · H.264' },
+                { value: 'webm', label: 'WebM · VP9' },
+              ]}
+              onChange={(format) => { setSettings((s) => ({ ...s, format })); }}
+            />
+          )}
           <Segmented<720 | 1080>
             label="Resolution"
             value={settings.shortEdge}

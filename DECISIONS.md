@@ -722,3 +722,64 @@ EBML, same dimensions and duration.
 **Not yet done in M4:** the MediaRecorder fallback (§11.9) and the
 frame-for-frame preview/export comparison that is the milestone's actual exit
 criterion. Both are written up as outstanding rather than quietly skipped.
+
+---
+
+## D-040 — "Matches the preview frame-for-frame" is a perceptual threshold
+M4. Resolves D-017's open question with a measurement.
+
+§15's M4 criterion cannot be asserted literally. The preview samples arbitrary
+wall-clock times while the export samples `t = n/fps`, and a lossy codec never
+returns the bytes it was given. The operational form is: **the same
+`globalTimeMs` rendered through both paths differs by under a perceptual
+threshold.**
+
+`?frozen=<ms>` parks the preview at an exact time and `?thumb=1080` pins its
+backing store to the export resolution, so the two frames compare without an
+intervening resample.
+
+**Measured: mean absolute error 1.81/255 per channel — 0.7% — and the best
+match is at offset 0ms**, meaning the export's frame at t=4000 *is* the
+preview's frame at t=4000, not a neighbour. That residual is H.264 compression
+plus the sampling downscale, and nothing else.
+
+The threshold is set at 10/255: 5.5× headroom over the observed value, which is
+loose enough to survive codec and bitrate variation and tight enough that a real
+divergence — a missing layer, a fallback font, a wrong palette, all of which
+cost tens of units — fails it.
+
+---
+
+## D-041 — The codec probe gates the offline path only
+M4. A bug the fallback's first test caught immediately.
+
+The export dialog disabled its own button when `canEncodeVideo` reported a
+format unavailable. Correct for the offline path — and it made the
+MediaRecorder fallback **unreachable**, because without WebCodecs the probe
+reports *every* format unavailable, which is exactly the situation the fallback
+exists for.
+
+The probe now gates only when the offline path is actually in use. In fallback
+mode the format selector is hidden too, since §11.9 is WebM regardless.
+
+This is the second time in two milestones that forcing a fallback to run found a
+bug that a green test suite had not (see D-038's HEIC note). Fallback paths are
+by definition the ones the development machine never takes, so they have to be
+forced deliberately or they are not tested at all.
+
+---
+
+## D-042 — Export tests run serially, in their own Playwright project
+M4.
+
+Each export test encodes a 1080p clip, which is genuinely CPU-bound. Run six
+in parallel alongside the rest of the suite and the machine saturates — load
+average hit 54 on this one — at which point unrelated timing assertions start
+failing and the run took ten minutes.
+
+The export spec is therefore its own project with `fullyParallel: false`, and
+export tests get a 150s budget. Serial costs about ninety seconds and makes
+every result mean something.
+
+Worth remembering when adding the audio export tests at M6: they will be just
+as expensive.

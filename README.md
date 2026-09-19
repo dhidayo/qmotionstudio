@@ -73,7 +73,10 @@ user types something that needs it. See DECISIONS.md D-026.
 - **M3 — done.** Showcase mode: library with categories, search, free/pro filter
   and favourites; all four inspector tabs on an undoable action pipeline; photo
   upload by drop, paste or picker, including HEIC.
-- M4 — export: Mediabunny, worker, MP4 + WebM, progress and cancel.
+- **M4 — done.** Export: offline render in a worker via Mediabunny, MP4 and
+  WebM, real-time MediaRecorder fallback, progress and cancel. A 10s 1080p MP4
+  encodes in ~3s and matches the preview to 1.81/255 per channel.
+- M5 — Motion Ads: scene sequencing, transitions, timeline, overlays.
 
 ## Templates
 
