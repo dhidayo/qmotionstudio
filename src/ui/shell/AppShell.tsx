@@ -145,19 +145,31 @@ export function AppShell(): React.JSX.Element {
     if (neededKey.length === 0) return;
     let cancelled = false;
 
+    /*
+     * Note what this deliberately does *not* do: clear the layer cache.
+     *
+     * It used to, defensively, and that was dead work. `BuildContext` has no
+     * access to the media store at all — a layer carries a `mediaId` and the
+     * bitmap is looked up at draw time in image.ts — so a photograph finishing
+     * its decode cannot change what `build()` produced. Clearing threw away a
+     * valid cache and paid for a full rebuild to get an identical result.
+     *
+     * It was also a race. The clear fired whenever the decode happened to
+     * land, so "rebuilds exactly once when the aspect changes" (§3B) passed or
+     * failed depending on whether a fetch resolved inside the test's window —
+     * invisible while the samples were 95KB gradients, intermittent once they
+     * became real photographs (D-049).
+     */
     loadSamples(media, {
       artboardLongestEdge: 1920,
       names: neededKey.split(',') as SampleName[],
     })
-      .then(() => {
-        if (!cancelled) rig.layerCache.clear();
-      })
       .catch((error: unknown) => {
-        console.error('Failed to load sample photographs.', error);
+        if (!cancelled) console.error('Failed to load sample photographs.', error);
       });
 
     return () => { cancelled = true; };
-  }, [neededKey, media, rig]);
+  }, [neededKey, media]);
 
   // Dev-only handle so the visual suite can assert on the real renderer's
   // counters — in particular that build() is not running per frame (§16).
