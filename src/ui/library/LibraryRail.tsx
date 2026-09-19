@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { CATEGORIES, posterUrl, previewUrl, TEMPLATE_MANIFEST, type TemplateSummary } from '@/templates/manifest';
+import { CATEGORIES, posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
 import { useEditor } from '@/state/store';
 import { useEntitlements } from '@/entitlements';
 
@@ -11,7 +11,9 @@ import { useEntitlements } from '@/entitlements';
  * which is what `npm run thumbs` produces both of for.
  */
 export function LibraryRail(): React.JSX.Element {
-  const currentId = useEditor((s) => s.project.scenes[0]?.templateId);
+  const currentId = useEditor((s) =>
+    s.project.sourceAdTemplateId ?? s.project.scenes[s.selectedScene]?.templateId,
+  );
   const setTemplate = useEditor((s) => s.setTemplate);
   const favourites = useEditor((s) => s.favourites);
   const toggleFavourite = useEditor((s) => s.toggleFavourite);
@@ -22,16 +24,24 @@ export function LibraryRail(): React.JSX.Element {
   const showFavourites = useEditor((s) => s.libraryShowFavourites);
   const toggleFavouritesFilter = useEditor((s) => s.toggleLibraryFavourites);
 
+  /**
+   * The two modes list different things (D-013): Showcase picks a scene
+   * template for the selected scene, Motion Ads picks an ad template that
+   * replaces the whole sequence. Mixing them in one grid would mean a card
+   * whose meaning depends on a switch elsewhere in the chrome.
+   */
+  const mode = useEditor((s) => s.project.mode);
+
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return TEMPLATE_MANIFEST.filter((t) => {
+    return templatesForMode(mode).filter((t) => {
       if (tierFilter !== 'all' && t.tier !== tierFilter) return false;
       if (showFavourites && !favourites.includes(t.id)) return false;
       if (query.length === 0) return true;
       // Category is searchable too, so typing "depth" finds the whole group.
       return `${t.name} ${t.category} ${t.blurb}`.toLowerCase().includes(query);
     });
-  }, [search, tierFilter, showFavourites, favourites]);
+  }, [mode, search, tierFilter, showFavourites, favourites]);
 
   const categories = CATEGORIES.filter((c) => visible.some((t) => t.category === c));
 
@@ -181,11 +191,18 @@ function TemplateCard({
             onMouseLeave={(e) => { e.currentTarget.pause(); }}
           />
         </span>
-        <span
-          className="block truncate px-1.5 py-1 text-[11px]"
-          style={{ color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)', fontWeight: active ? 600 : 400 }}
-        >
-          {template.name}
+        <span className="block px-1.5 py-1">
+          <span
+            className="block truncate text-[11px]"
+            style={{ color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)', fontWeight: active ? 600 : 400 }}
+          >
+            {template.name}
+          </span>
+          {template.kind === 'ad' && (
+            <span className="tabular block truncate text-[9px] text-ink-faint">
+              {template.sceneCount} scenes · {Math.round((template.durationMs ?? 0) / 1000)}s
+            </span>
+          )}
         </span>
       </button>
 

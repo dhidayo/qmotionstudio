@@ -87,10 +87,14 @@ async function run(request: ExportRequest): Promise<void> {
     }
 
     const project: Project = request.project;
-    const templateId = project.scenes[0]?.templateId;
-    if (templateId !== undefined && !templateId.startsWith('__')) {
-      await loadTemplate(templateId);
-    }
+
+    // Every scene's template, not just the first. An ad's later beats are the
+    // ones a single-scene load would silently render blank — and the export
+    // would finish "successfully" with half the frames empty, which §16's ban
+    // on swallowing errors is exactly about.
+    const templateIds = [...new Set(project.scenes.map((scene) => scene.templateId))]
+      .filter((id) => !id.startsWith('__'));
+    await Promise.all(templateIds.map((id) => loadTemplate(id)));
 
     if (isCancelled()) {
       post({ type: 'cancelled' });

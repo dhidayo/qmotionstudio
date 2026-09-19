@@ -1,15 +1,17 @@
-import type { Ctx2D, Layer, Size } from '@/core/types';
-import type { Project, Scene } from '@/document/types';
+import type { Ctx2D, Layer, Palette, Size } from '@/core/types';
+import type { Overlay, Project, Scene } from '@/document/types';
 import { makeViewport, type Viewport } from '@/core/math/aspect';
-import { activeScenesAt, sceneSpans } from '@/document/select/timeline';
+import { activeOverlaysAt, activeScenesAt, sceneSpans, type SceneSpan } from '@/document/select/timeline';
 import { TextMeasurer } from '@/core/text/measure';
 import { createBuildContext } from '@/templates/buildContext';
 import { peekTemplate } from '@/templates/registry';
 import { structureKey } from '@/templates/schema';
 import { buildDemoScene } from '@/templates/_demo/demoScene';
-import { drawLayers } from './drawLayer';
+import { drawLayer, drawLayers } from './drawLayer';
 import { drawGrain, drawVignette } from './postFx';
 import { drawPlaceholderFrame } from './placeholder';
+import { overlayKey, overlayLayer } from './overlays';
+import { transitionFn } from './transitions';
 import type { DrawContext } from './drawContext';
 import type { RenderRig } from './rig';
 
@@ -25,6 +27,17 @@ import type { RenderRig } from './rig';
  * `rig` carries the scene buffers and caches. It is a parameter rather than a
  * module singleton so preview and export can run concurrently without writing
  * over each other's scratch surfaces.
+ *
+ * §6.4's five steps, in order:
+ *   1. resolve the active scene, or the two that overlap during a transition;
+ *   2. draw each into a scene buffer at its own local time;
+ *   3. composite the buffers through the transition function;
+ *   4. draw the active overlays, ordered by track then z;
+ *   5. frame-level post-effects.
+ *
+ * Step 2 has a fast path. With one active scene there is nothing to composite,
+ * so it draws straight to the output and the buffers are never touched — which
+ * is every frame of Showcase mode and most frames of an ad.
  */
 export function renderFrame(
   ctx: Ctx2D,
@@ -37,32 +50,22 @@ export function renderFrame(
   const px: Size = { w: ctx.canvas.width, h: ctx.canvas.height };
   if (px.w <= 0 || px.h <= 0) return;
 
-  // M2 reads designSize from the active scene's template.
-  const designSize: Size = { w: 1080, h: 1080 };
-  const vp = makeViewport(project.aspect, px, designSize);
+  /**
+   * The project's own coordinate space, which overlays and post-effects live
+   * in. Scenes get their own viewport from their template's designSize inside
+   * `drawScene` — two scenes in one ad may not share one, and an overlay must
+   * not move because the scene under it changed.
+   */
+  const vp = makeViewport(project.aspect, px, PROJECT_DESIGN);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, px.w, px.h);
-
-  // One uniform scale for the whole frame (§6.5). Everything downstream of
-  // this line works in design units and never thinks about pixels again.
-  ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
 
   //  1. Resolve which scene(s) are active — two during a transition overlap.
   const spans = sceneSpans(project.scenes);
   const active = activeScenesAt(spans, globalTimeMs);
 
-  const scene = active?.current.scene;
-  const look = scene?.inputs.look;
-  const palette = look?.palette ?? project.brand.palette;
-
-  /**
-   * D-006: the global speed multiplier is a time remap applied before layers
-   * are evaluated, never baked into keyframes. That is what lets the speed
-   * slider repaint without rebuilding the template.
-   */
-  const rawLocalMs = active ? globalTimeMs - active.current.startMs : globalTimeMs;
-  const localTimeMs = rawLocalMs * (look?.speed ?? 1);
+  const palette = active?.current.scene.inputs.look.palette ?? project.brand.palette;
 
   const dc: DrawContext = {
     ctx,
@@ -72,28 +75,139 @@ export function renderFrame(
     depth: 0,
   };
 
-  if (!scene || scene.templateId === '__placeholder__') {
-    drawPlaceholderFrame(ctx, vp, palette, localTimeMs);
+  if (!active) {
+    ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+    drawPlaceholderFrame(ctx, vp, palette, globalTimeMs);
+  } else if (!active.incoming) {
+    //  2a. One scene: straight to the output, no buffer round trip.
+    drawScene(ctx, project, active.current, globalTimeMs, rig, px);
   } else {
-    //  2. Fetch memoised layers, then draw. build() is never called per frame
-    //     (§3B, §16) — only when its structure key changes.
-    const layers = memoisedLayers(rig, vp, scene, palette);
-    if (layers) drawLayers(dc, layers, localTimeMs);
+    //  2b. Two scenes, each into its own buffer …
+    rig.buffers.resize(px);
+    const a = rig.buffers.clear(0);
+    const b = rig.buffers.clear(1);
+
+    drawScene(a.ctx, project, active.current, globalTimeMs, rig, px);
+    drawScene(b.ctx, project, active.incoming, globalTimeMs, rig, px);
+
+    //  3. … composited through the transition.
+    const transition = active.incoming.transitionIn;
+    const composite = transitionFn(transition?.kind ?? 'crossFade');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    composite(ctx, a.canvas, b.canvas, active.progress, {
+      size: px,
+      direction: transition?.direction ?? 'left',
+      scratch: rig.buffers.get(2).canvas,
+    });
   }
 
-  //  3. Composite scene buffers through the transition (M5).
-  //  4. Overlays, ordered by track then z (M5).
+  //  4. Overlays, in the project's own space, over whatever the scenes produced.
+  ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+  drawOverlays(dc, project.overlays, globalTimeMs, rig, vp);
 
-  //  5. Frame post-effects and, at M7, the free-tier watermark.
-  if (look) {
-    drawGrain(ctx, vp.design, look.grain, rawLocalMs);
-    drawVignette(ctx, vp.design, look.vignette);
-  }
+  //  5. Frame post-effects and, at M7, the free-tier watermark. Grain and
+  //     vignette belong to the scene's look, so they are applied per scene
+  //     inside drawScene — a crossfade between two looks has to blend them,
+  //     not apply the incoming one to both.
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   rig.stats.frameCount += 1;
   rig.stats.lastFrameMs = now() - started;
+}
+
+/**
+ * Design space when nothing else says otherwise.
+ *
+ * Every template ships 1080×1080 today, and overlays need a stable space that
+ * does not shift when the scene under them changes template.
+ */
+const PROJECT_DESIGN: Size = { w: 1080, h: 1080 };
+
+/**
+ * Draws one scene, with its own look, into `target`.
+ *
+ * The target is either the output canvas (one active scene) or a scene buffer
+ * (a transition). Both are the same pixel size, so the scene cannot tell which
+ * it got — which is what keeps the transition path and the fast path identical
+ * frame for frame.
+ */
+function drawScene(
+  target: Ctx2D,
+  project: Project,
+  span: SceneSpan,
+  globalTimeMs: number,
+  rig: RenderRig,
+  px: Size,
+): void {
+  const { scene } = span;
+  const template = scene.templateId.startsWith('__') ? null : peekTemplate(scene.templateId);
+  const design = template?.kind === 'scene' ? template.designSize : PROJECT_DESIGN;
+  const vp = makeViewport(project.aspect, px, design);
+
+  target.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+
+  const look = scene.inputs.look;
+  const palette = look.palette;
+
+  const dc: DrawContext = {
+    ctx: target,
+    palette,
+    media: rig.media,
+    measurer: new TextMeasurer(target, rig.textCache),
+    depth: 0,
+  };
+
+  /**
+   * D-006: the global speed multiplier is a time remap applied before layers
+   * are evaluated, never baked into keyframes. That is what lets the speed
+   * slider repaint without rebuilding the template.
+   */
+  const rawLocalMs = globalTimeMs - span.startMs;
+  const localTimeMs = rawLocalMs * look.speed;
+
+  if (scene.templateId === '__placeholder__') {
+    drawPlaceholderFrame(target, vp, palette, localTimeMs);
+  } else {
+    const layers = memoisedLayers(rig, vp, scene, palette);
+    if (layers) drawLayers(dc, layers, localTimeMs);
+  }
+
+  drawGrain(target, vp.design, look.grain, rawLocalMs);
+  drawVignette(target, vp.design, look.vignette);
+}
+
+/** §6.4 step 4. Each overlay's layer is memoised on its own content. */
+function drawOverlays(
+  dc: DrawContext,
+  overlays: readonly Overlay[],
+  globalTimeMs: number,
+  rig: RenderRig,
+  vp: Viewport,
+): void {
+  if (overlays.length === 0) return;
+
+  for (const overlay of activeOverlaysAt(overlays, globalTimeMs)) {
+    const layer = memoisedOverlay(rig, overlay, vp.design);
+    // Overlay time is relative to the overlay, not the scene (§6.1).
+    if (layer) drawLayer(dc, layer, globalTimeMs - overlay.startMs);
+  }
+}
+
+function memoisedOverlay(rig: RenderRig, overlay: Overlay, design: Size): Layer | null {
+  const key = overlayKey(overlay, design);
+  const hit = rig.overlayCache.get(key);
+  if (hit) return hit;
+
+  let counter = 0;
+  const layer = overlayLayer(overlay, {
+    design,
+    id: (prefix) => `${overlay.id}-${prefix}-${counter++}`,
+  });
+  if (!layer) return null;
+
+  rig.overlayCache.set(key, layer);
+  return layer;
 }
 
 /**
@@ -112,7 +226,7 @@ function memoisedLayers(
   rig: RenderRig,
   vp: Viewport,
   scene: Scene,
-  palette: DrawContext['palette'],
+  palette: Palette,
 ): readonly Layer[] | null {
   const key = structureKey(scene.templateId, scene.inputs, vp.aspect, vp.design, scene.durationMs);
 

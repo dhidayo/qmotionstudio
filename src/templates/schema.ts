@@ -65,17 +65,36 @@ export type SceneTemplate = TemplateBase & {
   build(inputs: SceneInputs, ctx: BuildContext): Layer[];
 };
 
+/**
+ * One beat of a Motion Ad.
+ *
+ * §7 gives this three fields. Two more are needed for an ad to expand into
+ * something worth looking at rather than into seven copies of the same
+ * placeholder copy (D-046):
+ *
+ *   texts       seed copy per beat, keyed by the sub-template's own slot ids.
+ *               Without it every scene shows the sub-template's placeholder and
+ *               the ad reads as a bug.
+ *   photoCount  how many photo slots this beat fills. A "hero shot" beat and a
+ *               "grid of six" beat are the same template at different counts.
+ */
 export type SceneTemplateRef = {
   readonly templateId: string;
   readonly durationMs: number;
   /** Applied on entry to this scene; ignored on the first (D-004). */
   readonly transitionIn: Transition | null;
+  readonly texts?: Readonly<Record<string, string>>;
+  readonly photoCount?: number;
 };
 
 export type AdTemplate = TemplateBase & {
   readonly kind: 'ad';
   readonly mode: 'motionAd';
   readonly scenes: readonly SceneTemplateRef[];
+  /** Seeds every scene's look, so an ad arrives colour-coordinated (§8.4). */
+  readonly paletteId?: string;
+  /** One line for the library card and the template's accessible description. */
+  readonly blurb?: string;
 };
 
 export type Template = SceneTemplate | AdTemplate;
@@ -196,6 +215,25 @@ export function validateTemplate(template: Template): TemplateIssue[] {
     if (template.scenes.length === 0) fail('ad template has no scenes');
     if (template.scenes[0]?.transitionIn !== null) {
       fail('the first scene must not declare a transitionIn (D-004)');
+    }
+
+    let total = 0;
+    for (const [i, ref] of template.scenes.entries()) {
+      if (ref.durationMs <= 0) fail(`scene ${i} ("${ref.templateId}") has a non-positive duration`);
+      if (ref.photoCount !== undefined && ref.photoCount < 0) {
+        fail(`scene ${i} ("${ref.templateId}") declares a negative photoCount`);
+      }
+      const overlap = i === 0 || ref.transitionIn === null || ref.transitionIn.kind === 'cut'
+        ? 0
+        : ref.transitionIn.durationMs;
+      total += ref.durationMs - overlap;
+    }
+
+    // D-004: the ad's own duration is the sum of its scenes minus the overlaps,
+    // so declaring a defaultDurationMs that disagrees would put the scrub bar
+    // and the export at different lengths.
+    if (Math.abs(total - template.defaultDurationMs) > 1) {
+      fail(`scenes sum to ${total}ms but defaultDurationMs is ${template.defaultDurationMs}ms`);
     }
     return issues;
   }

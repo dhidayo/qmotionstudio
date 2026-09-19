@@ -23,8 +23,8 @@ const BACKGROUND_LABELS: Record<BackgroundTreatment, string> = {
 /** §8.4. */
 export function LookTab({ template }: { template: SceneTemplate | null }): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
-  const look = useEditor((s) => s.project.scenes[0]?.inputs.look);
-  const durationMs = useEditor((s) => s.project.scenes[0]?.durationMs ?? 10_000);
+  const look = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.look);
+  const durationMs = useEditor((s) => s.project.scenes[s.selectedScene]?.durationMs ?? 10_000);
 
   if (!look) return <EmptyNote>No scene.</EmptyNote>;
 

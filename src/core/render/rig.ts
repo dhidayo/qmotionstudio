@@ -39,6 +39,15 @@ export type RenderRig = {
   readonly buffers: BufferPool;
   /** Memoised template output, keyed by (templateId, structural inputs, aspect). §3B. */
   readonly layerCache: Map<string, readonly Layer[]>;
+  /**
+   * Memoised overlay layers, keyed on the overlay's own content (M5).
+   *
+   * Separate from layerCache because an overlay is not a scene (§3C): it
+   * outlives a template change and is keyed on completely different fields.
+   * Same rule though — building one per frame would be §16's forbidden
+   * `build()` in the render loop wearing a different hat.
+   */
+  readonly overlayCache: Map<string, Layer>;
   /** Laid-out glyph runs, keyed by every field that can change a measurement. §6.3. */
   readonly textCache: Map<string, GlyphRun>;
   readonly media: MediaResolver;
@@ -49,6 +58,7 @@ export function createRenderRig(media: MediaResolver = EMPTY_MEDIA): RenderRig {
   return {
     buffers: new BufferPool(),
     layerCache: new Map(),
+    overlayCache: new Map(),
     textCache: new Map(),
     media,
     stats: { frameCount: 0, lastFrameMs: 0, lastBuildMs: 0, buildCount: 0 },
@@ -58,5 +68,6 @@ export function createRenderRig(media: MediaResolver = EMPTY_MEDIA): RenderRig {
 export function disposeRenderRig(rig: RenderRig): void {
   rig.buffers.dispose();
   rig.layerCache.clear();
+  rig.overlayCache.clear();
   rig.textCache.clear();
 }

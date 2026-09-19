@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Artboard } from '@/ui/artboard/Artboard';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
+import { Timeline } from '@/ui/timeline/Timeline';
 import { LibraryRail } from '@/ui/library/LibraryRail';
 import { Inspector } from '@/ui/inspector/Inspector';
 import { PerfOverlay } from '@/dev/PerfOverlay';
 import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
-import { useEditor } from '@/state/store';
+import { pendingAdTemplateId, useEditor } from '@/state/store';
 import { totalDurationMs } from '@/document/select/timeline';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { MediaStore } from '@/media/store';
@@ -49,7 +50,14 @@ export function AppShell(): React.JSX.Element {
     }
     clock.seek(frozen);
     clock.pause();
-  }, [clock]);
+    /*
+     * Re-seeks when the document's length changes, which it does once for
+     * every Motion Ad: the project starts as a placeholder and only reaches
+     * thirty seconds after the ad template has expanded. `seek` clamps to the
+     * current duration, so freezing this once on mount parked every ad at the
+     * ten-second placeholder length and quietly rendered the wrong frame.
+     */
+  }, [clock, duration]);
   useEffect(() => () => { disposeRenderRig(rig); }, [rig]);
 
   /**
@@ -58,29 +66,50 @@ export function AppShell(): React.JSX.Element {
    * from the cache and draws nothing until it lands — one blank frame, not an
    * error.
    */
-  const templateId = project.scenes[0]?.templateId;
+  const selectedScene = useEditor((s) => s.selectedScene);
   const setLoadedTemplate = useEditor((s) => s.setLoadedTemplate);
 
+  // Every scene's template, not just the selected one: an ad's playhead reaches
+  // beat four without anyone having selected it, and a template that is not in
+  // the cache by then costs a blank beat rather than a blank frame.
+  const templateIds = project.scenes.map((scene) => scene.templateId).join(',');
+  const activeTemplateId = project.scenes[selectedScene]?.templateId;
+
   useEffect(() => {
-    if (!templateId || templateId === DEMO_TEMPLATE_ID || templateId === PLACEHOLDER_TEMPLATE_ID) {
+    const ids = [...new Set(templateIds.split(',').filter((id) => id.length > 0))]
+      .filter((id) => id !== DEMO_TEMPLATE_ID && id !== PLACEHOLDER_TEMPLATE_ID);
+
+    if (ids.length === 0) {
       setLoadedTemplate(null);
       return;
     }
+
     let cancelled = false;
-    loadTemplate(templateId)
-      .then((template) => {
+    Promise.all(ids.map((id) => loadTemplate(id)))
+      .then((templates) => {
         if (cancelled) return;
         // Clearing the layer cache forces a rebuild now that build() exists.
         rig.layerCache.clear();
-        setLoadedTemplate(template.kind === 'scene' ? template : null);
+        const active = templates.find((t) => t.id === activeTemplateId);
+        setLoadedTemplate(active?.kind === 'scene' ? active : null);
       })
       .catch((error: unknown) => {
         // §16: a malformed or missing template is a build mistake, not
         // something to paper over with an empty artboard.
-        console.error(`Failed to load template "${templateId}".`, error);
+        console.error('Failed to load a scene template.', error);
       });
     return () => { cancelled = true; };
-  }, [templateId, rig, setLoadedTemplate]);
+  }, [templateIds, activeTemplateId, rig, setLoadedTemplate]);
+
+  /**
+   * `?template=<ad-id>` opens straight into an expanded ad, which is what the
+   * thumbnail job and the visual suite drive Motion Ads through.
+   */
+  const setTemplateById = useEditor((s) => s.setTemplate);
+  useEffect(() => {
+    const pending = pendingAdTemplateId();
+    if (pending !== null) setTemplateById(pending);
+  }, [setTemplateById]);
 
   /** Sample photos, so a new project opens with something to look at (§8.1). */
   useEffect(() => {
@@ -122,7 +151,7 @@ export function AppShell(): React.JSX.Element {
             <Artboard project={project} clock={clock} rig={rig} />
             <PerfOverlay rig={rig} />
           </div>
-          <ScrubBar clock={clock} />
+          {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}
         </main>
         <Inspector />
       </div>

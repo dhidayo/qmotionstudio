@@ -103,9 +103,15 @@ async function main(): Promise<void> {
     if ((summary.isNew ?? false) !== (template.isNew ?? false)) mismatches.push('isNew');
     if (summary.supportedAspects.join() !== template.supportedAspects.join()) mismatches.push('supportedAspects');
 
+    if (summary.kind !== template.kind) mismatches.push('kind');
+
     if (template.kind === 'scene') {
       if (summary.photoSlots.min !== template.photoSlots.min) mismatches.push('photoSlots.min');
       if (summary.photoSlots.max !== template.photoSlots.max) mismatches.push('photoSlots.max');
+    } else {
+      if (summary.sceneCount !== template.scenes.length) mismatches.push('sceneCount');
+      if (summary.durationMs !== template.defaultDurationMs) mismatches.push('durationMs');
+      if (summary.blurb !== template.blurb) mismatches.push('blurb');
     }
 
     for (const field of mismatches) {
@@ -116,6 +122,71 @@ async function main(): Promise<void> {
   for (const summary of TEMPLATE_MANIFEST) {
     if (!loaded.some(({ template }) => template.id === summary.id)) {
       issues.push({ templateId: summary.id, message: 'is in TEMPLATE_MANIFEST but has no file on disk' });
+    }
+  }
+
+  // ── Ad templates reference real scene templates ───────────────────────────
+  // An ad expands into scenes at pick time (D-013), by which point a bad
+  // reference is a runtime failure in front of the user. It is a static fact,
+  // so it belongs here.
+  const byId = new Map(loaded.map(({ template }) => [template.id, template]));
+
+  for (const { template } of loaded) {
+    if (template.kind !== 'ad') continue;
+
+    for (const [i, ref] of template.scenes.entries()) {
+      const sub = byId.get(ref.templateId);
+      const where = `scene ${i} ("${ref.templateId}")`;
+
+      if (!sub) {
+        issues.push({ templateId: template.id, message: `${where} references a template that does not exist` });
+        continue;
+      }
+      if (sub.kind !== 'scene') {
+        issues.push({ templateId: template.id, message: `${where} references another ad template` });
+        continue;
+      }
+
+      if (ref.durationMs < sub.minDurationMs || ref.durationMs > sub.maxDurationMs) {
+        issues.push({
+          templateId: template.id,
+          message: `${where} runs ${ref.durationMs}ms, outside that template's ${sub.minDurationMs}–${sub.maxDurationMs}ms`,
+        });
+      }
+
+      if (ref.photoCount !== undefined && (ref.photoCount < sub.photoSlots.min || ref.photoCount > sub.photoSlots.max)) {
+        issues.push({
+          templateId: template.id,
+          message: `${where} asks for ${ref.photoCount} photos, outside that template's ${sub.photoSlots.min}–${sub.photoSlots.max}`,
+        });
+      }
+
+      for (const aspect of template.supportedAspects) {
+        if (!sub.supportedAspects.includes(aspect)) {
+          issues.push({
+            templateId: template.id,
+            message: `${where} does not support ${aspect}, which the ad claims`,
+          });
+        }
+      }
+
+      for (const slotId of Object.keys(ref.texts ?? {})) {
+        if (!sub.textSlots.some((slot) => slot.id === slotId)) {
+          issues.push({ templateId: template.id, message: `${where} seeds unknown text slot "${slotId}"` });
+        }
+      }
+
+      // D-004 again, from the other side: an overlap longer than half of
+      // either neighbour gets clamped at render time, so the declared length
+      // and the rendered one would silently disagree.
+      const previous = template.scenes[i - 1];
+      const overlap = ref.transitionIn === null || ref.transitionIn.kind === 'cut' ? 0 : ref.transitionIn.durationMs;
+      if (previous && overlap > Math.min(ref.durationMs, previous.durationMs) / 2) {
+        issues.push({
+          templateId: template.id,
+          message: `${where} has a ${overlap}ms transition, more than half of its shorter neighbour`,
+        });
+      }
     }
   }
 

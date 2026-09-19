@@ -7,6 +7,7 @@ import {
   type Project,
   type Scene,
   type SceneInputs,
+  type TextStyle,
 } from './types';
 
 export const DEFAULT_PALETTE: Palette = {
@@ -44,6 +45,9 @@ function id(prefix: string): string {
   const uuid = globalThis.crypto.randomUUID();
   return `${prefix}_${uuid.slice(0, 8)}`;
 }
+
+/** The same generator, for actions that mint scenes and overlays. */
+export const newId = id;
 
 export function emptySceneInputs(): SceneInputs {
   return {
@@ -90,6 +94,23 @@ export function createScene(templateId: string, durationMs = DEFAULT_SCENE_MS): 
  * via ?scene= and exist so the renderer's own regressions stay visible
  * independently of whatever the template library happens to contain.
  */
+export const DEFAULT_OVERLAY_TEXT_STYLE: TextStyle = {
+  fontId: 'headline',
+  weight: 700,
+  align: 'center',
+  sizePct: 100,
+  color: '',
+  wrap: true,
+  shadow: true,
+  outline: false,
+  pill: false,
+  wrapWidthPct: 100,
+  letterSpacingPct: 0,
+};
+
+/** How long a freshly dropped overlay lasts before the user drags its edges. */
+export const DEFAULT_OVERLAY_MS = 3_000;
+
 export const DEMO_TEMPLATE_ID = '__demo__';
 export const PLACEHOLDER_TEMPLATE_ID = '__placeholder__';
 

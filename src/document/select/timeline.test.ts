@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Scene, Transition } from '@/document/types';
-import { activeScenesAt, sceneSpans } from './timeline';
+import type { Overlay, Project, Scene, Transition } from '@/document/types';
+import { activeOverlaysAt, activeScenesAt, sceneSpans, totalDurationMs } from './timeline';
 
 const scene = (id: string, durationMs: number, transitionIn: Transition | null = null): Scene =>
   ({ id, templateId: 't', durationMs, transitionIn, inputs: null as never });
@@ -88,5 +88,62 @@ describe('activeScenesAt', () => {
   it('clamps before the start and after the end rather than returning nothing', () => {
     expect(activeScenesAt(spans, -100)?.current.scene.id).toBe('a');
     expect(activeScenesAt(spans, 99999)?.current.scene.id).toBe('b');
+  });
+});
+
+describe('activeOverlaysAt — §6.4 step 4', () => {
+  const overlay = (id: string, track: number, startMs: number, endMs: number): Overlay =>
+    ({
+      id, track, startMs, endMs,
+      kind: 'text',
+      content: { kind: 'text', text: id, style: null as never },
+      transform: {},
+      enterAnim: 'none',
+      exitAnim: 'none',
+    });
+
+  const clips = [
+    overlay('late', 1, 2_000, 6_000),
+    overlay('early', 0, 0, 3_000),
+    overlay('gone', 0, 8_000, 9_000),
+  ];
+
+  it('includes only the clips the playhead is inside', () => {
+    expect(activeOverlaysAt(clips, 1_000).map((o) => o.id)).toEqual(['early']);
+    expect(activeOverlaysAt(clips, 8_500).map((o) => o.id)).toEqual(['gone']);
+  });
+
+  it('treats the end as exclusive, so two clips that touch never both draw', () => {
+    expect(activeOverlaysAt([overlay('a', 0, 0, 1_000), overlay('b', 0, 1_000, 2_000)], 1_000)
+      .map((o) => o.id)).toEqual(['b']);
+  });
+
+  it('orders by track, so a higher layer draws last and therefore on top', () => {
+    expect(activeOverlaysAt(clips, 2_500).map((o) => o.id)).toEqual(['early', 'late']);
+  });
+
+  it('falls back to document order within one track', () => {
+    const sameTrack = [overlay('second', 0, 0, 5_000), overlay('first', 0, 0, 5_000)];
+    expect(activeOverlaysAt(sameTrack, 1_000).map((o) => o.id)).toEqual(['second', 'first']);
+  });
+
+  it('returns nothing rather than throwing on an empty project', () => {
+    expect(activeOverlaysAt([], 1_000)).toEqual([]);
+  });
+});
+
+describe('totalDurationMs', () => {
+  // Only the two fields totalDurationMs reads; the rest of a Project would be
+  // noise in a test about arithmetic.
+  const project = (scenes: Scene[], overlays: Overlay[] = []): Project =>
+    ({ scenes, overlays } as unknown as Project);
+
+  it('is the scenes minus their overlaps', () => {
+    expect(totalDurationMs(project([scene('a', 3000), scene('b', 3000, fade(500))]))).toBe(5500);
+  });
+
+  it('stretches to cover an overlay that outlives the last scene', () => {
+    const overlays = [{ id: 'o', track: 0, startMs: 0, endMs: 9_000 } as Overlay];
+    expect(totalDurationMs(project([scene('a', 3000)], overlays))).toBe(9_000);
   });
 });

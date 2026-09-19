@@ -783,3 +783,157 @@ every result mean something.
 
 Worth remembering when adding the audio export tests at M6: they will be just
 as expensive.
+
+---
+
+## D-043 — Transition functions take a fifth options argument
+**Amends §6.4.** M5.
+
+§6.4 specifies `(ctxOut, bufA, bufB, progress) => void`. Three of the seven
+transitions cannot be written against that signature:
+
+- `push` and `wipe` need a **direction**, which §5 already stores on the
+  `Transition` and which is meaningless to the other five.
+- `zoomBlur` needs a **scratch surface**. It accumulates several scaled copies
+  of each buffer, and a composite that reads its own target mid-pass produces
+  garbage on some drivers. `BufferPool` has held a third buffer since M1 for
+  exactly this, anticipated in its own comment.
+
+The extras arrive in a fifth argument — `{ size, direction, scratch }` — rather
+than in module state, so the functions stay pure and the preview and the export
+can run two different transitions at the same instant without interfering.
+
+`size` is in **pixels**, not design units: a composite is a pixel operation, and
+scaling it would resample an already-rendered frame for nothing.
+
+**Rejected:** a factory per transition returning a four-argument closure (the
+same data, one more indirection); module-level scratch (breaks D-001's
+concurrency guarantee for the sake of one parameter).
+
+---
+
+## D-044 — An overlay's `transform` is normalised, and `wipeIn` uses `clipProgress`
+M5. Fills in two things §5 leaves open.
+
+**Placement.** §5 types an overlay's placement as `Partial<AnimatedProps>` —
+a set of numbers with no units. Read literally, `x` would be design units, and
+an overlay placed at 9:16 would hang off the edge of the same project at 16:9.
+§1.3 requires switching aspect to *re-lay-out*, not to crop, so:
+
+```
+x, y            normalised 0–1 within the design box, default centre
+scaleX, scaleY  multiply the overlay's nominal size, not the frame
+rotation        degrees
+opacity         0–1, multiplied into whatever the enter/exit preset does
+```
+
+A photo overlay's nominal size is 34% of the frame's short edge; a text
+overlay's is 6.2%, scaled by its own `sizePct`.
+
+**wipeIn.** Five of the six presets in §5 are transforms and compose by adding
+keyframes. `wipeIn` is not: the content has to stay still while a window over it
+opens. That is what §6.1 named `clipProgress` for, and until now nothing read
+it. `MaskProps` gains `clipFrom: Direction`, and a mask with one clips to a
+fraction of its box. The overlay wraps its content in that mask instead of
+animating the content's own scale — which would be a squash, not a wipe.
+
+**Overlay layers are memoised separately from scene layers.** The cache key
+excludes `startMs`, so dragging a clip along the timeline moves *when* it draws
+without rebuilding *what* it draws, and excludes the palette, because overlay
+colours resolve at draw time through Paint roles like everything else (D-006).
+
+---
+
+## D-045 — Inspector edits carry an `ActionScope`
+M5.
+
+The four inspector tabs edit "the current scene". Showcase has one, so M0–M4
+hard-coded index 0. A Motion Ad has eight, and *which* one is selected is
+editor state: it must not be undoable, must not be saved, and cannot live in
+the document.
+
+Nor can it live in the action — `setGrain(0.4)` is created by a slider that has
+no idea which scene is selected. So `Action.apply` takes a second argument:
+
+```ts
+apply(project: Project, scope: ActionScope): Project
+```
+
+The store supplies it at dispatch, which is the one place that knows both the
+document and the selection. Every existing action kept its signature; only the
+four plumbing helpers changed.
+
+The dispatcher also suffixes the coalescing key with the scene index, so
+dragging the same slider on two different scenes is two undo steps rather than
+one merged one.
+
+**Rejected:** a `selectedScene` field on the document (undo would step through
+selection changes, and autosave would persist a cursor); an extra parameter on
+every action factory (forty call sites, all passing the same value).
+
+---
+
+## D-046 — Ad templates expand asynchronously, and `?frozen` re-seeks
+M5. Two halves of one problem.
+
+An ad template has no `build()` (D-013), so its id must never reach a scene: the
+renderer would throw rather than draw a blank frame. `setTemplate` therefore
+loads the template *first* and only then dispatches — `applyAdTemplate` for an
+ad, `setTemplate` for a scene template. There is no window in which the document
+is invalid. `?template=<ad-id>` opens on the placeholder and expands on mount
+for the same reason.
+
+The consequence caught a real bug. A project's duration changes *after* the
+first paint for every Motion Ad — ten seconds of placeholder, then thirty once
+the ad expands — and `PreviewClock.seek` clamps to the current duration. So
+`?frozen=10500` parked at 10,000 and rendered the wrong frame, silently. The
+frozen hook now re-seeks whenever the duration changes.
+
+That hook is what D-017 and D-040 rest on: `npm run thumbs` and every visual
+test read frames through it. A silent clamp there would have made the thumbnail
+job and the M5 suite agree with each other about the wrong picture.
+
+---
+
+## D-047 — `SceneTemplateRef` carries seed copy and a photo count
+**Extends §7.** M5.
+
+§7 gives a Motion Ad's scene refs three fields: template, duration, transition.
+Expanded from those alone, an eight-beat ad is the same placeholder headline
+eight times, which reads as a bug rather than as a template.
+
+Two optional fields are added:
+
+- `texts` — seed copy per beat, keyed by the sub-template's own slot ids.
+- `photoCount` — how many photo slots this beat fills. A "hero shot" beat and a
+  "grid of six" beat are frequently the same template at different counts.
+
+`lint:templates` checks both against the referenced template: unknown slot ids
+and out-of-range counts fail the build, as do durations outside the
+sub-template's own bounds, aspects the sub-template does not support, and
+transitions longer than half of their shorter neighbour — that last one being
+the point at which D-004's overlap clamp would silently make the rendered
+length disagree with the advertised one.
+
+Photos are dealt from a moving cursor across the pool rather than restarting at
+each beat, because consecutive beats showing the same photograph is the single
+thing that makes an auto-filled ad look broken.
+
+---
+
+## D-048 — The export Playwright project depends on the app project
+**Amends D-042.** M5.
+
+D-042 gave the export spec its own project with `fullyParallel: false`. That
+serialises tests *within* the project, but Playwright still schedules the two
+projects into one worker pool — so a 1080p encode ran alongside five app
+workers.
+
+With 10-second clips that was survivable. M5's thirty-second eight-scene export
+went from **20 seconds alone to over two minutes under that load**, and timed
+out. Raising the budget would have hidden a real contention problem behind a
+bigger number.
+
+`dependencies: ['app']` makes the two phases disjoint. The full suite runs in
+**2.7 minutes, down from 4.4** — serialising the phases is faster than letting
+them fight, because neither half was getting the cores it needed.

@@ -330,3 +330,101 @@ test.describe('realtime fallback (§11.9)', () => {
     expect(info.w).toBeGreaterThan(0);
   });
 });
+
+/**
+ * M5's exit criterion, export half: "a 30s multi-scene ad plays and exports
+ * correctly". Playing is asserted in motionAds.spec.ts; exporting is here,
+ * where D-042's serial project keeps a 30-second encode from competing with
+ * the rest of the suite for cores.
+ */
+test.describe('a multi-scene ad exports (M5)', () => {
+  test.beforeEach(async ({ page }) => {
+    // Three times the frames of the 10s tests, plus eight template modules to
+    // fetch inside the worker before the first one is drawn.
+    test.setTimeout(EXPORT_TIMEOUT_MS + 90_000);
+    await captureDownloads(page);
+  });
+
+  test('a 30s eight-scene ad exports at full length with every beat in it', async ({ page }) => {
+    await page.goto('/?template=launch-story&aspect=9:16');
+    await page.waitForSelector('canvas');
+    // The ad expands and fetches one module per beat (D-029). The export
+    // worker loads them again in its own realm, but the main thread has to
+    // have the document before the dialog can size the job.
+    await page.waitForTimeout(2_500);
+
+    await expect(page.getByText('8 scenes · 0 overlays')).toBeVisible();
+
+    await runExport(page, 'mp4');
+    await waitForExport(page, 140_000);
+
+    const info = await page.evaluate(async () => {
+      const { blob, name } = (globalThis as unknown as { __exported: { blob: Blob; name: string } }).__exported;
+      const url = URL.createObjectURL(blob);
+      const video = document.createElement('video');
+      video.src = url;
+      video.muted = true;
+
+      const meta = await new Promise<{ w: number; h: number; duration: number }>((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          resolve({ w: video.videoWidth, h: video.videoHeight, duration: video.duration });
+        };
+        video.onerror = () => { reject(new Error('the exported ad would not decode')); };
+      });
+
+      /*
+       * Sample the decoded file at three instants and compare them to each
+       * other. An export that loaded only the first scene's template — which is
+       * exactly what the worker used to do — still produces a well-formed
+       * thirty-second MP4; it is just the same beat eight times over. Only
+       * reading the pixels back catches that.
+       */
+      const frameAt = async (seconds: number): Promise<number[]> => {
+        await new Promise<void>((resolve) => {
+          const done = setTimeout(resolve, 3_000);
+          video.onseeked = () => { clearTimeout(done); resolve(); };
+          video.currentTime = seconds;
+        });
+        const c = document.createElement('canvas');
+        c.width = 24;
+        c.height = 42;
+        const cx = c.getContext('2d', { alpha: false });
+        if (!cx) throw new Error('no context');
+        cx.drawImage(video, 0, 0, 24, 42);
+        return [...cx.getImageData(0, 0, 24, 42).data];
+      };
+
+      const spread = (a: number[], b: number[]): number => {
+        let total = 0;
+        for (let i = 0; i < a.length; i++) total += Math.abs((a[i] ?? 0) - (b[i] ?? 0));
+        return total / a.length;
+      };
+
+      // Beats one, five and seven — three different sub-templates.
+      const beatOne = await frameAt(1.8);
+      const beatFive = await frameAt(16.5);
+      const beatSeven = await frameAt(23.8);
+
+      URL.revokeObjectURL(url);
+      return {
+        name,
+        size: blob.size,
+        ...meta,
+        oneToFive: spread(beatOne, beatFive),
+        oneToSeven: spread(beatOne, beatSeven),
+      };
+    });
+
+    expect(info.name).toMatch(/\.mp4$/);
+    expect(info.w).toBe(1080);
+    expect(info.h).toBe(1920);
+    // D-004: eight beats summing to 31,000ms minus 1,000ms of overlap.
+    expect(info.duration).toBeCloseTo(30, 0);
+    expect(info.size).toBeGreaterThan(500_000);
+
+    // Different templates with different photos; a single-beat export would
+    // score near zero on both.
+    expect(info.oneToFive, 'beats one and five look the same in the export').toBeGreaterThan(8);
+    expect(info.oneToSeven, 'beats one and seven look the same in the export').toBeGreaterThan(8);
+  });
+});

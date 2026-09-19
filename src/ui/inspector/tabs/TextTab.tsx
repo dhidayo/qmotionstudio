@@ -43,7 +43,7 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
 
 function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
-  const inputs = useEditor((s) => s.project.scenes[0]?.inputs);
+  const inputs = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs);
   if (!inputs) return <EmptyNote>No scene.</EmptyNote>;
 
   const style = resolveStyle(slot, inputs);

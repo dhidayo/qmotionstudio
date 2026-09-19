@@ -126,25 +126,47 @@ function HistoryButton({
   );
 }
 
+/**
+ * §1.1 / §1.2. Switching to Motion Ads keeps the scene you were on and lets you
+ * add more; switching back keeps the *selected* scene and drops the rest along
+ * with the overlays and audio, because §5 says showcase has exactly one scene.
+ *
+ * That is destructive, and it is one ⌘Z away — which is why the button says so
+ * rather than opening a dialog.
+ */
 function ModeSwitch(): React.JSX.Element {
   const mode = useEditor((s) => s.project.mode);
+  const sceneCount = useEditor((s) => s.project.scenes.length);
+  const setMode = useEditor((s) => s.setMode);
+
   return (
     <div className="flex rounded-md border border-edge p-0.5" role="group" aria-label="Mode">
-      {(['showcase', 'motionAd'] as const).map((m) => (
-        <span
-          key={m}
-          aria-current={mode === m}
-          title={m === 'motionAd' ? 'Motion Ads arrive at M5' : undefined}
-          className="rounded-sm px-2 py-0.5 text-[12px]"
-          style={
-            mode === m
-              ? { background: 'var(--c-accent-soft)', color: 'var(--c-accent)', fontWeight: 600 }
-              : { color: 'var(--c-ink-faint)' }
-          }
-        >
-          {m === 'showcase' ? 'Showcase' : 'Motion Ads'}
-        </span>
-      ))}
+      {(['showcase', 'motionAd'] as const).map((m) => {
+        const active = mode === m;
+        const lossy = m === 'showcase' && sceneCount > 1;
+        return (
+          <button
+            key={m}
+            type="button"
+            aria-current={active}
+            aria-pressed={active}
+            onClick={() => { if (!active) setMode(m); }}
+            title={
+              lossy
+                ? `Keeps the selected scene and drops the other ${sceneCount - 1}. Undoable.`
+                : m === 'showcase' ? 'One looping scene' : 'Several scenes, transitions and overlays'
+            }
+            className="rounded-sm px-2 py-0.5 text-[12px] transition-colors"
+            style={
+              active
+                ? { background: 'var(--c-accent-soft)', color: 'var(--c-accent)', fontWeight: 600 }
+                : { color: 'var(--c-ink-faint)' }
+            }
+          >
+            {m === 'showcase' ? 'Showcase' : 'Motion Ads'}
+          </button>
+        );
+      })}
     </div>
   );
 }

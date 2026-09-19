@@ -1,4 +1,4 @@
-import type { Project, Scene, Transition } from '@/document/types';
+import type { Overlay, Project, Scene, Transition } from '@/document/types';
 
 /**
  * Scene placement on the global timeline.
@@ -104,4 +104,32 @@ export function activeScenesAt(spans: readonly SceneSpan[], timeMs: number): Act
 
   const first = spans[0];
   return first ? { current: first, progress: 0 } : null;
+}
+
+/**
+ * Overlays live on the *global* timeline (§3C), not inside a scene, so they are
+ * resolved against `globalTimeMs` directly and never shifted by a transition
+ * overlap.
+ *
+ * §6.4 step 4 orders them "by track then z". Track index is the outer key —
+ * L1 draws first, so a higher track number sits on top, which is the way every
+ * layer panel in the world reads. Document order breaks the tie, so two clips
+ * sharing a track stack in the order they were added.
+ */
+export function activeOverlaysAt(
+  overlays: readonly Overlay[],
+  timeMs: number,
+): readonly Overlay[] {
+  const active = overlays.filter((o) => timeMs >= o.startMs && timeMs < o.endMs);
+  if (active.length < 2) return active;
+
+  return active
+    .map((overlay, order) => ({ overlay, order }))
+    .sort((a, b) => a.overlay.track - b.overlay.track || a.order - b.order)
+    .map((entry) => entry.overlay);
+}
+
+/** Highest track index in use, so the timeline knows how many rows to draw. */
+export function trackCount(overlays: readonly Overlay[]): number {
+  return overlays.reduce((max, o) => Math.max(max, o.track + 1), 0);
 }

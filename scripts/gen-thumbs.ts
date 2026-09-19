@@ -119,8 +119,30 @@ window.__thumb = {
 
 type Result = { id: string; posterKB: number; loopKB: number; aspectsChecked: number };
 
+/**
+ * `npm run thumbs -- <id|category fragment> …` regenerates only what matches.
+ *
+ * The loop is captured with MediaRecorder, so re-running the whole set rewrites
+ * every .webm with slightly different bytes. With three templates that was
+ * noise; at §15's twenty-five it is a diff nobody can read. Matching is a
+ * case-insensitive substring of the id or the category.
+ */
+function selected(): readonly TemplateSummary[] {
+  const filters = process.argv.slice(2).map((arg) => arg.toLowerCase());
+  if (filters.length === 0) return TEMPLATE_MANIFEST;
+
+  const matched = TEMPLATE_MANIFEST.filter((t) =>
+    filters.some((f) => t.id.toLowerCase().includes(f) || t.category.toLowerCase().includes(f)),
+  );
+  if (matched.length === 0) {
+    throw new Error(`Nothing matches ${filters.join(', ')}. Known ids: ${TEMPLATE_MANIFEST.map((t) => t.id).join(', ')}`);
+  }
+  return matched;
+}
+
 async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
+  const wanted = selected();
 
   const browser = await chromium.launch({
     args: ['--autoplay-policy=no-user-gesture-required'],
@@ -137,7 +159,7 @@ async function main(): Promise<void> {
   const results: Result[] = [];
   const failures: string[] = [];
 
-  for (const summary of TEMPLATE_MANIFEST) {
+  for (const summary of wanted) {
     try {
       const result = await renderTemplate(page, summary);
       results.push(result);
@@ -155,7 +177,7 @@ async function main(): Promise<void> {
 
   await browser.close();
 
-  console.log(`\n${results.length} of ${TEMPLATE_MANIFEST.length} templates rendered.`);
+  console.log(`\n${results.length} of ${wanted.length} templates rendered.`);
   if (failures.length > 0) {
     console.error(`\n${failures.length} failure${failures.length === 1 ? '' : 's'}:`);
     for (const failure of failures) console.error(`  ${failure}`);
@@ -166,10 +188,11 @@ async function main(): Promise<void> {
 async function renderTemplate(page: Page, summary: TemplateSummary): Promise<Result> {
   // §7: verify every declared aspect actually renders, not just the poster one.
   const posterAt = summary.posterAtMs ?? DEFAULT_POSTER_AT_MS;
+  const settleMs = summary.kind === 'ad' ? 1_800 : 700;
 
   let aspectsChecked = 0;
   for (const aspect of summary.supportedAspects) {
-    await openTemplate(page, summary.id, aspect, posterAt);
+    await openTemplate(page, summary.id, aspect, posterAt, settleMs);
     const coverage = await frameCoverage(page);
     if (coverage < 0.02) {
       throw new Error(`renders blank at ${aspect} (coverage ${(coverage * 100).toFixed(1)}%)`);
@@ -180,7 +203,7 @@ async function renderTemplate(page: Page, summary: TemplateSummary): Promise<Res
   // Poster is taken at the template's own first supported aspect, which is the
   // shape it was designed against.
   const posterAspect = summary.supportedAspects[0] ?? '9:16';
-  await openTemplate(page, summary.id, posterAspect, posterAt);
+  await openTemplate(page, summary.id, posterAspect, posterAt, settleMs);
 
   const posterData = await page.evaluate(
     (q: number) => (globalThis as unknown as { __thumb: { poster: (n: number) => string } }).__thumb.poster(q),
@@ -190,7 +213,7 @@ async function renderTemplate(page: Page, summary: TemplateSummary): Promise<Res
   await writeFile(resolve(OUT_DIR, `${summary.id}.webp`), posterBytes);
 
   // Loop: play from the start and record the canvas stream.
-  await openTemplate(page, summary.id, posterAspect, null);
+  await openTemplate(page, summary.id, posterAspect, null, settleMs);
   const loopData = await page.evaluate(
     (o: { ms: number; fps: number; bitrate: number }) =>
       (globalThis as unknown as {
@@ -214,6 +237,7 @@ async function openTemplate(
   id: string,
   aspect: string,
   frozenMs: number | null,
+  settleMs = 700,
 ): Promise<void> {
   const params = new URLSearchParams({ template: id, aspect, thumb: String(THUMB_SHORT_EDGE) });
   if (frozenMs !== null) params.set('frozen', String(frozenMs));
@@ -221,8 +245,9 @@ async function openTemplate(
   await page.goto(`${BASE_URL}/?${params.toString()}`, { waitUntil: 'networkidle' });
   await page.waitForSelector('canvas');
   // Templates load lazily (D-029) and sample photos are fetched; give both a
-  // moment to land before judging the frame.
-  await page.waitForTimeout(700);
+  // moment to land before judging the frame. An ad template also has to expand
+  // and fetch every one of its beats, which is several more round trips.
+  await page.waitForTimeout(settleMs);
 }
 
 /** Delegates to the injected page helper; see PAGE_HELPERS. */

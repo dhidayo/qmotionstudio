@@ -118,9 +118,25 @@ function paintLayer(
 
     case 'mask': {
       const { ctx } = dc;
+      const { shape, w, h, cornerRadius, clipFrom } = layer.props;
       ctx.save();
-      if (layer.props.shape === 'ellipse') ellipsePath(ctx, x, y, layer.props.w, layer.props.h);
-      else roundedRectPath(ctx, x, y, layer.props.w, layer.props.h, layer.props.cornerRadius ?? 0);
+
+      if (shape === 'ellipse') {
+        ellipsePath(ctx, x, y, w, h);
+      } else if (clipFrom === undefined) {
+        roundedRectPath(ctx, x, y, w, h, cornerRadius ?? 0);
+      } else {
+        // §6.1's clipProgress: the window opens from one edge rather than
+        // being a fixed hole. The children are untouched — that is the whole
+        // difference between a wipe and a scale.
+        const p = props.clipProgress < 0 ? 0 : props.clipProgress > 1 ? 1 : props.clipProgress;
+        const openW = w * (clipFrom === 'left' || clipFrom === 'right' ? p : 1);
+        const openH = h * (clipFrom === 'up' || clipFrom === 'down' ? p : 1);
+        const openX = clipFrom === 'right' ? x + w - openW : x;
+        const openY = clipFrom === 'down' ? y + h - openH : y;
+        roundedRectPath(ctx, openX, openY, openW, openH, cornerRadius ?? 0);
+      }
+
       ctx.clip();
       const child = atDepth(dc, dc.depth + 1);
       for (const c of layer.children) drawLayer(child, c, localMs);

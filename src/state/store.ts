@@ -1,9 +1,12 @@
 import { create } from 'zustand';
 import type { Aspect } from '@/core/types';
-import type { Project } from '@/document/types';
+import type { Project, ProjectMode } from '@/document/types';
 import { createProject, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { totalDurationMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
+import { loadTemplate } from '@/templates/registry';
+import { expandAdTemplate } from '@/templates/ad';
+import { summaryFor } from '@/templates/manifest';
 import { renderParams } from '@/dev/renderParams';
 import * as actions from '@/document/actions';
 import {
@@ -35,6 +38,21 @@ type EditorState = {
    */
   template: SceneTemplate | null;
 
+  /**
+   * Which scene the four inspector tabs edit.
+   *
+   * Editor state, not document state — it must not be undoable and it must not
+   * be saved. Dispatch turns it into an ActionScope (D-045).
+   */
+  selectedScene: number;
+  /**
+   * The overlay the inspector is editing, or null for the scene.
+   *
+   * An overlay is not a scene (§3C), so it does not fit the four tabs; while
+   * one is selected the inspector shows its own panel instead.
+   */
+  selectedOverlay: string | null;
+
   playheadMs: number;
   isPlaying: boolean;
   inspectorTab: InspectorTab;
@@ -47,6 +65,8 @@ type EditorState = {
   libraryShowFavourites: boolean;
   exporting: boolean;
 
+  selectScene: (index: number) => void;
+  selectOverlay: (id: string | null) => void;
   setLoadedTemplate: (template: SceneTemplate | null) => void;
   setExporting: (exporting: boolean) => void;
   dispatch: (action: actions.Action) => void;
@@ -60,7 +80,18 @@ type EditorState = {
   redoLabel: () => string | null;
 
   setAspect: (aspect: Aspect) => void;
+  /**
+   * Picks a template from the library.
+   *
+   * Asynchronous because the registry is lazy (D-029) and because an *ad*
+   * template has to be expanded into scenes before the document can hold it —
+   * writing the ad's own id into a scene would leave the renderer with a scene
+   * whose template has no `build()`, which is a throw, not a blank frame.
+   * Nothing is dispatched until the template has resolved, so there is no
+   * window in which the document is invalid.
+   */
   setTemplate: (templateId: string) => void;
+  setMode: (mode: ProjectMode) => void;
   setPlayhead: (ms: number) => void;
   togglePlay: () => void;
   setInspectorTab: (tab: InspectorTab) => void;
@@ -115,19 +146,35 @@ function persistFavourites(ids: readonly string[]): void {
   }
 }
 
+/**
+ * `?template=` may name an *ad* template, which cannot go straight into a
+ * scene: a scene whose templateId has no `build()` is a throw in the render
+ * loop, not a blank frame. The project starts on the placeholder and AppShell
+ * expands the ad as soon as it mounts.
+ */
+export function pendingAdTemplateId(): string | null {
+  const wanted = renderParams().template;
+  if (wanted === null) return null;
+  return summaryFor(wanted)?.kind === 'ad' ? wanted : null;
+}
+
 /** See dev/renderParams for the full list of steering parameters. */
 function initialProject(): Project {
   const params = renderParams();
+  const pendingAd = pendingAdTemplateId();
 
   let templateId: string | undefined;
   if (params.scene === 'placeholder') templateId = PLACEHOLDER_TEMPLATE_ID;
   else if (params.scene === 'demo') templateId = DEMO_TEMPLATE_ID;
+  else if (pendingAd !== null) templateId = PLACEHOLDER_TEMPLATE_ID;
   else if (params.template) templateId = params.template;
 
-  return createProject({
+  const project = createProject({
     ...(templateId === undefined ? {} : { templateId }),
     ...(params.aspect === null ? {} : { aspect: params.aspect }),
   });
+
+  return pendingAd === null ? project : { ...project, mode: 'motionAd' };
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -135,6 +182,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   history: emptyHistory,
   template: null,
 
+  selectedScene: 0,
+  selectedOverlay: null,
   playheadMs: 0,
   isPlaying: true,
   inspectorTab: 'photos',
@@ -145,6 +194,17 @@ export const useEditor = create<EditorState>((set, get) => ({
   libraryTierFilter: 'all',
   libraryShowFavourites: false,
   exporting: false,
+
+  selectScene: (index) => {
+    set((state) => {
+      const clamped = Math.max(0, Math.min(index, state.project.scenes.length - 1));
+      return clamped === state.selectedScene && state.selectedOverlay === null
+        ? {}
+        : { selectedScene: clamped, selectedOverlay: null, selectedPhoto: 0, template: null };
+    });
+  },
+
+  selectOverlay: (selectedOverlay) => { set({ selectedOverlay }); },
 
   setLoadedTemplate: (template) => { set({ template }); },
 
@@ -158,12 +218,19 @@ export const useEditor = create<EditorState>((set, get) => ({
    */
   dispatch: (action) => {
     set((state) => {
-      const next = action.apply(state.project);
+      const scope: actions.ActionScope = { sceneIndex: state.selectedScene };
+      const next = action.apply(state.project, scope);
       const result = commit(state.history, state.project, next, {
         label: action.label,
-        ...(action.coalesceKey === undefined ? {} : { coalesceKey: action.coalesceKey }),
+        // The key is scoped to the scene as well as to the control: dragging
+        // the same slider on two different scenes is two undo steps, not one.
+        ...(action.coalesceKey === undefined
+          ? {}
+          : { coalesceKey: `${action.coalesceKey}@${scope.sceneIndex}` }),
       });
-      return { project: result.project, history: result.history };
+      // A scene removal can leave the selection past the end of the list.
+      const selectedScene = Math.max(0, Math.min(state.selectedScene, result.project.scenes.length - 1));
+      return { project: result.project, history: result.history, selectedScene };
     });
   },
 
@@ -193,10 +260,30 @@ export const useEditor = create<EditorState>((set, get) => ({
   setAspect: (aspect) => { get().dispatch(actions.setAspect(aspect)); },
 
   setTemplate: (templateId) => {
-    get().dispatch(actions.setTemplate(templateId));
     // Cleared so the inspector does not show the previous template's controls
     // against the new one's document while the fetch is in flight.
-    set({ selectedPhoto: 0, template: null });
+    set({ selectedPhoto: 0, template: null, selectedOverlay: null });
+
+    void loadTemplate(templateId)
+      .then(async (template) => {
+        if (template.kind === 'ad') {
+          const scenes = await expandAdTemplate(template);
+          get().dispatch(actions.applyAdTemplate(scenes, template.id));
+          set({ selectedScene: 0 });
+          return;
+        }
+        get().dispatch(actions.setTemplate(templateId, template.defaultDurationMs));
+      })
+      .catch((error: unknown) => {
+        // §16: a template that will not load is a build mistake, and silently
+        // leaving the old one selected would hide it.
+        console.error(`Failed to load template "${templateId}".`, error);
+      });
+  },
+
+  setMode: (mode) => {
+    get().dispatch(actions.setMode(mode));
+    set({ selectedOverlay: null, selectedScene: 0, template: null });
   },
 
   setPlayhead: (ms) => { set({ playheadMs: Math.max(0, ms) }); },
@@ -231,7 +318,13 @@ export const useEditor = create<EditorState>((set, get) => ({
   durationMs: () => totalDurationMs(get().project),
 }));
 
-/** The scene Showcase mode edits. M5 makes this an index. */
+/** The scene the inspector is editing. Showcase always has exactly one. */
 export function useScene(): Project['scenes'][number] | undefined {
-  return useEditor((s) => s.project.scenes[0]);
+  return useEditor((s) => s.project.scenes[s.selectedScene] ?? s.project.scenes[0]);
+}
+
+export function useSelectedOverlay(): Project['overlays'][number] | undefined {
+  return useEditor((s) =>
+    s.selectedOverlay === null ? undefined : s.project.overlays.find((o) => o.id === s.selectedOverlay),
+  );
 }

@@ -192,6 +192,16 @@ export type MaskProps = {
   readonly w: number;
   readonly h: number;
   readonly cornerRadius?: number;
+  /**
+   * The edge the mask opens from when `clipProgress` is animated.
+   *
+   * With no direction the mask is a fixed window and `clipProgress` does
+   * nothing; with one, the clip grows from that edge across the box — which is
+   * what §6.1 named `clipProgress` for, and what M5's `wipeIn` overlay preset
+   * is built on. Rect masks only: a partially-revealed ellipse is a shape
+   * nobody has asked for.
+   */
+  readonly clipFrom?: Direction;
 };
 
 export type VideoProps = {

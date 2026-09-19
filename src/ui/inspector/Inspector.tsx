@@ -3,6 +3,7 @@ import { PhotosTab } from './tabs/PhotosTab';
 import { TextTab } from './tabs/TextTab';
 import { LogoTab } from './tabs/LogoTab';
 import { LookTab } from './tabs/LookTab';
+import { OverlayPanel } from './OverlayPanel';
 
 const TABS: readonly { id: InspectorTab; label: string }[] = [
   { id: 'photos', label: 'Photos' },
@@ -21,6 +22,24 @@ export function Inspector(): React.JSX.Element {
   const setTab = useEditor((s) => s.setInspectorTab);
   // Resolved by AppShell once the lazy registry (D-029) has fetched it.
   const template = useEditor((s) => s.template);
+  /**
+   * An overlay is not a scene (§3C), so it has no photo slots, no template text
+   * slots and no look. While one is selected the panel replaces the four tabs
+   * rather than adding a fifth that would be empty the rest of the time.
+   */
+  const editingOverlay = useEditor((s) => s.selectedOverlay !== null);
+
+  if (editingOverlay) {
+    return (
+      <aside
+        className="flex shrink-0 flex-col overflow-y-auto border-l border-edge bg-panel p-3"
+        style={{ width: 'var(--w-inspector)' }}
+        aria-label="Overlay inspector"
+      >
+        <OverlayPanel />
+      </aside>
+    );
+  }
 
   return (
     <aside

@@ -12,7 +12,7 @@ import { Button, EmptyNote, Section, Segmented, Slider, Stepper } from '../contr
 export function PhotosTab({ template }: { template: SceneTemplate | null }): React.JSX.Element {
   const store = useMediaStore();
   const dispatch = useEditor((s) => s.dispatch);
-  const photos = useEditor((s) => s.project.scenes[0]?.inputs.photos ?? []);
+  const photos = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.photos ?? []);
   const selected = useEditor((s) => s.selectedPhoto);
   const selectPhoto = useEditor((s) => s.selectPhoto);
 

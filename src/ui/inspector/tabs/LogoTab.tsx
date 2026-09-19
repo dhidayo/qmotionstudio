@@ -20,7 +20,7 @@ const PLACEMENTS: readonly { value: LogoPlacement; label: string }[] = [
 export function LogoTab({ template }: { template: SceneTemplate | null }): React.JSX.Element {
   const store = useMediaStore();
   const dispatch = useEditor((s) => s.dispatch);
-  const logo = useEditor((s) => s.project.scenes[0]?.inputs.logo);
+  const logo = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.logo);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const onAdded = useCallback(
