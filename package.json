@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "lint:templates": "tsx scripts/lint-templates.ts",
-    "thumbs": "tsx scripts/gen-thumbs.ts"
+    "thumbs": "tsx scripts/gen-thumbs.ts",
+    "samples": "tsx scripts/gen-samples.ts"
   },
   "dependencies": {
     "react": "^18.3.1",

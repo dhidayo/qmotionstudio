@@ -508,3 +508,86 @@ How many lines a string wraps to is a property of the face, so templates measure
 through `BuildContext.measure` and lay out from real heights. This is one reason
 `BuildContext` carries text measurement at all (D-022), and it is cheap: it
 happens inside `build()`, which is memoised.
+
+---
+
+## D-029 — The template glob is lazy; metadata is eager
+M2.
+
+§7 says templates are "auto-registered by a glob import". Done eagerly, all 25
+v1 templates land in the initial bundle and spend §14's whole cold-load budget
+before the editor draws anything.
+
+So `import.meta.glob` runs with `eager: false` and each template's code is
+fetched when it is first used. The library grid cannot wait on 25 dynamic
+imports to render a card, so names, categories, tiers and thumbnails live in a
+separate eager manifest.
+
+That creates two sources of truth, which is the cost. `npm run lint:templates`
+pays it back by asserting the manifest and the files on disk agree on every
+field — drift fails the build rather than shipping a card that opens something
+else.
+
+---
+
+## D-030 — Sample photos are synthesised, not photographed
+M2. Flagged to you before starting; no objection raised.
+
+§7's thumbnail job and §8.1's "Try sample photos" both need stock images.
+Licensed photography would mean a licence to track and attribute, for pictures
+that only ever stand in for the user's own.
+
+`npm run samples` draws eight abstract compositions instead — layered geometry,
+a horizon, a light source, fine lines and grain, all from a seeded PRNG so they
+are reproducible. Deliberately structured rather than soft: the first pass was
+gradient meshes, which read as blurred colour and told you nothing about how a
+template crops or frames a real picture.
+
+**Still open for you:** whether "Try sample photos" eventually ships real
+photography. These do the job for template thumbnails; they are visibly not
+photographs, which may or may not matter for the user-facing button at M3.
+
+---
+
+## D-031 — Build scripts inject page code as source, not as functions
+M2. Cost about an hour, so it is written down.
+
+`tsx` compiles the build scripts with esbuild, which has `keepNames` enabled and
+rewrites functions to call a `__name()` helper. Playwright serialises a function
+passed to `page.evaluate` and runs it in the browser, where that helper does not
+exist — so anything beyond a trivial arrow fails with `__name is not defined`.
+
+Both `gen-samples.ts` and `gen-thumbs.ts` therefore keep their page-side code in
+a string and inject it with `addScriptTag` / `addInitScript`. It costs
+type-checking inside those blocks, which is an acceptable trade for build
+scripts. Small inline arrows passed to `evaluate` are fine and still used.
+
+Worth knowing before writing any new Playwright-driven script in this repo.
+
+---
+
+## D-032 — Generated thumbnails and samples are committed
+**Amends D-007.** M2.
+
+D-007 gitignored thumbnails as build output. That was right in principle and
+wrong in practice: the library grid loads them at runtime, so a fresh clone
+would show broken images until someone ran a two-minute job that needs a dev
+server up.
+
+They are committed instead — twelve files, about 1MB. The churn in binary diffs
+when a template's look changes is a smaller problem than an app that looks
+broken on checkout. Revisit if CI ever generates them on the way to a deploy.
+
+---
+
+## D-033 — Templates declare their own poster frame
+M2.
+
+`npm run thumbs` originally grabbed every poster at a fixed 3.2s. Templates that
+cycle — Card Stack deals a new photo every few seconds — got caught mid-
+transition, and a poster showing a card halfway out of frame sells nothing.
+
+`TemplateSummary.posterAtMs` lets a template name its own best instant, falling
+back to 3.2s. Cheap, and it is the kind of thing that only shows up once you are
+looking at all six posters side by side — which is exactly what the thumbnail
+pipeline is for.

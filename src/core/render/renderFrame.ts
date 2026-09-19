@@ -1,9 +1,11 @@
 import type { Ctx2D, Layer, Size } from '@/core/types';
-import type { Project } from '@/document/types';
+import type { Project, Scene } from '@/document/types';
 import { makeViewport, type Viewport } from '@/core/math/aspect';
 import { activeScenesAt, sceneSpans } from '@/document/select/timeline';
 import { TextMeasurer } from '@/core/text/measure';
 import { createBuildContext } from '@/templates/buildContext';
+import { peekTemplate } from '@/templates/registry';
+import { structureKey } from '@/templates/schema';
 import { buildDemoScene } from '@/templates/_demo/demoScene';
 import { drawLayers } from './drawLayer';
 import { drawPlaceholderFrame } from './placeholder';
@@ -61,14 +63,13 @@ export function renderFrame(
     depth: 0,
   };
 
-  if (scene?.templateId === '__placeholder__') {
+  if (!scene || scene.templateId === '__placeholder__') {
     drawPlaceholderFrame(ctx, vp, palette, localTimeMs);
   } else {
     //  2. Fetch memoised layers, then draw. build() is never called per frame
-    //     (§3B, §16) — only when the cache key changes.
-    const durationMs = active?.current.scene.durationMs ?? 10_000;
-    const layers = memoisedLayers(rig, vp, palette, durationMs);
-    drawLayers(dc, layers, localTimeMs);
+    //     (§3B, §16) — only when its structure key changes.
+    const layers = memoisedLayers(rig, vp, scene, palette);
+    if (layers) drawLayers(dc, layers, localTimeMs);
   }
 
   //  3. Composite scene buffers through the transition (M5).
@@ -82,19 +83,25 @@ export function renderFrame(
 }
 
 /**
- * §3B: build() runs once per (template, inputs, aspect) change and is memoised.
+ * §3B: build() runs once per (template, structural inputs, aspect) change.
  *
- * The cache key deliberately excludes the palette — colours resolve at draw
- * time through Paint roles (D-006), so dragging a colour picker repaints
- * without rebuilding. It is the geometry that invalidates a build, not the look.
+ * The key comes from structureKey, which deliberately excludes everything
+ * cosmetic — colours resolve at draw time through Paint roles (D-006), so
+ * dragging a colour picker repaints without rebuilding. It is geometry that
+ * invalidates a build, not the look.
+ *
+ * Returns null while a template is still being fetched. The registry is lazy
+ * (D-029), so the first frame after picking a template may have nothing to
+ * draw yet; that is one blank frame, not an error.
  */
 function memoisedLayers(
   rig: RenderRig,
   vp: Viewport,
+  scene: Scene,
   palette: DrawContext['palette'],
-  durationMs: number,
-): readonly Layer[] {
-  const key = `demo|${vp.aspect}|${Math.round(vp.design.w)}x${Math.round(vp.design.h)}|${durationMs}`;
+): readonly Layer[] | null {
+  const key = structureKey(scene.templateId, scene.inputs, vp.aspect, vp.design, scene.durationMs);
+
   const hit = rig.layerCache.get(key);
   if (hit) return hit;
 
@@ -103,10 +110,22 @@ function memoisedLayers(
     design: vp.design,
     safe: vp.safe,
     palette,
-    durationMs,
+    durationMs: scene.durationMs,
     measureContext: measureSurface(),
   });
-  const layers = buildDemoScene(buildCtx);
+
+  let layers: Layer[];
+  if (scene.templateId === '__demo__') {
+    layers = buildDemoScene(buildCtx);
+  } else {
+    const template = peekTemplate(scene.templateId);
+    if (!template) return null;
+    if (template.kind !== 'scene') {
+      throw new Error(`Scene "${scene.id}" references ad template "${scene.templateId}".`);
+    }
+    layers = template.build(scene.inputs, buildCtx);
+  }
+
   rig.stats.lastBuildMs = now() - buildStarted;
   rig.stats.buildCount += 1;
 

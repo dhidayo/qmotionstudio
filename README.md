@@ -26,6 +26,9 @@ Then open http://localhost:5173.
 | `npm run lint` | ESLint, including the worker-safety import boundary |
 | `npm test` | Vitest unit tests |
 | `npm run e2e` | Playwright visual regression |
+| `npm run lint:templates` | Validate templates and check manifest agreement |
+| `npm run thumbs` | Regenerate template posters and preview loops (needs `npm run dev`) |
+| `npm run samples` | Regenerate the bundled sample photos |
 
 ## Layout
 
@@ -64,7 +67,25 @@ user types something that needs it. See DECISIONS.md D-026.
 - **M1 — done.** Render core: seven layer types, keyframe interpolation,
   easings, a baked spring solver, repeaters, blur, text layout and measurement
   cache, and a hand-written scene running at 60fps.
-- M2 — template schema, registry, build context, six templates, thumbnails.
+- **M2 — done.** Template schema and registry, six templates across three
+  categories, the structural/cosmetic input split, and the lint and thumbnail
+  pipelines.
+- M3 — Showcase mode: template library, scrub loop, all four inspector tabs.
+
+## Templates
+
+Six, across three categories:
+
+| Category | Templates |
+|---|---|
+| Depth Stage | Parallax Depth, Card Stack |
+| Angle Stage | Fan Out, Tilt Sweep *(Pro)* |
+| Kinetic Type | Statement, Phrase Swap *(Pro)* |
+
+A template is a pure generator: `build(inputs, ctx) => Layer[]`, called once per
+structural change and memoised, never per frame. Adding one is a single file
+under `src/templates/<category-slug>/<id>.ts` plus a manifest entry —
+`npm run lint:templates` checks the two agree.
 
 ## Debugging
 
@@ -72,9 +93,18 @@ user types something that needs it. See DECISIONS.md D-026.
 the visual tests, and by M4 to compare preview against export at identical
 times.
 
-`?scene=placeholder` renders the M0 aspect test card instead of the M1 demo
-scene, which is what keeps the M0 aspect-scaling baselines meaningful as the
-renderer grows.
+Other steering parameters (see `src/dev/renderParams.ts`):
+
+| Parameter | Effect |
+|---|---|
+| `?template=<id>` | Render a specific template |
+| `?scene=demo` | The M1 render-core fixture |
+| `?scene=placeholder` | The M0 aspect test card |
+| `?aspect=16:9` | Force an aspect |
+| `?thumb=<px>` | Pin the preview's short edge, for thumbnail capture |
+
+These exist so `npm run thumbs` can drive the real app rather than
+reimplementing the renderer.
 
 In dev, `window.__motionStudio.stats` exposes the live renderer counters
 (`frameCount`, `buildCount`, `lastFrameMs`, `lastBuildMs`).

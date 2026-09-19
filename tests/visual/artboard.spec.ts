@@ -84,7 +84,7 @@ test.describe('M0 — aspect scaling', () => {
 
 test.describe('M1 — render core', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/?frozen=3000');
+    await page.goto('/?scene=demo&frozen=3000');
     await page.waitForSelector('canvas');
   });
 
@@ -102,7 +102,7 @@ test.describe('M1 — render core', () => {
     test(`is deterministic at t=${at}ms`, async ({ page }) => {
       // The same time must produce the same pixels on every run — that is what
       // makes M4's "export matches preview" assertable at all.
-      await page.goto(`/?frozen=${at}`);
+      await page.goto(`/?scene=demo&frozen=${at}`);
       await page.waitForSelector('canvas');
       await page.waitForTimeout(200);
       await expect(page.locator('canvas')).toHaveScreenshot(`demo-t${at}.png`, {
@@ -114,7 +114,7 @@ test.describe('M1 — render core', () => {
 
 test.describe('M1 — the render loop', () => {
   test('sustains 60fps on the hand-written scene', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(400);
 
@@ -130,7 +130,7 @@ test.describe('M1 — the render loop', () => {
     // §16, and the reason §3B exists. build() runs once per (template, inputs,
     // aspect) change; if this count tracks the frame count, the memo key is
     // churning and the 16ms build budget is being paid sixty times a second.
-    await page.goto('/');
+    await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(400);
 
@@ -143,7 +143,7 @@ test.describe('M1 — the render loop', () => {
   });
 
   test('rebuilds exactly once when the aspect changes', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(300);
 
@@ -160,7 +160,7 @@ test.describe('M1 — the render loop', () => {
     // reaches the measurement cache key, every frame is a miss and the whole
     // string is laid out sixty times a second — §6.3's cache defeated exactly
     // where it matters. It also re-wraps the text mid-animation.
-    await page.goto('/');
+    await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1800);
 
@@ -172,7 +172,7 @@ test.describe('M1 — the render loop', () => {
   });
 
   test('keeps the frame and build budgets of §14', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(800);
 
@@ -182,7 +182,7 @@ test.describe('M1 — the render loop', () => {
   });
 
   test('advances real time', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     const readout = page.locator('text=/\\d+\\.\\d\\ds \\/ /');
     const first = await readout.textContent();

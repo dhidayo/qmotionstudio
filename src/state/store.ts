@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import type { Aspect } from '@/core/types';
 import type { Project } from '@/document/types';
-import { createProject, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
+import { createProject, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
+import { renderParams } from '@/dev/renderParams';
 import { totalDurationMs } from '@/document/select/timeline';
 
 export type InspectorTab = 'photos' | 'text' | 'logo' | 'look';
@@ -25,6 +26,7 @@ type EditorState = {
   theme: Theme;
 
   setAspect: (aspect: Aspect) => void;
+  setTemplate: (templateId: string) => void;
   setPlayhead: (ms: number) => void;
   togglePlay: () => void;
   setInspectorTab: (tab: InspectorTab) => void;
@@ -53,20 +55,19 @@ function applyTheme(theme: Theme): void {
   }
 }
 
-/**
- * `?scene=placeholder` renders the M0 aspect test card instead of the M1 demo
- * scene, so the M0 visual baselines stay meaningful as the renderer grows.
- */
+/** See dev/renderParams for the full list of steering parameters. */
 function initialProject(): ReturnType<typeof createProject> {
+  const params = renderParams();
+
   let templateId: string | undefined;
-  try {
-    if (new URLSearchParams(location.search).get('scene') === 'placeholder') {
-      templateId = PLACEHOLDER_TEMPLATE_ID;
-    }
-  } catch {
-    // No location (a test harness, a worker) — the demo scene is the default.
-  }
-  return createProject(templateId === undefined ? {} : { templateId });
+  if (params.scene === 'placeholder') templateId = PLACEHOLDER_TEMPLATE_ID;
+  else if (params.scene === 'demo') templateId = DEMO_TEMPLATE_ID;
+  else if (params.template) templateId = params.template;
+
+  return createProject({
+    ...(templateId === undefined ? {} : { templateId }),
+    ...(params.aspect === null ? {} : { aspect: params.aspect }),
+  });
 }
 
 export const useEditor = create<EditorState>((set, get) => ({
@@ -78,6 +79,20 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setAspect: (aspect) => {
     set((state) => ({ project: { ...state.project, aspect, updatedAt: Date.now() } }));
+  },
+
+  setTemplate: (templateId) => {
+    set((state) => {
+      const [scene, ...rest] = state.project.scenes;
+      if (!scene || scene.templateId === templateId) return {};
+      return {
+        project: {
+          ...state.project,
+          scenes: [{ ...scene, templateId }, ...rest],
+          updatedAt: Date.now(),
+        },
+      };
+    });
   },
 
   setPlayhead: (ms) => {

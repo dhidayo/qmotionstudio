@@ -1,0 +1,81 @@
+import type { MediaResolver } from '@/core/render/rig';
+
+/**
+ * The media store (§5, §9).
+ *
+ * Decoded bitmaps live here, keyed by mediaId; the document holds only ids.
+ * That is what keeps undo snapshots cheap and the autosave payload small.
+ *
+ * §9's decode rules are in decode.ts. This is the lookup the renderer sees,
+ * and it is deliberately synchronous: `renderFrame` must not await anything.
+ * A bitmap that has not landed yet reads as null and the layer draws a
+ * placeholder, rather than the frame stalling or throwing.
+ */
+
+export type MediaKind = 'image' | 'video' | 'audio';
+
+export type MediaEntry = {
+  readonly id: string;
+  readonly kind: MediaKind;
+  readonly name: string;
+  /** Kept for persistence (§13) and for re-decoding inside the export worker. */
+  readonly blob: Blob;
+  readonly bitmap: ImageBitmap | null;
+  readonly width: number;
+  readonly height: number;
+};
+
+export class MediaStore implements MediaResolver {
+  readonly #entries = new Map<string, MediaEntry>();
+  #revision = 0;
+
+  /** Bumped on every change, so callers can tell when a redraw is warranted. */
+  get revision(): number {
+    return this.#revision;
+  }
+
+  set(entry: MediaEntry): void {
+    const previous = this.#entries.get(entry.id);
+    if (previous && previous.bitmap && previous.bitmap !== entry.bitmap) {
+      previous.bitmap.close();
+    }
+    this.#entries.set(entry.id, entry);
+    this.#revision++;
+  }
+
+  get(id: string): MediaEntry | null {
+    return this.#entries.get(id) ?? null;
+  }
+
+  has(id: string): boolean {
+    return this.#entries.has(id);
+  }
+
+  ids(): readonly string[] {
+    return [...this.#entries.keys()];
+  }
+
+  getBitmap(mediaId: string): ImageBitmap | null {
+    return this.#entries.get(mediaId)?.bitmap ?? null;
+  }
+
+  /** Custom media (Pro) arrives at M5; until then there are no video frames. */
+  getVideoFrame(_mediaId: string, _timeMs: number): VideoFrame | null {
+    return null;
+  }
+
+  delete(id: string): void {
+    const entry = this.#entries.get(id);
+    // ImageBitmap holds decoded pixels outside the JS heap; dropping the
+    // reference is not enough, and §14 budgets 900MB.
+    entry?.bitmap?.close();
+    this.#entries.delete(id);
+    this.#revision++;
+  }
+
+  clear(): void {
+    for (const entry of this.#entries.values()) entry.bitmap?.close();
+    this.#entries.clear();
+    this.#revision++;
+  }
+}

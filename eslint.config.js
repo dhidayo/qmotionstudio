@@ -23,6 +23,12 @@ export default defineConfig(
     },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
+      // A leading underscore marks a parameter kept for interface conformance.
+      '@typescript-eslint/no-unused-vars': ['error', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        caughtErrorsIgnorePattern: '^_',
+      }],
       '@typescript-eslint/ban-ts-comment': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],

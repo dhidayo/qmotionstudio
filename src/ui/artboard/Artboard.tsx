@@ -3,6 +3,7 @@ import { aspectValue, fitContain, renderSizeFor } from '@/core/math/aspect';
 import type { RenderRig } from '@/core/render/rig';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Project } from '@/document/types';
+import { renderParams } from '@/dev/renderParams';
 import { usePreviewLoop } from './usePreviewLoop';
 
 /**
@@ -40,7 +41,10 @@ export function Artboard({ project, clock, rig }: Props): React.JSX.Element {
   // from whatever size it finds, so preview and export lay out identically —
   // only the resolution differs.
   const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
-  const wanted = Math.min(Math.min(display.w, display.h) * dpr, MAX_PREVIEW_SHORT_EDGE);
+  // ?thumb= pins the backing store so `npm run thumbs` captures a consistent
+  // size regardless of the window it happens to run in.
+  const thumb = renderParams().thumbShortEdge;
+  const wanted = thumb ?? Math.min(Math.min(display.w, display.h) * dpr, MAX_PREVIEW_SHORT_EDGE);
   const backing = renderSizeFor(project.aspect, Math.max(2, Math.round(wanted)));
 
   usePreviewLoop(canvas, project, clock, rig);
