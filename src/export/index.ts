@@ -15,6 +15,7 @@ import {
   type ExportResult,
 } from './types';
 import { canUseRealtimeExport, startRealtimeExport } from './fallback/mediaRecorder';
+import { renderMixdown } from '@/core/audio/mixdown';
 
 export { ExportCancelled };
 export type { ExportHandle, ExportProgress, ExportResult, ExportPath } from './types';
@@ -105,6 +106,8 @@ export function startExport(options: {
     type: 'module',
   });
 
+  let cancelled = false;
+
   let settle: ((result: ExportResult) => void) | null = null;
   let fail: ((error: unknown) => void) | null = null;
 
@@ -173,19 +176,47 @@ export function startExport(options: {
     if (entry) usedMedia.push([id, entry.blob] as const);
   }
 
-  const request: ExportRequest = {
-    type: 'export',
-    project,
-    settings,
-    size,
-    durationMs,
-    media: usedMedia,
-  };
-  worker.postMessage(request);
+  /*
+   * The audio mix is rendered here, on the main thread, because Web Audio is
+   * absent from workers (D-053) — so this is asynchronous where the rest of
+   * the setup is not. The worker is started either way; it simply receives the
+   * request a moment later.
+   */
+  void renderMixdown(project.audio, (id) => media.getAudioBuffer(id), { durationMs })
+    .then((mix) => {
+      if (cancelled) return;
+
+      const request: ExportRequest = {
+        type: 'export',
+        project,
+        settings,
+        size,
+        durationMs,
+        media: usedMedia,
+        ...(mix === null ? {} : { audio: mix }),
+      };
+
+      // The PCM is transferred rather than copied; a three-minute stereo mix
+      // is 70MB and structured-cloning it would briefly double that.
+      const transfer = mix === null ? [] : mix.channels.map((c) => c.buffer as ArrayBuffer);
+      worker.postMessage(request, transfer);
+    })
+    .catch((error: unknown) => {
+      // §11.8, §16: an audio failure fails the export rather than quietly
+      // producing a silent file.
+      fail?.(new Error(
+        'Could not render the audio mix.',
+        { cause: error },
+      ));
+      worker.terminate();
+    });
 
   return {
     result,
-    cancel: () => { worker.postMessage({ type: 'cancel' }); },
+    cancel: () => {
+      cancelled = true;
+      worker.postMessage({ type: 'cancel' });
+    },
   };
 }
 
@@ -199,6 +230,11 @@ function mediaIdsIn(project: Project): string[] {
   for (const overlay of project.overlays) {
     if (overlay.content.kind !== 'text') ids.add(overlay.content.mediaId);
   }
+  /*
+   * Audio is deliberately absent: the mix crosses as rendered PCM, not as
+   * source files (D-053), so sending the blobs too would ship a track the
+   * worker has no way to decode and no reason to want.
+   */
   return [...ids];
 }
 

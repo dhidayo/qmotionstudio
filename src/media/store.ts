@@ -1,6 +1,7 @@
 import type { DecodedFrame } from '@/core/types';
 import type { MediaResolver } from '@/core/render/rig';
 import type { VideoClip } from './video/clip';
+import type { Waveform } from './audio/waveform';
 
 /**
  * The media store (§5, §9).
@@ -25,6 +26,9 @@ export type MediaEntry = {
   readonly bitmap: ImageBitmap | null;
   /** Video only: the open container and its frame ring (§9, D-051). */
   readonly clip?: VideoClip;
+  /** Audio only: the whole decoded track, and its peaks for the timeline (§10). */
+  readonly audio?: AudioBuffer;
+  readonly waveform?: Waveform;
   readonly width: number;
   readonly height: number;
   /** Video only. */
@@ -144,9 +148,18 @@ export class MediaStore implements MediaResolver {
     await this.#entries.get(mediaId)?.clip?.prefetch(timeMs);
   }
 
-  /** How long a video clip runs, for the overlay panel's readout. */
+  /** How long a video or audio clip runs, for the panel readouts. */
   durationMsOf(mediaId: string): number | null {
     return this.#entries.get(mediaId)?.durationMs ?? null;
+  }
+
+  /** The decoded track behind an audio clip (§10). Null until it has landed. */
+  getAudioBuffer(mediaId: string): AudioBuffer | null {
+    return this.#entries.get(mediaId)?.audio ?? null;
+  }
+
+  getWaveform(mediaId: string): Waveform | null {
+    return this.#entries.get(mediaId)?.waveform ?? null;
   }
 
   delete(id: string): void {

@@ -21,6 +21,7 @@
     "fixtures": "tsx scripts/gen-fixtures.ts"
   },
   "dependencies": {
+    "@mediabunny/aac-encoder": "^1.58.1",
     "libheif-js": "^1.23.2",
     "mediabunny": "^1.58.1",
     "react": "^18.3.1",

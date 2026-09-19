@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { addClip, BAND, DROPPED_AT_MS, nearestBand } from '../support/customMedia';
+import { addMusic, EXPECTED, RMS_SOURCE } from '../support/audio';
 
 /**
  * M4 — export.
@@ -517,3 +518,71 @@ test.describe('custom media exports (§9)', () => {
 
     expect(nearestBand(sampled)).toBe('green');
   });});
+
+/**
+ * §15's M6 criterion: "a 30s export has in-sync audio in both MP4 and WebM".
+ *
+ * The fixture alternates one-second bursts of tone with one-second silences,
+ * so synchronisation is testable with an RMS window and no FFT: aligned audio
+ * is loud at 0.5s, silent at 1.5s, loud at 2.5s. A track that drifts by a
+ * quarter second smears the pattern; one that drifts by a second inverts it.
+ *
+ * Both containers, because they take completely different encoders — Opus
+ * natively through WebCodecs, AAC through D-010's polyfill where the browser
+ * lacks it.
+ */
+test.describe('audio export (§10, M6)', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(EXPORT_TIMEOUT_MS + 90_000);
+    await captureDownloads(page);
+    await page.addInitScript({ content: RMS_SOURCE });
+  });
+
+  for (const format of ['mp4', 'webm'] as const) {
+    test(`${format.toUpperCase()} carries the music, in sync`, async ({ page }) => {
+      await page.goto('/?template=quick-pitch&aspect=9:16');
+      await page.waitForSelector('canvas');
+      await page.waitForTimeout(2_000);
+
+      await addMusic(page);
+      await runExport(page, format);
+      await waitForExport(page, 140_000);
+
+      const analysis = await page.evaluate(async (points: number[]) => {
+        const { blob } = (globalThis as unknown as { __exported: { blob: Blob } }).__exported;
+        const rms = (globalThis as unknown as {
+          __rmsAt: (b: Blob, p: number[], w: number) => Promise<{
+            durationS: number; channels: number; sampleRate: number; levels: number[];
+          }>;
+        }).__rmsAt;
+        // A 300ms window, comfortably inside a one-second band even allowing
+        // for the encoder's own priming delay.
+        return rms(blob, points, 0.3);
+      }, EXPECTED.map((e) => e.atS));
+
+      // The file genuinely has an audio track, not just a video one.
+      expect(analysis.channels).toBeGreaterThan(0);
+      expect(analysis.sampleRate).toBeGreaterThan(0);
+
+      // §10: the mix is cut to the video's length, so both tracks agree.
+      expect(analysis.durationS).toBeGreaterThan(14);
+      expect(analysis.durationS).toBeLessThan(16);
+
+      /*
+       * The alignment itself. Loud windows have to be far above the silent
+       * ones — not merely different, because a lossy codec leaks a little
+       * energy into silence and ringing would otherwise pass as signal.
+       */
+      const levels = analysis.levels;
+
+      for (const [index, expected] of EXPECTED.entries()) {
+        const level = levels[index] ?? 0;
+        if (expected.loud) {
+          expect(level, `${expected.atS}s should be a burst`).toBeGreaterThan(0.05);
+        } else {
+          expect(level, `${expected.atS}s should be silent`).toBeLessThan(0.02);
+        }
+      }
+    });
+  }
+});

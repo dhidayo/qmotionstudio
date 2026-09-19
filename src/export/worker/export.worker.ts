@@ -1,12 +1,16 @@
 /// <reference lib="webworker" />
 import {
+  AudioSample,
+  AudioSampleSource,
   BufferTarget,
+  canEncodeAudio,
   CanvasSource,
   Mp4OutputFormat,
   Output,
   Quality,
   WebMOutputFormat,
 } from 'mediabunny';
+import { registerAacEncoder } from '@mediabunny/aac-encoder';
 import type { Project } from '@/document/types';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { renderFrame } from '@/core/render/renderFrame';
@@ -16,8 +20,11 @@ import { MediaStore } from '@/media/store';
 import { decodeImage } from '@/media/image/decode';
 import { decodeVideo } from '@/media/video/decode';
 import { videoDemands } from '@/document/select/media';
-import { bitrateFor, frameCount, VIDEO_CODEC, type ExportSettings } from '../config';
+import {
+  AUDIO_BITRATE, AUDIO_CODEC, bitrateFor, frameCount, VIDEO_CODEC, type ExportSettings,
+} from '../config';
 import type { ExportRequest, WorkerMessage } from '../protocol';
+import { interleave } from '@/core/audio/mixdown';
 
 /**
  * The export worker (§11.7).
@@ -123,7 +130,29 @@ async function run(request: ExportRequest): Promise<void> {
     });
 
     output.addVideoTrack(source, { frameRate: request.settings.fps });
+
+    /*
+     * §10: the mix is muxed as a second track, sharing one microsecond
+     * timebase with the video. Mediabunny owns that — both sources take
+     * timestamps in seconds and it converts once (D-002).
+     */
+    const audioSource = await makeAudioSource(request);
+    if (audioSource) output.addAudioTrack(audioSource);
+
     await output.start();
+
+    /*
+     * Audio is fed *alongside* the video, not before it.
+     *
+     * Writing the whole mix up front deadlocked the MP4 muxer: an interleaved
+     * container will not let one track run arbitrarily far ahead of another,
+     * so `add()` blocked waiting for video frames that the loop below had not
+     * started producing yet. WebM tolerated it, which is exactly the kind of
+     * difference that makes "it worked in one format" worthless as evidence.
+     */
+    const audio = audioSource && request.audio
+      ? new AudioFeeder(audioSource, request.audio)
+      : null;
 
     const total = frameCount(request.durationMs, request.settings.fps);
     const frameDuration = 1 / request.settings.fps;
@@ -156,10 +185,15 @@ async function run(request: ExportRequest): Promise<void> {
       // Awaiting is the backpressure (§11.5).
       await source.add(frame * frameDuration, frameDuration);
 
+      // Keep the audio track roughly level with the video one.
+      if (audio) await audio.feedUpTo(timeMs / 1000);
+
       if (frame % 5 === 0 || frame === total - 1) {
         post({ type: 'progress', frame: frame + 1, totalFrames: total });
       }
     }
+
+    if (audio) await audio.finish();
 
     post({ type: 'stage', stage: 'finalising' });
     await output.finalize();
@@ -178,6 +212,102 @@ async function run(request: ExportRequest): Promise<void> {
     });
   } finally {
     if (rig) disposeRenderRig(rig);
+  }
+}
+
+/**
+ * Prepares the audio track, registering the AAC polyfill only if needed.
+ *
+ * D-010 approved `@mediabunny/aac-encoder` as a narrow amendment to §16's
+ * dependency ban. It is a polyfill, so it is registered only where the browser
+ * genuinely cannot encode AAC itself — overriding a native encoder would be
+ * slower and pointless.
+ */
+async function makeAudioSource(request: ExportRequest): Promise<AudioSampleSource | null> {
+  if (!request.audio || request.audio.channels.length === 0) return null;
+
+  const codec = AUDIO_CODEC[request.settings.format];
+  if (codec === 'aac' && !(await canEncodeAudio('aac'))) {
+    registerAacEncoder();
+  }
+
+  if (!(await canEncodeAudio(codec))) {
+    // §16: silently dropping the music would produce a file the user has no
+    // reason to suspect is wrong.
+    throw new Error(
+      `This browser cannot encode ${codec.toUpperCase()} audio, so the music could not be included.`,
+    );
+  }
+
+  return new AudioSampleSource({
+    codec,
+    bitrate: AUDIO_BITRATE,
+  });
+}
+
+/**
+ * Feeds the mix to the encoder in step with the video.
+ *
+ * One `AudioSample` per second rather than one for the whole mix: an encoder
+ * handed a thirty-second sample allocates the lot before emitting anything,
+ * and awaiting each `add` is what §11.5's backpressure means on this side too.
+ *
+ * `LEAD_S` keeps audio slightly ahead of the video so the muxer always has
+ * something to interleave, without letting it run far enough ahead to block.
+ */
+const AUDIO_CHUNK_S = 1;
+const AUDIO_LEAD_S = 2;
+
+class AudioFeeder {
+  readonly #source: AudioSampleSource;
+  readonly #audio: NonNullable<ExportRequest['audio']>;
+  readonly #frames: number;
+  readonly #channels: number;
+  #cursor = 0;
+
+  constructor(source: AudioSampleSource, audio: NonNullable<ExportRequest['audio']>) {
+    this.#source = source;
+    this.#audio = audio;
+    this.#channels = audio.channels.length;
+    this.#frames = audio.channels[0]?.length ?? 0;
+  }
+
+  /** Adds chunks until the audio is `AUDIO_LEAD_S` ahead of `videoTimeS`. */
+  async feedUpTo(videoTimeS: number): Promise<void> {
+    if (this.#channels === 0) return;
+    const targetFrame = Math.min(
+      this.#frames,
+      Math.ceil((videoTimeS + AUDIO_LEAD_S) * this.#audio.sampleRate),
+    );
+    await this.#feedTo(targetFrame);
+  }
+
+  async finish(): Promise<void> {
+    await this.#feedTo(this.#frames);
+    this.#source.close();
+  }
+
+  async #feedTo(targetFrame: number): Promise<void> {
+    const chunkFrames = Math.max(1, Math.floor(this.#audio.sampleRate * AUDIO_CHUNK_S));
+
+    while (this.#cursor < targetFrame) {
+      const start = this.#cursor;
+      const end = Math.min(this.#frames, start + chunkFrames);
+      if (end <= start) break;
+
+      const slice = this.#audio.channels.map((channel) => channel.subarray(start, end));
+      const sample = new AudioSample({
+        data: interleave(slice),
+        format: 'f32',
+        numberOfChannels: this.#channels,
+        sampleRate: this.#audio.sampleRate,
+        timestamp: start / this.#audio.sampleRate,
+      });
+
+      await this.#source.add(sample);
+      sample.close();
+      this.#cursor = end;
+    }
   }
 }
 

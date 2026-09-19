@@ -1087,3 +1087,96 @@ flat colour. The shape is the point: it lets the tests assert *which* frame is
 on screen at a given instant, not merely that something drew. A ring buffer
 serving whatever it decoded first passes the weak version of that test and
 fails this one.
+
+---
+
+## D-052 — One audio graph, two contexts
+M6. The audio counterpart of §3A.
+
+§10 asks for two things that could easily have been written twice: a live
+preview scheduling `AudioBufferSourceNode`s, and an export that "renders the
+mixed audio offline into a single `AudioBuffer`". Two implementations of trim,
+gain and fades is two chances for the exported mix to differ from the one the
+editor played — the exact failure decision A exists to prevent on the video
+side.
+
+So `scheduleClips(ctx, destination, …)` takes a `BaseAudioContext`, which is
+the shared supertype of `AudioContext` and `OfflineAudioContext`. Preview hands
+it a live one; the export mixdown hands it an offline one. Neither knows which.
+
+Underneath it, `envelope.ts` is pure arithmetic with no Web Audio at all —
+`gainAt`, `resolvedFades`, `envelopeFrom` — so the rules can be pinned down in
+unit tests that need no browser on either side.
+
+Two details worth recording:
+
+- **Overlapping fades are scaled, not truncated.** A two-second clip with a
+  two-second fade in and a one-second fade out is something a user will drag
+  into being. Truncating makes one of them vanish; splitting the available
+  time in proportion keeps both audible, which is the only reading that
+  respects what was asked for.
+- **`envelopeFrom` carries the gain already in effect.** Playback rarely starts
+  at a clip's beginning. A clip entered halfway through its fade-in has to
+  resume at the level it had reached, or the fade audibly restarts.
+
+---
+
+## D-053 — The mix is rendered on the main thread and crosses as PCM
+**Amends §10.** M6.
+
+§10 says to render the mix offline and encode it; §11.7 puts the export in a
+worker. Those two cannot both happen in the same place: **Web Audio does not
+exist in a worker.** Measured, not assumed — inside a `DedicatedWorkerGlobalScope`,
+`OfflineAudioContext` and `AudioContext` are both `undefined`, while
+`AudioEncoder` and `AudioData` are present.
+
+So the work is split along the line the platform draws:
+
+- the **main thread** renders the mix through an `OfflineAudioContext`, using
+  the same graph the preview plays (D-052);
+- the resulting channels are **transferred** to the worker as `Float32Array`s,
+  not copied — a three-minute stereo mix is about 70MB and structured-cloning
+  it would briefly double that;
+- the **worker** builds `AudioSample`s from raw `AudioSampleInit` and hands
+  them to Mediabunny, which owns the encoder exactly as it owns the video one
+  (D-002).
+
+Audio source blobs are therefore *not* in the worker's media payload. It
+receives a finished mix, not something to decode.
+
+The mix is cut to the **video's** duration rather than the music's. Otherwise a
+long track would silently change the file's length, and the muxer would be
+holding two tracks that disagree about when the piece ends.
+
+---
+
+## D-054 — The audio clock is the clock
+M6. How §10's drift budget is actually met.
+
+§10: *"Preview playback uses `AudioBufferSourceNode` scheduled against the same
+clock as the visual preview. Drift over a 60s preview must stay under one
+frame."*
+
+Accumulating `performance.now()` deltas cannot meet that. An audio device runs
+on its own crystal and the two disagree by tens of milliseconds a minute —
+every one of them visible as the picture sliding against the beat.
+
+Rather than keeping two clocks in step, there is one. While audio is sounding,
+`AudioEngine.currentProjectMs()` reports where the device has actually reached
+and `PreviewClock` simply reads it; the visual frame is drawn for whatever time
+the audio says it is. Drift is then not small, it is **structurally absent** —
+there is nothing left to drift against. With no audio the clock falls straight
+back to wall time, which is what Showcase mode and every silent project use.
+
+`PreviewClock` gained a transport subscription for this. Web Audio cannot move
+a source once it has started, so every play, pause and seek tears the graph
+down and reschedules; polling for those at the readout's 12–20Hz would put a
+visible stutter on every scrub.
+
+**A bug this design did not prevent, and how it surfaced:** the first version
+wrote the entire mix to the muxer before the video loop began. WebM accepted
+it; **MP4 deadlocked** — an interleaved container will not let one track run
+arbitrarily far ahead, so `add()` blocked waiting for video frames that had not
+been produced yet. The export timed out at 140 seconds. Feeding the audio
+alongside the video, two seconds ahead, brought it to 14.7. Worth remembering
+that "it worked in one format" is not evidence about the other.

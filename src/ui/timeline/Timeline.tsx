@@ -7,8 +7,9 @@ import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
 import { useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
-import { useUpload, VIDEO_ACCEPT_ATTRIBUTE } from '@/ui/media/useUpload';
+import { useUpload, AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE } from '@/ui/media/useUpload';
 import { SceneTools } from './SceneTools';
+import { MusicTrack } from './MusicTrack';
 import {
   dragResult, formatSeconds, msToPct, pxToMs, rowCount, snap, tickIntervalMs,
   type ClipDrag,
@@ -191,6 +192,29 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
     video: true,
   });
 
+  /**
+   * Music (§10). One track per project, so adding replaces rather than
+   * appends — the timeline has one music row and two clips fighting over it
+   * would be a model the UI cannot show.
+   */
+  const audioInput = useRef<HTMLInputElement>(null);
+  const selectAudio = useEditor((s) => s.selectAudio);
+  const onAudioAdded = useCallback(
+    (mediaIds: string[]) => {
+      const first = mediaIds[0];
+      if (first === undefined) return;
+      const sourceMs = media.durationMsOf(first) ?? 0;
+      const clip = actions.makeAudioClip(first, { startMs: 0, durationMs: sourceMs });
+      dispatch(actions.addAudio(clip));
+      selectAudio(clip.id);
+    },
+    [media, dispatch, selectAudio],
+  );
+  const { state: audioUpload, addFiles: addAudioFiles } = useUpload(media, onAudioAdded, {
+    artboardLongestEdge: 1920,
+    audio: true,
+  });
+
   const rows = rowCount(project.overlays);
   const tick = tickIntervalMs(durationMs, laneWidth);
   const ticks: number[] = [];
@@ -238,11 +262,30 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
               e.target.value = '';
             }}
           />
+
+          <AddButton
+            onClick={() => { audioInput.current?.click(); }}
+            disabled={audioUpload.busy}
+            title="Add a music track"
+          >
+            {audioUpload.busy ? 'Decoding…' : '+ Music'}
+          </AddButton>
+          <input
+            ref={audioInput}
+            type="file"
+            accept={AUDIO_ACCEPT_ATTRIBUTE}
+            hidden
+            aria-label="Add a music track"
+            onChange={(e) => {
+              void addAudioFiles([...(e.target.files ?? [])]);
+              e.target.value = '';
+            }}
+          />
         </div>
 
-        {videoUpload.error !== null && (
+        {(videoUpload.error ?? audioUpload.error) !== null && (
           <span className="max-w-64 truncate text-[10px]" style={{ color: 'var(--c-danger)' }}>
-            {videoUpload.error}
+            {videoUpload.error ?? audioUpload.error}
           </span>
         )}
 
@@ -369,12 +412,8 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
             </div>
           ))}
 
-          {/* §1.2's dedicated music track. Empty until M6 owns it. */}
-          <div className="relative h-7 border-b border-edge">
-            <span className="absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
-              Music arrives at M6
-            </span>
-          </div>
+          {/* §1.2's dedicated music track, §10's waveform. */}
+          <MusicTrack clip={project.audio[0]} durationMs={durationMs} laneWidth={laneWidth} />
 
           {/* Playhead, over every row. */}
           <div

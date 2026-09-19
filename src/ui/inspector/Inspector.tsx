@@ -4,6 +4,7 @@ import { TextTab } from './tabs/TextTab';
 import { LogoTab } from './tabs/LogoTab';
 import { LookTab } from './tabs/LookTab';
 import { OverlayPanel } from './OverlayPanel';
+import { AudioPanel } from './AudioPanel';
 
 const TABS: readonly { id: InspectorTab; label: string }[] = [
   { id: 'photos', label: 'Photos' },
@@ -28,6 +29,19 @@ export function Inspector(): React.JSX.Element {
    * rather than adding a fifth that would be empty the rest of the time.
    */
   const editingOverlay = useEditor((s) => s.selectedOverlay !== null);
+  const editingAudio = useEditor((s) => s.selectedAudio !== null);
+
+  if (editingAudio) {
+    return (
+      <aside
+        className="flex shrink-0 flex-col overflow-y-auto border-l border-edge bg-panel p-3"
+        style={{ width: 'var(--w-inspector)' }}
+        aria-label="Music inspector"
+      >
+        <AudioPanel />
+      </aside>
+    );
+  }
 
   if (editingOverlay) {
     return (

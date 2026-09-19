@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { decodeImage, UnsupportedImageError, ACCEPTED_TYPES } from '@/media/image/decode';
 import { decodeVideo, isVideoFile, UnsupportedVideoError, ACCEPTED_VIDEO_TYPES } from '@/media/video/decode';
+import { decodeAudio, isAudioFile, UnsupportedAudioError, ACCEPTED_AUDIO_TYPES } from '@/media/audio/decode';
 import type { MediaStore } from '@/media/store';
 
 /**
@@ -16,6 +17,9 @@ export const ACCEPT_ATTRIBUTE = [...ACCEPTED_TYPES, 'image/heic', 'image/heif'].
 
 /** Custom media is Pro (§12); the picker that uses this is gated, not this list. */
 export const VIDEO_ACCEPT_ATTRIBUTE = ACCEPTED_VIDEO_TYPES.join(',');
+
+/** §10: MP3/M4A/WAV/OGG. Music is not gated. */
+export const AUDIO_ACCEPT_ATTRIBUTE = [...ACCEPTED_AUDIO_TYPES, '.mp3', '.m4a', '.wav', '.ogg'].join(',');
 
 export type UploadState = {
   readonly busy: boolean;
@@ -41,6 +45,8 @@ export function useUpload(
      * panel turns it on (§9's custom media).
      */
     video?: boolean;
+    /** Accept music (§10). The timeline's "+ Music" picker turns this on. */
+    audio?: boolean;
   },
 ): {
   state: UploadState;
@@ -52,17 +58,28 @@ export function useUpload(
   const addFiles = useCallback(
     async (files: readonly File[]) => {
       const wantsVideo = options.video === true;
-      const usable = files.filter(
-        (f) =>
-          f.type.startsWith('image/') ||
-          /\.(hei[cf])$/i.test(f.name) ||
-          (wantsVideo && isVideoFile(f)),
-      );
+      const wantsAudio = options.audio === true;
+
+      /*
+       * An audio picker takes audio only. Letting it also accept images would
+       * mean a drop that silently lands a photograph in the media store with
+       * nothing referencing it.
+       */
+      const usable = wantsAudio
+        ? files.filter((f) => isAudioFile(f))
+        : files.filter(
+            (f) =>
+              f.type.startsWith('image/') ||
+              /\.(hei[cf])$/i.test(f.name) ||
+              (wantsVideo && isVideoFile(f)),
+          );
 
       if (usable.length === 0) {
         setState({
           busy: false,
-          error: wantsVideo ? 'No images or video in that drop.' : 'No images in that drop.',
+          error: wantsAudio
+            ? 'No audio in that drop.'
+            : wantsVideo ? 'No images or video in that drop.' : 'No images in that drop.',
         });
         return;
       }
@@ -74,18 +91,22 @@ export function useUpload(
       for (const file of usable) {
         const id = nextMediaId();
         try {
-          const entry = wantsVideo && isVideoFile(file)
-            ? await decodeVideo(file, { id, name: file.name })
-            : await decodeImage(file, {
-                id,
-                name: file.name,
-                artboardLongestEdge: options.artboardLongestEdge,
-              });
+          const entry = wantsAudio
+            ? await decodeAudio(file, { id, name: file.name })
+            : wantsVideo && isVideoFile(file)
+              ? await decodeVideo(file, { id, name: file.name })
+              : await decodeImage(file, {
+                  id,
+                  name: file.name,
+                  artboardLongestEdge: options.artboardLongestEdge,
+                });
           store.set(entry);
           added.push(id);
         } catch (error) {
           failures.push(
-            error instanceof UnsupportedImageError || error instanceof UnsupportedVideoError
+            error instanceof UnsupportedImageError ||
+            error instanceof UnsupportedVideoError ||
+            error instanceof UnsupportedAudioError
               ? error.message
               : `Could not read "${file.name}".`,
           );
@@ -95,7 +116,7 @@ export function useUpload(
       if (added.length > 0) onAdded(added);
       setState({ busy: false, error: failures[0] ?? null });
     },
-    [store, onAdded, options.artboardLongestEdge, options.video],
+    [store, onAdded, options.artboardLongestEdge, options.video, options.audio],
   );
 
   const clearError = useCallback(() => { setState((s) => ({ ...s, error: null })); }, []);

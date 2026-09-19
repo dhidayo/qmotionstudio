@@ -139,7 +139,8 @@ test.describe('scene sequencing', () => {
 
     await page.getByRole('button', { name: 'Motion Ads' }).click();
     await expect(page.getByLabel('Timeline')).toBeVisible();
-    await expect(page.getByText('Music arrives at M6')).toBeVisible();
+    // The music row is real since M6; it invites a track rather than promising one.
+    await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
   });
 });
 

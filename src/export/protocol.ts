@@ -18,6 +18,20 @@ export type ExportRequest = {
   readonly durationMs: number;
   /** mediaId → source blob. */
   readonly media: readonly (readonly [string, Blob])[];
+  /**
+   * The finished audio mix, as raw PCM (§10, D-053).
+   *
+   * Rendered on the main thread rather than here, because Web Audio does not
+   * exist in a worker — `OfflineAudioContext` is `undefined` in one, measured
+   * rather than assumed. The channels are transferred, so the main thread
+   * loses its copy and nothing is duplicated for a mix that can run to tens of
+   * megabytes.
+   */
+  readonly audio?: {
+    readonly channels: readonly Float32Array[];
+    readonly sampleRate: number;
+    readonly durationMs: number;
+  };
 };
 
 export type ExportStage = 'preparing' | 'encoding' | 'finalising';

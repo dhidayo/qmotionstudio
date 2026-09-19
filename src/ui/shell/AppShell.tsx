@@ -16,6 +16,7 @@ import { loadTemplate } from '@/templates/registry';
 import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { renderParams } from '@/dev/renderParams';
 import { useKeyboard } from '@/ui/hooks/useKeyboard';
+import { useAudioPlayback } from '@/ui/audio/useAudioPlayback';
 import { Toast } from './Toast';
 import { ExportDialog } from '@/ui/export/ExportDialog';
 
@@ -165,8 +166,26 @@ export function AppShell(): React.JSX.Element {
     (globalThis as unknown as { __motionStudio?: unknown }).__motionStudio = {
       stats: rig.stats,
       textCacheSize: () => rig.textCache.size,
+      /*
+       * §10 budgets under one frame of drift across a sixty-second preview,
+       * which is met by making the audio clock the only clock (D-054) rather
+       * than by keeping two in step. `audioMastered` is how a test can tell
+       * which of those is actually happening.
+       */
+      clock: {
+        timeMs: () => clock.timeMs,
+        playing: () => clock.playing,
+        audioMastered: () => clock.audioMastered,
+      },
     };
-  }, [rig]);
+  }, [rig, clock]);
+
+  /**
+   * §10's synced preview. The engine masters the clock while it is sounding,
+   * so the visual loop follows the audio device rather than the other way
+   * round (D-054).
+   */
+  useAudioPlayback(clock, project.audio, media, duration);
 
   const [toast, setToast] = useState<string | null>(null);
   const exporting = useEditor((s) => s.exporting);

@@ -2,6 +2,7 @@ import type { Palette, PaletteRole, PropValues } from '@/core/types';
 import { DEFAULT_LOGO, newId } from '../defaults';
 import type {
   AnimPreset,
+  AudioClip,
   BackgroundTreatment,
   LogoPlacement,
   Overlay,
@@ -812,5 +813,130 @@ export function makeOverlay(
     transform: { x: 0.5, y: 0.5 },
     enterAnim: 'fade',
     exitAnim: 'fade',
+  };
+}
+
+// ── Audio (§10) ─────────────────────────────────────────────────────────────
+
+/**
+ * §5 gives a project an `audio` array and §10 says "one track for now". The
+ * array stays, because the shape is right and a second track is a UI problem
+ * rather than a model one — but `addAudio` replaces rather than appends, so
+ * the timeline never shows two clips fighting over one row.
+ */
+function editAudio(project: Project, id: string, edit: (clip: AudioClip) => AudioClip): Project {
+  const index = project.audio.findIndex((c) => c.id === id);
+  const current = project.audio[index];
+  if (!current) return project;
+
+  const next = edit(current);
+  if (next === current) return project;
+
+  const audio = [...project.audio];
+  audio[index] = next;
+  return { ...project, audio, updatedAt: Date.now() };
+}
+
+export function makeAudioClip(
+  mediaId: string,
+  options: { startMs?: number; durationMs: number },
+): AudioClip {
+  return {
+    id: newId('aud'),
+    mediaId,
+    startMs: Math.max(0, Math.round(options.startMs ?? 0)),
+    trimStartMs: 0,
+    trimEndMs: Math.max(0, Math.round(options.durationMs)),
+    gainDb: 0,
+    fadeInMs: 0,
+    // A short tail by default. Music that stops dead at the end of an ad is
+    // the single most common way an otherwise finished piece sounds unfinished.
+    fadeOutMs: Math.min(1_200, Math.round(options.durationMs / 4)),
+  };
+}
+
+export function addAudio(clip: AudioClip): Action {
+  return {
+    label: 'Add music',
+    apply: (project) => ({ ...project, audio: [clip], updatedAt: Date.now() }),
+  };
+}
+
+export function removeAudio(id: string): Action {
+  return {
+    label: 'Remove music',
+    apply: (project) => {
+      const audio = project.audio.filter((c) => c.id !== id);
+      return audio.length === project.audio.length
+        ? project
+        : { ...project, audio, updatedAt: Date.now() };
+    },
+  };
+}
+
+export function setAudioStart(id: string, startMs: number): Action {
+  return {
+    label: 'Move music',
+    coalesceKey: `audioStart:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        const next = Math.max(0, Math.round(startMs));
+        return clip.startMs === next ? clip : { ...clip, startMs: next };
+      }),
+  };
+}
+
+/** Trim is an offset *into the source file*, not a position on the timeline. */
+export function setAudioTrim(
+  id: string,
+  trim: { trimStartMs?: number; trimEndMs?: number },
+  sourceDurationMs: number,
+): Action {
+  return {
+    label: 'Trim music',
+    coalesceKey: `audioTrim:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        const limit = Math.max(0, sourceDurationMs);
+        // 200ms of minimum length, for the same reason an overlay has one:
+        // a clip dragged to nothing can never be grabbed again.
+        const start = clamp(Math.round(trim.trimStartMs ?? clip.trimStartMs), 0, Math.max(0, limit - 200));
+        const end = clamp(Math.round(trim.trimEndMs ?? clip.trimEndMs), start + 200, limit);
+        return clip.trimStartMs === start && clip.trimEndMs === end
+          ? clip
+          : { ...clip, trimStartMs: start, trimEndMs: end };
+      }),
+  };
+}
+
+export function setAudioGain(id: string, gainDb: number): Action {
+  return {
+    label: 'Change volume',
+    coalesceKey: `audioGain:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        // −60dB is the silence floor dbToGain uses; +12 is as loud as anything
+        // here should be able to make itself.
+        const next = clamp(gainDb, -60, 12);
+        return clip.gainDb === next ? clip : { ...clip, gainDb: next };
+      }),
+  };
+}
+
+export function setAudioFades(id: string, fades: { fadeInMs?: number; fadeOutMs?: number }): Action {
+  return {
+    label: 'Change fades',
+    coalesceKey: `audioFades:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        // Not clamped against the clip length here: `resolvedFades` scales
+        // overlapping fades at playback, so a long fade on a short clip stays
+        // a long fade if the clip is later lengthened.
+        const fadeInMs = Math.max(0, Math.round(fades.fadeInMs ?? clip.fadeInMs));
+        const fadeOutMs = Math.max(0, Math.round(fades.fadeOutMs ?? clip.fadeOutMs));
+        return clip.fadeInMs === fadeInMs && clip.fadeOutMs === fadeOutMs
+          ? clip
+          : { ...clip, fadeInMs, fadeOutMs };
+      }),
   };
 }

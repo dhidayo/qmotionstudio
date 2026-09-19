@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 /**
- * `npm run fixtures` — builds the test video for §9's custom media.
+ * `npm run fixtures` — builds the test media for §9 and §10.
  *
  * A real encoded file, not a stub: the point of the custom-media tests is that
  * a container is demuxed and a codec decoded, and a fake would prove neither.
@@ -88,8 +88,65 @@ window.__recordBands = function (options) {
 };
 `;
 
+/**
+ * A WAV of alternating one-second bursts and silences (§10).
+ *
+ * Amplitude rather than pitch, so a test can prove synchronisation with an RMS
+ * window and no FFT: if the export's audio is aligned, 0.5s is loud, 1.5s is
+ * silent, 2.5s is loud. Shift the track by even a quarter second and the
+ * pattern inverts, which is the whole point.
+ *
+ * Written by hand as 16-bit PCM — no browser, no encoder, and a container that
+ * every decoder agrees about.
+ */
+const AUDIO_SECONDS = 12;
+const AUDIO_RATE = 48_000;
+const AUDIO_TONE_HZ = 440;
+
+function buildWav(): Buffer {
+  const frames = AUDIO_SECONDS * AUDIO_RATE;
+  const samples = Buffer.alloc(frames * 2);
+
+  for (let i = 0; i < frames; i++) {
+    const second = Math.floor(i / AUDIO_RATE);
+    const loud = second % 2 === 0;
+    // A short raised-cosine at each edge, so the bursts do not click — a
+    // discontinuity would spread energy across the spectrum and muddy any
+    // later analysis.
+    const intoSecond = (i % AUDIO_RATE) / AUDIO_RATE;
+    const edge = Math.min(1, Math.min(intoSecond, 1 - intoSecond) / 0.01);
+    const amplitude = loud ? 0.7 * edge : 0;
+    const value = Math.sin((2 * Math.PI * AUDIO_TONE_HZ * i) / AUDIO_RATE) * amplitude;
+    samples.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(value * 32767))), i * 2);
+  }
+
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + samples.length, 4);
+  header.write('WAVE', 8);
+  header.write('fmt ', 12);
+  header.writeUInt32LE(16, 16);          // PCM chunk size
+  header.writeUInt16LE(1, 20);           // format: PCM
+  header.writeUInt16LE(1, 22);           // channels: mono
+  header.writeUInt32LE(AUDIO_RATE, 24);
+  header.writeUInt32LE(AUDIO_RATE * 2, 28); // byte rate
+  header.writeUInt16LE(2, 32);           // block align
+  header.writeUInt16LE(16, 34);          // bits per sample
+  header.write('data', 36);
+  header.writeUInt32LE(samples.length, 40);
+
+  return Buffer.concat([header, samples]);
+}
+
 async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
+
+  const wav = buildWav();
+  await writeFile(resolve(OUT_DIR, 'beat-bands.wav'), wav);
+  console.log(
+    `Wrote tests/fixtures/beat-bands.wav — ${(wav.length / 1024).toFixed(0)} KB, ` +
+    `${AUDIO_SECONDS}s of alternating ${AUDIO_TONE_HZ}Hz bursts and silence.`,
+  );
 
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
   const page = await browser.newPage();

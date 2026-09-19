@@ -30,6 +30,21 @@ export const DEFAULT_EXPORT: ExportSettings = {
 };
 
 /** Mediabunny's codec family names, not WebCodecs strings. */
+/**
+ * §11.2: MP4 → AAC, WebM → Opus.
+ *
+ * Opus encodes natively through WebCodecs everywhere WebCodecs exists. AAC
+ * does not, which is what D-010's `@mediabunny/aac-encoder` polyfill is for —
+ * registered only when the browser cannot do it itself.
+ */
+export const AUDIO_CODEC: Record<ExportFormat, 'aac' | 'opus'> = {
+  mp4: 'aac',
+  webm: 'opus',
+};
+
+/** Stereo music at this rate is transparent enough for social video. */
+export const AUDIO_BITRATE = 128_000;
+
 export const VIDEO_CODEC: Record<ExportFormat, 'avc' | 'vp9'> = {
   mp4: 'avc',
   webm: 'vp9',

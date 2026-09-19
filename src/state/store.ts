@@ -54,6 +54,8 @@ type EditorState = {
    * one is selected the inspector shows its own panel instead.
    */
   selectedOverlay: string | null;
+  /** The music clip the inspector is editing, or null (§10). */
+  selectedAudio: string | null;
 
   playheadMs: number;
   isPlaying: boolean;
@@ -69,6 +71,7 @@ type EditorState = {
 
   selectScene: (index: number) => void;
   selectOverlay: (id: string | null) => void;
+  selectAudio: (id: string | null) => void;
   setLoadedTemplate: (template: SceneTemplate | null) => void;
   setExporting: (exporting: boolean) => void;
   dispatch: (action: actions.Action) => void;
@@ -197,6 +200,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   selectedScene: 0,
   selectedOverlay: null,
+  selectedAudio: null,
   playheadMs: 0,
   isPlaying: true,
   inspectorTab: 'photos',
@@ -211,13 +215,15 @@ export const useEditor = create<EditorState>((set, get) => ({
   selectScene: (index) => {
     set((state) => {
       const clamped = Math.max(0, Math.min(index, state.project.scenes.length - 1));
-      return clamped === state.selectedScene && state.selectedOverlay === null
+      return clamped === state.selectedScene && state.selectedOverlay === null && state.selectedAudio === null
         ? {}
-        : { selectedScene: clamped, selectedOverlay: null, selectedPhoto: 0, template: null };
+        : { selectedScene: clamped, selectedOverlay: null, selectedAudio: null, selectedPhoto: 0, template: null };
     });
   },
 
-  selectOverlay: (selectedOverlay) => { set({ selectedOverlay }); },
+  selectOverlay: (selectedOverlay) => { set({ selectedOverlay, selectedAudio: null }); },
+
+  selectAudio: (selectedAudio) => { set({ selectedAudio, selectedOverlay: null }); },
 
   setLoadedTemplate: (template) => { set({ template }); },
 
@@ -337,6 +343,12 @@ export const useEditor = create<EditorState>((set, get) => ({
 /** The scene the inspector is editing. Showcase always has exactly one. */
 export function useScene(): Project['scenes'][number] | undefined {
   return useEditor((s) => s.project.scenes[s.selectedScene] ?? s.project.scenes[0]);
+}
+
+export function useSelectedAudio(): Project['audio'][number] | undefined {
+  return useEditor((s) =>
+    s.selectedAudio === null ? undefined : s.project.audio.find((c) => c.id === s.selectedAudio),
+  );
 }
 
 export function useSelectedOverlay(): Project['overlays'][number] | undefined {
