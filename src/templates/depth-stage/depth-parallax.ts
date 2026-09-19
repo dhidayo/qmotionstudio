@@ -6,6 +6,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, HEADLINE_STYLE, BODY_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
+import { backgroundLayer, logoLayers } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -79,26 +80,7 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const spreadY = stageH * 0.2;
 
   // ── Background ────────────────────────────────────────────────────────────
-  layers.push({
-    id: ctx.id('bg'),
-    type: 'gradient',
-    startMs: 0,
-    endMs: durationMs,
-    anchorX: 0,
-    anchorY: 0,
-    tracks: {},
-    props: {
-      w: design.w,
-      h: design.h,
-      gradient: 'linear',
-      angle: 100,
-      stops: [
-        { at: 0, paint: roleFill('surface') },
-        { at: 0.75, paint: roleFill('bg') },
-        { at: 1, paint: roleFill('bg') },
-      ],
-    },
-  });
+  layers.push(backgroundLayer(inputs, ctx));
 
   // ── Receding planes ───────────────────────────────────────────────────────
   // depth 0 is nearest. Everything about a plane derives from it, so adding a
@@ -183,6 +165,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     },
     props: caption,
   });
+
+  layers.push(...logoLayers(inputs, ctx));
 
   return layers;
 }

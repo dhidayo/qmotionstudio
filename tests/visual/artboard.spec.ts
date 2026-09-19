@@ -1,6 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
+ * Scoped to the top bar's group: the Photos tab's "Frame ratio" control offers
+ * the same labels, so an unscoped selector matches two buttons.
+ */
+function aspectButton(page: Page, label: string) {
+  return page.getByRole('group', { name: 'Aspect ratio' }).getByRole('button', { name: label, exact: true });
+}
+
+/**
  * M0: a placeholder frame renders correctly at all five aspects.
  * M1: the render core animates a hand-written scene at 60fps, without calling
  *     build() inside the render loop.
@@ -58,7 +66,7 @@ test.describe('M0 — aspect scaling', () => {
 
   for (const { label, ratio } of ASPECTS) {
     test(`renders at ${label}`, async ({ page }) => {
-      await page.getByRole('button', { name: label, exact: true }).click();
+      await aspectButton(page, label).click();
       await page.waitForTimeout(150);
 
       const m = await canvasMetrics(page);
@@ -90,7 +98,7 @@ test.describe('M1 — render core', () => {
 
   for (const { label } of ASPECTS) {
     test(`draws the hand-written scene at ${label}`, async ({ page }) => {
-      await page.getByRole('button', { name: label, exact: true }).click();
+      await aspectButton(page, label).click();
       await page.waitForTimeout(200);
       await expect(page.locator('canvas')).toHaveScreenshot(`demo-${label.replace(':', '-')}.png`, {
         maxDiffPixelRatio: 0.02,
@@ -148,7 +156,7 @@ test.describe('M1 — the render loop', () => {
     await page.waitForTimeout(300);
 
     const before = await readStats(page);
-    await page.getByRole('button', { name: '16:9', exact: true }).click();
+    await aspectButton(page, '16:9').click();
     await page.waitForTimeout(500);
     const after = await readStats(page);
 

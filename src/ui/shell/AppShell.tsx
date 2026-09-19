@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Artboard } from '@/ui/artboard/Artboard';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { LibraryRail } from '@/ui/library/LibraryRail';
@@ -8,11 +8,14 @@ import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { useEditor } from '@/state/store';
 import { totalDurationMs } from '@/document/select/timeline';
+import { MediaProvider } from '@/ui/media/MediaProvider';
 import { MediaStore } from '@/media/store';
 import { loadSamples } from '@/media/samples';
 import { loadTemplate } from '@/templates/registry';
 import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { renderParams } from '@/dev/renderParams';
+import { useKeyboard } from '@/ui/hooks/useKeyboard';
+import { Toast } from './Toast';
 
 export function AppShell(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -55,13 +58,20 @@ export function AppShell(): React.JSX.Element {
    * error.
    */
   const templateId = project.scenes[0]?.templateId;
+  const setLoadedTemplate = useEditor((s) => s.setLoadedTemplate);
+
   useEffect(() => {
-    if (!templateId || templateId === DEMO_TEMPLATE_ID || templateId === PLACEHOLDER_TEMPLATE_ID) return;
+    if (!templateId || templateId === DEMO_TEMPLATE_ID || templateId === PLACEHOLDER_TEMPLATE_ID) {
+      setLoadedTemplate(null);
+      return;
+    }
     let cancelled = false;
     loadTemplate(templateId)
-      .then(() => {
+      .then((template) => {
+        if (cancelled) return;
         // Clearing the layer cache forces a rebuild now that build() exists.
-        if (!cancelled) rig.layerCache.clear();
+        rig.layerCache.clear();
+        setLoadedTemplate(template.kind === 'scene' ? template : null);
       })
       .catch((error: unknown) => {
         // §16: a malformed or missing template is a build mistake, not
@@ -69,7 +79,7 @@ export function AppShell(): React.JSX.Element {
         console.error(`Failed to load template "${templateId}".`, error);
       });
     return () => { cancelled = true; };
-  }, [templateId, rig]);
+  }, [templateId, rig, setLoadedTemplate]);
 
   /** Sample photos, so a new project opens with something to look at (§8.1). */
   useEffect(() => {
@@ -94,36 +104,26 @@ export function AppShell(): React.JSX.Element {
     };
   }, [rig]);
 
-  // §13: space toggles playback. Focus-scoped so it does not fight a text field.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const target = e.target;
-      const typing =
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
-      if (typing) return;
+  const [toast, setToast] = useState<string | null>(null);
 
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if (clock.playing) clock.pause();
-        else clock.play();
-      }
-    };
-    addEventListener('keydown', onKey);
-    return () => { removeEventListener('keydown', onKey); };
-  }, [clock]);
+  const onExport = useCallback(() => { setToast('Export arrives at M4.'); }, []);
+  const onSaveNote = useCallback(() => { setToast('Saves automatically.'); }, []);
+  useKeyboard(clock, { onExport, onSaveNote });
 
   return (
-    <div className="flex h-full min-h-0 flex-1">
-      <LibraryRail />
-      <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
-        <div className="relative min-h-0 flex-1">
-          <Artboard project={project} clock={clock} rig={rig} />
-          <PerfOverlay rig={rig} />
-        </div>
-        <ScrubBar clock={clock} />
-      </main>
-      <Inspector />
-    </div>
+    <MediaProvider store={media}>
+      <div className="flex h-full min-h-0 flex-1">
+        <LibraryRail />
+        <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
+          <div className="relative min-h-0 flex-1">
+            <Artboard project={project} clock={clock} rig={rig} />
+            <PerfOverlay rig={rig} />
+          </div>
+          <ScrubBar clock={clock} />
+        </main>
+        <Inspector />
+      </div>
+      <Toast message={toast} onDone={() => { setToast(null); }} />
+    </MediaProvider>
   );
 }

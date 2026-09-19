@@ -70,7 +70,10 @@ user types something that needs it. See DECISIONS.md D-026.
 - **M2 — done.** Template schema and registry, six templates across three
   categories, the structural/cosmetic input split, and the lint and thumbnail
   pipelines.
-- M3 — Showcase mode: template library, scrub loop, all four inspector tabs.
+- **M3 — done.** Showcase mode: library with categories, search, free/pro filter
+  and favourites; all four inspector tabs on an undoable action pipeline; photo
+  upload by drop, paste or picker.
+- M4 — export: Mediabunny, worker, MP4 + WebM, progress and cancel.
 
 ## Templates
 

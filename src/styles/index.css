@@ -62,6 +62,17 @@
   }
 }
 
+@keyframes toast-in-out {
+  0% { opacity: 0; transform: translate(-50%, 6px); }
+  8% { opacity: 1; transform: translate(-50%, 0); }
+  88% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, 6px); }
+}
+
+.toast {
+  animation: toast-in-out 2.5s var(--ease-out) both;
+}
+
 /*
  * §13: reduced motion suppresses editor chrome animation only. The artboard is
  * a <canvas> and is never affected by this rule — the user asked for motion,

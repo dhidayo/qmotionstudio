@@ -1,5 +1,13 @@
 import type { Aspect, Palette } from '@/core/types';
-import { SCHEMA_VERSION, type LookSettings, type PhotoInput, type Project, type Scene, type SceneInputs } from './types';
+import {
+  SCHEMA_VERSION,
+  type LogoSettings,
+  type LookSettings,
+  type PhotoInput,
+  type Project,
+  type Scene,
+  type SceneInputs,
+} from './types';
 
 export const DEFAULT_PALETTE: Palette = {
   bg: '#101014',
@@ -18,6 +26,17 @@ export const DEFAULT_LOOK: LookSettings = {
   cornerRadius: 24,
 };
 
+export const DEFAULT_LOGO: LogoSettings = {
+  mediaId: null,
+  sizePct: 12,
+  placement: 'bottomRight',
+  x: 0.88,
+  y: 0.88,
+  opacity: 1,
+  lockup: false,
+  lockupText: '',
+};
+
 export const DEFAULT_SCENE_MS = 10_000;
 
 /** crypto.randomUUID needs a secure context; localhost qualifies, so does https. */
@@ -30,7 +49,7 @@ export function emptySceneInputs(): SceneInputs {
   return {
     photos: [],
     texts: {},
-    logo: null,
+    logo: DEFAULT_LOGO,
     look: DEFAULT_LOOK,
     styleOverrides: { texts: {} },
   };

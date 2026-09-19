@@ -591,3 +591,83 @@ transition, and a poster showing a card halfway out of frame sells nothing.
 back to 3.2s. Cheap, and it is the kind of thing that only shows up once you are
 looking at all six posters side by side — which is exactly what the thumbnail
 pipeline is for.
+
+---
+
+## D-034 — Draw order is fixed at build time, so rotating depth needs slot layers
+M3, found while fixing Card Stack.
+
+The renderer draws layers in the order a template emits them. That order is
+fixed when `build()` runs, which means a template whose **z-order changes over
+time** cannot be expressed by emitting one layer per object.
+
+Card Stack hit this directly: cards cycle, so the card on top this turn is at
+the back two turns later. One layer per photo rendered correctly for one turn in
+four and painted rear cards over the front one for the rest — a bug that looked
+like a spacing problem and was not.
+
+The fix is to invert the mapping: **layers are slots, photos cycle through
+them.** Each slot has a fixed depth and therefore a fixed position in the draw
+order; a photo appears in a slot only during the turn it occupies it, using the
+layer's own time window. Cost is one layer per (slot, photo) pair — 64 at the
+eight-photo maximum, and layers outside their window cost a comparison each.
+
+**Rejected:** adding a `z` animated prop and sorting layers per frame. §6.4 does
+mention z-ordering for overlays, so it is not foreign to the model, but sorting
+every layer every frame to serve one template is the kind of renderer
+special-casing §3B warns about. The slot formulation stays inside the existing
+architecture and is the standard way carousels are built.
+
+Worth knowing before writing any template with a carousel, a shuffle or
+anything else where objects pass in front of each other.
+
+---
+
+## D-035 — The logo is a settings object, not a MediaRef
+**Amends §5.** M3.
+
+§5 types `SceneInputs.logo` as `MediaRef | null`, but §8.3 gives the inspector
+size, placement, opacity and a lockup with its own text. None of that fits in a
+bare reference.
+
+`LogoSettings` carries them. The alternative was smuggling them into
+`styleOverrides`, which is for *text* style and would have made the
+structural/cosmetic split (D-006) incoherent — logo placement is structural,
+logo opacity is not, and both would have sat in the same bag.
+
+---
+
+## D-036 — Undo coalescing is keyed, and sealed on blur rather than keyup
+M3.
+
+A slider drag fires an action per pointer move. One undo entry per frame makes
+⌘Z useless, so actions carry a `coalesceKey` and consecutive commits sharing one
+replace the previous entry rather than stacking. The key includes the target, so
+dragging photo 2's size and then photo 3's gives two entries rather than one.
+
+The run is sealed on **blur**, not on keyup. Sealing per keystroke gave keyboard
+users ten undo steps for an adjustment that gives mouse users one — caught by a
+test that pressed the arrow key ten times and then found a single undo did not
+return to the start.
+
+Selection, the open tab, the playhead and favourites are all excluded from the
+history. Nobody wants ⌘Z to reopen a panel or un-favourite a template.
+
+---
+
+## D-037 — Background and logo are shared, not per-template
+M3.
+
+§8.4's background treatment and §8.3's logo are *user* controls, so they have to
+behave identically in every template — "Blurred photo" doing something slightly
+different in each one is the kind of inconsistency that makes an editor feel
+unreliable. `_shared/chrome.ts` owns both; templates call
+`backgroundLayer(inputs, ctx)` and spread `logoLayers(inputs, ctx)`.
+
+Grain and vignette are different: they apply to the finished frame rather than
+to a layer, so they live in the compositor as a post pass (`postFx.ts`) and no
+template can opt out of them by forgetting.
+
+The grain tile is generated once and repeated with a per-frame *offset*.
+Generating noise per frame would mean writing a megapixel of random bytes sixty
+times a second, which costs more than the rest of the renderer combined.

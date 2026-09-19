@@ -79,10 +79,32 @@ export type StyleOverrides = {
   readonly texts: Readonly<Record<string, Partial<TextStyle>>>;
 };
 
+export type LogoPlacement =
+  | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'center' | 'free';
+
+/**
+ * §5 types the logo as `MediaRef | null`, but §8.3 gives the inspector size,
+ * placement, opacity and a lockup option — none of which fit in a bare ref.
+ * Extended here rather than smuggled into styleOverrides (D-035).
+ */
+export type LogoSettings = {
+  readonly mediaId: string | null;
+  /** Percent of the artboard's short edge. */
+  readonly sizePct: number;
+  readonly placement: LogoPlacement;
+  /** Normalised 0–1, used only when placement is 'free'. */
+  readonly x: number;
+  readonly y: number;
+  readonly opacity: number;
+  /** Pairs the logo with a text mark (§8.3). */
+  readonly lockup: boolean;
+  readonly lockupText: string;
+};
+
 export type SceneInputs = {
   readonly photos: readonly PhotoInput[];
   readonly texts: Readonly<Record<string, string>>;
-  readonly logo: MediaRef | null;
+  readonly logo: LogoSettings;
   readonly look: LookSettings;
   readonly styleOverrides: StyleOverrides;
 };

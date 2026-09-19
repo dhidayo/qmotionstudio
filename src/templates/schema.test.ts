@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PhotoInput, SceneInputs } from '@/document/types';
-import { DEFAULT_LOOK, DEFAULT_PALETTE, emptySceneInputs } from '@/document/defaults';
+import { DEFAULT_LOGO, DEFAULT_LOOK, DEFAULT_PALETTE, emptySceneInputs } from '@/document/defaults';
 import { structureKey, validateTemplate, type SceneTemplate, type Template } from './schema';
 
 const DESIGN = { w: 1080, h: 1920 };
@@ -113,8 +113,15 @@ describe('structureKey — what MUST invalidate the build', () => {
     expect(structureKey('other', inputs(), '9:16', DESIGN, 10_000)).not.toBe(base);
   });
 
-  it('reacts to a logo appearing or disappearing', () => {
-    expect(keyOf(inputs({ logo: { mediaId: 'logo1' } }))).not.toBe(base);
+  it('reacts to a logo appearing, moving or resizing', () => {
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, mediaId: 'logo1' } }))).not.toBe(base);
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, placement: 'topLeft' } }))).not.toBe(base);
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, sizePct: 24 } }))).not.toBe(base);
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, lockup: true } }))).not.toBe(base);
+  });
+
+  it('ignores logo opacity — it resolves at draw time', () => {
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, opacity: 0.5 } }))).toBe(base);
   });
 
   it('reacts to background treatment and corner radius', () => {

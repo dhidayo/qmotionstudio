@@ -27,6 +27,7 @@ export type MediaEntry = {
 
 export class MediaStore implements MediaResolver {
   readonly #entries = new Map<string, MediaEntry>();
+  readonly #previewUrls = new Map<string, string>();
   #revision = 0;
 
   /** Bumped on every change, so callers can tell when a redraw is warranted. */
@@ -39,6 +40,7 @@ export class MediaStore implements MediaResolver {
     if (previous && previous.bitmap && previous.bitmap !== entry.bitmap) {
       previous.bitmap.close();
     }
+    this.#revokePreview(entry.id);
     this.#entries.set(entry.id, entry);
     this.#revision++;
   }
@@ -59,6 +61,31 @@ export class MediaStore implements MediaResolver {
     return this.#entries.get(mediaId)?.bitmap ?? null;
   }
 
+  /**
+   * A stable object URL for showing the media in DOM chrome (thumbnails in the
+   * inspector). Cached and revoked with the entry — creating one per render
+   * leaks a URL every frame, and the leak is invisible until the tab is using
+   * a gigabyte.
+   */
+  previewUrl(mediaId: string): string | null {
+    const cached = this.#previewUrls.get(mediaId);
+    if (cached !== undefined) return cached;
+
+    const entry = this.#entries.get(mediaId);
+    if (!entry) return null;
+
+    const url = URL.createObjectURL(entry.blob);
+    this.#previewUrls.set(mediaId, url);
+    return url;
+  }
+
+  #revokePreview(mediaId: string): void {
+    const url = this.#previewUrls.get(mediaId);
+    if (url === undefined) return;
+    URL.revokeObjectURL(url);
+    this.#previewUrls.delete(mediaId);
+  }
+
   /** Custom media (Pro) arrives at M5; until then there are no video frames. */
   getVideoFrame(_mediaId: string, _timeMs: number): VideoFrame | null {
     return null;
@@ -69,12 +96,15 @@ export class MediaStore implements MediaResolver {
     // ImageBitmap holds decoded pixels outside the JS heap; dropping the
     // reference is not enough, and §14 budgets 900MB.
     entry?.bitmap?.close();
+    this.#revokePreview(id);
     this.#entries.delete(id);
     this.#revision++;
   }
 
   clear(): void {
     for (const entry of this.#entries.values()) entry.bitmap?.close();
+    for (const url of this.#previewUrls.values()) URL.revokeObjectURL(url);
+    this.#previewUrls.clear();
     this.#entries.clear();
     this.#revision++;
   }

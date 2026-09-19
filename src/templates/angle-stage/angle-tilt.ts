@@ -6,6 +6,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
+import { backgroundLayer, logoLayers } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -73,26 +74,7 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const pitch = cardSize * 0.98;
   const rowSpan = pitch * count;
 
-  layers.push({
-    id: ctx.id('bg'),
-    type: 'gradient',
-    startMs: 0,
-    endMs: durationMs,
-    anchorX: 0,
-    anchorY: 0,
-    tracks: {},
-    props: {
-      w: design.w,
-      h: design.h,
-      gradient: 'linear',
-      angle: 92,
-      stops: [
-        { at: 0, paint: roleFill('bg') },
-        { at: 0.55, paint: roleFill('surface') },
-        { at: 1, paint: roleFill('bg') },
-      ],
-    },
-  });
+  layers.push(backgroundLayer(inputs, ctx));
 
   const centreX = design.w / 2;
 
@@ -176,6 +158,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     tracks: { x: [kf(0, safe.x)], y: [kf(0, typeTop + kickerRun.height + unit * 0.022)] },
     props: headline,
   });
+
+  layers.push(...logoLayers(inputs, ctx));
 
   return layers;
 }

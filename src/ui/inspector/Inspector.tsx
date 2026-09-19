@@ -1,4 +1,8 @@
 import { useEditor, type InspectorTab } from '@/state/store';
+import { PhotosTab } from './tabs/PhotosTab';
+import { TextTab } from './tabs/TextTab';
+import { LogoTab } from './tabs/LogoTab';
+import { LookTab } from './tabs/LookTab';
 
 const TABS: readonly { id: InspectorTab; label: string }[] = [
   { id: 'photos', label: 'Photos' },
@@ -7,17 +11,16 @@ const TABS: readonly { id: InspectorTab; label: string }[] = [
   { id: 'look', label: 'Look' },
 ];
 
-const MILESTONE: Record<InspectorTab, string> = {
-  photos: 'Upload, reorder, frame ratio, size mode and crop arrive at M3 (§8.1).',
-  text: 'Per-slot text, font, weight, alignment and style toggles arrive at M3 (§8.2).',
-  logo: 'Logo upload, placement and lockup arrive at M3 (§8.3).',
-  look: 'Palette, background treatment, grain, vignette and speed arrive at M3 (§8.4).',
-};
-
-/** Placeholder. All four panels are built at M3 against the real document actions. */
+/**
+ * §8. The inspector reads the template to know what controls to show — a
+ * template with no text slots has no Text tab content, and one that does not
+ * place a logo says so rather than offering a dead control.
+ */
 export function Inspector(): React.JSX.Element {
   const tab = useEditor((s) => s.inspectorTab);
   const setTab = useEditor((s) => s.setInspectorTab);
+  // Resolved by AppShell once the lazy registry (D-029) has fetched it.
+  const template = useEditor((s) => s.template);
 
   return (
     <aside
@@ -45,8 +48,12 @@ export function Inspector(): React.JSX.Element {
           </button>
         ))}
       </div>
+
       <div className="flex-1 overflow-y-auto p-3" role="tabpanel">
-        <p className="text-[12px] leading-relaxed text-ink-muted">{MILESTONE[tab]}</p>
+        {tab === 'photos' && <PhotosTab template={template} />}
+        {tab === 'text' && <TextTab template={template} />}
+        {tab === 'logo' && <LogoTab template={template} />}
+        {tab === 'look' && <LookTab template={template} />}
       </div>
     </aside>
   );

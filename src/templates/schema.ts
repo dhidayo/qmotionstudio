@@ -151,7 +151,11 @@ export function structureKey(
     durationMs,
     photos,
     texts,
-    inputs.logo === null ? null : inputs.logo.mediaId,
+    inputs.logo.mediaId,
+    inputs.logo.placement,
+    inputs.logo.sizePct,
+    inputs.logo.lockup,
+    inputs.logo.lockupText,
     inputs.look.background,
     inputs.look.cornerRadius,
   ]);

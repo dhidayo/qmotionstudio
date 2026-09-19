@@ -8,6 +8,7 @@ import { peekTemplate } from '@/templates/registry';
 import { structureKey } from '@/templates/schema';
 import { buildDemoScene } from '@/templates/_demo/demoScene';
 import { drawLayers } from './drawLayer';
+import { drawGrain, drawVignette } from './postFx';
 import { drawPlaceholderFrame } from './placeholder';
 import type { DrawContext } from './drawContext';
 import type { RenderRig } from './rig';
@@ -52,8 +53,16 @@ export function renderFrame(
   const active = activeScenesAt(spans, globalTimeMs);
 
   const scene = active?.current.scene;
-  const palette = scene?.inputs.look.palette ?? project.brand.palette;
-  const localTimeMs = active ? globalTimeMs - active.current.startMs : globalTimeMs;
+  const look = scene?.inputs.look;
+  const palette = look?.palette ?? project.brand.palette;
+
+  /**
+   * D-006: the global speed multiplier is a time remap applied before layers
+   * are evaluated, never baked into keyframes. That is what lets the speed
+   * slider repaint without rebuilding the template.
+   */
+  const rawLocalMs = active ? globalTimeMs - active.current.startMs : globalTimeMs;
+  const localTimeMs = rawLocalMs * (look?.speed ?? 1);
 
   const dc: DrawContext = {
     ctx,
@@ -74,7 +83,12 @@ export function renderFrame(
 
   //  3. Composite scene buffers through the transition (M5).
   //  4. Overlays, ordered by track then z (M5).
-  //  5. Persistent brand elements and the free-tier watermark (M7).
+
+  //  5. Frame post-effects and, at M7, the free-tier watermark.
+  if (look) {
+    drawGrain(ctx, vp.design, look.grain, rawLocalMs);
+    drawVignette(ctx, vp.design, look.vignette);
+  }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 

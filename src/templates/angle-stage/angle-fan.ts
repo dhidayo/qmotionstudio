@@ -7,6 +7,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
+import { backgroundLayer, logoLayers } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -90,25 +91,7 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     faceOutward: true,
   });
 
-  layers.push({
-    id: ctx.id('bg'),
-    type: 'gradient',
-    startMs: 0,
-    endMs: durationMs,
-    anchorX: 0,
-    anchorY: 0,
-    tracks: {},
-    props: {
-      w: design.w,
-      h: design.h,
-      gradient: 'linear',
-      angle: 118,
-      stops: [
-        { at: 0, paint: roleFill('surface') },
-        { at: 1, paint: roleFill('bg') },
-      ],
-    },
-  });
+  layers.push(backgroundLayer(inputs, ctx));
 
   const middle = (count - 1) / 2;
   const ordered = ctx.depthSort(
@@ -163,6 +146,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     tracks: { x: [kf(0, design.w / 2)], y: [kf(0, headTop)] },
     props: headline,
   });
+
+  layers.push(...logoLayers(inputs, ctx));
 
   return layers;
 }

@@ -6,6 +6,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
+import { backgroundLayer, logoLayers } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -51,106 +52,110 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const stageTop = headTop + headRun.height + unit * 0.05;
   const stageH = Math.max(unit * 0.3, safe.y + safe.h - stageTop);
   const stageCentreY = stageTop + stageH / 2;
-  const cardSize = Math.min(unit * 0.56, stageH * 0.78);
+  // Sized so the whole ladder fits, not just the top card: deeper cards step
+  // down the frame, so the stack needs more room than one photo.
+  const cardSize = Math.min(unit * 0.52, stageH * 0.58);
 
-  layers.push({
-    id: ctx.id('bg'),
-    type: 'gradient',
-    startMs: 0,
-    endMs: durationMs,
-    anchorX: 0,
-    anchorY: 0,
-    tracks: {},
-    props: {
-      w: design.w,
-      h: design.h,
-      gradient: 'radial',
-      stops: [
-        { at: 0, paint: roleFill('surface') },
-        { at: 1, paint: roleFill('bg') },
-      ],
-    },
-  });
+  layers.push(backgroundLayer(inputs, ctx));
 
   // Resting places in the stack: index 0 is on top, each one behind is a little
   // smaller, lower and rotated. Reused by every card as it cycles through.
-  // Offsets have to be big enough to read as a *stack*. At a fraction of the
-  // frame they vanish behind the top card and the whole thing looks like one
-  // photo with a coloured fringe, which is how the first pass came out.
+  /**
+   * Resting places in the stack. Index 0 is on top.
+   *
+   * The offset has to beat the scale shrink, or the card behind hides inside
+   * the one in front: a card 7% shorter is already 3.5% of its height higher at
+   * the bottom edge, so an offset of the same order peeks by almost nothing.
+   * That is why the first two passes read as one card with a coloured fringe.
+   * Shallow scale falloff, generous vertical step.
+   */
+  const cardH = cardSize / Math.sqrt(0.75);
   const restingAt = (slot: number): { y: number; scale: number; rotation: number; opacity: number } => ({
-    y: stageCentreY + slot * cardSize * 0.085,
-    scale: 1 - slot * 0.1,
-    rotation: (slot % 2 === 0 ? 1 : -1) * slot * 3.4,
-    opacity: slot >= count ? 0 : 1 - slot * 0.1,
+    y: stageCentreY + slot * cardH * 0.12,
+    scale: 1 - slot * 0.05,
+    rotation: (slot % 2 === 0 ? 1 : -1) * slot * 4,
+    opacity: slot >= count ? 0 : 1 - slot * 0.14,
   });
 
-  for (let i = 0; i < count; i++) {
-    const photo = photos[i];
-    if (!photo) continue;
+  /**
+   * Layers are SLOTS, not photos.
+   *
+   * The renderer draws layers in the order a template emits them, and that
+   * order is fixed at build time. A stack whose cards cycle has a z-order that
+   * *changes* — the card on top this turn is at the back two turns later — and
+   * a fixed list cannot express that. Emitting one layer per photo produced a
+   * stack that rendered correctly for one turn in four and painted rear cards
+   * over the front one for the rest.
+   *
+   * So each slot gets its own layer at a fixed depth, and photos cycle through
+   * the slots by appearing only during the turn they occupy one. Draw order
+   * becomes slot order, which never changes, and the loop is seamless because
+   * turn indices wrap.
+   *
+   * Cost is one layer per (slot, photo) pair — 64 at the eight-photo maximum.
+   * Layers outside their time window cost a comparison each, so this is cheap.
+   */
+  for (let slot = count - 1; slot >= 0; slot--) {
+    const rest = restingAt(slot);
 
-    const props = photoProps(photo, cardSize, {
-      cornerRadius: inputs.look.cornerRadius,
-      shadow: { blur: unit * 0.06, offsetX: 0, offsetY: unit * 0.018, paint: colorFill('rgba(0,0,0,0.55)') },
-      border: { inset: 0, paint: roleFill('ink', 0.1), width: Math.max(1, unit * 0.002) },
-    });
+    for (let photoIndex = 0; photoIndex < count; photoIndex++) {
+      const photo = photos[photoIndex];
+      if (!photo) continue;
 
-    const exitMs = Math.min(620, turnMs * 0.45);
+      // The turn during which this photo sits in this slot.
+      const turn = (photoIndex - slot + count) % count;
+      const from = turn * turnMs;
+      const to = from + turnMs;
 
-    const yTrack: Keyframe[] = [];
-    const scaleTrack: Keyframe[] = [];
-    const rotTrack: Keyframe[] = [];
-    const opacityTrack: Keyframe[] = [];
+      const props = photoProps(photo, cardSize, {
+        cornerRadius: inputs.look.cornerRadius,
+        shadow: { blur: unit * 0.06, offsetX: 0, offsetY: unit * 0.018, paint: colorFill('rgba(0,0,0,0.55)') },
+        border: { inset: 0, paint: roleFill('ink', 0.1), width: Math.max(1, unit * 0.002) },
+      });
 
-    // Walk every turn in the loop and record where this card sits during it.
-    for (let turn = 0; turn <= count; turn++) {
-      const at = turn * turnMs;
-      // How far this card is from the top during this turn.
-      const slot = (i - turn + count) % count;
-      const rest = restingAt(slot);
+      const isFront = slot === 0;
+      const exitMs = Math.min(620, turnMs * 0.45);
+      const leaves = turnMs - exitMs;
 
-      if (slot === 0) {
-        // Arriving on top: settle in, hold, then deal away.
-        yTrack.push(kf(at, rest.y, 'outCubic'));
-        scaleTrack.push(kf(at, rest.scale, 'outCubic'));
-        rotTrack.push(kf(at, 0, 'outCubic'));
-        opacityTrack.push(kf(at, 1));
+      // Keyframes are relative to the layer's own start (D-005), so each of
+      // these reads as "during my turn" regardless of which turn that is.
+      const yTrack: Keyframe[] = isFront
+        ? [kf(0, rest.y), kf(leaves, rest.y, 'inCubic'), kf(turnMs, rest.y - cardH * 0.9, 'inCubic')]
+        : [kf(0, rest.y)];
 
-        const leaves = at + turnMs - exitMs;
-        yTrack.push(kf(leaves, rest.y, 'inCubic'), kf(at + turnMs, rest.y - unit * 0.42, 'inCubic'));
-        scaleTrack.push(kf(leaves, rest.scale), kf(at + turnMs, rest.scale * 1.08, 'inCubic'));
-        rotTrack.push(kf(leaves, 0), kf(at + turnMs, -7, 'inCubic'));
-        opacityTrack.push(kf(leaves, 1), kf(at + turnMs, 0, 'inCubic'));
-      } else if (slot === count - 1) {
-        // Returning to the back of the stack — appear there rather than flying
-        // back across the frame, which would read as a mistake.
-        yTrack.push(kf(at, rest.y));
-        scaleTrack.push(kf(at, rest.scale));
-        rotTrack.push(kf(at, rest.rotation));
-        opacityTrack.push(kf(at, 0), kf(at + Math.min(280, turnMs * 0.3), rest.opacity));
-      } else {
-        yTrack.push(kf(at, rest.y, 'outCubic'));
-        scaleTrack.push(kf(at, rest.scale, 'outCubic'));
-        rotTrack.push(kf(at, rest.rotation, 'outCubic'));
-        opacityTrack.push(kf(at, rest.opacity));
-      }
+      const scaleTrack: Keyframe[] = isFront
+        ? [kf(0, rest.scale), kf(leaves, rest.scale), kf(turnMs, rest.scale * 1.06, 'inCubic')]
+        : [kf(0, rest.scale)];
+
+      const rotationTrack: Keyframe[] = isFront
+        ? [kf(0, rest.rotation), kf(leaves, rest.rotation), kf(turnMs, rest.rotation - 7, 'inCubic')]
+        : [kf(0, rest.rotation)];
+
+      // The deepest slot fades in rather than appearing, so a photo arriving at
+      // the back of the stack does not pop into existence mid-frame.
+      const fadeIn = Math.min(260, turnMs * 0.3);
+      const opacityTrack: Keyframe[] = isFront
+        ? [kf(0, rest.opacity), kf(leaves, rest.opacity), kf(turnMs, 0, 'inCubic')]
+        : slot === count - 1 && count > 1
+          ? [kf(0, 0), kf(fadeIn, rest.opacity)]
+          : [kf(0, rest.opacity)];
+
+      layers.push({
+        id: ctx.id(`slot${slot}`),
+        type: 'image',
+        startMs: from,
+        endMs: to,
+        tracks: {
+          x: [kf(0, design.w / 2)],
+          y: yTrack,
+          scaleX: scaleTrack,
+          scaleY: scaleTrack,
+          rotation: rotationTrack,
+          opacity: opacityTrack,
+        },
+        props,
+      });
     }
-
-    layers.push({
-      id: ctx.id('card'),
-      type: 'image',
-      // Drawn back to front: the card whose turn is furthest away sits deepest.
-      startMs: 0,
-      endMs: durationMs,
-      tracks: {
-        x: [kf(0, design.w / 2)],
-        y: yTrack,
-        scaleX: scaleTrack,
-        scaleY: scaleTrack,
-        rotation: rotTrack,
-        opacity: opacityTrack,
-      },
-      props,
-    });
   }
 
   layers.push({
@@ -163,6 +168,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     tracks: { x: [kf(0, design.w / 2)], y: [kf(0, headTop)] },
     props: headline,
   });
+
+  layers.push(...logoLayers(inputs, ctx));
 
   return layers;
 }

@@ -34,6 +34,8 @@ export function TopBar(): React.JSX.Element {
         ))}
       </div>
 
+      <UndoRedo />
+
       <div className="ml-auto flex items-center gap-2">
         <span className="text-[11px] text-ink-faint">Nothing leaves your device</span>
         <span
@@ -60,6 +62,60 @@ export function TopBar(): React.JSX.Element {
         </button>
       </div>
     </header>
+  );
+}
+
+/** §13's ⌘Z/⌘⇧Z, surfaced so the history is visible rather than folklore. */
+function UndoRedo(): React.JSX.Element {
+  const undo = useEditor((s) => s.undo);
+  const redo = useEditor((s) => s.redo);
+  const history = useEditor((s) => s.history);
+
+  const undoName = history.past.at(-1)?.label ?? null;
+  const redoName = history.future[0]?.label ?? null;
+
+  return (
+    <div className="flex items-center gap-1">
+      <HistoryButton
+        onClick={undo}
+        disabled={undoName === null}
+        label={undoName === null ? 'Nothing to undo' : `Undo ${undoName}`}
+      >
+        ↶
+      </HistoryButton>
+      <HistoryButton
+        onClick={redo}
+        disabled={redoName === null}
+        label={redoName === null ? 'Nothing to redo' : `Redo ${redoName}`}
+      >
+        ↷
+      </HistoryButton>
+    </div>
+  );
+}
+
+function HistoryButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  label: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className="grid size-6 place-items-center rounded-md border border-edge text-[13px] leading-none hover:bg-panel-alt disabled:opacity-30"
+    >
+      {children}
+    </button>
   );
 }
 

@@ -7,6 +7,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
+import { backgroundLayer, logoLayers } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -84,24 +85,7 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const maskSize = Math.min(stageH * 0.92, safe.w * 0.76, unit * 0.68);
   const maskCentreY = safe.y + stageH / 2;
 
-  layers.push({
-    id: ctx.id('bg'),
-    type: 'gradient',
-    startMs: 0,
-    endMs: durationMs,
-    anchorX: 0,
-    anchorY: 0,
-    tracks: {},
-    props: {
-      w: design.w,
-      h: design.h,
-      gradient: 'radial',
-      stops: [
-        { at: 0, paint: roleFill('surface') },
-        { at: 1, paint: roleFill('bg') },
-      ],
-    },
-  });
+  layers.push(backgroundLayer(inputs, ctx));
 
   // A ring behind the mask, slowly counter-rotating.
   layers.push({
@@ -195,6 +179,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     tracks: { x: [kf(0, design.w / 2)], y: [kf(0, supportTop)] },
     props: support,
   });
+
+  layers.push(...logoLayers(inputs, ctx));
 
   return layers;
 }
