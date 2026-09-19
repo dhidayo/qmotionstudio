@@ -171,20 +171,32 @@ test.describe('transitions (§6.4)', () => {
     expect(difference(during, after)).toBeGreaterThan(2);
   });
 
-  test('a push puts the two scenes side by side', async ({ page }) => {
+  test('a push seams the two scenes together at the midpoint', async ({ page }) => {
     await openAd(page, 'launch-story', BEAT.pushMid);
 
-    // Sample a column near each edge. During a horizontal push the two halves
-    // of the frame come from different scenes, so their column means separate
-    // much further than they do within one scene.
-    const split = await page.evaluate(() => {
+    /*
+     * A push slides both scenes as one strip, so at the halfway point — and
+     * `inOutCubic(0.5)` is exactly 0.5 — the boundary between them sits on the
+     * frame's vertical centre line. That hard discontinuity is the property
+     * that makes a push a push: a crossfade blends and has no seam anywhere.
+     *
+     * Measured as a ratio against the frame's own median column-to-column
+     * difference, so the assertion holds whatever the photographs happen to
+     * look like. An earlier version compared the mean brightness of the left
+     * and right edges, which passed only because the synthesised sample set
+     * happened to make those two beats differ; real photography brought them
+     * within a unit of each other and the test failed while the renderer was
+     * perfectly correct.
+     */
+    const seam = await page.evaluate(() => {
       const canvas = document.querySelector('canvas');
       if (!canvas) throw new Error('no artboard');
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('no context');
+      const { width, height } = canvas;
 
       const columnMean = (x: number): number => {
-        const data = ctx.getImageData(x, 0, 1, canvas.height).data;
+        const data = ctx.getImageData(x, 0, 1, height).data;
         let total = 0;
         for (let i = 0; i < data.length; i += 4) {
           total += ((data[i] ?? 0) + (data[i + 1] ?? 0) + (data[i + 2] ?? 0)) / 3;
@@ -192,10 +204,36 @@ test.describe('transitions (§6.4)', () => {
         return total / (data.length / 4);
       };
 
-      return { left: columnMean(4), right: columnMean(canvas.width - 5) };
+      const means: number[] = [];
+      for (let x = 0; x < width; x++) means.push(columnMean(x));
+
+      const diffs: number[] = [];
+      for (let x = 1; x < width; x++) diffs.push(Math.abs((means[x] ?? 0) - (means[x - 1] ?? 0)));
+
+      const sorted = [...diffs].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)] ?? 0;
+
+      let peak = 0;
+      let peakX = 0;
+      for (let i = 0; i < diffs.length; i++) {
+        const value = diffs[i] ?? 0;
+        if (value > peak) { peak = value; peakX = i + 1; }
+      }
+
+      return { width, median, peak, peakX };
     });
 
-    expect(Math.abs(split.left - split.right)).toBeGreaterThan(10);
+    // The strongest edge in the frame is the seam, and it lands on the centre.
+    expect(
+      Math.abs(seam.peakX - seam.width / 2),
+      `strongest edge at x=${seam.peakX}, centre is ${seam.width / 2}`,
+    ).toBeLessThanOrEqual(2);
+
+    // …and it stands far out of the frame's own texture. Measures about 44×.
+    expect(
+      seam.peak / Math.max(seam.median, 0.01),
+      `seam ${seam.peak.toFixed(2)} against median ${seam.median.toFixed(3)}`,
+    ).toBeGreaterThan(6);
   });
 
   test('changing a transition changes what the frame shows', async ({ page }) => {

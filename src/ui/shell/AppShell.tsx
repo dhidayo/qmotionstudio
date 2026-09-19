@@ -11,7 +11,7 @@ import { pendingAdTemplateId, useEditor } from '@/state/store';
 import { totalDurationMs } from '@/document/select/timeline';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { MediaStore } from '@/media/store';
-import { loadSamples } from '@/media/samples';
+import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
 import { loadTemplate } from '@/templates/registry';
 import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { renderParams } from '@/dev/renderParams';
@@ -111,18 +111,52 @@ export function AppShell(): React.JSX.Element {
     if (pending !== null) setTemplateById(pending);
   }, [setTemplateById]);
 
-  /** Sample photos, so a new project opens with something to look at (§8.1). */
+  /**
+   * Sample photographs, so a new project opens with something to look at
+   * (§8.1) — but only the ones this document actually references.
+   *
+   * The set is real photography now and weighs 1.16MB (D-049). A fresh
+   * Showcase project shows four of the eight, and an ad references all eight
+   * once it expands; fetching the whole set up front would spend half a
+   * megabyte on photographs nobody has asked to see. The effect re-runs when
+   * the reference set changes, and loadSamples skips what is already in.
+   */
+  const neededSamples = useMemo(() => {
+    const names = new Set<SampleName>();
+    for (const scene of project.scenes) {
+      for (const photo of scene.inputs.photos) {
+        const name = sampleNameOf(photo.mediaId);
+        if (name) names.add(name);
+      }
+    }
+    for (const overlay of project.overlays) {
+      if (overlay.content.kind === 'text') continue;
+      const name = sampleNameOf(overlay.content.mediaId);
+      if (name) names.add(name);
+    }
+    return [...names].sort();
+  }, [project]);
+
+  // Joined, so the effect compares by value rather than by array identity.
+  const neededKey = neededSamples.join(',');
+
   useEffect(() => {
+    if (neededKey.length === 0) return;
     let cancelled = false;
-    loadSamples(media, { artboardLongestEdge: 1920 })
+
+    loadSamples(media, {
+      artboardLongestEdge: 1920,
+      names: neededKey.split(',') as SampleName[],
+    })
       .then(() => {
         if (!cancelled) rig.layerCache.clear();
       })
       .catch((error: unknown) => {
-        console.error('Failed to load sample photos.', error);
+        console.error('Failed to load sample photographs.', error);
       });
+
     return () => { cancelled = true; };
-  }, [media, rig]);
+  }, [neededKey, media, rig]);
 
   // Dev-only handle so the visual suite can assert on the real renderer's
   // counters — in particular that build() is not running per frame (§16).
