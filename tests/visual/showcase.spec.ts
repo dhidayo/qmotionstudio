@@ -78,6 +78,36 @@ test.describe('library', () => {
 });
 
 test.describe('inspector', () => {
+  test('photo tiles show the decoded media, not empty boxes', async ({ page }) => {
+    /*
+     * A regression guard for a race, not for a layout.
+     *
+     * Decoded bitmaps land in a Map inside MediaStore, which React cannot
+     * observe. The inspector renders once; without a subscription its tiles
+     * keep whatever they had at first paint, which is nothing. That was
+     * invisible while the sample set was 95KB of synthesised gradient and
+     * unmissable the moment it became real photography (D-049) — the decode
+     * simply started losing the race. The store has notified since.
+     */
+    const tiles = page.locator('[aria-label^="Photo "] span');
+    await expect(tiles.first()).toBeVisible();
+
+    await expect
+      .poll(async () =>
+        tiles.evaluateAll((nodes) =>
+          nodes.filter((node) => getComputedStyle(node).backgroundImage.includes('blob:')).length,
+        ),
+      )
+      .toBeGreaterThan(0);
+
+    // Every tile, not just the first: a partially-loaded set is the same bug.
+    const total = await tiles.count();
+    const filled = await tiles.evaluateAll((nodes) =>
+      nodes.filter((node) => getComputedStyle(node).backgroundImage.includes('blob:')).length,
+    );
+    expect(filled, `${filled} of ${total} photo tiles have an image`).toBe(total);
+  });
+
   test('shows the template’s own text slots', async ({ page }) => {
     await page.getByRole('tab', { name: 'Text' }).click();
     // Parallax Depth declares a headline and a caption.

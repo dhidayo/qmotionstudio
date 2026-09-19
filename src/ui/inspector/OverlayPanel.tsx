@@ -2,7 +2,7 @@ import type { AnimPreset, TextStyle } from '@/document/types';
 import * as actions from '@/document/actions';
 import { ANIM_PRESETS } from '@/core/render/overlays';
 import { useEditor, useSelectedOverlay } from '@/state/store';
-import { useMediaStore } from '@/ui/media/MediaProvider';
+import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from './controls';
 
 /**
@@ -31,6 +31,8 @@ export function OverlayPanel(): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const selectOverlay = useEditor((s) => s.selectOverlay);
   const media = useMediaStore();
+  // The source list is built from the store's keys, so it has to follow them.
+  useMediaRevision();
 
   if (!overlay) {
     return <EmptyNote>That overlay is gone. Pick another clip on the timeline.</EmptyNote>;

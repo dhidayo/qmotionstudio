@@ -4,7 +4,7 @@ import type { PhotoCropMode, PhotoFrame, PhotoSizeMode } from '@/document/types'
 import { useEditor } from '@/state/store';
 import { loadSamples, SAMPLE_NAMES, sampleMediaId } from '@/media/samples';
 import type { SceneTemplate } from '@/templates/schema';
-import { useMediaStore } from '@/ui/media/MediaProvider';
+import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { Button, EmptyNote, Section, Segmented, Slider, Stepper } from '../controls';
 
@@ -208,6 +208,8 @@ function PhotoThumb({
   onDropOn: () => void;
 }): React.JSX.Element {
   const store = useMediaStore();
+  // Redraws when the decode lands; without it the tile stays empty.
+  useMediaRevision();
   const preview = store.previewUrl(mediaId);
 
   return (

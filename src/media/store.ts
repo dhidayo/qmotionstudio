@@ -28,11 +28,38 @@ export type MediaEntry = {
 export class MediaStore implements MediaResolver {
   readonly #entries = new Map<string, MediaEntry>();
   readonly #previewUrls = new Map<string, string>();
+  readonly #listeners = new Set<() => void>();
   #revision = 0;
 
   /** Bumped on every change, so callers can tell when a redraw is warranted. */
   get revision(): number {
     return this.#revision;
+  }
+
+  /**
+   * External-store plumbing, so React chrome can redraw when media arrives.
+   *
+   * The artboard does not need this — it repaints every animation frame and
+   * picks up whatever is in the store. The *inspector* does: it renders once
+   * and would otherwise keep showing empty thumbnails forever, because a
+   * decoded bitmap landing in a Map is invisible to React.
+   *
+   * Bound as fields rather than methods because useSyncExternalStore compares
+   * the subscribe function by identity and resubscribes when it changes.
+   *
+   * No React import here — src/media may not depend on it (D-001's eslint
+   * boundary). These are two plain functions; the hook lives in the UI layer.
+   */
+  readonly subscribe = (listener: () => void): (() => void) => {
+    this.#listeners.add(listener);
+    return () => { this.#listeners.delete(listener); };
+  };
+
+  readonly getRevision = (): number => this.#revision;
+
+  #changed(): void {
+    this.#revision++;
+    for (const listener of this.#listeners) listener();
   }
 
   set(entry: MediaEntry): void {
@@ -42,7 +69,7 @@ export class MediaStore implements MediaResolver {
     }
     this.#revokePreview(entry.id);
     this.#entries.set(entry.id, entry);
-    this.#revision++;
+    this.#changed();
   }
 
   get(id: string): MediaEntry | null {
@@ -98,7 +125,7 @@ export class MediaStore implements MediaResolver {
     entry?.bitmap?.close();
     this.#revokePreview(id);
     this.#entries.delete(id);
-    this.#revision++;
+    this.#changed();
   }
 
   clear(): void {
@@ -106,6 +133,6 @@ export class MediaStore implements MediaResolver {
     for (const url of this.#previewUrls.values()) URL.revokeObjectURL(url);
     this.#previewUrls.clear();
     this.#entries.clear();
-    this.#revision++;
+    this.#changed();
   }
 }

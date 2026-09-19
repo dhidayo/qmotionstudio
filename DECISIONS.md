@@ -987,3 +987,36 @@ taste: a calm lower third (`kinetic-statement` puts a headline there), survival
 of a centre crop to all five aspects (`fit: 'cover'` plus the frame-ratio
 control), legibility at ~250px (`angle-fan` shows eight at once), and a low-key
 grade (the default palette is `#0c0c11`).
+
+---
+
+## D-050 — The media store notifies; the inspector subscribes
+M5, found while landing D-049.
+
+`MediaStore` has carried a `revision` counter since M3, commented *"bumped on
+every change, so callers can tell when a redraw is warranted"*. Nothing ever
+read it. The mechanism was designed and never wired up.
+
+The artboard did not need it — it repaints every animation frame and picks up
+whatever is in the store. The **inspector** did: it renders once, decoded
+bitmaps land in a `Map`, and React has no way to see that. Its photo tiles kept
+whatever they had at first paint, which was nothing.
+
+This was invisible for two milestones because the sample set was eight ~95KB
+synthesised gradients fetched from a local dev server — the decode reliably won
+the race. Real photographs at up to 312KB reliably lose it.
+
+The store now keeps a listener set and notifies on every mutation;
+`useMediaRevision()` wraps it in `useSyncExternalStore` for the three places
+that read media during render (photo tiles, the logo preview, the overlay
+source list). `subscribe` and `getRevision` are bound fields rather than
+methods, because `useSyncExternalStore` compares the subscribe function by
+identity and would resubscribe on every render otherwise. No React inside
+`src/media` — D-001's eslint boundary still holds; the hook lives in the UI
+layer.
+
+**Worth recording about the test:** without the fix it fails at **three of four
+tiles**, not zero. React re-renders for unrelated reasons and happens to pick up
+whatever has decoded by then. A test that checked only the first tile would
+have passed against the bug, which is presumably how it survived M3 and M4 —
+so the assertion counts every tile.

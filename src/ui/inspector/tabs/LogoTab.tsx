@@ -3,7 +3,7 @@ import * as actions from '@/document/actions';
 import type { LogoPlacement } from '@/document/types';
 import { useEditor } from '@/state/store';
 import type { SceneTemplate } from '@/templates/schema';
-import { useMediaStore } from '@/ui/media/MediaProvider';
+import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { Button, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from '../controls';
 
@@ -19,6 +19,9 @@ const PLACEMENTS: readonly { value: LogoPlacement; label: string }[] = [
 /** §8.3. */
 export function LogoTab({ template }: { template: SceneTemplate | null }): React.JSX.Element {
   const store = useMediaStore();
+  // Above the early returns below: hooks have to run in the same order every
+  // render, and this component bails out for templates with no logo slot.
+  useMediaRevision();
   const dispatch = useEditor((s) => s.dispatch);
   const logo = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.logo);
   const fileInput = useRef<HTMLInputElement>(null);
