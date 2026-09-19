@@ -697,3 +697,28 @@ Windows and Linux — was never exercised. The suite now also runs with
 `createImageBitmap` stubbed to refuse HEIC, and asserts that the libheif module
 was genuinely fetched. A green test that silently skips the branch it claims to
 cover is worse than no test.
+
+---
+
+## D-039 — Export confirmed against the M0 research; no API drift
+M4, partial.
+
+The M0 research predicted Mediabunny's current shape and it held exactly:
+
+- `CanvasSource` accepts `OffscreenCanvas`, so the worker path works.
+- `keyFrameInterval` defaults to 2 seconds — §11.4's manual
+  `i % (fps * 2)` modulo is unnecessary.
+- `add()` returns a promise that stays pending while the encoder is saturated,
+  so awaiting it *is* §11.5's backpressure. There is no `encodeQueueSize` to
+  poll and no `VideoFrame` to leak (§11.6), because the source owns and closes
+  its own.
+
+Measured on this machine: a 10-second 1080×1920 MP4 in **3.0 seconds**, 11.7MB.
+§14 budgets 45s for 30s at 1080p30; extrapolating, that is roughly 9s. Verified
+by decoding the result in a video element — `ftypisom…avc1`, 1080×1920, exactly
+10.00s, and a frame seeked from 4.0s is 99.6% non-black. WebM likewise: valid
+EBML, same dimensions and duration.
+
+**Not yet done in M4:** the MediaRecorder fallback (§11.9) and the
+frame-for-frame preview/export comparison that is the milestone's actual exit
+criterion. Both are written up as outstanding rather than quietly skipped.

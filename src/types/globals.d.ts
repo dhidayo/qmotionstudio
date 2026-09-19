@@ -6,9 +6,13 @@
  * §17 forbids `any` and `@ts-ignore`, so anything the standard libs are missing
  * gets declared properly here instead of being cast away at the call site.
  *
- * Expected additions as the build progresses:
- *   - WorkerGlobalScope.fonts (FontFaceSet in workers) at M4, for the export
- *     worker's font loading. Implemented in all three engines but not yet in
- *     TypeScript's WebWorker lib.
+ * WorkerGlobalScope.fonts is implemented in all three engines — Firefox since
+ * 105, WebKit via bug 224178 — but TypeScript's WebWorker lib does not declare
+ * it. The export worker needs it for §3E: faces added to the *document's*
+ * FontFaceSet are invisible inside a worker, so it loads its own copies.
  */
+interface WorkerGlobalScope {
+  readonly fonts: FontFaceSet;
+}
+
 export {};

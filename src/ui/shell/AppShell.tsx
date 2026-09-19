@@ -16,6 +16,7 @@ import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { renderParams } from '@/dev/renderParams';
 import { useKeyboard } from '@/ui/hooks/useKeyboard';
 import { Toast } from './Toast';
+import { ExportDialog } from '@/ui/export/ExportDialog';
 
 export function AppShell(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -105,8 +106,10 @@ export function AppShell(): React.JSX.Element {
   }, [rig]);
 
   const [toast, setToast] = useState<string | null>(null);
+  const exporting = useEditor((s) => s.exporting);
+  const setExporting = useEditor((s) => s.setExporting);
 
-  const onExport = useCallback(() => { setToast('Export arrives at M4.'); }, []);
+  const onExport = useCallback(() => { setExporting(true); }, [setExporting]);
   const onSaveNote = useCallback(() => { setToast('Saves automatically.'); }, []);
   useKeyboard(clock, { onExport, onSaveNote });
 
@@ -123,6 +126,7 @@ export function AppShell(): React.JSX.Element {
         </main>
         <Inspector />
       </div>
+      {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
       <Toast message={toast} onDone={() => { setToast(null); }} />
     </MediaProvider>
   );

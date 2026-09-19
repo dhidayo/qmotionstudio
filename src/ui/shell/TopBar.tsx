@@ -52,16 +52,23 @@ export function TopBar(): React.JSX.Element {
         >
           {theme === 'dark' ? 'Light' : 'Dark'}
         </button>
-        <button
-          type="button"
-          disabled
-          title="Export arrives at M4"
-          className="rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-accent-ink disabled:opacity-40"
-        >
-          Export
-        </button>
+        <ExportButton />
       </div>
     </header>
+  );
+}
+
+function ExportButton(): React.JSX.Element {
+  const setExporting = useEditor((s) => s.setExporting);
+  return (
+    <button
+      type="button"
+      onClick={() => { setExporting(true); }}
+      title="Export (⌘E)"
+      className="rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-accent-ink hover:bg-accent-hover"
+    >
+      Export
+    </button>
   );
 }
 

@@ -45,8 +45,10 @@ type EditorState = {
   librarySearch: string;
   libraryTierFilter: 'all' | 'free' | 'pro';
   libraryShowFavourites: boolean;
+  exporting: boolean;
 
   setLoadedTemplate: (template: SceneTemplate | null) => void;
+  setExporting: (exporting: boolean) => void;
   dispatch: (action: actions.Action) => void;
   /** Ends a coalescing run — call on pointer-up after a drag. */
   endInteraction: () => void;
@@ -142,8 +144,11 @@ export const useEditor = create<EditorState>((set, get) => ({
   librarySearch: '',
   libraryTierFilter: 'all',
   libraryShowFavourites: false,
+  exporting: false,
 
   setLoadedTemplate: (template) => { set({ template }); },
+
+  setExporting: (exporting) => { set({ exporting }); },
 
   /**
    * The one way the document changes.

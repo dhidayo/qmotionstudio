@@ -60,6 +60,12 @@ export default defineConfig(
     },
   },
   {
+    // Ambient declaration files exist to be merged into global scope; every
+    // interface in them looks unused to the linter by definition.
+    files: ['src/types/**/*.d.ts'],
+    rules: { '@typescript-eslint/no-unused-vars': 'off' },
+  },
+  {
     files: ['scripts/**/*.ts', 'tests/**/*.ts', '*.config.ts'],
     rules: { '@typescript-eslint/no-console': 'off' },
   },
