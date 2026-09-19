@@ -72,7 +72,7 @@ user types something that needs it. See DECISIONS.md D-026.
   pipelines.
 - **M3 — done.** Showcase mode: library with categories, search, free/pro filter
   and favourites; all four inspector tabs on an undoable action pipeline; photo
-  upload by drop, paste or picker.
+  upload by drop, paste or picker, including HEIC.
 - M4 — export: Mediabunny, worker, MP4 + WebM, progress and cancel.
 
 ## Templates

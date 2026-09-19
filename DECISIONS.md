@@ -671,3 +671,29 @@ template can opt out of them by forgetting.
 The grain tile is generated once and repeated with a per-frame *offset*.
 Generating noise per frame would mean writing a megapixel of random bytes sixty
 times a second, which costs more than the rest of the renderer combined.
+
+---
+
+## D-038 — HEIC decodes in two stages: browser first, WASM only if it refuses
+Implements D-011. M3.
+
+`createImageBitmap` is tried first. Safari always decodes HEIC and Chrome does
+on macOS and Android, because both delegate to the system codec — roughly a
+third of sessions, for free. Only when that throws does the ~2MB libheif WASM
+bundle load, behind a dynamic import.
+
+So the module never touches §14's cold-load path and never loads at all for a
+user who does not drop a HEIC on a browser that cannot read one. Measured: the
+entry chunk grew 0.36KB gzipped, and libheif is its own 697KB chunk.
+
+The decoded PNG replaces the original blob in the media store. A HEIC blob is
+useless to everything downstream — including the export worker's re-decode
+(§9) — so keeping it would just mean decoding twice.
+
+**Testing note worth keeping.** The first end-to-end test passed on macOS
+because Chromium handled HEIC natively, so the WASM path — the one that
+actually matters, since the browsers needing it are Firefox and Chrome on
+Windows and Linux — was never exercised. The suite now also runs with
+`createImageBitmap` stubbed to refuse HEIC, and asserts that the libheif module
+was genuinely fetched. A green test that silently skips the branch it claims to
+cover is worse than no test.

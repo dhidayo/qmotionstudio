@@ -1,11 +1,11 @@
+import { decodeHeic, HeicDecodeError } from './heic';
 import type { MediaEntry } from '../store';
 
 /**
  * Image decode (§9).
  *
- * Accepts JPEG, PNG, WebP and AVIF. HEIC is detected and reported clearly
- * rather than producing a broken bitmap — D-011 upgrades that to a real WASM
- * decode at M3, and the detection here is what will route to it.
+ * Accepts JPEG, PNG, WebP and AVIF, plus HEIC via D-011's two-stage decode —
+ * the browser first, then WASM only if it refuses.
  */
 
 export const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif'] as const;
@@ -59,28 +59,41 @@ export async function decodeImage(
   options: { id: string; name: string; artboardLongestEdge: number },
 ): Promise<MediaEntry> {
   const head = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
-
-  if (sniffHeic(head)) {
-    throw new UnsupportedImageError(
-      'HEIC images are not supported yet. Export as JPEG from Photos, or wait for the next release.',
-      'heic',
-    );
-  }
+  const isHeic = sniffHeic(head);
 
   // Decode once at full size to learn the dimensions, then again at the target
   // size. createImageBitmap's resize is done by the browser's image pipeline,
   // which is both faster and better quality than drawing through a canvas.
+  let source = blob;
   let probe: ImageBitmap;
   try {
-    probe = await createImageBitmap(blob);
-  } catch (cause) {
-    throw new UnsupportedImageError(
-      `Could not decode "${options.name}". It may be corrupt or in an unsupported format.`,
-      'unknown',
-      // §16: never swallow a decode error — the original reason is what makes
-      // a bug report actionable.
-      { cause },
-    );
+    probe = await createImageBitmap(source);
+  } catch (nativeFailure) {
+    if (!isHeic) {
+      throw new UnsupportedImageError(
+        `Could not decode "${options.name}". It may be corrupt or in an unsupported format.`,
+        'unknown',
+        // §16: never swallow a decode error — the original reason is what
+        // makes a bug report actionable.
+        { cause: nativeFailure },
+      );
+    }
+
+    // D-011: the browser cannot read this HEIC, so fall back to WASM. The
+    // module is ~2MB and loads only here, which is why the native attempt
+    // comes first — Safari and Chrome-on-macOS never reach this line.
+    try {
+      source = await decodeHeic(blob);
+      probe = await createImageBitmap(source);
+    } catch (wasmFailure) {
+      throw new UnsupportedImageError(
+        wasmFailure instanceof HeicDecodeError
+          ? wasmFailure.message
+          : `Could not decode "${options.name}".`,
+        'heic',
+        { cause: wasmFailure },
+      );
+    }
   }
 
   const target = targetSize(probe.width, probe.height, options.artboardLongestEdge);
@@ -90,14 +103,16 @@ export async function decodeImage(
       id: options.id,
       kind: 'image',
       name: options.name,
-      blob,
+      // The decoded source, not the original: a HEIC blob is useless to
+      // everything downstream, including the export worker's re-decode (§9).
+      blob: source,
       bitmap: probe,
       width: probe.width,
       height: probe.height,
     };
   }
 
-  const bitmap = await createImageBitmap(blob, {
+  const bitmap = await createImageBitmap(source, {
     resizeWidth: target.w,
     resizeHeight: target.h,
     resizeQuality: 'high',
@@ -108,7 +123,7 @@ export async function decodeImage(
     id: options.id,
     kind: 'image',
     name: options.name,
-    blob,
+    blob: source,
     bitmap,
     width: target.w,
     height: target.h,
