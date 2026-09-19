@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { Aspect } from '@/core/types';
 import type { Project, ProjectMode } from '@/document/types';
-import { createProject, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
+import {
+  createProject, DEFAULT_PHOTO_COUNT, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID,
+} from '@/document/defaults';
 import { totalDurationMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
 import { loadTemplate } from '@/templates/registry';
@@ -169,9 +171,20 @@ function initialProject(): Project {
   else if (pendingAd !== null) templateId = PLACEHOLDER_TEMPLATE_ID;
   else if (params.template) templateId = params.template;
 
+  /*
+   * The eager manifest knows every template's slot range without loading its
+   * code (D-029), so the opening scene is sized to the template it is actually
+   * about to render rather than to a flat four.
+   */
+  const slots = templateId === undefined ? undefined : summaryFor(templateId)?.photoSlots;
+  const photoCount = slots
+    ? Math.max(slots.min, Math.min(DEFAULT_PHOTO_COUNT, slots.max))
+    : undefined;
+
   const project = createProject({
     ...(templateId === undefined ? {} : { templateId }),
     ...(params.aspect === null ? {} : { aspect: params.aspect }),
+    ...(photoCount === undefined ? {} : { photoCount }),
   });
 
   return pendingAd === null ? project : { ...project, mode: 'motionAd' };
@@ -272,7 +285,10 @@ export const useEditor = create<EditorState>((set, get) => ({
           set({ selectedScene: 0 });
           return;
         }
-        get().dispatch(actions.setTemplate(templateId, template.defaultDurationMs));
+        get().dispatch(actions.setTemplate(templateId, {
+          durationMs: template.defaultDurationMs,
+          photoSlots: template.photoSlots,
+        }));
       })
       .catch((error: unknown) => {
         // §16: a template that will not load is a build mistake, and silently

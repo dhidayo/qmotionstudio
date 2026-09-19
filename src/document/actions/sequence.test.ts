@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Overlay, Project, Scene } from '@/document/types';
-import { createProject, createScene } from '@/document/defaults';
+import { createProject, createScene, starterPhotos } from '@/document/defaults';
 import * as actions from './index';
 
 /**
@@ -196,5 +196,61 @@ describe('overlays', () => {
     const before = withOverlay();
     expect(actions.removeOverlay('missing').apply(before, scope(0))).toBe(before);
     expect(actions.setOverlayTrack('missing', 2).apply(before, scope(0))).toBe(before);
+  });
+});
+
+describe('switching template reconciles the photo count', () => {
+  const withPhotos = (count: number): Project => {
+    const base = createProject({ templateId: 'depth-parallax' });
+    const scene = base.scenes[0];
+    if (!scene) throw new Error('expected a scene');
+    return {
+      ...base,
+      scenes: [{ ...scene, inputs: { ...scene.inputs, photos: starterPhotos(count) } }],
+    };
+  };
+
+  it('trims to the new template’s maximum', () => {
+    // kinetic-statement takes exactly one. Four left behind meant a stepper
+    // reading "4 of 1" and three unused photos in every export's payload.
+    const next = actions
+      .setTemplate('kinetic-statement', { photoSlots: { min: 1, max: 1 } })
+      .apply(withPhotos(4), scope(0));
+
+    expect(next.scenes[0]?.inputs.photos).toHaveLength(1);
+  });
+
+  it('grows to the new template’s minimum, reusing earlier photos (§8.1)', () => {
+    const next = actions
+      .setTemplate('angle-fan', { photoSlots: { min: 3, max: 8 } })
+      .apply(withPhotos(2), scope(0));
+
+    const photos = next.scenes[0]?.inputs.photos ?? [];
+    expect(photos).toHaveLength(3);
+    expect(photos[2]?.mediaId).toBe(photos[0]?.mediaId);
+  });
+
+  it('leaves a count that already fits alone', () => {
+    const before = withPhotos(4);
+    const next = actions
+      .setTemplate('angle-fan', { photoSlots: { min: 3, max: 8 } })
+      .apply(before, scope(0));
+
+    expect(next.scenes[0]?.inputs.photos).toEqual(before.scenes[0]?.inputs.photos);
+  });
+
+  it('does not invent photos for an empty scene', () => {
+    const next = actions
+      .setTemplate('angle-fan', { photoSlots: { min: 3, max: 8 } })
+      .apply(withPhotos(0), scope(0));
+
+    expect(next.scenes[0]?.inputs.photos).toEqual([]);
+  });
+
+  it('is a no-op when the template is unchanged', () => {
+    const before = withPhotos(4);
+    expect(
+      actions.setTemplate('depth-parallax', { photoSlots: { min: 1, max: 1 } }).apply(before, scope(0)),
+    ).toBe(before);
   });
 });

@@ -78,13 +78,25 @@ export function starterPhotos(count: number): PhotoInput[] {
   }));
 }
 
-export function createScene(templateId: string, durationMs = DEFAULT_SCENE_MS): Scene {
+/**
+ * `photoCount` defaults to four, which suits most templates. Callers that know
+ * the template's slots should pass them: a scene carrying four photographs
+ * onto a one-slot template left the inspector's stepper reading "4 of 1" and
+ * three unused images in the payload handed to the export worker.
+ */
+export const DEFAULT_PHOTO_COUNT = 4;
+
+export function createScene(
+  templateId: string,
+  durationMs = DEFAULT_SCENE_MS,
+  photoCount = DEFAULT_PHOTO_COUNT,
+): Scene {
   return {
     id: id('scn'),
     templateId,
     durationMs,
     transitionIn: null,
-    inputs: { ...emptySceneInputs(), photos: starterPhotos(4) },
+    inputs: { ...emptySceneInputs(), photos: starterPhotos(photoCount) },
   };
 }
 
@@ -121,6 +133,8 @@ export function createProject(options?: {
   name?: string;
   aspect?: Aspect;
   templateId?: string;
+  /** Sized to the template's own slot range by the caller that knows it. */
+  photoCount?: number;
 }): Project {
   const timestamp = Date.now();
   return {
@@ -129,7 +143,7 @@ export function createProject(options?: {
     name: options?.name ?? 'Untitled project',
     mode: 'showcase',
     aspect: options?.aspect ?? '9:16',
-    scenes: [createScene(options?.templateId ?? DEFAULT_TEMPLATE_ID)],
+    scenes: [createScene(options?.templateId ?? DEFAULT_TEMPLATE_ID, DEFAULT_SCENE_MS, options?.photoCount)],
     overlays: [],
     audio: [],
     brand: {

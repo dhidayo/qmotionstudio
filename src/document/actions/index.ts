@@ -423,16 +423,70 @@ export function setCornerRadius(cornerRadius: number): Action {
 
 // ── Scene and project ───────────────────────────────────────────────────────
 
-export function setTemplate(templateId: string, durationMs?: number): Action {
+/**
+ * Switches a scene to another template.
+ *
+ * Takes the new template's photo slots so the scene's photo list can be
+ * reconciled in the same step. Without that, moving a four-photo scene onto a
+ * one-slot template left four photos in the document: the renderer coped —
+ * `fillSlots` takes the first — but the inspector's stepper read "4 of 1", and
+ * three unused photographs were carried into every export's media transfer.
+ *
+ * The count is clamped into the new range rather than reset to its default, so
+ * a deliberate choice survives a template change wherever it still can.
+ */
+export function setTemplate(
+  templateId: string,
+  options?: { durationMs?: number; photoSlots?: { min: number; max: number } },
+): Action {
   return {
     label: 'Change template',
     apply: (project, scope) =>
-      editScene(project, scope, (scene) =>
-        scene.templateId === templateId
-          ? scene
-          : { ...scene, templateId, ...(durationMs === undefined ? {} : { durationMs }) },
-      ),
+      editScene(project, scope, (scene) => {
+        if (scene.templateId === templateId) return scene;
+
+        const durationMs = options?.durationMs;
+        const next: Scene = {
+          ...scene,
+          templateId,
+          ...(durationMs === undefined ? {} : { durationMs }),
+        };
+
+        const slots = options?.photoSlots;
+        if (!slots) return next;
+
+        const photos = fitPhotos(scene.inputs.photos, slots);
+        return photos === scene.inputs.photos
+          ? next
+          : { ...next, inputs: { ...next.inputs, photos } };
+      }),
   };
+}
+
+/**
+ * Brings a photo list inside a template's declared slot range.
+ *
+ * §8.1: "increasing beyond the supplied photos reuses earlier ones". An empty
+ * list stays empty — there is nothing to reuse, and inventing entries would
+ * put ids in the document that the media store has never heard of.
+ */
+export function fitPhotos(
+  photos: readonly PhotoInput[],
+  slots: { min: number; max: number },
+): readonly PhotoInput[] {
+  if (photos.length === 0) return photos;
+
+  const target = Math.round(clamp(photos.length, slots.min, slots.max));
+  if (target === photos.length) return photos;
+  if (target < photos.length) return photos.slice(0, target);
+
+  const grown = [...photos];
+  while (grown.length < target) {
+    const source = photos[grown.length % photos.length];
+    if (!source) break;
+    grown.push(source);
+  }
+  return grown;
 }
 
 export function setDuration(durationMs: number, bounds: { min: number; max: number }): Action {
