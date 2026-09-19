@@ -7,6 +7,7 @@ import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
 import { useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
+import { useUpload, VIDEO_ACCEPT_ATTRIBUTE } from '@/ui/media/useUpload';
 import { SceneTools } from './SceneTools';
 import {
   dragResult, formatSeconds, msToPct, pxToMs, rowCount, snap, tickIntervalMs,
@@ -142,27 +143,53 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const media = useMediaStore();
   const { limits } = useEntitlements('motionAd');
 
-  const addOverlay = (kind: Overlay['kind']): void => {
-    const startMs = Math.min(Math.round(timeMs), Math.max(0, durationMs - DEFAULT_OVERLAY_MS));
-    const endMs = Math.min(startMs + DEFAULT_OVERLAY_MS, durationMs);
-    const track = rowCount(project.overlays) - 1;
+  const placeOverlay = useCallback(
+    (content: Overlay['content']): void => {
+      const startMs = Math.min(Math.round(timeMs), Math.max(0, durationMs - DEFAULT_OVERLAY_MS));
+      const endMs = Math.min(startMs + DEFAULT_OVERLAY_MS, durationMs);
+      const track = rowCount(project.overlays) - 1;
+
+      const overlay = actions.makeOverlay(content, { startMs, endMs, track });
+      dispatch(actions.addOverlay(overlay));
+      selectOverlay(overlay.id);
+    },
+    [timeMs, durationMs, project.overlays, dispatch, selectOverlay],
+  );
+
+  const addOverlay = (kind: 'photo' | 'text'): void => {
+    if (kind === 'text') {
+      placeOverlay({ kind: 'text', text: 'New caption', style: DEFAULT_OVERLAY_TEXT_STYLE });
+      return;
+    }
 
     // A photo overlay needs something to show. Whatever the user has uploaded
     // comes first; the sample set is the fallback so the button is never a
     // no-op on a fresh project.
-    const firstMedia = media.ids()[0] ?? STARTER_PHOTO_IDS[0] ?? '';
-
-    const content: Overlay['content'] =
-      kind === 'text'
-        ? { kind: 'text', text: 'New caption', style: DEFAULT_OVERLAY_TEXT_STYLE }
-        : kind === 'photo'
-          ? { kind: 'photo', mediaId: firstMedia }
-          : { kind: 'customMedia', mediaId: firstMedia };
-
-    const overlay = actions.makeOverlay(content, { startMs, endMs, track });
-    dispatch(actions.addOverlay(overlay));
-    selectOverlay(overlay.id);
+    const firstMedia = media.ids('image')[0] ?? STARTER_PHOTO_IDS[0] ?? '';
+    placeOverlay({ kind: 'photo', mediaId: firstMedia });
   };
+
+  /**
+   * Custom media picks its file first (§9).
+   *
+   * The button used to mint an overlay pointing at `media.ids()[0]`, which on
+   * any ordinary project is a *photograph* — so a Pro user got a video overlay
+   * that could never draw a frame. A clip is not something the editor can
+   * invent a default for, so the picker opens and the overlay is created once
+   * a file has actually decoded.
+   */
+  const videoInput = useRef<HTMLInputElement>(null);
+  const onVideoAdded = useCallback(
+    (mediaIds: string[]) => {
+      const first = mediaIds[0];
+      if (first !== undefined) placeOverlay({ kind: 'customMedia', mediaId: first });
+    },
+    [placeOverlay],
+  );
+  const { state: videoUpload, addFiles: addVideoFiles } = useUpload(media, onVideoAdded, {
+    artboardLongestEdge: 1920,
+    video: true,
+  });
 
   const rows = rowCount(project.overlays);
   const tick = tickIntervalMs(durationMs, laneWidth);
@@ -194,13 +221,30 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           <AddButton onClick={() => { addOverlay('photo'); }} title="Add a photo overlay">+ Photo</AddButton>
           <AddButton onClick={() => { addOverlay('text'); }} title="Add a text overlay">+ Text</AddButton>
           <AddButton
-            onClick={() => { addOverlay('customMedia'); }}
-            disabled={!limits.customMedia}
+            onClick={() => { videoInput.current?.click(); }}
+            disabled={!limits.customMedia || videoUpload.busy}
             title={limits.customMedia ? 'Add a video overlay' : 'Custom media is a Pro feature (§12)'}
           >
-            + Media
+            {videoUpload.busy ? 'Reading…' : '+ Media'}
           </AddButton>
+          <input
+            ref={videoInput}
+            type="file"
+            accept={VIDEO_ACCEPT_ATTRIBUTE}
+            hidden
+            aria-label="Add a video overlay"
+            onChange={(e) => {
+              void addVideoFiles([...(e.target.files ?? [])]);
+              e.target.value = '';
+            }}
+          />
         </div>
+
+        {videoUpload.error !== null && (
+          <span className="max-w-64 truncate text-[10px]" style={{ color: 'var(--c-danger)' }}>
+            {videoUpload.error}
+          </span>
+        )}
 
         <span className="ml-auto text-[10px] text-ink-faint">
           {project.scenes.length} scenes · {project.overlays.length} overlays

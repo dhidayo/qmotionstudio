@@ -6,14 +6,13 @@ import type { DrawContext } from '../drawContext';
 /**
  * Video layers — custom media, which is Pro (§9, §12).
  *
- * The decoder and its ring buffer arrive with custom media at M5; the media
- * resolver returns null until then, so this draws the same neutral placeholder
- * an undecoded image would. The layer type exists now so templates and the
- * compositor do not need changing later.
+ * The frame comes from the ring buffer in media/video/clip.ts, already decoded
+ * (D-051). A miss draws the same neutral placeholder an undecoded image would,
+ * because §3A forbids this path from awaiting anything.
  *
- * VideoFrame is drawable directly by drawImage. It must NOT be closed here —
- * the frame is owned by the decoder's ring buffer, and closing a cached frame
- * mid-playback would leave the buffer handing out detached frames.
+ * The frame must NOT be closed here. It is owned by the ring buffer, and
+ * closing a cached frame mid-playback would leave the buffer handing out
+ * detached ones — the silent, fatal kind of leak §11.6 is about, in reverse.
  */
 export function drawVideo(dc: DrawContext, props: VideoProps, x: number, y: number, localMs: number): void {
   const { ctx, palette } = dc;
@@ -35,6 +34,7 @@ export function drawVideo(dc: DrawContext, props: VideoProps, x: number, y: numb
 
   const srcW = frame.displayWidth;
   const srcH = frame.displayHeight;
+  if (srcW <= 0 || srcH <= 0) return;
 
   ctx.save();
   roundedRectPath(ctx, x, y, w, h, radius);
@@ -43,9 +43,9 @@ export function drawVideo(dc: DrawContext, props: VideoProps, x: number, y: numb
   const source = fitSourceRect(srcW, srcH, w, h, props.fit);
   if (props.fit === 'contain') {
     const box = containBox(source.w, source.h, w, h);
-    ctx.drawImage(frame, source.x, source.y, source.w, source.h, x + box.x, y + box.y, box.w, box.h);
+    frame.draw(ctx, source.x, source.y, source.w, source.h, x + box.x, y + box.y, box.w, box.h);
   } else {
-    ctx.drawImage(frame, source.x, source.y, source.w, source.h, x, y, w, h);
+    frame.draw(ctx, source.x, source.y, source.w, source.h, x, y, w, h);
   }
 
   ctx.restore();

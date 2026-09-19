@@ -3,6 +3,7 @@ import { aspectValue, fitContain, renderSizeFor } from '@/core/math/aspect';
 import type { RenderRig } from '@/core/render/rig';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Project } from '@/document/types';
+import type { MediaStore } from '@/media/store';
 import { renderParams } from '@/dev/renderParams';
 import { usePreviewLoop } from './usePreviewLoop';
 
@@ -13,9 +14,9 @@ import { usePreviewLoop } from './usePreviewLoop';
  */
 const MAX_PREVIEW_SHORT_EDGE = 1080;
 
-type Props = { project: Project; clock: PreviewClock; rig: RenderRig };
+type Props = { project: Project; clock: PreviewClock; rig: RenderRig; media: MediaStore };
 
-export function Artboard({ project, clock, rig }: Props): React.JSX.Element {
+export function Artboard({ project, clock, rig, media }: Props): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -47,7 +48,7 @@ export function Artboard({ project, clock, rig }: Props): React.JSX.Element {
   const wanted = thumb ?? Math.min(Math.min(display.w, display.h) * dpr, MAX_PREVIEW_SHORT_EDGE);
   const backing = renderSizeFor(project.aspect, Math.max(2, Math.round(wanted)));
 
-  usePreviewLoop(canvas, project, clock, rig);
+  usePreviewLoop(canvas, project, clock, rig, media);
 
   return (
     <div ref={hostRef} className="relative grid h-full w-full place-items-center overflow-hidden p-6">

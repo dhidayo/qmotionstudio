@@ -14,6 +14,8 @@ import { loadFonts } from '@/fonts/registry';
 import { loadTemplate } from '@/templates/registry';
 import { MediaStore } from '@/media/store';
 import { decodeImage } from '@/media/image/decode';
+import { decodeVideo } from '@/media/video/decode';
+import { videoDemands } from '@/document/select/media';
 import { bitrateFor, frameCount, VIDEO_CODEC, type ExportSettings } from '../config';
 import type { ExportRequest, WorkerMessage } from '../protocol';
 
@@ -78,11 +80,16 @@ async function run(request: ExportRequest): Promise<void> {
     // "never as data URLs" is right about the mechanism, wrong about transfer).
     const media = new MediaStore();
     for (const [mediaId, blob] of request.media) {
-      const entry = await decodeImage(blob, {
-        id: mediaId,
-        name: mediaId,
-        artboardLongestEdge: Math.max(request.size.w, request.size.h),
-      });
+      // Custom media opens its own container and decoder in this realm (§9).
+      // The main thread's clip cannot be shared — a decoder is not
+      // transferable, and the two paths must not contend for one ring anyway.
+      const entry = blob.type.startsWith('video/')
+        ? await decodeVideo(blob, { id: mediaId, name: mediaId })
+        : await decodeImage(blob, {
+            id: mediaId,
+            name: mediaId,
+            artboardLongestEdge: Math.max(request.size.w, request.size.h),
+          });
       media.set(entry);
     }
 
@@ -133,6 +140,17 @@ async function run(request: ExportRequest): Promise<void> {
       // Fixed timestep. The preview samples wall-clock times; both call the
       // same renderFrame, so the same t produces the same pixels (D-017).
       const timeMs = (frame / request.settings.fps) * 1000;
+
+      /*
+       * Unlike the preview, this *awaits* the decode (D-051). A dropped video
+       * frame here would be baked into the file, and an export that silently
+       * substitutes a placeholder for a frame it could have decoded is exactly
+       * the kind of quiet wrongness §16 is about.
+       */
+      for (const demand of videoDemands(project, timeMs)) {
+        await media.prefetchVideo(demand.mediaId, demand.timeMs);
+      }
+
       renderFrame(ctx, project, timeMs, rig);
 
       // Awaiting is the backpressure (§11.5).

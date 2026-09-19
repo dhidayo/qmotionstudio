@@ -1020,3 +1020,70 @@ tiles**, not zero. React re-renders for unrelated reasons and happens to pick up
 whatever has decoded by then. A test that checked only the first tile would
 have passed against the bug, which is presumably how it survived M3 and M4 —
 so the assertion counts every tile.
+
+---
+
+## D-051 — Custom media: Mediabunny reads, a ring buffer bridges, export awaits
+Completes §15's M5 row. Approved 2026-09-19.
+
+M5 shipped with "add photo/text/custom media" two-thirds done. The overlay
+kind, the `video` layer, `drawVideo` and a Pro-gated **+ Media** button all
+existed; `MediaStore.getVideoFrame` returned `null` unconditionally and the
+uploader accepted images only. A Pro user pressing the button got an overlay
+that drew a grey rectangle forever. It was invisible because §12's dev toggle
+did not exist either, so nobody could reach the Pro path at all — a gap hidden
+behind a second gap.
+
+**Mediabunny reads as well as writes.** §9 says "decode via `VideoDecoder`",
+but feeding a decoder means demuxing the container first, §16 rules out
+`ffmpeg.wasm`, and an MP4 demuxer is not code this project should own. The
+symmetric decision to D-002: `Input` + `BlobSource` + `VideoSampleSink`.
+`getSample(t)` is documented to return the last sample whose start timestamp is
+≤ t — precisely §9's "frame nearest the requested timestamp". Verified against
+the installed 1.58.1 typings, not from memory (§17).
+
+**A ring buffer, because `renderFrame` cannot await.** §3A makes the render
+synchronous and decoding is not, so the buffer is filled *ahead* of the draw by
+whoever owns the clock. `videoDemands(project, t)` is a pure function from an
+instant to the decode work it implies, which keeps the renderer free of side
+effects while still never missing a frame. Twelve frames, ~0.4s at 30fps —
+§9's "small ring buffer", and a cache miss draws the placeholder rather than
+stalling the editor.
+
+**The two clocks differ, deliberately.** Preview calls `prefetchVideo` and does
+not wait: a stale frame for one animation frame after a seek is better than
+dropping the whole editor to the decoder's pace. Export *awaits* it before
+every frame, because a missing frame there is baked into the file, and an
+export that quietly substitutes a placeholder is exactly the silent wrongness
+§16 exists to prevent.
+
+A frame more than 400ms behind the request is treated as a miss. Without that,
+a large seek shows whatever the ring still holds — a frame from a completely
+different part of the clip — until the fill lands, and the wrong picture is
+worse than no picture.
+
+**Looping.** A clip shorter than its overlay repeats. The common case is a
+two-second texture under a ten-second beat, and holding the last frame for
+eight seconds reads as a stall rather than as a decision.
+
+**Two bugs fixed on the way in:**
+
+- **+ Media** minted an overlay pointing at `media.ids()[0]`, which on any
+  ordinary project is a *photograph*. It now opens a file picker and creates
+  the overlay only once a clip has actually decoded — a video is not something
+  the editor can invent a default for. The overlay panel's source list is
+  likewise filtered to the overlay's own kind.
+- The template glob `./*/*.ts` matched `_shared` and `_demo`, so
+  `knownTemplateIds()` reported `chrome`, `look`, `photo`, `text` and
+  `demoScene` as templates. Harmless — nothing looked them up — but it made
+  every "unknown template" message misleading about what was available.
+
+**§12's dev toggle exists now**, because the Pro paths cannot be tested without
+it. That is the switch only; the inline upsell and the free-tier watermark
+remain M7.
+
+**On the test fixture.** `npm run fixtures` builds four one-second bands of
+flat colour. The shape is the point: it lets the tests assert *which* frame is
+on screen at a given instant, not merely that something drew. A ring buffer
+serving whatever it decoded first passes the weak version of that test and
+fails this one.

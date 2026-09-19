@@ -18,7 +18,19 @@ import { validateTemplate, type SceneTemplate, type Template, type TemplateIssue
 
 type TemplateModule = { readonly default: Template };
 
-const modules = import.meta.glob<TemplateModule>('./*/*.ts', { eager: false });
+/**
+ * The glob deliberately excludes `_shared` and `_demo`.
+ *
+ * Without the exclusion, `knownTemplateIds()` reported `chrome`, `look`,
+ * `photo`, `text` and `demoScene` as templates — helper modules with no
+ * default export and no business in a library listing. Harmless in practice,
+ * since nothing looked them up by those names, but it made every "unknown
+ * template" error message misleading about what was actually available.
+ */
+const modules = import.meta.glob<TemplateModule>(
+  ['./*/*.ts', '!./_*/**'],
+  { eager: false },
+);
 
 const cache = new Map<string, Template>();
 

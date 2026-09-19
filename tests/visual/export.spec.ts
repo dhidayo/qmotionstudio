@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { addClip, BAND, DROPPED_AT_MS, nearestBand } from '../support/customMedia';
 
 /**
  * M4 — export.
@@ -428,3 +429,91 @@ test.describe('a multi-scene ad exports (M5)', () => {
     expect(info.oneToSeven, 'beats one and seven look the same in the export').toBeGreaterThan(8);
   });
 });
+
+
+/**
+ * §9's custom media, export half.
+ *
+ * Here rather than in customMedia.spec.ts because this one encodes, and
+ * encoding belongs in the serial project (D-048). The preview path fills its
+ * frame ring opportunistically; this path awaits it (D-051), and the
+ * difference is exactly what this test exists to hold.
+ */
+test.describe('custom media exports (§9)', () => {
+  test('the exported file contains the decoded clip', async ({ page }) => {
+    test.setTimeout(180_000);
+
+    await page.addInitScript(() => {
+      localStorage.setItem('ms.tier', 'pro');
+      const store = globalThis as unknown as { __exported?: { blob: Blob } };
+      HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+        if (!this.download) return;
+        void fetch(this.href).then((r) => r.blob()).then((blob) => { store.__exported = { blob }; });
+      };
+    });
+
+    await page.goto(`/?template=quick-pitch&aspect=9:16&frozen=${DROPPED_AT_MS}`);
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+    await addClip(page);
+
+    await page.getByTitle('Export (⌘E)').click();
+    await page.getByRole('button', { name: 'WebM · VP9' }).click();
+    await page.getByRole('button', { name: /^Export( again)?$/ }).last().click();
+    await page.waitForFunction(
+      () => (globalThis as unknown as { __exported?: unknown }).__exported !== undefined,
+      undefined,
+      { timeout: 140_000 },
+    );
+
+    /*
+     * Decode the export and sample the same centre patch at a time the overlay
+     * is on screen. The export path awaits its prefetch where the preview does
+     * not (D-051), so a frame missing here would mean the offline path had
+     * quietly baked in a placeholder.
+     */
+    const sampled = await page.evaluate(async (atMs: number) => {
+      const { blob } = (globalThis as unknown as { __exported: { blob: Blob } }).__exported;
+      const url = URL.createObjectURL(blob);
+      const video = document.createElement('video');
+      video.src = url;
+      video.muted = true;
+
+      await new Promise<void>((resolvePromise, reject) => {
+        video.onloadedmetadata = () => { resolvePromise(); };
+        video.onerror = () => { reject(new Error('the export would not decode')); };
+      });
+
+      await new Promise<void>((resolvePromise) => {
+        const done = setTimeout(resolvePromise, 3_000);
+        video.onseeked = () => { clearTimeout(done); resolvePromise(); };
+        video.currentTime = atMs / 1000;
+      });
+
+      const size = Math.round(Math.min(video.videoWidth, video.videoHeight) * 0.12);
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const cx = c.getContext('2d', { alpha: false });
+      if (!cx) throw new Error('no context');
+      cx.drawImage(
+        video,
+        Math.round(video.videoWidth / 2 - size / 2),
+        Math.round(video.videoHeight / 2 - size / 2),
+        size, size, 0, 0, size, size,
+      );
+
+      const data = cx.getImageData(0, 0, size, size).data;
+      let r = 0, g = 0, b = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        r += data[i] ?? 0;
+        g += data[i + 1] ?? 0;
+        b += data[i + 2] ?? 0;
+      }
+      const n = data.length / 4;
+      URL.revokeObjectURL(url);
+      return { r: r / n, g: g / n, b: b / n };
+    }, DROPPED_AT_MS + BAND.green);
+
+    expect(nearestBand(sampled)).toBe('green');
+  });});

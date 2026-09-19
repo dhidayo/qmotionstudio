@@ -1,4 +1,6 @@
+import type { DecodedFrame } from '@/core/types';
 import type { MediaResolver } from '@/core/render/rig';
+import type { VideoClip } from './video/clip';
 
 /**
  * The media store (§5, §9).
@@ -21,8 +23,12 @@ export type MediaEntry = {
   /** Kept for persistence (§13) and for re-decoding inside the export worker. */
   readonly blob: Blob;
   readonly bitmap: ImageBitmap | null;
+  /** Video only: the open container and its frame ring (§9, D-051). */
+  readonly clip?: VideoClip;
   readonly width: number;
   readonly height: number;
+  /** Video only. */
+  readonly durationMs?: number;
 };
 
 export class MediaStore implements MediaResolver {
@@ -67,6 +73,7 @@ export class MediaStore implements MediaResolver {
     if (previous && previous.bitmap && previous.bitmap !== entry.bitmap) {
       previous.bitmap.close();
     }
+    if (previous?.clip && previous.clip !== entry.clip) previous.clip.close();
     this.#revokePreview(entry.id);
     this.#entries.set(entry.id, entry);
     this.#changed();
@@ -80,8 +87,10 @@ export class MediaStore implements MediaResolver {
     return this.#entries.has(id);
   }
 
-  ids(): readonly string[] {
-    return [...this.#entries.keys()];
+  /** Every id, or just those of one kind — the overlay picker wants videos only. */
+  ids(kind?: MediaKind): readonly string[] {
+    if (kind === undefined) return [...this.#entries.keys()];
+    return [...this.#entries.values()].filter((e) => e.kind === kind).map((e) => e.id);
   }
 
   getBitmap(mediaId: string): ImageBitmap | null {
@@ -113,9 +122,31 @@ export class MediaStore implements MediaResolver {
     this.#previewUrls.delete(mediaId);
   }
 
-  /** Custom media (Pro) arrives at M5; until then there are no video frames. */
-  getVideoFrame(_mediaId: string, _timeMs: number): VideoFrame | null {
-    return null;
+  /**
+   * Synchronous frame lookup for the renderer (§9).
+   *
+   * Null means the frame is not in the ring yet, and the layer draws a
+   * placeholder — `renderFrame` cannot await (§3A). Whoever owns the clock
+   * fills the ring first; see `prefetchVideo`.
+   */
+  getVideoFrame(mediaId: string, timeMs: number): DecodedFrame | null {
+    return this.#entries.get(mediaId)?.clip?.frameAt(timeMs) ?? null;
+  }
+
+  /**
+   * Decodes ahead of the playhead.
+   *
+   * Preview calls this and does not wait — a stale frame for one rAF tick
+   * after a seek is better than stalling the editor. Export awaits it, which
+   * is what makes the exported clip exact rather than merely plausible.
+   */
+  async prefetchVideo(mediaId: string, timeMs: number): Promise<void> {
+    await this.#entries.get(mediaId)?.clip?.prefetch(timeMs);
+  }
+
+  /** How long a video clip runs, for the overlay panel's readout. */
+  durationMsOf(mediaId: string): number | null {
+    return this.#entries.get(mediaId)?.durationMs ?? null;
   }
 
   delete(id: string): void {
@@ -123,13 +154,17 @@ export class MediaStore implements MediaResolver {
     // ImageBitmap holds decoded pixels outside the JS heap; dropping the
     // reference is not enough, and §14 budgets 900MB.
     entry?.bitmap?.close();
+    entry?.clip?.close();
     this.#revokePreview(id);
     this.#entries.delete(id);
     this.#changed();
   }
 
   clear(): void {
-    for (const entry of this.#entries.values()) entry.bitmap?.close();
+    for (const entry of this.#entries.values()) {
+      entry.bitmap?.close();
+      entry.clip?.close();
+    }
     for (const url of this.#previewUrls.values()) URL.revokeObjectURL(url);
     this.#previewUrls.clear();
     this.#entries.clear();

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { decodeImage, UnsupportedImageError, ACCEPTED_TYPES } from '@/media/image/decode';
+import { decodeVideo, isVideoFile, UnsupportedVideoError, ACCEPTED_VIDEO_TYPES } from '@/media/video/decode';
 import type { MediaStore } from '@/media/store';
 
 /**
@@ -12,6 +13,9 @@ import type { MediaStore } from '@/media/store';
  */
 
 export const ACCEPT_ATTRIBUTE = [...ACCEPTED_TYPES, 'image/heic', 'image/heif'].join(',');
+
+/** Custom media is Pro (§12); the picker that uses this is gated, not this list. */
+export const VIDEO_ACCEPT_ATTRIBUTE = ACCEPTED_VIDEO_TYPES.join(',');
 
 export type UploadState = {
   readonly busy: boolean;
@@ -27,7 +31,17 @@ function nextMediaId(): string {
 export function useUpload(
   store: MediaStore,
   onAdded: (mediaIds: string[]) => void,
-  options: { artboardLongestEdge: number },
+  options: {
+    artboardLongestEdge: number;
+    /**
+     * Accept video as well as stills.
+     *
+     * Off by default: the Photos tab takes photographs, and a video dropped
+     * there would land in a photo slot that has no way to draw it. The overlay
+     * panel turns it on (§9's custom media).
+     */
+    video?: boolean;
+  },
 ): {
   state: UploadState;
   addFiles: (files: readonly File[]) => Promise<void>;
@@ -37,9 +51,19 @@ export function useUpload(
 
   const addFiles = useCallback(
     async (files: readonly File[]) => {
-      const images = files.filter((f) => f.type.startsWith('image/') || /\.(hei[cf])$/i.test(f.name));
-      if (images.length === 0) {
-        setState({ busy: false, error: 'No images in that drop.' });
+      const wantsVideo = options.video === true;
+      const usable = files.filter(
+        (f) =>
+          f.type.startsWith('image/') ||
+          /\.(hei[cf])$/i.test(f.name) ||
+          (wantsVideo && isVideoFile(f)),
+      );
+
+      if (usable.length === 0) {
+        setState({
+          busy: false,
+          error: wantsVideo ? 'No images or video in that drop.' : 'No images in that drop.',
+        });
         return;
       }
 
@@ -47,19 +71,21 @@ export function useUpload(
       const added: string[] = [];
       const failures: string[] = [];
 
-      for (const file of images) {
+      for (const file of usable) {
         const id = nextMediaId();
         try {
-          const entry = await decodeImage(file, {
-            id,
-            name: file.name,
-            artboardLongestEdge: options.artboardLongestEdge,
-          });
+          const entry = wantsVideo && isVideoFile(file)
+            ? await decodeVideo(file, { id, name: file.name })
+            : await decodeImage(file, {
+                id,
+                name: file.name,
+                artboardLongestEdge: options.artboardLongestEdge,
+              });
           store.set(entry);
           added.push(id);
         } catch (error) {
           failures.push(
-            error instanceof UnsupportedImageError
+            error instanceof UnsupportedImageError || error instanceof UnsupportedVideoError
               ? error.message
               : `Could not read "${file.name}".`,
           );
@@ -69,7 +95,7 @@ export function useUpload(
       if (added.length > 0) onAdded(added);
       setState({ busy: false, error: failures[0] ?? null });
     },
-    [store, onAdded, options.artboardLongestEdge],
+    [store, onAdded, options.artboardLongestEdge, options.video],
   );
 
   const clearError = useCallback(() => { setState((s) => ({ ...s, error: null })); }, []);

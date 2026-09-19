@@ -30,9 +30,6 @@ export function OverlayPanel(): React.JSX.Element {
   const overlay = useSelectedOverlay();
   const dispatch = useEditor((s) => s.dispatch);
   const selectOverlay = useEditor((s) => s.selectOverlay);
-  const media = useMediaStore();
-  // The source list is built from the store's keys, so it has to follow them.
-  useMediaRevision();
 
   if (!overlay) {
     return <EmptyNote>That overlay is gone. Pick another clip on the timeline.</EmptyNote>;
@@ -76,20 +73,14 @@ export function OverlayPanel(): React.JSX.Element {
 
       {overlay.content.kind !== 'text' && (
         <Section title="Source">
-          {media.ids().length === 0 ? (
-            <EmptyNote>Upload something in the Photos tab first.</EmptyNote>
-          ) : (
-            <Segmented
-              value={overlay.content.mediaId}
-              options={media.ids().map((mediaId) => ({
-                value: mediaId,
-                label: media.get(mediaId)?.name ?? mediaId,
-              }))}
-              onChange={(mediaId) => { dispatch(actions.setOverlayMedia(id, mediaId)); }}
-              label="Media"
-              columns={2}
-            />
-          )}
+          {/* An overlay can only be pointed at media of its own kind: a photo
+              overlay draws bitmaps and a custom-media one draws decoded video
+              frames, and crossing them yields an element that never appears. */}
+          <MediaPicker
+            id={id}
+            kind={overlay.content.kind === 'photo' ? 'image' : 'video'}
+            current={overlay.content.mediaId}
+          />
         </Section>
       )}
 
@@ -176,6 +167,55 @@ export function OverlayPanel(): React.JSX.Element {
         </div>
       </Section>
     </>
+  );
+}
+
+/**
+ * The media this overlay can point at, of its own kind.
+ *
+ * Video shows its length too: a clip shorter than the overlay loops (D-051),
+ * and knowing which is which is the difference between a deliberate loop and
+ * an apparent stutter.
+ */
+function MediaPicker({
+  id,
+  kind,
+  current,
+}: {
+  id: string;
+  kind: 'image' | 'video';
+  current: string;
+}): React.JSX.Element {
+  const media = useMediaStore();
+  useMediaRevision();
+  const dispatch = useEditor((s) => s.dispatch);
+  const ids = media.ids(kind);
+
+  if (ids.length === 0) {
+    return (
+      <EmptyNote>
+        {kind === 'video'
+          ? 'No clips loaded. Use “+ Media” on the timeline to add one.'
+          : 'No photos loaded. Add some in the Photos tab first.'}
+      </EmptyNote>
+    );
+  }
+
+  return (
+    <Segmented
+      value={current}
+      options={ids.map((mediaId) => {
+        const name = media.get(mediaId)?.name ?? mediaId;
+        const durationMs = media.durationMsOf(mediaId);
+        return {
+          value: mediaId,
+          label: durationMs === null ? name : `${name} · ${(durationMs / 1000).toFixed(1)}s`,
+        };
+      })}
+      onChange={(mediaId) => { dispatch(actions.setOverlayMedia(id, mediaId)); }}
+      label={kind === 'video' ? 'Clip' : 'Photo'}
+      columns={1}
+    />
   );
 }
 

@@ -182,7 +182,7 @@ export function AppShell(): React.JSX.Element {
         <LibraryRail />
         <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
           <div className="relative min-h-0 flex-1">
-            <Artboard project={project} clock={clock} rig={rig} />
+            <Artboard project={project} clock={clock} rig={rig} media={media} />
             <PerfOverlay rig={rig} />
           </div>
           {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}

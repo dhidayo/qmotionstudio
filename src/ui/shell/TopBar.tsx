@@ -1,6 +1,6 @@
 import { ASPECTS, type Aspect } from '@/core/types';
 import { useEditor } from '@/state/store';
-import { useEntitlements } from '@/entitlements';
+import { setTier, useEntitlements } from '@/entitlements';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -38,12 +38,22 @@ export function TopBar(): React.JSX.Element {
 
       <div className="ml-auto flex items-center gap-2">
         <span className="text-[11px] text-ink-faint">Nothing leaves your device</span>
-        <span
+        {/*
+          * §12's dev toggle. The stub "returns a tier from local state with a
+          * dev toggle", and without one the Pro paths — custom media most of
+          * all — cannot be reached, let alone tested. The upsell UI and the
+          * free-tier watermark remain M7; this is only the switch.
+          */}
+        <button
+          type="button"
+          onClick={() => { setTier(tier === 'pro' ? 'free' : 'pro'); }}
+          title={`Development toggle — currently ${tier}. Click for ${tier === 'pro' ? 'free' : 'pro'}.`}
+          aria-label={`Tier: ${tier}. Switch to ${tier === 'pro' ? 'free' : 'pro'}.`}
           className="rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
           style={{ background: 'var(--c-pro-soft)', color: 'var(--c-pro)' }}
         >
           {tier}
-        </span>
+        </button>
         <button
           type="button"
           onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); }}

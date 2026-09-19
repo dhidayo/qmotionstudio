@@ -17,7 +17,8 @@
     "e2e": "playwright test",
     "lint:templates": "tsx scripts/lint-templates.ts",
     "thumbs": "tsx scripts/gen-thumbs.ts",
-    "samples": "tsx scripts/gen-samples.ts"
+    "samples": "tsx scripts/gen-samples.ts",
+    "fixtures": "tsx scripts/gen-fixtures.ts"
   },
   "dependencies": {
     "libheif-js": "^1.23.2",

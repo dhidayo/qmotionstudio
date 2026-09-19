@@ -3,6 +3,8 @@ import type { Project } from '@/document/types';
 import type { PreviewClock } from '@/core/time/clock';
 import type { RenderRig } from '@/core/render/rig';
 import { renderFrame } from '@/core/render/renderFrame';
+import { videoDemandsWithLead } from '@/document/select/media';
+import type { MediaStore } from '@/media/store';
 
 /**
  * Drives renderFrame from requestAnimationFrame (§3A).
@@ -23,6 +25,7 @@ export function usePreviewLoop(
   project: Project,
   clock: PreviewClock,
   rig: RenderRig,
+  media: MediaStore,
 ): void {
   useEffect(() => {
     if (!canvas) return;
@@ -42,6 +45,23 @@ export function usePreviewLoop(
       previous = now;
 
       const timeMs = clock.tick(delta);
+
+      /*
+       * Custom media decodes ahead of the playhead (D-051). Deliberately not
+       * awaited: renderFrame is synchronous (§3A) and blocking the loop on a
+       * decode would drop the whole editor to the decoder's pace. A frame that
+       * has not landed draws a placeholder for a tick or two; the export path
+       * does await, which is why its output is exact and this one is merely
+       * smooth.
+       */
+      for (const demand of videoDemandsWithLead(project, timeMs)) {
+        void media.prefetchVideo(demand.mediaId, demand.timeMs).catch((error: unknown) => {
+          // §16: surface it. A decode that fails every frame would otherwise
+          // be an overlay that is simply never there.
+          console.error(`Could not decode custom media "${demand.mediaId}".`, error);
+        });
+      }
+
       renderFrame(ctx, project, timeMs, rig);
 
       frame = requestAnimationFrame(tick);
@@ -53,5 +73,5 @@ export function usePreviewLoop(
       cancelled = true;
       cancelAnimationFrame(frame);
     };
-  }, [canvas, project, clock, rig]);
+  }, [canvas, project, clock, rig, media]);
 }

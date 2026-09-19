@@ -129,6 +129,27 @@ export type Reveal =
 
 export type ObjectFit = 'cover' | 'contain';
 
+/**
+ * A decoded video frame, as the renderer needs it (§9's custom media).
+ *
+ * Structural on purpose. The decoder hands back Mediabunny's `VideoSample`,
+ * but `src/core` describes what it needs rather than importing the library to
+ * say it — the render core has exactly one job and no business knowing which
+ * demuxer filled the buffer.
+ *
+ * The nine-argument `draw` is the source-rect form, which is what keeps the
+ * crop and object-fit arithmetic in image.ts and video.ts identical.
+ */
+export interface DecodedFrame {
+  readonly displayWidth: number;
+  readonly displayHeight: number;
+  draw(
+    ctx: Ctx2D,
+    sx: number, sy: number, sWidth: number, sHeight: number,
+    dx: number, dy: number, dWidth?: number, dHeight?: number,
+  ): void;
+}
+
 // Per-type static props. The spec names this StaticProps (§6.1); modelling it
 // as a discriminated union on `type` is the same idea with the compiler
 // checking that a text layer never carries an image's fields.

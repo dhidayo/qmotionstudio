@@ -1,4 +1,4 @@
-import type { Layer } from '@/core/types';
+import type { DecodedFrame, Layer } from '@/core/types';
 import type { GlyphRun } from '@/core/text/layout';
 import { BufferPool } from './buffers';
 
@@ -15,10 +15,17 @@ import { BufferPool } from './buffers';
  * it draws the same pixels, reads no React state and touches no DOM.
  */
 
-/** What the core needs from the media store, without depending on it. */
+/**
+ * What the core needs from the media store, without depending on it.
+ *
+ * Deliberately synchronous, both of them. `renderFrame` must not await
+ * anything (§3A), so a frame that has not been decoded yet reads as null and
+ * the layer draws a placeholder. Filling the buffer ahead of the render is the
+ * caller's job — see `videoDemands` and `MediaStore.prefetchVideo` (D-051).
+ */
 export interface MediaResolver {
   getBitmap(mediaId: string): ImageBitmap | null;
-  getVideoFrame(mediaId: string, timeMs: number): VideoFrame | null;
+  getVideoFrame(mediaId: string, timeMs: number): DecodedFrame | null;
 }
 
 export const EMPTY_MEDIA: MediaResolver = {
