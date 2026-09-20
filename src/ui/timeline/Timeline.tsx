@@ -8,6 +8,7 @@ import { useEditor } from '@/state/store';
 import { setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { useUpload, AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE } from '@/ui/media/useUpload';
+import { capturePointer } from './pointerCapture';
 import { SceneTools } from './SceneTools';
 import { MusicTrack } from './MusicTrack';
 import {
@@ -108,7 +109,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   }, [clock, laneMs]);
 
   const onRulerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
-    event.currentTarget.setPointerCapture(event.pointerId);
+    capturePointer(event.currentTarget, event.pointerId);
     scrubTo(event.clientX);
   };
 
@@ -125,7 +126,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
     mode: ClipDrag['mode'],
   ): void => {
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    capturePointer(event.currentTarget, event.pointerId);
     selectOverlay(overlay.id);
     dragRef.current = {
       mode,
@@ -257,8 +258,13 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           {playing ? 'Pause' : 'Play'}
         </button>
 
-        <span className="tabular w-28 text-[11px] text-ink-muted">
+        <span
+          className="tabular w-32 text-[11px]"
+          style={{ color: timeMs > videoMs ? 'var(--c-ink-faint)' : 'var(--c-ink-muted)' }}
+        >
           {formatSeconds(timeMs)} / {formatSeconds(videoMs)}
+          {/* Said plainly, so a held last frame does not read as a stall. */}
+          {timeMs > videoMs && <span className="ml-1">past end</span>}
         </span>
 
         <div className="ml-2 flex items-center gap-1" role="group" aria-label="Add overlay">
@@ -370,13 +376,14 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
             aria-label="Scrub"
             aria-valuemin={0}
             /*
-             * The video's length, not the lane's. The lane may run on past the
-             * end to show overhanging audio, but the playhead cannot: there is
-             * nothing there to render, and `clock.seek` clamps to the video
-             * regardless. Reporting the lane would promise reachable time that
-             * is not.
+             * The lane's length, because the playhead now reaches all of it.
+             *
+             * It used to report the video's, which was honest at the time —
+             * the transport was clamped to the video and promising more would
+             * have been a lie. Now the transport spans the lane so that
+             * overhanging music can actually be auditioned, and this follows.
              */
-            aria-valuemax={Math.round(videoMs)}
+            aria-valuemax={Math.round(durationMs)}
             aria-valuenow={Math.round(timeMs)}
             onKeyDown={(e) => {
               if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;

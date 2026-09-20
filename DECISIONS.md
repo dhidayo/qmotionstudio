@@ -1293,3 +1293,37 @@ the right its fade out, and the new inner edges butt.
 `import.meta.env.DEV` — it would have been permanently disabled in a
 production build. The timeline already samples the clock at 20Hz for its own
 readout, so it publishes that to the store and the panel reads it there.
+
+---
+
+## D-057 — The transport spans the lane, and the artboard holds the last frame
+M6, completing the music work.
+
+The playhead stopped at the end of the video, so every second of overhanging
+music was visible on the timeline, editable by slider — and impossible to
+*hear*. Deciding where to cut a piece of music means auditioning the part you
+are cutting, so the transport now runs to `timelineSpanMs`: the whole lane,
+music included.
+
+`totalDurationMs` still governs what renders and what exports. Only the
+transport is longer, and with no audio the two are identical — nothing changes
+for Showcase or for a silent project.
+
+**The artboard holds the last frame past the end.** Left alone, the renderer
+draws a scene whose layers have all ended: a bare background, which reads as
+the preview having broken rather than as "past the end". The preview loop
+clamps its render time to the video while the transport carries on, so there is
+still a picture. The dimmed region of the lane and a `past end` marker on the
+readout are what say where you actually are.
+
+Clamped in the preview loop rather than in `renderFrame`, because it is a
+property of *previewing*, not of rendering. The export never asks for a time
+past the video, and D-001's one-render-function guarantee stays exactly as
+strong: given the same time, both paths still draw the same pixels.
+
+**`setPointerCapture` is now guarded.** It throws `NotFoundError` when the
+pointer id is no longer active, and thrown from a React event handler with no
+error boundary above it that unmounts the entire editor — a dropped drag would
+take the application with it. Capture is an optimisation here: without it a
+drag stops tracking once the pointer leaves the element, which is a small
+degradation, and losing the editor is not.

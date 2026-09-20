@@ -380,3 +380,100 @@ test.describe('music follows the timeline (§10)', () => {
     expect(startedAt ?? 0).toBeGreaterThan(3_000);
   });
 });
+
+test.describe('auditioning the whole track (§10)', () => {
+  /**
+   * Deciding where to cut a piece of music means being able to hear the part
+   * you are cutting. The transport used to stop at the end of the video, so
+   * every second of overhanging music was visible on the timeline, editable by
+   * slider, and impossible to listen to.
+   */
+
+  test('the playhead reaches past the end of the video', async ({ page }) => {
+    await openAd(page);
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    // quick-pitch is 15s; the fixture is 40s.
+    const scrub = page.getByLabel('Scrub');
+    expect(Number(await scrub.getAttribute('aria-valuemax'))).toBe(40_000);
+
+    // Scrub to 30s — fifteen seconds past the last scene.
+    const box = await scrub.boundingBox();
+    if (!box) throw new Error('no ruler');
+    await scrub.click({ position: { x: box.width * 0.75, y: 2 } });
+    await page.waitForTimeout(400);
+
+    const at = Number(await scrub.getAttribute('aria-valuenow'));
+    expect(at, 'the playhead went past the video').toBeGreaterThan(16_000);
+
+    // And it says so, rather than leaving a held frame looking like a stall.
+    await expect(page.getByText('past end')).toBeVisible();
+  });
+
+  test('the artboard holds the last frame rather than going blank', async ({ page }) => {
+    await openAd(page);
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    const luminance = async (): Promise<number> =>
+      page.evaluate(() => {
+        const canvas = document.querySelector('canvas');
+        if (!canvas) throw new Error('no artboard');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('no context');
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let total = 0;
+        let n = 0;
+        for (let i = 0; i < data.length; i += 4 * 97) {
+          total += ((data[i] ?? 0) + (data[i + 1] ?? 0) + (data[i + 2] ?? 0)) / 3;
+          n += 1;
+        }
+        return total / n;
+      });
+
+    const scrub = page.getByLabel('Scrub');
+    const box = await scrub.boundingBox();
+    if (!box) throw new Error('no ruler');
+
+    // Inside the video…
+    await scrub.click({ position: { x: box.width * 0.2, y: 2 } });
+    await page.waitForTimeout(500);
+    const inside = await luminance();
+
+    // …and well past the end of it.
+    await scrub.click({ position: { x: box.width * 0.9, y: 2 } });
+    await page.waitForTimeout(500);
+    const beyond = await luminance();
+
+    /*
+     * The last frame is held, so there is still a picture. Without the clamp
+     * the renderer draws a scene whose layers have all ended — a bare
+     * background, which reads as the preview having broken.
+     */
+    expect(beyond, 'the artboard went blank past the end').toBeGreaterThan(8);
+    expect(Math.abs(beyond - inside)).toBeLessThan(120);
+  });
+
+  test('music past the end of the video is still audible', async ({ page }) => {
+    await page.goto('/?template=quick-pitch&aspect=9:16&frozen=25000');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    // Frozen at 25s — ten seconds past the video, well inside the track.
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.waitForTimeout(1_500);
+
+    const state = await page.evaluate(() => {
+      const handle = (globalThis as unknown as {
+        __motionStudio?: { clock: { timeMs: () => number; audioMastered: () => boolean } };
+      }).__motionStudio;
+      if (!handle) throw new Error('no dev handle');
+      return { timeMs: handle.clock.timeMs(), mastered: handle.clock.audioMastered() };
+    });
+
+    // Sounding, and the audio clock is driving — which is only true if the
+    // engine actually scheduled something out here.
+    expect(state.mastered, 'audio is playing past the end of the video').toBe(true);
+    expect(state.timeMs).toBeGreaterThan(20_000);
+  });
+});

@@ -4,6 +4,7 @@ import type { PreviewClock } from '@/core/time/clock';
 import type { RenderRig } from '@/core/render/rig';
 import { renderFrame } from '@/core/render/renderFrame';
 import { videoDemandsWithLead } from '@/document/select/media';
+import { totalDurationMs } from '@/document/select/timeline';
 import type { MediaStore } from '@/media/store';
 
 /**
@@ -47,6 +48,16 @@ export function usePreviewLoop(
       const timeMs = clock.tick(delta);
 
       /*
+       * Past the end of the video there is nothing to draw — the last scene's
+       * layers have all ended — so the artboard would go blank while the music
+       * played on, which reads as a fault rather than as "past the end". It
+       * holds the final frame instead; the dimmed region of the timeline is
+       * what says where you actually are.
+       */
+      const videoMs = totalDurationMs(project);
+      const renderMs = videoMs > 0 ? Math.min(timeMs, videoMs - 1) : timeMs;
+
+      /*
        * Custom media decodes ahead of the playhead (D-051). Deliberately not
        * awaited: renderFrame is synchronous (§3A) and blocking the loop on a
        * decode would drop the whole editor to the decoder's pace. A frame that
@@ -54,7 +65,7 @@ export function usePreviewLoop(
        * does await, which is why its output is exact and this one is merely
        * smooth.
        */
-      for (const demand of videoDemandsWithLead(project, timeMs)) {
+      for (const demand of videoDemandsWithLead(project, renderMs)) {
         void media.prefetchVideo(demand.mediaId, demand.timeMs).catch((error: unknown) => {
           // §16: surface it. A decode that fails every frame would otherwise
           // be an overlay that is simply never there.
@@ -62,7 +73,7 @@ export function usePreviewLoop(
         });
       }
 
-      renderFrame(ctx, project, timeMs, rig);
+      renderFrame(ctx, project, renderMs, rig);
 
       frame = requestAnimationFrame(tick);
     };

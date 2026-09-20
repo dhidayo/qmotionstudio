@@ -8,7 +8,7 @@ import { PerfOverlay } from '@/dev/PerfOverlay';
 import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { pendingAdTemplateId, useEditor } from '@/state/store';
-import { totalDurationMs } from '@/document/select/timeline';
+import { timelineSpanMs } from '@/document/select/timeline';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { MediaStore } from '@/media/store';
 import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
@@ -22,7 +22,20 @@ import { ExportDialog } from '@/ui/export/ExportDialog';
 
 export function AppShell(): React.JSX.Element {
   const project = useEditor((s) => s.project);
-  const duration = totalDurationMs(project);
+
+  /*
+   * The playhead travels the whole lane, not just the video.
+   *
+   * Music routinely outlasts the piece it scores, and deciding where to cut it
+   * means being able to hear the part you are cutting. Confining the transport
+   * to the video made every second of overhang unreachable — visible on the
+   * timeline, editable by slider, and impossible to listen to.
+   *
+   * `videoMs` is still what renders and exports; only the transport is longer.
+   * With no audio the two are identical, so nothing changes for Showcase or
+   * for a silent project.
+   */
+  const duration = timelineSpanMs(project);
 
   // One media store, rig and clock for the preview. The export path will create
   // its own set, which is the whole point of D-001 — the two never share

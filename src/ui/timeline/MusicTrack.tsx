@@ -5,6 +5,7 @@ import { peakAt } from '@/media/audio/waveform';
 import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
+import { capturePointer } from './pointerCapture';
 import { dragResult, msToPct, pxToMs, snap, type ClipDrag } from './timelineGeometry';
 
 /**
@@ -119,7 +120,7 @@ function MusicClip({
 
   const begin = (event: React.PointerEvent<HTMLElement>, mode: MusicDragMode): void => {
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    capturePointer(event.currentTarget, event.pointerId);
     selectAudio(clip.id);
     dragRef.current = {
       // `slip` is not a ClipDrag mode — dragResult knows nothing about it, and
