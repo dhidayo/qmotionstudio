@@ -855,10 +855,17 @@ export function makeAudioClip(
   };
 }
 
+/**
+ * Appends rather than replaces.
+ *
+ * §10's "one track for now" is about tracks, not clips — splitting a clip and
+ * dropping a second passage onto the same row are both ordinary things to want,
+ * and the mixdown has always summed whatever the array holds.
+ */
 export function addAudio(clip: AudioClip): Action {
   return {
     label: 'Add music',
-    apply: (project) => ({ ...project, audio: [clip], updatedAt: Date.now() }),
+    apply: (project) => ({ ...project, audio: [...project.audio, clip], updatedAt: Date.now() }),
   };
 }
 
@@ -1009,6 +1016,93 @@ export function fitAudioToProject(id: string, projectMs: number, sourceMs: numbe
 
         return { ...clip, startMs: 0, trimStartMs: start, trimEndMs: start + length };
       }),
+  };
+}
+
+/**
+ * Sets *where in the track* the clip starts, absolutely.
+ *
+ * The control `slipAudio` cannot replace. Slipping is relative and driven by a
+ * drag, and a drag maps pixels against the lane — so on a fifteen-second lane
+ * the entire width is fifteen seconds of slip, and reaching 1:30 in a
+ * three-minute track would take six full drags. Absolute addressing is the
+ * only way to say "start at 1:30" and mean it.
+ *
+ * Length is preserved, so this moves the window rather than resizing it.
+ */
+export function setAudioSection(id: string, sourceStartMs: number, sourceMs: number): Action {
+  return {
+    label: 'Change music section',
+    coalesceKey: `audioSection:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        const length = clip.trimEndMs - clip.trimStartMs;
+        const limit = Math.max(MIN_CLIP_MS, sourceMs);
+        const start = clamp(Math.round(sourceStartMs), 0, Math.max(0, limit - length));
+        return start === clip.trimStartMs
+          ? clip
+          : { ...clip, trimStartMs: start, trimEndMs: start + length };
+      }),
+  };
+}
+
+/** Sets how much of the track is used, from wherever the section starts. */
+export function setAudioLength(id: string, lengthMs: number, sourceMs: number): Action {
+  return {
+    label: 'Change music length',
+    coalesceKey: `audioLength:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        const limit = Math.max(MIN_CLIP_MS, sourceMs);
+        const available = limit - clip.trimStartMs;
+        const length = clamp(Math.round(lengthMs), MIN_CLIP_MS, Math.max(MIN_CLIP_MS, available));
+        const trimEndMs = clip.trimStartMs + length;
+        return trimEndMs === clip.trimEndMs ? clip : { ...clip, trimEndMs };
+      }),
+  };
+}
+
+/**
+ * Splits a clip in two at a point on the project timeline.
+ *
+ * What "cut a section out of the music" actually needs: split twice and delete
+ * the middle. §10 says "one track for now" — one *track*, not one clip, and
+ * `project.audio` has always been an array. The renderer and the mixdown both
+ * iterate it already, so this costs the model nothing.
+ *
+ * Refuses rather than producing a sliver: either side shorter than the minimum
+ * would be a clip too small to grab, which is how a split becomes a way to
+ * lose audio.
+ */
+export function splitAudio(id: string, atMs: number): Action {
+  return {
+    label: 'Split music',
+    apply: (project) => {
+      const index = project.audio.findIndex((c) => c.id === id);
+      const clip = project.audio[index];
+      if (!clip) return project;
+
+      const offset = Math.round(atMs) - clip.startMs;
+      const length = clip.trimEndMs - clip.trimStartMs;
+      if (offset < MIN_CLIP_MS || length - offset < MIN_CLIP_MS) return project;
+
+      const cut = clip.trimStartMs + offset;
+
+      // Fades belong to the outer edges: the left keeps its fade in, the right
+      // its fade out, and the new inner edges are butt joins.
+      const left: AudioClip = { ...clip, trimEndMs: cut, fadeOutMs: 0 };
+      const right: AudioClip = {
+        ...clip,
+        id: newId('aud'),
+        startMs: clip.startMs + offset,
+        trimStartMs: cut,
+        fadeInMs: 0,
+      };
+
+      const audio = [...project.audio];
+      audio.splice(index, 1, left, right);
+      return { ...project, audio, updatedAt: Date.now() };
+    },
   };
 }
 

@@ -36,16 +36,58 @@ const MIN_CLIP_MS = 300;
 /** How many columns the waveform is drawn with. Beyond this it is mush. */
 const COLUMNS = 160;
 
+/**
+ * The music row.
+ *
+ * Renders every clip in `project.audio`, not just the first — splitting a clip
+ * to cut a passage out is only useful if both halves are then on screen.
+ */
 export function MusicTrack({
+  clips,
+  durationMs,
+  videoMs,
+  laneWidth,
+}: {
+  clips: readonly AudioClip[];
+  /** The lane's span, which includes anything past the end of the video. */
+  durationMs: number;
+  /** What actually renders and exports. */
+  videoMs: number;
+  laneWidth: number;
+}): React.JSX.Element {
+  if (clips.length === 0) {
+    return (
+      <div className="relative h-7 border-b border-edge" data-lane>
+        <span className="absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
+          No music. Use “+ Music” above.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-7 border-b border-edge" data-lane>
+      {clips.map((clip) => (
+        <MusicClip
+          key={clip.id}
+          clip={clip}
+          durationMs={durationMs}
+          videoMs={videoMs}
+          laneWidth={laneWidth}
+        />
+      ))}
+    </div>
+  );
+}
+
+function MusicClip({
   clip,
   durationMs,
   videoMs,
   laneWidth,
 }: {
-  clip: AudioClip | undefined;
-  /** The lane's span, which includes anything past the end of the video. */
+  clip: AudioClip;
   durationMs: number;
-  /** What actually renders and exports. */
   videoMs: number;
   laneWidth: number;
 }): React.JSX.Element {
@@ -67,16 +109,6 @@ export function MusicTrack({
     },
     [durationMs],
   );
-
-  if (!clip) {
-    return (
-      <div className="relative h-7 border-b border-edge">
-        <span className="absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
-          No music. Use “+ Music” above.
-        </span>
-      </div>
-    );
-  }
 
   const sourceMs = media.durationMsOf(clip.mediaId);
   const waveform = media.getWaveform(clip.mediaId);
@@ -171,7 +203,7 @@ export function MusicTrack({
   const { inMs, outMs } = resolvedFades(clip);
 
   return (
-    <div className="relative h-7 border-b border-edge" data-lane>
+    <>
       <div
         role="button"
         tabIndex={0}
@@ -257,7 +289,7 @@ export function MusicTrack({
           clip is very short
         </span>
       )}
-    </div>
+    </>
   );
 }
 

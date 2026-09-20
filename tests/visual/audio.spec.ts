@@ -118,7 +118,7 @@ test.describe('music (§10)', () => {
     await page.waitForTimeout(2_000);
     await addMusic(page);
 
-    await page.getByRole('button', { name: 'Play' }).click();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
     await page.waitForTimeout(1_500);
 
     const read = async (): Promise<{
@@ -305,5 +305,78 @@ test.describe('a track longer than the video (§10)', () => {
     await page.keyboard.press('ControlOrMeta+z');
     await page.waitForTimeout(400);
     expect(await section(page)).toBe(before);
+  });
+});
+
+test.describe('music follows the timeline (§10)', () => {
+  test('the audio loops with the video instead of running on past it', async ({ page }) => {
+    /*
+     * The bug this exists for. Web Audio sources play once, so the picture
+     * looped and the music did not — and because the clock is *mastered* by
+     * the audio (D-054), the two did not drift apart, they diverged by a whole
+     * loop: the frame showed 1s while the track was 31s in.
+     *
+     * quick-pitch is 15s, so a pass takes 15 seconds of wall clock. Rather
+     * than wait that out, the clip is placed near the end and the loop point
+     * is crossed in a couple of seconds.
+     */
+    await page.goto('/?template=quick-pitch&aspect=9:16&frozen=13000');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+    await addMusic(page);
+
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+
+    const read = async (): Promise<{ timeMs: number; mastered: boolean }> =>
+      page.evaluate(() => {
+        const handle = (globalThis as unknown as {
+          __motionStudio?: { clock: { timeMs: () => number; audioMastered: () => boolean } };
+        }).__motionStudio;
+        if (!handle) throw new Error('no dev handle');
+        return { timeMs: handle.clock.timeMs(), mastered: handle.clock.audioMastered() };
+      });
+
+    // Cross the 15s loop point.
+    await page.waitForTimeout(4_000);
+    const after = await read();
+
+    /*
+     * Two assertions, and the second is the one that mattered. Before the fix
+     * the clock kept reporting a wrapped position — so "it looped" looked
+     * true — while the audio graph had nothing scheduled and was silent. The
+     * clock only stays audio-mastered if the engine actually rescheduled.
+     */
+    expect(after.timeMs, 'the playhead wrapped').toBeLessThan(13_000);
+    expect(after.mastered, 'audio is still driving the clock after the loop').toBe(true);
+  });
+
+  test('a clip placed later starts later, not immediately', async ({ page }) => {
+    await page.goto('/?template=quick-pitch&aspect=9:16&frozen=0');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+    await addMusic(page);
+
+    // Push the clip to start at roughly 8s.
+    const clip = page.getByRole('button', { name: /^Music clip/ });
+    const box = await clip.boundingBox();
+    const lane = await page.locator('[data-lane]').first().boundingBox();
+    if (!box || !lane) throw new Error('no geometry');
+
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(lane.x + lane.width * 0.85, box.y + box.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+
+    const startedAt = await page.evaluate(() => {
+      const handle = (globalThis as unknown as {
+        __motionStudio?: { audio?: { clipStartMs: () => number | null } };
+      }).__motionStudio;
+      return handle?.audio?.clipStartMs() ?? null;
+    });
+
+    // Moved, and not back to zero — the clip's position is what schedules it.
+    expect(startedAt).not.toBeNull();
+    expect(startedAt ?? 0).toBeGreaterThan(3_000);
   });
 });

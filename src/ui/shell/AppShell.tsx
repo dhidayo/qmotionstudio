@@ -189,8 +189,12 @@ export function AppShell(): React.JSX.Element {
         playing: () => clock.playing,
         audioMastered: () => clock.audioMastered,
       },
+      /** Where the music sits on the timeline, for the playback tests. */
+      audio: {
+        clipStartMs: (): number | null => project.audio[0]?.startMs ?? null,
+      },
     };
-  }, [rig, clock]);
+  }, [rig, clock, project.audio]);
 
   /**
    * §10's synced preview. The engine masters the clock while it is sounding,

@@ -57,13 +57,22 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const [timeMs, setTimeMs] = useState(0);
   const [playing, setPlaying] = useState(clock.playing);
 
+  /*
+   * The clock is a plain mutable object so the artboard can redraw without
+   * re-rendering React sixty times a second (see PreviewClock). Chrome that
+   * needs to *display* the time samples it slowly instead — and publishes it,
+   * so panels outside the timeline can act on the playhead without each one
+   * starting a poll of its own.
+   */
+  const setPlayhead = useEditor((s) => s.setPlayhead);
   useEffect(() => {
     const handle = setInterval(() => {
       setTimeMs(clock.timeMs);
       setPlaying(clock.playing);
+      setPlayhead(clock.timeMs);
     }, 1000 / READOUT_HZ);
     return () => { clearInterval(handle); };
-  }, [clock]);
+  }, [clock, setPlayhead]);
 
   const laneRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<ClipDrag | null>(null);
@@ -466,7 +475,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
           {/* §1.2's dedicated music track, §10's waveform. */}
           <MusicTrack
-            clip={project.audio[0]}
+            clips={project.audio}
             durationMs={durationMs}
             videoMs={videoMs}
             laneWidth={laneWidth}

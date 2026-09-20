@@ -20,6 +20,7 @@ export function AudioPanel(): React.JSX.Element {
   useMediaRevision();
   // Above the early return below — hooks run in the same order every render.
   const videoMs = useEditor((state) => totalDurationMs(state.project));
+  const playheadMs = useEditor((state) => state.playheadMs);
 
   if (!clip) {
     return <EmptyNote>That clip is gone. Pick another on the timeline.</EmptyNote>;
@@ -31,6 +32,9 @@ export function AudioPanel(): React.JSX.Element {
   const length = clipDurationMs(clip);
   const decoded = media.getAudioBuffer(clip.mediaId) !== null;
   const overruns = clip.startMs + length > videoMs + 1;
+  // A split needs room on both sides, or it produces a clip too small to grab.
+  const splittable =
+    playheadMs > clip.startMs + 300 && playheadMs < clip.startMs + length - 300;
 
   return (
     <>
@@ -89,9 +93,64 @@ export function AudioPanel(): React.JSX.Element {
         </div>
 
         <EmptyNote>
-          Drag the clip to move it, its edges to trim. Hold ⌥ and drag to slip — that changes
-          which part of the track plays without moving the clip. ⇧ turns off snapping.
+          Drag the clip to move it, its edges to trim. Hold ⌥ and drag to slip. ⇧ turns off
+          snapping.
         </EmptyNote>
+      </Section>
+
+      {sourceMs !== null && (
+        <Section title="Section of the track">
+          {/*
+            * Absolute, and spanning the whole track — which dragging cannot do.
+            * A slip drag maps pixels against the lane, so on a fifteen-second
+            * lane the entire width is fifteen seconds of slip and reaching 1:30
+            * in a three-minute track would take six full drags. This is how you
+            * say "start at 1:30" and mean it.
+            */}
+          <Slider
+            value={clip.trimStartMs}
+            min={0}
+            max={Math.max(0, sourceMs - length)}
+            step={100}
+            onChange={(startAt) => { dispatch(actions.setAudioSection(id, startAt, sourceMs)); }}
+            label="Start from"
+            suffix=""
+          />
+          <p className="tabular -mt-1 mb-2 text-[10px] text-ink-faint">
+            {clock(clip.trimStartMs)} into the track
+          </p>
+
+          <Slider
+            value={length}
+            min={300}
+            max={Math.max(300, sourceMs - clip.trimStartMs)}
+            step={100}
+            onChange={(next) => { dispatch(actions.setAudioLength(id, next, sourceMs)); }}
+            label="Length used"
+            suffix=""
+          />
+          <p className="tabular -mt-1 text-[10px] text-ink-faint">
+            {(length / 1000).toFixed(1)}s — ends at {clock(clip.trimEndMs)}
+          </p>
+        </Section>
+      )}
+
+      <Section title="Cut">
+        <EmptyNote>
+          Splits this clip at the playhead. Split twice and remove the middle piece to take a
+          section out of the music.
+        </EmptyNote>
+        <div className="mt-2 flex gap-1.5">
+          <Button
+            onClick={() => { dispatch(actions.splitAudio(id, playheadMs)); }}
+            disabled={!splittable}
+          >
+            Split at playhead
+          </Button>
+        </div>
+        {!splittable && (
+          <EmptyNote>Move the playhead inside this clip to split it.</EmptyNote>
+        )}
       </Section>
 
       <Section title="Level">

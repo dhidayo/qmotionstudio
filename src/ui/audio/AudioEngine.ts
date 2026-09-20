@@ -34,6 +34,18 @@ export class AudioEngine {
   #running = false;
   #loopMs = 0;
 
+  /**
+   * Fires when the preview wraps, to schedule the next pass.
+   *
+   * Web Audio sources play once. The visual preview loops, so without this the
+   * picture returns to zero while the music carries straight on — and because
+   * the clock is *mastered* by the audio (D-054), the two do not merely drift,
+   * they diverge by a whole loop. Rescheduling at the wrap is what makes the
+   * music actually follow the timeline.
+   */
+  #loopTimer: ReturnType<typeof setTimeout> | null = null;
+  #request: { clips: readonly AudioClip[]; media: MediaStore; durationMs: number } | null = null;
+
   get hasAudio(): boolean {
     return this.#scheduled.length > 0;
   }
@@ -101,10 +113,30 @@ export class AudioEngine {
 
     // Nothing landed in range — treat it as silence rather than as playing, so
     // the clock does not get mastered by a context with nothing in it.
-    if (this.#scheduled.length === 0) this.#running = false;
+    if (this.#scheduled.length === 0) {
+      this.#running = false;
+    }
+
+    /*
+     * Re-arm for the wrap. A clip that starts late in the timeline has nothing
+     * scheduled on this pass but everything on the next, so the timer is set
+     * whether or not anything is sounding right now.
+     */
+    this.#request = { clips, media, durationMs: options.durationMs };
+    const remaining = options.durationMs - options.fromMs;
+    if (remaining > 0) {
+      this.#loopTimer = setTimeout(() => {
+        const request = this.#request;
+        if (request) void this.play(request.clips, request.media, { fromMs: 0, durationMs: request.durationMs });
+      }, remaining);
+    }
   }
 
   stop(): void {
+    if (this.#loopTimer !== null) {
+      clearTimeout(this.#loopTimer);
+      this.#loopTimer = null;
+    }
     stopScheduled(this.#scheduled);
     this.#scheduled = [];
     this.#running = false;
@@ -113,6 +145,7 @@ export class AudioEngine {
   /** Releases the device. The editor should not hold one while silent. */
   async dispose(): Promise<void> {
     this.stop();
+    this.#request = null;
     const ctx = this.#ctx;
     this.#ctx = null;
     this.#master = null;

@@ -1245,3 +1245,51 @@ changed is that `+ Media` no longer sits disabled doing nothing when clicked —
 a control with no way to discover why it is inert reads as broken software. It
 now carries a PRO badge, explains itself on click, and offers the dev switch
 §12 already calls for. The inline upsell proper is still M7's.
+
+---
+
+## D-056 — Music is addressed absolutely, cut freely, and loops with the picture
+M6, after the first cut of the music track was reported unusable. Three
+separate faults, and the first was the serious one.
+
+**The music did not loop.** Web Audio sources play once. The visual preview
+loops, so the picture returned to zero while the track carried straight on —
+and because the clock is *mastered* by the audio (D-054), the two did not
+drift, they diverged by an entire loop: the frame showed 1s while the track was
+31s in. The engine now re-arms a timer at the wrap and reschedules from zero.
+
+Worth noting how this hid: `currentProjectMs` already wrapped its *reported*
+position with a modulo, so the clock looked like it was looping correctly while
+the graph underneath had nothing scheduled at all. The test that catches it
+therefore asserts `audioMastered` remains true after the wrap, not merely that
+the playhead came back round — the weaker assertion passes against the bug.
+
+**A section deep in a long track was unreachable.** Slip is a drag, and a drag
+maps pixels against the *lane*. On a fifteen-second lane the entire width is
+fifteen seconds of slip, so "use the part at 1:30" in a three-minute track was
+six full drags away. No amount of hint text fixes that; the gesture simply
+cannot express it.
+
+So the panel addresses the source **absolutely**: a *Start from* slider
+spanning `0 … source − length`, and a *Length used* slider, both reading out in
+clock time. Dragging stays for the small adjustments it is good at. The general
+rule this is an instance of: a relative gesture scaled to the viewport cannot
+reach a value larger than the viewport represents, and needs an absolute
+control beside it rather than a bigger hint.
+
+**There was no way to cut a passage out.** §10 says "one track for now" — one
+*track*, not one clip, and `project.audio` has been an array since §5.
+`scheduleClips` and `renderMixdown` both iterate it already, so the model cost
+nothing: the music row now renders every clip, `addAudio` appends rather than
+replaces, and `splitAudio` cuts one in two at the playhead. Split twice, delete
+the middle. A split that would leave either side under the minimum is refused
+rather than producing a sliver too small to grab.
+
+Fades belong to the outer edges of a split: the left half keeps its fade in,
+the right its fade out, and the new inner edges butt.
+
+**Also fixed:** the split button first read the playhead from the
+`__motionStudio` dev handle, which `AppShell` only installs under
+`import.meta.env.DEV` — it would have been permanently disabled in a
+production build. The timeline already samples the clock at 20Hz for its own
+readout, so it publishes that to the store and the panel reads it there.

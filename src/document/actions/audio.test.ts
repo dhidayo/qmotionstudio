@@ -171,3 +171,113 @@ describe('moving', () => {
     expect(after.startMs).toBe(120_000);
   });
 });
+
+describe('addressing a section absolutely', () => {
+  it('reaches deep into a long track, which dragging cannot', () => {
+    /*
+     * The complaint this exists for: "if I want music at 1:30 to be the start
+     * of the timeline, how do I do that?" A slip drag maps pixels against the
+     * lane, so on a fifteen-second lane the whole width is fifteen seconds of
+     * slip — 1:30 is six full drags away. Absolute addressing is the answer.
+     */
+    const after = clipOf(
+      actions.setAudioSection('aud_1', 90_000, SOURCE_MS).apply(withClip(), scope),
+    );
+    expect(after.trimStartMs).toBe(90_000);
+    expect(after.trimEndMs).toBe(105_000);
+  });
+
+  it('keeps the clip the same length', () => {
+    const before = withClip({ trimStartMs: 0, trimEndMs: 15_000 });
+    const after = clipOf(actions.setAudioSection('aud_1', 200_000, SOURCE_MS).apply(before, scope));
+    expect(after.trimEndMs - after.trimStartMs).toBe(15_000);
+  });
+
+  it('stops where the window would run off the end of the track', () => {
+    const after = clipOf(
+      actions.setAudioSection('aud_1', 999_000, SOURCE_MS).apply(withClip(), scope),
+    );
+    expect(after.trimEndMs).toBe(SOURCE_MS);
+  });
+
+  it('sets how much of the track is used, from the chosen start', () => {
+    const before = withClip({ trimStartMs: 90_000, trimEndMs: 105_000 });
+    const after = clipOf(actions.setAudioLength('aud_1', 40_000, SOURCE_MS).apply(before, scope));
+    expect(after.trimStartMs).toBe(90_000);
+    expect(after.trimEndMs).toBe(130_000);
+  });
+
+  it('cannot be lengthened past the end of the track', () => {
+    const before = withClip({ trimStartMs: 230_000, trimEndMs: 235_000 });
+    const after = clipOf(actions.setAudioLength('aud_1', 99_000, SOURCE_MS).apply(before, scope));
+    expect(after.trimEndMs).toBe(SOURCE_MS);
+  });
+});
+
+describe('splitting — cutting a section out', () => {
+  it('splits into two clips that together cover the original', () => {
+    const before = withClip({ startMs: 0, trimStartMs: 10_000, trimEndMs: 25_000 });
+    const after = actions.splitAudio('aud_1', 6_000).apply(before, scope);
+
+    expect(after.audio).toHaveLength(2);
+    const [left, right] = after.audio;
+    if (!left || !right) throw new Error('expected two clips');
+
+    expect(left.startMs).toBe(0);
+    expect(left.trimEndMs).toBe(16_000);
+    expect(right.startMs).toBe(6_000);
+    expect(right.trimStartMs).toBe(16_000);
+    expect(right.trimEndMs).toBe(25_000);
+
+    // No gap and no overlap: the cut is exactly where the playhead was.
+    expect(right.trimStartMs).toBe(left.trimEndMs);
+  });
+
+  it('gives the halves distinct ids, so they edit independently', () => {
+    const after = actions.splitAudio('aud_1', 6_000).apply(withClip(), scope);
+    expect(after.audio[0]?.id).not.toBe(after.audio[1]?.id);
+  });
+
+  it('keeps the outer fades and butts the new inner edges', () => {
+    const before = withClip({ fadeInMs: 1_000, fadeOutMs: 2_000 });
+    const after = actions.splitAudio('aud_1', 7_000).apply(before, scope);
+    const [left, right] = after.audio;
+
+    expect(left?.fadeInMs).toBe(1_000);
+    expect(left?.fadeOutMs).toBe(0);
+    expect(right?.fadeInMs).toBe(0);
+    expect(right?.fadeOutMs).toBe(2_000);
+  });
+
+  it('refuses a split that would leave a sliver', () => {
+    const before = withClip({ startMs: 0, trimEndMs: 15_000 });
+    expect(actions.splitAudio('aud_1', 100).apply(before, scope)).toBe(before);
+    expect(actions.splitAudio('aud_1', 14_950).apply(before, scope)).toBe(before);
+  });
+
+  it('refuses a split outside the clip', () => {
+    const before = withClip({ startMs: 5_000, trimEndMs: 15_000 });
+    expect(actions.splitAudio('aud_1', 1_000).apply(before, scope)).toBe(before);
+    expect(actions.splitAudio('aud_1', 99_000).apply(before, scope)).toBe(before);
+  });
+
+  it('leaves the far half alone when one is removed', () => {
+    const split = actions.splitAudio('aud_1', 6_000).apply(withClip(), scope);
+    const rightId = split.audio[1]?.id;
+    if (!rightId) throw new Error('expected a right half');
+
+    const after = actions.removeAudio(rightId).apply(split, scope);
+    expect(after.audio).toHaveLength(1);
+    expect(after.audio[0]?.id).toBe('aud_1');
+  });
+});
+
+describe('several clips on one track', () => {
+  it('adds rather than replaces, so a second passage can be dropped in', () => {
+    const second = actions.makeAudioClip('track', { startMs: 20_000, durationMs: 10_000 });
+    const after = actions.addAudio(second).apply(withClip(), scope);
+
+    expect(after.audio).toHaveLength(2);
+    expect(after.audio[1]?.startMs).toBe(20_000);
+  });
+});
