@@ -886,26 +886,141 @@ export function setAudioStart(id: string, startMs: number): Action {
   };
 }
 
-/** Trim is an offset *into the source file*, not a position on the timeline. */
-export function setAudioTrim(
-  id: string,
-  trim: { trimStartMs?: number; trimEndMs?: number },
-  sourceDurationMs: number,
-): Action {
+/**
+ * Trimming, slipping and moving — one atomic action per gesture.
+ *
+ * The first version dragged the left edge by dispatching *two* actions, a trim
+ * and a move, with different coalesce keys. Coalescing only merges a commit
+ * with the one before it when the keys match, so alternating keys meant every
+ * single pointermove pushed a fresh undo entry: one drag could push a hundred
+ * and evict the user's real history off the end of MAX_HISTORY. Each gesture
+ * is now one action carrying one key.
+ */
+
+/** Keeps a trim window inside the source and never shorter than this. */
+const MIN_CLIP_MS = 300;
+
+function clampWindow(
+  trimStartMs: number,
+  trimEndMs: number,
+  sourceMs: number,
+): { trimStartMs: number; trimEndMs: number } {
+  const limit = Math.max(MIN_CLIP_MS, sourceMs);
+  const start = clamp(Math.round(trimStartMs), 0, limit - MIN_CLIP_MS);
+  const end = clamp(Math.round(trimEndMs), start + MIN_CLIP_MS, limit);
+  return { trimStartMs: start, trimEndMs: end };
+}
+
+/**
+ * Drags the clip's left edge.
+ *
+ * Moves the trim window *and* the clip's position together, so the audio under
+ * the cursor stays where it is — dragging the edge reveals or hides the
+ * opening of the track rather than sliding the whole thing along the timeline.
+ */
+export function trimAudioStart(id: string, deltaMs: number, sourceMs: number): Action {
   return {
     label: 'Trim music',
-    coalesceKey: `audioTrim:${id}`,
+    coalesceKey: `audioEdge:${id}`,
     apply: (project) =>
       editAudio(project, id, (clip) => {
-        const limit = Math.max(0, sourceDurationMs);
-        // 200ms of minimum length, for the same reason an overlay has one:
-        // a clip dragged to nothing can never be grabbed again.
-        const start = clamp(Math.round(trim.trimStartMs ?? clip.trimStartMs), 0, Math.max(0, limit - 200));
-        const end = clamp(Math.round(trim.trimEndMs ?? clip.trimEndMs), start + 200, limit);
-        return clip.trimStartMs === start && clip.trimEndMs === end
+        const window = clampWindow(clip.trimStartMs + deltaMs, clip.trimEndMs, sourceMs);
+        // Whatever the clamp actually allowed, not what was asked for.
+        const applied = window.trimStartMs - clip.trimStartMs;
+        const startMs = Math.max(0, clip.startMs + applied);
+
+        /*
+         * Both edges are written, not just the one being dragged. The clamp
+         * pushes the far edge along when the near one would otherwise pass it,
+         * and writing only trimStartMs left an inverted window — trimStart
+         * beyond trimEnd — whose duration computes to zero, so the clip
+         * silently disappeared instead of stopping at its minimum length.
+         */
+        return window.trimStartMs === clip.trimStartMs
+          && window.trimEndMs === clip.trimEndMs
+          && startMs === clip.startMs
           ? clip
-          : { ...clip, trimStartMs: start, trimEndMs: end };
+          : { ...clip, trimStartMs: window.trimStartMs, trimEndMs: window.trimEndMs, startMs };
       }),
+  };
+}
+
+export function trimAudioEnd(id: string, deltaMs: number, sourceMs: number): Action {
+  return {
+    label: 'Trim music',
+    coalesceKey: `audioEdge:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        const window = clampWindow(clip.trimStartMs, clip.trimEndMs + deltaMs, sourceMs);
+        // Symmetrically: the clamp may move the start, and dropping that would
+        // invert the window from the other direction.
+        return window.trimEndMs === clip.trimEndMs && window.trimStartMs === clip.trimStartMs
+          ? clip
+          : { ...clip, ...window };
+      }),
+  };
+}
+
+/**
+ * Slips the clip: changes *which part* of the track plays without moving it.
+ *
+ * The gesture that was missing. Trimming can only shorten from the ends, so
+ * with trim alone the only way to reach a chorus ninety seconds in is to cut
+ * away the ninety seconds before it — which also moves the clip. Slipping
+ * holds the clip's position and length still and slides the source underneath.
+ */
+export function slipAudio(id: string, deltaMs: number, sourceMs: number): Action {
+  return {
+    label: 'Slip music',
+    coalesceKey: `audioSlip:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        const length = clip.trimEndMs - clip.trimStartMs;
+        const limit = Math.max(MIN_CLIP_MS, sourceMs);
+
+        // The window keeps its length, so the clip's duration never changes —
+        // it just stops at the ends of the source.
+        const start = clamp(Math.round(clip.trimStartMs + deltaMs), 0, Math.max(0, limit - length));
+        return start === clip.trimStartMs
+          ? clip
+          : { ...clip, trimStartMs: start, trimEndMs: start + length };
+      }),
+  };
+}
+
+/**
+ * Trims the clip to exactly cover the video, from wherever it currently starts.
+ *
+ * The one-click answer to the common case: a track far longer than the piece,
+ * which otherwise needs a drag with the far edge somewhere off in the overhang.
+ */
+export function fitAudioToProject(id: string, projectMs: number, sourceMs: number): Action {
+  return {
+    label: 'Fit music to video',
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        const wanted = Math.max(MIN_CLIP_MS, Math.round(projectMs));
+        const available = Math.max(MIN_CLIP_MS, sourceMs);
+
+        // Prefer keeping the chosen section's start; pull it back only if the
+        // source runs out before the video does.
+        const length = Math.min(wanted, available);
+        const start = clamp(clip.trimStartMs, 0, Math.max(0, available - length));
+
+        return { ...clip, startMs: 0, trimStartMs: start, trimEndMs: start + length };
+      }),
+  };
+}
+
+export function resetAudioTrim(id: string, sourceMs: number): Action {
+  return {
+    label: 'Reset music trim',
+    apply: (project) =>
+      editAudio(project, id, (clip) => ({
+        ...clip,
+        trimStartMs: 0,
+        trimEndMs: Math.max(MIN_CLIP_MS, Math.round(sourceMs)),
+      })),
   };
 }
 

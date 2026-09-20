@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { addMusic } from '../support/audio';
+import { addMusic, LONG_AUDIO_FIXTURE } from '../support/audio';
 
 /**
  * §10's audio, editor half — import, trim, gain, fades and the waveform.
@@ -121,7 +121,9 @@ test.describe('music (§10)', () => {
     await page.getByRole('button', { name: 'Play' }).click();
     await page.waitForTimeout(1_500);
 
-    const read = async (): Promise<{ timeMs: number; mastered: boolean; playing: boolean }> =>
+    const read = async (): Promise<{
+      timeMs: number; mastered: boolean; playing: boolean; wallMs: number;
+    }> =>
       page.evaluate(() => {
         const handle = (globalThis as unknown as {
           __motionStudio?: {
@@ -133,6 +135,7 @@ test.describe('music (§10)', () => {
           timeMs: handle.clock.timeMs(),
           mastered: handle.clock.audioMastered(),
           playing: handle.clock.playing(),
+          wallMs: performance.now(),
         };
       });
 
@@ -149,16 +152,24 @@ test.describe('music (§10)', () => {
      */
     expect(first.mastered, 'the audio clock is mastering the preview').toBe(true);
 
-    // And that time is genuinely advancing on that clock, not frozen.
     await page.waitForTimeout(1_200);
     const second = await read();
-    expect(second.timeMs).toBeGreaterThan(first.timeMs);
 
-    // Real time, not a runaway: about a second of wall clock is about a second
-    // of timeline. Loose bounds, because a loaded CI box is not a metronome.
+    /*
+     * Compared against *measured* wall time, not against the nominal 1200ms.
+     * `waitForTimeout` only promises a lower bound, and on a loaded machine it
+     * routinely overshoots by a second or more — which is exactly the sort of
+     * thing that makes a timing test fail for reasons that have nothing to do
+     * with the code under test.
+     */
     const advanced = second.timeMs - first.timeMs;
-    expect(advanced, `advanced ${advanced.toFixed(0)}ms in ~1200ms`).toBeGreaterThan(600);
-    expect(advanced).toBeLessThan(2_200);
+    const elapsed = second.wallMs - first.wallMs;
+    expect(advanced).toBeGreaterThan(0);
+
+    const ratio = advanced / Math.max(1, elapsed);
+    expect(ratio, `clock advanced ${advanced.toFixed(0)}ms over ${elapsed.toFixed(0)}ms of wall time`)
+      .toBeGreaterThan(0.7);
+    expect(ratio).toBeLessThan(1.4);
   });
 
   test('⌘Z puts back a removed track', async ({ page }) => {
@@ -169,5 +180,130 @@ test.describe('music (§10)', () => {
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.getByRole('button', { name: /^Music clip/ })).toBeVisible();
+  });
+});
+
+test.describe('a track longer than the video (§10)', () => {
+  /**
+   * The case that was unusable. The lane used to span the *video*, so a clip
+   * running past the end drew as a full-width bar with its far edge pinned off
+   * the end of the timeline — unreachable, so untrimmable.
+   */
+
+  /** Drags the music clip by a fraction of the lane, with optional modifiers. */
+  async function dragClip(
+    page: Page,
+    fromFraction: number,
+    toFraction: number,
+    modifier?: 'Alt' | 'Shift',
+  ): Promise<void> {
+    const clip = page.getByRole('button', { name: /^Music clip/ });
+    const box = await clip.boundingBox();
+    if (!box) throw new Error('no clip');
+
+    const y = box.y + box.height / 2;
+    if (modifier) await page.keyboard.down(modifier);
+    await page.mouse.move(box.x + box.width * fromFraction, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * toFraction, y, { steps: 12 });
+    await page.mouse.up();
+    if (modifier) await page.keyboard.up(modifier);
+    await page.waitForTimeout(400);
+  }
+
+  const section = async (page: Page): Promise<string> =>
+    (await page.getByLabel('Music inspector').innerText()).match(/\d:\d\d – \d:\d\d of \d:\d\d/)?.[0] ?? '';
+
+  test('the lane grows to show audio past the end of the video', async ({ page }) => {
+    await openAd(page);
+    // Forty seconds against a fifteen-second ad: the overhang comes from the
+    // track's own length, which is the ordinary case and the one that broke.
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    await expect(page.getByText(/music runs .* past the end/)).toBeVisible();
+    await expect(page.getByText(/runs past the end of the video/)).toBeVisible();
+
+    /*
+     * The right edge has to stay inside the lane. That is the whole fix: a
+     * clip whose end sits off the timeline cannot be trimmed, slipped or even
+     * seen, which is precisely what a lane sized to the video produced.
+     */
+    const clip = await page.getByRole('button', { name: /^Music clip/ }).boundingBox();
+    const lane = await page.locator('[data-lane]').first().boundingBox();
+    if (!clip || !lane) throw new Error('no geometry');
+
+    expect(clip.x + clip.width).toBeLessThanOrEqual(lane.x + lane.width + 1);
+    // …and it is a real clip, not a sliver squeezed against the edge.
+    expect(clip.width).toBeGreaterThan(lane.width * 0.5);
+  });
+
+  test('“Fit to video” trims the music to exactly the video', async ({ page }) => {
+    await openAd(page);
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+    await expect(page.getByRole('button', { name: /^Music clip, 40\.0 seconds/ })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Fit to video' }).click();
+    await page.waitForTimeout(400);
+
+    await expect(page.getByText(/runs past the end of the video/)).toBeHidden();
+    await expect(page.getByRole('button', { name: /^Music clip, 15\.0 seconds/ })).toBeVisible();
+  });
+
+  test('⌥-drag slips the section without moving the clip', async ({ page }) => {
+    await openAd(page);
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    // Slip needs somewhere to slip *to*, so take fifteen seconds of the forty.
+    await page.getByRole('button', { name: 'Fit to video' }).click();
+    await page.waitForTimeout(400);
+
+    const clipBefore = await page.getByRole('button', { name: /^Music clip/ }).boundingBox();
+    const before = await section(page);
+
+    await dragClip(page, 0.6, 0.2, 'Alt');
+
+    const after = await section(page);
+    const clipAfter = await page.getByRole('button', { name: /^Music clip/ }).boundingBox();
+    if (!clipBefore || !clipAfter) throw new Error('no geometry');
+
+    // A different part of the track — which trimming cannot achieve without
+    // also shortening the clip or moving it.
+    expect(after, `section was ${before}`).not.toBe(before);
+
+    // …and the clip itself has neither moved nor changed length.
+    expect(Math.abs(clipAfter.x - clipBefore.x)).toBeLessThan(2);
+    expect(Math.abs(clipAfter.width - clipBefore.width)).toBeLessThan(2);
+  });
+
+  test('trimming an edge is one undo step, not one per pointer move', async ({ page }) => {
+    await openAd(page);
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    const before = await section(page);
+
+    // Grab the left edge specifically — the handle is the leftmost 8px.
+    const clip = page.getByRole('button', { name: /^Music clip/ });
+    const box = await clip.boundingBox();
+    if (!box) throw new Error('no clip');
+    const y = box.y + box.height / 2;
+
+    await page.mouse.move(box.x + 3, y);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.3, y, { steps: 15 });
+    await page.mouse.up();
+    await page.waitForTimeout(400);
+
+    expect(await section(page)).not.toBe(before);
+
+    /*
+     * One ⌘Z has to undo the whole drag. The first version dispatched a trim
+     * and a move with *different* coalesce keys, and coalescing only merges
+     * with the entry immediately before it — so every pointermove pushed its
+     * own undo entry, and a single drag could evict the real history off the
+     * end of MAX_HISTORY.
+     */
+    await page.keyboard.press('ControlOrMeta+z');
+    await page.waitForTimeout(400);
+    expect(await section(page)).toBe(before);
   });
 });

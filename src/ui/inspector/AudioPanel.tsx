@@ -1,5 +1,6 @@
 import { clipDurationMs, dbToGain } from '@/core/audio/envelope';
 import * as actions from '@/document/actions';
+import { totalDurationMs } from '@/document/select/timeline';
 import { useEditor, useSelectedAudio } from '@/state/store';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, EmptyNote, Row, Section, Slider } from './controls';
@@ -17,6 +18,8 @@ export function AudioPanel(): React.JSX.Element {
   const selectAudio = useEditor((s) => s.selectAudio);
   const media = useMediaStore();
   useMediaRevision();
+  // Above the early return below — hooks run in the same order every render.
+  const videoMs = useEditor((state) => totalDurationMs(state.project));
 
   if (!clip) {
     return <EmptyNote>That clip is gone. Pick another on the timeline.</EmptyNote>;
@@ -27,6 +30,7 @@ export function AudioPanel(): React.JSX.Element {
   const sourceMs = media.durationMsOf(clip.mediaId);
   const length = clipDurationMs(clip);
   const decoded = media.getAudioBuffer(clip.mediaId) !== null;
+  const overruns = clip.startMs + length > videoMs + 1;
 
   return (
     <>
@@ -43,11 +47,51 @@ export function AudioPanel(): React.JSX.Element {
 
       <Section title="Track">
         <p className="truncate text-[12px]">{name}</p>
-        <p className="tabular mt-0.5 text-[10px] text-ink-faint">
-          {(length / 1000).toFixed(1)}s used
-          {sourceMs !== null && ` of ${(sourceMs / 1000).toFixed(1)}s`}
+
+        {/*
+          * Which section is playing, in clock time. Without this the only
+          * indication of *where* in a four-minute track you are is the shape
+          * of the waveform, which is not something anyone can read.
+          */}
+        <p className="tabular mt-0.5 text-[11px] text-ink-muted">
+          {clock(clip.trimStartMs)} – {clock(clip.trimEndMs)}
+          {sourceMs !== null && <span className="text-ink-faint"> of {clock(sourceMs)}</span>}
         </p>
+        <p className="tabular mt-0.5 text-[10px] text-ink-faint">
+          {(length / 1000).toFixed(1)}s used · video is {(videoMs / 1000).toFixed(1)}s
+        </p>
+
+        {overruns && (
+          <EmptyNote>
+            The music runs past the end of the video. Everything after {clock(videoMs)} is cut
+            from the export.
+          </EmptyNote>
+        )}
         {!decoded && <EmptyNote>Still decoding — playback starts when it lands.</EmptyNote>}
+
+        <div className="mt-2 flex gap-1.5">
+          <Button
+            onClick={() => {
+              if (sourceMs !== null) dispatch(actions.fitAudioToProject(id, videoMs, sourceMs));
+            }}
+            disabled={sourceMs === null}
+          >
+            Fit to video
+          </Button>
+          <Button
+            onClick={() => {
+              if (sourceMs !== null) dispatch(actions.resetAudioTrim(id, sourceMs));
+            }}
+            disabled={sourceMs === null}
+          >
+            Use all
+          </Button>
+        </div>
+
+        <EmptyNote>
+          Drag the clip to move it, its edges to trim. Hold ⌥ and drag to slip — that changes
+          which part of the track plays without moving the clip. ⇧ turns off snapping.
+        </EmptyNote>
       </Section>
 
       <Section title="Level">
@@ -108,4 +152,12 @@ export function AudioPanel(): React.JSX.Element {
       </Section>
     </>
   );
+}
+
+/** mm:ss, because "142.4s" is not a place in a song. */
+function clock(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }

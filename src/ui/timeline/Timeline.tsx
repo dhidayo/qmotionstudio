@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Overlay } from '@/document/types';
-import { sceneSpans, totalDurationMs } from '@/document/select/timeline';
+import { sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
 import { DEFAULT_OVERLAY_MS, DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } from '@/document/defaults';
 import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
-import { useEntitlements } from '@/entitlements';
+import { setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { useUpload, AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE } from '@/ui/media/useUpload';
 import { SceneTools } from './SceneTools';
@@ -41,7 +41,17 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const selectedOverlay = useEditor((s) => s.selectedOverlay);
   const selectOverlay = useEditor((s) => s.selectOverlay);
 
-  const durationMs = totalDurationMs(project);
+  /*
+   * Two different lengths, and conflating them was the bug that made a long
+   * music track unmanageable (see timelineSpanMs).
+   *
+   *   videoMs  what renders and exports — the scenes, minus D-004's overlaps.
+   *   durationMs  what the lane has to *show*, which includes audio running
+   *               past the end of the video.
+   */
+  const videoMs = totalDurationMs(project);
+  const durationMs = timelineSpanMs(project);
+  const overhang = durationMs > videoMs + 1;
   const spans = sceneSpans(project.scenes);
 
   const [timeMs, setTimeMs] = useState(0);
@@ -142,7 +152,8 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   // ── Adding overlays (§1.2) ───────────────────────────────────────────────
 
   const media = useMediaStore();
-  const { limits } = useEntitlements('motionAd');
+  const { tier, limits } = useEntitlements('motionAd');
+  const [proNote, setProNote] = useState(false);
 
   const placeOverlay = useCallback(
     (content: Overlay['content']): void => {
@@ -238,18 +249,37 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
         </button>
 
         <span className="tabular w-28 text-[11px] text-ink-muted">
-          {formatSeconds(timeMs)} / {formatSeconds(durationMs)}
+          {formatSeconds(timeMs)} / {formatSeconds(videoMs)}
         </span>
 
         <div className="ml-2 flex items-center gap-1" role="group" aria-label="Add overlay">
           <AddButton onClick={() => { addOverlay('photo'); }} title="Add a photo overlay">+ Photo</AddButton>
           <AddButton onClick={() => { addOverlay('text'); }} title="Add a text overlay">+ Text</AddButton>
+          {/*
+            * §12 keeps custom media behind Pro, and it stays behind Pro — but a
+            * disabled button that does nothing when clicked is a dead end, not
+            * a gate. It explains itself instead, and offers the dev switch §12
+            * already specifies. The real upsell is M7's.
+            */}
           <AddButton
-            onClick={() => { videoInput.current?.click(); }}
-            disabled={!limits.customMedia || videoUpload.busy}
-            title={limits.customMedia ? 'Add a video overlay' : 'Custom media is a Pro feature (§12)'}
+            onClick={() => {
+              if (!limits.customMedia) { setProNote(true); return; }
+              videoInput.current?.click();
+            }}
+            disabled={videoUpload.busy}
+            title={limits.customMedia
+              ? 'Add a video overlay'
+              : 'Custom media is a Pro feature — click to find out how to enable it'}
           >
             {videoUpload.busy ? 'Reading…' : '+ Media'}
+            {!limits.customMedia && (
+              <span
+                className="ml-1 rounded-sm px-1 text-[8px] font-bold uppercase"
+                style={{ background: 'var(--c-pro-soft)', color: 'var(--c-pro)' }}
+              >
+                Pro
+              </span>
+            )}
           </AddButton>
           <input
             ref={videoInput}
@@ -283,6 +313,20 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           />
         </div>
 
+        {proNote && !limits.customMedia && (
+          <span className="flex items-center gap-1.5 text-[10px] text-ink-muted">
+            Video overlays are Pro.
+            <button
+              type="button"
+              onClick={() => { setTier('pro'); setProNote(false); }}
+              className="rounded-md border px-1.5 py-0.5 text-[10px]"
+              style={{ borderColor: 'var(--c-pro)', color: 'var(--c-pro)' }}
+            >
+              Switch to Pro ({tier === 'free' ? 'dev' : 'on'})
+            </button>
+          </span>
+        )}
+
         {(videoUpload.error ?? audioUpload.error) !== null && (
           <span className="max-w-64 truncate text-[10px]" style={{ color: 'var(--c-danger)' }}>
             {videoUpload.error ?? audioUpload.error}
@@ -291,6 +335,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
         <span className="ml-auto text-[10px] text-ink-faint">
           {project.scenes.length} scenes · {project.overlays.length} overlays
+          {overhang && ` · music runs ${formatSeconds(durationMs - videoMs)} past the end`}
         </span>
       </div>
 
@@ -315,7 +360,14 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
             tabIndex={0}
             aria-label="Scrub"
             aria-valuemin={0}
-            aria-valuemax={Math.round(durationMs)}
+            /*
+             * The video's length, not the lane's. The lane may run on past the
+             * end to show overhanging audio, but the playhead cannot: there is
+             * nothing there to render, and `clock.seek` clamps to the video
+             * regardless. Reporting the lane would promise reachable time that
+             * is not.
+             */
+            aria-valuemax={Math.round(videoMs)}
             aria-valuenow={Math.round(timeMs)}
             onKeyDown={(e) => {
               if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
@@ -413,7 +465,32 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           ))}
 
           {/* §1.2's dedicated music track, §10's waveform. */}
-          <MusicTrack clip={project.audio[0]} durationMs={durationMs} laneWidth={laneWidth} />
+          <MusicTrack
+            clip={project.audio[0]}
+            durationMs={durationMs}
+            videoMs={videoMs}
+            laneWidth={laneWidth}
+          />
+
+          {/*
+            * Everything past the end of the video, dimmed.
+            *
+            * D-053 cuts the exported mix to the video's length; this is that
+            * rule made visible, so a track that overruns looks deliberate
+            * rather than broken.
+            */}
+          {overhang && (
+            <div
+              className="pointer-events-none absolute inset-y-0"
+              style={{
+                left: `${msToPct(videoMs, durationMs)}%`,
+                right: 0,
+                background: 'color-mix(in srgb, var(--c-stage) 55%, transparent)',
+                borderLeft: '1px dashed var(--c-edge-strong)',
+              }}
+              aria-hidden
+            />
+          )}
 
           {/* Playhead, over every row. */}
           <div

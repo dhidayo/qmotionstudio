@@ -103,20 +103,32 @@ const AUDIO_SECONDS = 12;
 const AUDIO_RATE = 48_000;
 const AUDIO_TONE_HZ = 440;
 
-function buildWav(): Buffer {
-  const frames = AUDIO_SECONDS * AUDIO_RATE;
+/**
+ * A second, longer track (§10).
+ *
+ * Real music is longer than the piece it scores, and that is the case the
+ * timeline used to handle worst — a clip running past the end of the video had
+ * its far edge off the lane entirely. Forty seconds against a fifteen-second
+ * ad reproduces it. 16kHz mono keeps a fixture that only has to carry a test
+ * tone down to about a megabyte.
+ */
+const LONG_SECONDS = 40;
+const LONG_RATE = 16_000;
+
+function buildWav(seconds = AUDIO_SECONDS, rate = AUDIO_RATE): Buffer {
+  const frames = seconds * rate;
   const samples = Buffer.alloc(frames * 2);
 
   for (let i = 0; i < frames; i++) {
-    const second = Math.floor(i / AUDIO_RATE);
+    const second = Math.floor(i / rate);
     const loud = second % 2 === 0;
     // A short raised-cosine at each edge, so the bursts do not click — a
     // discontinuity would spread energy across the spectrum and muddy any
     // later analysis.
-    const intoSecond = (i % AUDIO_RATE) / AUDIO_RATE;
+    const intoSecond = (i % rate) / rate;
     const edge = Math.min(1, Math.min(intoSecond, 1 - intoSecond) / 0.01);
     const amplitude = loud ? 0.7 * edge : 0;
-    const value = Math.sin((2 * Math.PI * AUDIO_TONE_HZ * i) / AUDIO_RATE) * amplitude;
+    const value = Math.sin((2 * Math.PI * AUDIO_TONE_HZ * i) / rate) * amplitude;
     samples.writeInt16LE(Math.max(-32768, Math.min(32767, Math.round(value * 32767))), i * 2);
   }
 
@@ -128,8 +140,8 @@ function buildWav(): Buffer {
   header.writeUInt32LE(16, 16);          // PCM chunk size
   header.writeUInt16LE(1, 20);           // format: PCM
   header.writeUInt16LE(1, 22);           // channels: mono
-  header.writeUInt32LE(AUDIO_RATE, 24);
-  header.writeUInt32LE(AUDIO_RATE * 2, 28); // byte rate
+  header.writeUInt32LE(rate, 24);
+  header.writeUInt32LE(rate * 2, 28); // byte rate
   header.writeUInt16LE(2, 32);           // block align
   header.writeUInt16LE(16, 34);          // bits per sample
   header.write('data', 36);
@@ -146,6 +158,13 @@ async function main(): Promise<void> {
   console.log(
     `Wrote tests/fixtures/beat-bands.wav — ${(wav.length / 1024).toFixed(0)} KB, ` +
     `${AUDIO_SECONDS}s of alternating ${AUDIO_TONE_HZ}Hz bursts and silence.`,
+  );
+
+  const long = buildWav(LONG_SECONDS, LONG_RATE);
+  await writeFile(resolve(OUT_DIR, 'long-bands.wav'), long);
+  console.log(
+    `Wrote tests/fixtures/long-bands.wav — ${(long.length / 1024).toFixed(0)} KB, ` +
+    `${LONG_SECONDS}s at ${LONG_RATE}Hz, for the overhang case.`,
   );
 
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });

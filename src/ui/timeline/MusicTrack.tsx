@@ -8,6 +8,18 @@ import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { dragResult, msToPct, pxToMs, snap, type ClipDrag } from './timelineGeometry';
 
 /**
+ * Music supports one gesture the other tracks do not: slip.
+ *
+ * Trim can only shorten from the ends, so reaching a chorus ninety seconds
+ * into a track means cutting away the ninety seconds before it — which moves
+ * the clip too. Slipping holds position and length and slides the source
+ * underneath, which is the gesture "which section of the music" actually
+ * wants. ⌥ while dragging the body.
+ */
+type MusicDragMode = ClipDrag['mode'] | 'slip';
+type MusicDrag = Omit<ClipDrag, 'mode'> & { readonly mode: MusicDragMode };
+
+/**
  * §1.2's dedicated music track, and §10's waveform preview.
  *
  * The waveform is drawn from the precomputed peaks, sampled across the part of
@@ -27,10 +39,14 @@ const COLUMNS = 160;
 export function MusicTrack({
   clip,
   durationMs,
+  videoMs,
   laneWidth,
 }: {
   clip: AudioClip | undefined;
+  /** The lane's span, which includes anything past the end of the video. */
   durationMs: number;
+  /** What actually renders and exports. */
+  videoMs: number;
   laneWidth: number;
 }): React.JSX.Element {
   const media = useMediaStore();
@@ -40,7 +56,7 @@ export function MusicTrack({
   const selectedAudio = useEditor((s) => s.selectedAudio);
   const selectAudio = useEditor((s) => s.selectAudio);
 
-  const dragRef = useRef<ClipDrag | null>(null);
+  const dragRef = useRef<MusicDrag | null>(null);
 
   const laneMs = useCallback(
     (clientX: number, element: HTMLElement): number => {
@@ -69,12 +85,14 @@ export function MusicTrack({
   const width = Math.max(1.2, msToPct(clip.startMs + length, durationMs) - left);
   const active = selectedAudio === clip.id;
 
-  const begin = (event: React.PointerEvent<HTMLElement>, mode: ClipDrag['mode']): void => {
+  const begin = (event: React.PointerEvent<HTMLElement>, mode: MusicDragMode): void => {
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     selectAudio(clip.id);
     dragRef.current = {
-      mode,
+      // `slip` is not a ClipDrag mode — dragResult knows nothing about it, and
+      // the slip branch above returns before ever calling it.
+      mode: mode === 'slip' ? 'slip' : mode,
       id: clip.id,
       startMs: clip.startMs,
       endMs: clip.startMs + length,
@@ -86,34 +104,54 @@ export function MusicTrack({
     const drag = dragRef.current;
     if (!drag || event.buttons === 0) return;
 
-    const next = dragResult(drag, laneMs(event.clientX, event.currentTarget), {
-      durationMs,
-      minLengthMs: MIN_CLIP_MS,
-    });
-    const free = event.altKey;
+    const pointerMs = laneMs(event.clientX, event.currentTarget);
+    // ⇧ bypasses snapping. ⌥ is taken: it is the slip modifier.
+    const free = event.shiftKey;
+    const rawDelta = pointerMs - drag.pointerMs;
 
-    if (drag.mode === 'move') {
-      dispatch(actions.setAudioStart(clip.id, snap(next.startMs, SNAP_MS, free)));
+    if (drag.mode === 'slip') {
+      // Slipping runs *against* the drag: pulling the clip left brings later
+      // audio into view, the way scrubbing a reel under a playhead does.
+      dispatch(actions.slipAudio(clip.id, snap(-rawDelta, SNAP_MS, free), sourceMs ?? 0));
       return;
     }
 
-    /*
-     * Trimming moves the window into the *source*, not the clip's place on the
-     * timeline. Dragging the left edge right therefore does two things at
-     * once: it starts the clip later and it skips further into the track, so
-     * the audio under the cursor stays put.
-     */
+    // Narrowed past 'slip' by the branch above, which is what dragResult needs.
+    const geometry: ClipDrag = { ...drag, mode: drag.mode };
+    const next = dragResult(geometry, pointerMs, { durationMs, minLengthMs: MIN_CLIP_MS });
+
+    if (drag.mode === 'move') {
+      /*
+       * Clamped against the *video*, not the lane.
+       *
+       * `dragResult` keeps a clip inside the lane, which is right for overlays
+       * and wrong here — the lane is sized from the content, so clamping a
+       * music clip to it made overhang unreachable by construction: the clip
+       * could never be dragged past an end that only moved because the clip
+       * had. Music may start anywhere up to the end of the video; past that it
+       * would be inaudible in the export anyway.
+       */
+      const wanted = drag.startMs + (pointerMs - drag.pointerMs);
+      const startMs = Math.max(0, Math.min(wanted, videoMs));
+      dispatch(actions.setAudioStart(clip.id, snap(startMs, SNAP_MS, free)));
+      return;
+    }
+
     if (!sourceMs) return;
 
+    /*
+     * Trimming moves the window into the *source*, not the clip's place on the
+     * timeline. Each edge is one atomic action carrying one coalesce key, so a
+     * drag is a single undo step rather than one per pointermove.
+     */
     if (drag.mode === 'trimStart') {
       const delta = snap(next.startMs, SNAP_MS, free) - clip.startMs;
-      dispatch(actions.setAudioTrim(clip.id, { trimStartMs: clip.trimStartMs + delta }, sourceMs));
-      dispatch(actions.setAudioStart(clip.id, clip.startMs + delta));
+      dispatch(actions.trimAudioStart(clip.id, delta, sourceMs));
       return;
     }
 
     const delta = snap(next.endMs, SNAP_MS, free) - (clip.startMs + length);
-    dispatch(actions.setAudioTrim(clip.id, { trimEndMs: clip.trimEndMs + delta }, sourceMs));
+    dispatch(actions.trimAudioEnd(clip.id, delta, sourceMs));
   };
 
   const end = (): void => {
@@ -140,7 +178,7 @@ export function MusicTrack({
         aria-pressed={active}
         aria-label={`Music clip, ${(length / 1000).toFixed(1)} seconds`}
         title={`${media.get(clip.mediaId)?.name ?? clip.mediaId} · ${(length / 1000).toFixed(1)}s`}
-        onPointerDown={(e) => { begin(e, 'move'); }}
+        onPointerDown={(e) => { begin(e, e.altKey ? 'slip' : 'move'); }}
         onPointerMove={move}
         onPointerUp={end}
         onPointerCancel={end}

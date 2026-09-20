@@ -1180,3 +1180,68 @@ arbitrarily far ahead, so `add()` blocked waiting for video frames that had not
 been produced yet. The export timed out at 140 seconds. Feeding the audio
 alongside the video, two seconds ahead, brought it to 14.7. Worth remembering
 that "it worked in one format" is not evidence about the other.
+
+---
+
+## D-055 — The timeline lane spans content; music gets move, trim and slip
+M6, after the first version of the music track proved unusable on the ordinary
+case: a track longer than the piece it scores.
+
+**The lane was sized to the video.** Clip positions were percentages of
+`totalDurationMs`, and `msToPct` clamps at 100%, so a four-minute track on a
+fifteen-second ad drew as a full-width bar with its far edge *off the end of
+the timeline*. It could not be trimmed, slipped or even seen. The only way to
+shorten it was to not have imported it.
+
+The lane now spans `timelineSpanMs` — the larger of the video and the audio —
+with everything past the end of the video dimmed behind a dashed marker. That
+also makes D-053 visible: the exported mix is cut to the video, and now the
+part that will be cut is on screen rather than implied.
+
+Two lengths, kept distinct, because conflating them was the bug:
+
+| | |
+|---|---|
+| `totalDurationMs` | what renders and exports; what the playhead can reach |
+| `timelineSpanMs` | what the lane has to *show* |
+
+The scrub control reports the **video's** length as its `aria-valuemax`: the
+lane may run on, but the playhead cannot, and promising reachable time that is
+not would be a lie to anyone driving it from the keyboard.
+
+**Three gestures, because trim alone cannot express the thing people want.**
+Trim only shortens from the ends, so reaching a chorus ninety seconds into a
+track means cutting away the ninety seconds before it — which also moves the
+clip. The missing gesture is *slip*:
+
+- **drag the body** → move on the timeline
+- **drag an edge** → trim, holding the audio under the cursor still
+- **⌥ + drag** → slip: change which section plays, clip stays put
+- **⇧** → bypass snapping
+
+Plus **Fit to video** and **Use all** in the inspector, because the common case
+deserves one click, and a readout of the section in clock time — `0:12 – 0:27
+of 3:40` — since the only other indication of where you are in a long track is
+the shape of a waveform, which nobody can read.
+
+A move is clamped against the **video**, not the lane. Clamping to the lane was
+circular: the clip could never be dragged past an end that only moved because
+the clip had.
+
+**Two bugs found while building it**, both by tests written for something else:
+
+- `trimAudioStart` computed a clamped window and wrote back only the *start*.
+  Dragging the left edge far enough right left `trimStart` beyond `trimEnd` — a
+  window whose duration computes to zero, so the music silently vanished
+  instead of stopping at its minimum length. Both edges are written now.
+- The first left-edge trim dispatched **two** actions, a trim and a move, with
+  *different* coalesce keys. `commit` only merges with the entry immediately
+  before it, so alternating keys meant every pointermove pushed its own undo
+  entry: one drag could push a hundred and evict the user's real history off
+  the end of `MAX_HISTORY`. Each gesture is one action carrying one key.
+
+**On §12's Pro gate.** Custom media stays Pro, exactly as specified. What
+changed is that `+ Media` no longer sits disabled doing nothing when clicked —
+a control with no way to discover why it is inert reads as broken software. It
+now carries a PRO badge, explains itself on click, and offers the dev switch
+§12 already calls for. The inline upsell proper is still M7's.

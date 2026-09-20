@@ -13,6 +13,9 @@ import { resolve } from 'node:path';
 
 export const AUDIO_FIXTURE = resolve(process.cwd(), 'tests/fixtures/beat-bands.wav');
 
+/** Forty seconds, for the case where the music outlives the video. */
+export const LONG_AUDIO_FIXTURE = resolve(process.cwd(), 'tests/fixtures/long-bands.wav');
+
 /** Seconds into the fixture, and whether a burst should be sounding there. */
 export const EXPECTED = [
   { atS: 0.5, loud: true },
@@ -22,8 +25,8 @@ export const EXPECTED = [
   { atS: 4.5, loud: true },
 ] as const;
 
-export async function addMusic(page: Page): Promise<void> {
-  await page.getByLabel('Add a music track').setInputFiles(AUDIO_FIXTURE);
+export async function addMusic(page: Page, fixture = AUDIO_FIXTURE): Promise<void> {
+  await page.getByLabel('Add a music track').setInputFiles(fixture);
   await expect(page.getByLabel('Music inspector')).toBeVisible({ timeout: 20_000 });
 }
 

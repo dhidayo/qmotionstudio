@@ -1,4 +1,5 @@
 import type { Overlay, Project, Scene, Transition } from '@/document/types';
+import { audioEndMs } from '@/core/audio/envelope';
 
 /**
  * Scene placement on the global timeline.
@@ -132,4 +133,28 @@ export function activeOverlaysAt(
 /** Highest track index in use, so the timeline knows how many rows to draw. */
 export function trackCount(overlays: readonly Overlay[]): number {
   return overlays.reduce((max, o) => Math.max(max, o.track + 1), 0);
+}
+
+/**
+ * How much time the timeline has to *show*, as opposed to how much it renders.
+ *
+ * These are not the same thing and conflating them was a real bug. The lane
+ * used to span `totalDurationMs` — the video's length — so a three-minute
+ * track dropped onto a fifteen-second ad drew as a full-width bar with its
+ * right-hand trim handle pinned off the end of the lane. It could not be
+ * trimmed, slipped or even seen; the only way to shorten it was to not have
+ * imported it.
+ *
+ * The lane therefore spans whatever the project *contains*. Audio past the end
+ * of the video is shown, dimmed, beyond an end-of-video marker — which also
+ * makes D-053 visible: the exported mix is cut to the video, and now you can
+ * see the part that will be cut.
+ */
+export function timelineSpanMs(project: Project): number {
+  return Math.max(totalDurationMs(project), audioEndMs(project.audio));
+}
+
+/** True when there is content past the end of the video. */
+export function hasOverhang(project: Project): boolean {
+  return timelineSpanMs(project) > totalDurationMs(project) + 1;
 }

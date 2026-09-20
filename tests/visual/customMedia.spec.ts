@@ -19,17 +19,42 @@ import {
 test.use({ viewport: { width: 1500, height: 940 } });
 
 test.describe('custom media (§9)', () => {
-  test('the button is Pro-gated', async ({ page }) => {
+  test('the Pro gate explains itself instead of being a dead button', async ({ page }) => {
     await page.addInitScript(() => { localStorage.setItem('ms.tier', 'free'); });
     await page.goto('/?template=quick-pitch&aspect=9:16');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_500);
 
-    await expect(page.getByRole('button', { name: '+ Media' })).toBeDisabled();
+    /*
+     * §12 keeps custom media behind Pro and it stays there. What changed is
+     * that the button no longer just sits disabled: a control that does
+     * nothing when clicked gives the user no way to find out why, which is how
+     * this shipped looking broken.
+     */
+    const add = page.getByRole('button', { name: /\+ Media/ });
+    await expect(add).toBeEnabled();
+    await expect(add.getByText('Pro')).toBeVisible();
 
-    // §12's dev toggle is the supported way in, and it works without a reload.
+    await add.click();
+    await expect(page.getByText('Video overlays are Pro.')).toBeVisible();
+
+    // And the way through is the dev switch §12 already specifies.
+    await page.getByRole('button', { name: /^Switch to Pro/ }).click();
+    await expect(page.getByText('Video overlays are Pro.')).toBeHidden();
+    await expect(add.getByText('Pro')).toBeHidden();
+
+    // It now opens the picker rather than the note.
+    await expect(page.getByLabel('Add a video overlay')).toBeAttached();
+  });
+
+  test('the tier badge toggles without a reload', async ({ page }) => {
+    await page.addInitScript(() => { localStorage.setItem('ms.tier', 'free'); });
+    await page.goto('/?template=quick-pitch&aspect=9:16');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(1_500);
+
     await page.getByRole('button', { name: /^Tier: free/ }).click();
-    await expect(page.getByRole('button', { name: '+ Media' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: /^Tier: pro/ })).toBeVisible();
   });
 
   test('an uploaded clip decodes and draws', async ({ page }) => {
