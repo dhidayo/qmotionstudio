@@ -57,20 +57,35 @@ export function AppShell(): React.JSX.Element {
    * is the only way "matches the preview" can actually be asserted.
    */
   useEffect(() => {
+    if (renderParams().frozenMs === null) clock.play();
+    // Mount only. Autoplay is a decision about how the editor *opens*, not a
+    // rule to be re-imposed: re-running this on every duration change meant
+    // that pausing the preview and then touching anything that alters the
+    // timeline's length — adding music, dragging a music clip past the end of
+    // the video, retiming or adding a scene — slammed the transport back into
+    // play underneath the user. Making the lane span the whole track turned
+    // that from occasional into constant, because now every music gesture
+    // moves the duration.
+  }, [clock]);
+
+  useEffect(() => {
     const frozen = renderParams().frozenMs;
-    if (frozen === null) {
-      clock.play();
-      return;
-    }
-    clock.seek(frozen);
-    clock.pause();
+    if (frozen === null) return;
     /*
      * Re-seeks when the document's length changes, which it does once for
      * every Motion Ad: the project starts as a placeholder and only reaches
      * thirty seconds after the ad template has expanded. `seek` clamps to the
      * current duration, so freezing this once on mount parked every ad at the
      * ten-second placeholder length and quietly rendered the wrong frame.
+     *
+     * Only while the transport is still parked, though. Pressing play releases
+     * the freeze, and an ad that finishes expanding after that used to re-park
+     * the playhead and pause — mid-playback, from an effect, for a reason the
+     * user could not see.
      */
+    if (clock.playing) return;
+    clock.seek(frozen);
+    clock.pause();
   }, [clock, duration]);
   useEffect(() => () => { disposeRenderRig(rig); }, [rig]);
 

@@ -1327,3 +1327,44 @@ error boundary above it that unmounts the entire editor — a dropped drag would
 take the application with it. Capture is an optimisation here: without it a
 drag stops tracking once the pointer leaves the element, which is a small
 degradation, and losing the editor is not.
+
+## D-058 — changing the timeline's length must not change the transport
+
+Found by a flaking test, and the flake was the smaller half of it.
+
+`AppShell` applied its opening transport decision — autoplay, or the `?frozen`
+park — from an effect keyed on the project's duration. D-046 added `duration`
+to those deps on purpose, because a Motion Ad expands asynchronously and a
+freeze applied once on mount parked every ad at the placeholder length. What
+that missed is that the same effect also *decides whether the editor is
+playing*, so every later duration change re-imposed that decision.
+
+Under D-057 the duration now moves whenever the lane does, which is on every
+music gesture that shifts the end of the track. So: pause the preview, add
+music or drag a clip past the end of the video, and the transport silently
+started playing again. The user's most recent instruction to the editor was
+"stop", and the editor overrode it from an effect.
+
+The mirror image is what flaked. With `?frozen` the same re-run does
+`seek(frozen); pause()`, so an ad whose expansion landed *after* play had been
+pressed re-parked the playhead mid-playback. The clock test measured that as
+the audio clock advancing at a third of wall time and reported a stall — a true
+symptom with the wrong cause attached, which is the expensive kind.
+
+Split in two. Autoplay is now a mount-only decision about how the editor opens.
+The re-seek keeps its duration dependency, because the reason for D-046 has not
+gone away, but it only fires while the transport is still parked: pressing play
+releases the freeze, and nothing re-imposes it.
+
+Both halves are now asserted directly, on a paused preview and on a playing
+one, rather than inferred from a timing ratio. Verified against the old
+behaviour: both fail, each on its own assertion.
+
+**`AudioEngine.play` is generation-guarded.** It can suspend at `ctx.resume()`,
+and a seek arriving in that gap starts a second `play()`. The second calls
+`stop()`, but the first has not scheduled anything yet, so there is nothing to
+stop — and when it resumes it schedules sources that `#scheduled` holds no
+reference to. Nothing can then stop them and they play over the top of the new
+ones until the track ends. Only reachable around the first resume, since after
+that `play()` never actually suspends, which is precisely why it would have
+been diagnosed as unreproducible.

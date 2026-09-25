@@ -46,6 +46,18 @@ export class AudioEngine {
   #loopTimer: ReturnType<typeof setTimeout> | null = null;
   #request: { clips: readonly AudioClip[]; media: MediaStore; durationMs: number } | null = null;
 
+  /**
+   * Bumped by every `stop()`, and so by every `play()`, which stops first.
+   *
+   * `play()` can suspend at `ctx.resume()`, and a seek arriving during that
+   * gap starts a second one. The second calls `stop()` — but the first has not
+   * scheduled anything yet, so there is nothing to stop, and when it resumes
+   * it schedules sources that no `#scheduled` list holds a reference to. They
+   * cannot then be stopped by anything, and play on over the top of the new
+   * ones until the track ends.
+   */
+  #generation = 0;
+
   get hasAudio(): boolean {
     return this.#scheduled.length > 0;
   }
@@ -83,6 +95,7 @@ export class AudioEngine {
     options: { fromMs: number; durationMs: number },
   ): Promise<void> {
     this.stop();
+    const generation = this.#generation;
 
     const playable = clips.filter((clip) => media.getAudioBuffer(clip.mediaId) !== null);
     if (playable.length === 0) return;
@@ -90,6 +103,10 @@ export class AudioEngine {
     const ctx = this.#context();
     // Resuming needs a gesture on first use; after that it is a no-op.
     if (ctx.state === 'suspended') await ctx.resume();
+
+    // Superseded while we were suspended — a newer play, or a stop, has taken
+    // over. Scheduling now would be scheduling into someone else's timeline.
+    if (generation !== this.#generation) return;
 
     const master = this.#master;
     if (!master) return;
@@ -133,6 +150,7 @@ export class AudioEngine {
   }
 
   stop(): void {
+    this.#generation += 1;
     if (this.#loopTimer !== null) {
       clearTimeout(this.#loopTimer);
       this.#loopTimer = null;

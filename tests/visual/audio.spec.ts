@@ -381,6 +381,62 @@ test.describe('music follows the timeline (§10)', () => {
   });
 });
 
+test.describe('the transport belongs to the user (§10)', () => {
+  /**
+   * Changing how long the timeline is must not change whether it is playing.
+   *
+   * These are the same defect seen from two sides. The editor re-applied its
+   * opening transport decision — autoplay, or the `?frozen` park — every time
+   * the document's length changed, and the length now changes on every music
+   * gesture that moves the end of the lane.
+   */
+
+  const playing = async (page: Page): Promise<boolean> =>
+    page.evaluate(() => {
+      const handle = (globalThis as unknown as {
+        __motionStudio?: { clock: { playing: () => boolean } };
+      }).__motionStudio;
+      if (!handle) throw new Error('no dev handle');
+      return handle.clock.playing();
+    });
+
+  test('a paused preview stays paused when music changes the length', async ({ page }) => {
+    // No ?frozen: the editor opens playing, as a user finds it.
+    await page.goto('/?template=quick-pitch&aspect=9:16');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+
+    await page.getByRole('button', { name: 'Pause', exact: true }).first().click();
+    expect(await playing(page), 'paused by the user').toBe(false);
+
+    // Forty seconds against a fifteen-second ad, so the lane really does grow.
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    expect(await playing(page), 'still paused after the music landed').toBe(false);
+    await expect(page.getByRole('button', { name: 'Play', exact: true }).first()).toBeVisible();
+  });
+
+  test('a playing preview keeps playing when music changes the length', async ({ page }) => {
+    /*
+     * The mirror image, and the one that made the clock test flaky rather than
+     * failing: a Motion Ad expands asynchronously, so its duration can land
+     * *after* play has been pressed. On a loaded machine that arrived mid
+     * playback and re-parked the transport, which read as the audio clock
+     * having stalled.
+     */
+    await page.goto('/?template=quick-pitch&aspect=9:16&frozen=0');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+
+    await page.getByRole('button', { name: 'Play', exact: true }).first().click();
+    expect(await playing(page)).toBe(true);
+
+    await addMusic(page, LONG_AUDIO_FIXTURE);
+
+    expect(await playing(page), 'the freeze was released by pressing play').toBe(true);
+  });
+});
+
 test.describe('auditioning the whole track (§10)', () => {
   /**
    * Deciding where to cut a piece of music means being able to hear the part
