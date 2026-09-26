@@ -1901,3 +1901,26 @@ is an approximation of "template easing plus user easing", and the right one —
 but it is only used when the nudge actually moves. A constant nudge keeps the
 exact path it had, because approximating something that needs no approximation
 would quietly cost fidelity to every project that never asked for this.
+
+## D-078 — M8 opens a fifth category: Split Frame
+
+§15's M8 asks for 25 templates across at least five categories. The library had
+nine across four, and the gap was not only a count — it had no *comparison*
+layout at all, which is the thing people reach for most: before and after, two
+products, two places.
+
+`split-pair` is the first of the category. Two photographs meeting on a hard
+seam, arriving from opposite edges, with the seam drawn in the accent colour
+rather than implied — two photographs of similar tone read as one badly cropped
+picture without it.
+
+The split follows the frame: side by side where there is width to spare,
+stacked where there is not. A 9:16 frame cut vertically gives two slivers
+nobody can read, and §1.3 requires an aspect change to re-lay-out rather than
+to letterbox.
+
+Type sits over the join on a scrim of its own, because a caption legible on one
+half and lost on the other is the usual way this layout fails. The scrim needed
+an explicit position: a centre-anchored layer with no x/y draws at the origin,
+which is the top-left corner, so the first version put it in the corner and
+left the type with nothing behind it.

@@ -49,7 +49,9 @@ export type TemplateSummary = {
   readonly posterAtMs?: number;
 };
 
-export const CATEGORIES: readonly string[] = ['Story Ads', 'Depth Stage', 'Angle Stage', 'Kinetic Type'];
+export const CATEGORIES: readonly string[] = [
+  'Story Ads', 'Depth Stage', 'Angle Stage', 'Kinetic Type', 'Split Frame',
+];
 
 export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
   {
@@ -135,6 +137,19 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 2, max: 6 },
     blurb: 'A tilted row sweeping past, nearest photo largest.',
+  },
+  {
+    id: 'split-pair',
+    name: 'Split Pair',
+    category: 'Split Frame',
+    kind: 'scene',
+    tier: 'free',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 2, max: 2 },
+    blurb: 'Two photos meeting on a seam — before and after, side by side.',
+    // After the halves have landed and the type has arrived.
+    posterAtMs: 2_000,
   },
   {
     id: 'kinetic-statement',
