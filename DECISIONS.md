@@ -1686,3 +1686,52 @@ rather than guessing, because forwards is not a migration. The v1 → v2 step is
 kept even though no v1 document was ever written — persistence arrived with
 v2 — so the chain stays honest and the mechanism has something real to be
 tested against.
+
+## D-068 — one IndexedDB database per store
+
+`idb-keyval`'s `createStore(db, store)` opens the database at its default
+version and creates only *its* object store in `onupgradeneeded`. Three calls
+against one database name meant the first to open created it at version 1
+holding a single store; the other two then found the database already at
+version 1, their upgrade never ran, and every transaction against them threw
+`NotFoundError`.
+
+The save therefore failed on its first attempt and on every attempt after it.
+The badge read "Not saved" for the whole session and a reload found nothing —
+which is exactly how it was reported. Each store now has its own database,
+which is the library's own convention.
+
+Worth naming the shape of the mistake: the failure was total and immediate, and
+it still shipped, because the work was committed on a green typecheck and a
+green suite that had nothing to say about IndexedDB. The tests added here would
+have caught it in the first minute.
+
+## D-069 — undo has a floor at the document you opened
+
+A project opens as a placeholder and only becomes an ad once its template has
+been fetched and expanded (D-046) — and that expansion was dispatched through
+the ordinary undoable pipeline. So enough presses of ⌘Z walked back *through*
+it and left the editor showing the bare M0 test card, with one scene called
+`__placeholder__`. Reported as "when I use undo, especially on the motion, I
+get into blank page", and keyframing is exactly where it would surface first,
+because it is the feature that has you making several small edits and then
+reconsidering them.
+
+Opening a document is not an edit to it. `setTemplate` now takes
+`asBaseline`, and the initial expansion seals the history behind it, so the
+earliest state undo can reach is the ad as it first appeared. Picking a
+template from the library stays undoable, because that *is* an edit.
+
+## D-070 — the debounce needed a flush
+
+Autosave waits 700ms, which leaves a window where an edit made and a tab closed
+in quick succession is lost. That is the exact promise §13 makes, so the window
+had to be closed: the save now also runs on `visibilitychange` to hidden and on
+`pagehide`.
+
+It is a real fix for a closing tab and it is *not* a substitute for waiting,
+which the tests here have to do explicitly. A programmatic reload tears the
+page down faster than an IndexedDB transaction completes, so a test that edits
+and reloads immediately is testing the teardown race rather than persistence.
+The badge cannot help it decide: it reads "saved" from the previous write while
+the newest change is still inside the debounce.

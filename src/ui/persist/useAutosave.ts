@@ -30,38 +30,32 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
   /** Media already on disk, so a save does not rewrite what it wrote before. */
   const known = useRef(new Set<string>());
 
+  /**
+   * The newest document, readable from a listener that must not re-subscribe.
+   *
+   * The flush below is attached once and has to save whatever is current when
+   * it fires, not whatever was current when it was attached.
+   */
+  const latest = useRef({ project, media });
+  useEffect(() => { latest.current = { project, media }; }, [project, media]);
+
   useEffect(() => {
     if (!enabled) return;
 
     let cancelled = false;
     const timer = setTimeout(() => {
       setState('saving');
-
-      void (async () => {
-        try {
-          /*
-           * The document first.
-           *
-           * It is small, it is what "losing work" actually means, and it can
-           * be written in one transaction. Blobs can take as long as they
-           * like afterwards — a project that reopens with its photographs
-           * still arriving is a far better failure than one that reopens
-           * with the wrong text.
-           */
-          await writeProject({ schemaVersion: SCHEMA_VERSION, project, savedAt: Date.now() });
-          await writeLastOpened(project.id);
-          await persistMedia(media, known.current);
-
-          if (cancelled) return;
-          setState('saved');
-        } catch (error) {
+      void save(latest.current.project, latest.current.media, known.current)
+        .then(() => {
+          if (!cancelled) setState('saved');
+        })
+        .catch((error: unknown) => {
           if (cancelled) return;
           // §16: never silently swallow. The shell shows this as "not saved",
           // which is the one thing the user must not be wrong about.
           console.error('Could not save the project.', error);
           setState('failed');
-        }
-      })();
+        });
     }, DEBOUNCE_MS);
 
     return () => {
@@ -69,6 +63,53 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
       clearTimeout(timer);
     };
   }, [project, media, enabled, setState]);
+
+  /*
+   * Save immediately when the page is being hidden or torn down.
+   *
+   * The debounce leaves a window — edit something and reload within it and the
+   * edit is gone, which is precisely the promise §13 makes and precisely the
+   * failure people never forgive. `visibilitychange` to hidden is the one
+   * event browsers still run work for reliably; `pagehide` is the belt to it.
+   *
+   * Attached once and reading through a ref, because re-subscribing on every
+   * keystroke would be its own kind of waste.
+   */
+  useEffect(() => {
+    if (!enabled) return;
+
+    const flush = (): void => {
+      const { project: current, media: store } = latest.current;
+      void save(current, store, known.current).catch((error: unknown) => {
+        console.error('Could not save the project as the page went away.', error);
+      });
+    };
+
+    const onVisibility = (): void => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [enabled]);
+}
+
+/**
+ * One write.
+ *
+ * The document first: it is small, it is what "losing work" actually means,
+ * and it goes in one transaction. Blobs can take as long as they like
+ * afterwards — a project that reopens with its photographs still arriving is a
+ * far better failure than one that reopens with the wrong text.
+ */
+async function save(project: Project, media: MediaStore, known: Set<string>): Promise<void> {
+  await writeProject({ schemaVersion: SCHEMA_VERSION, project, savedAt: Date.now() });
+  await writeLastOpened(project.id);
+  await persistMedia(media, known);
 }
 
 /**

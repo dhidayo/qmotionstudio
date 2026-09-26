@@ -127,7 +127,23 @@ type EditorState = {
    * Nothing is dispatched until the template has resolved, so there is no
    * window in which the document is invalid.
    */
-  setTemplate: (templateId: string) => void;
+  /**
+   * Picks a template (§8). `asBaseline` marks the *opening* document rather
+   * than an edit — see `sealHistory`.
+   */
+  setTemplate: (templateId: string, options?: { asBaseline?: boolean }) => void;
+
+  /**
+   * Makes the current document the earliest thing undo can reach.
+   *
+   * A project opens as a placeholder and only becomes an ad once the template
+   * has been fetched and expanded, which happens through the ordinary
+   * undoable pipeline. That left the expansion sitting in the history, so
+   * enough presses of ⌘Z walked back *through* it and left the editor showing
+   * the bare M0 test card — which reads, reasonably, as the application having
+   * broken. Opening a document is not an edit to it.
+   */
+  sealHistory: () => void;
   setMode: (mode: ProjectMode) => void;
   setPlayhead: (ms: number) => void;
   togglePlay: () => void;
@@ -350,6 +366,8 @@ export const useEditor = create<EditorState>((set, get) => ({
     });
   },
 
+  sealHistory: () => { set({ history: emptyHistory }); },
+
   endInteraction: () => {
     set((state) => ({ history: sealCoalescing(state.history) }));
   },
@@ -375,7 +393,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setAspect: (aspect) => { get().dispatch(actions.setAspect(aspect)); },
 
-  setTemplate: (templateId) => {
+  setTemplate: (templateId, options) => {
     // Cleared so the inspector does not show the previous template's controls
     // against the new one's document while the fetch is in flight.
     set({ selectedPhoto: 0, template: null, selectedOverlay: null });
@@ -386,12 +404,14 @@ export const useEditor = create<EditorState>((set, get) => ({
           const scenes = await expandAdTemplate(template);
           get().dispatch(actions.applyAdTemplate(scenes, template.id));
           set({ selectedScene: 0 });
+          if (options?.asBaseline === true) get().sealHistory();
           return;
         }
         get().dispatch(actions.setTemplate(templateId, {
           durationMs: template.defaultDurationMs,
           photoSlots: template.photoSlots,
         }));
+        if (options?.asBaseline === true) get().sealHistory();
       })
       .catch((error: unknown) => {
         // §16: a template that will not load is a build mistake, and silently

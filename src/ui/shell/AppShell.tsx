@@ -139,7 +139,7 @@ export function AppShell(): React.JSX.Element {
   const setTemplateById = useEditor((s) => s.setTemplate);
   useEffect(() => {
     const pending = pendingAdTemplateId();
-    if (pending !== null) setTemplateById(pending);
+    if (pending !== null) setTemplateById(pending, { asBaseline: true });
   }, [setTemplateById]);
 
   /**

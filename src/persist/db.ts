@@ -16,11 +16,21 @@ import type { MediaKind } from '@/media/store';
  * of ids, not a pile of blobs.
  */
 
-const DB = 'motion-studio';
-
-const projectStore = createStore(DB, 'projects');
-const mediaStore = createStore(DB, 'media');
-const metaStore = createStore(DB, 'meta');
+/*
+ * One database per store, which is idb-keyval's own convention and not a
+ * stylistic choice.
+ *
+ * `createStore(db, store)` opens the database at its default version and
+ * creates only *its* object store in `onupgradeneeded`. Point three of them at
+ * one database name and the first to open creates it at version 1 holding a
+ * single store; the other two then find the database already at version 1, so
+ * their upgrade never runs and every transaction against them throws
+ * NotFoundError. The symptom is a save that fails forever and a reload that
+ * finds nothing, which is exactly what it did.
+ */
+const projectStore = createStore('motion-studio-projects', 'projects');
+const mediaStore = createStore('motion-studio-media', 'media');
+const metaStore = createStore('motion-studio-meta', 'meta');
 
 /** What a saved project looks like on disk. */
 export type StoredProject = {
