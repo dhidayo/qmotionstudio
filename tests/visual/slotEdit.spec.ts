@@ -57,6 +57,17 @@ async function frameHash(page: Page): Promise<string> {
   });
 }
 
+/**
+ * Moves the playhead.
+ *
+ * Showcase has no timeline — it has the scrub *slider* under the artboard —
+ * so this drives that. The timeline's own click-to-scrub is covered where
+ * there is a timeline to click.
+ */
+async function seek(page: Page, ms: number): Promise<void> {
+  await page.getByLabel('Scrub').fill(String(ms));
+}
+
 /** Scoped: the Photos tab has frame-ratio buttons with the same labels. */
 const aspectButton = (page: Page, label: string) =>
   page.getByRole('group', { name: 'Aspect ratio' }).getByRole('button', { name: label, exact: true });
@@ -324,17 +335,16 @@ test.describe('keyframes on a template element', () => {
     await keyframeSwitch(page).click();
     await expect(chips(page)).toHaveCount(1);
 
-    await page.getByRole('button', { name: 'Set end' }).click();
-    await expect(chips(page)).toHaveCount(2);
-
-    // Move it at the end keyframe …
+    // Move the playhead and drag: the second keyframe is made where the
+    // playhead is, which is the whole interaction.
+    await seek(page, 7_000);
     const atEnd = await boxOf(page);
     await drag(page, centreOf(atEnd), { x: centreOf(atEnd).x - 90, y: centreOf(atEnd).y - 70 });
+    await expect(chips(page)).toHaveCount(2);
 
-    // … and it is somewhere else at the start.
-    await page.getByRole('button', { name: 'Go to start' }).click();
+    await chips(page).first().click();
     const start = centreOf(await boxOf(page));
-    await page.getByRole('button', { name: 'Go to end' }).click();
+    await chips(page).last().click();
     const end = centreOf(await boxOf(page));
 
     /*

@@ -15,9 +15,6 @@ import { Button, EmptyNote, Section, Segmented, Toggle } from './controls';
  * and that belongs in the callers, not here.
  */
 
-/** Keyframes inside this of an end count as being *at* it. */
-const EDGE_MS = 120;
-
 export function KeyframeControls({
   animated,
   times,
@@ -46,15 +43,8 @@ export function KeyframeControls({
   onRemove: (atMs: number) => void;
   onGoTo: (atMs: number) => void;
 }): React.JSX.Element {
-  // The last moment the element is actually drawn. A layer's range is
-  // half-open, so the exact end is the first instant it is gone — sending the
-  // playhead there gives a keyframe with nothing on screen to drag.
-  const lastMs = Math.max(0, spanMs - 1);
   const withinClip = localMs >= 0 && localMs <= spanMs;
   const atIndex = times.findIndex((at) => Math.abs(at - localMs) <= 60);
-
-  const hasStart = times.some((at) => at <= EDGE_MS);
-  const hasEnd = times.some((at) => at >= lastMs - EDGE_MS);
 
   return (
     <Section title="Keyframes">
@@ -65,24 +55,40 @@ export function KeyframeControls({
       {animated && (
         <>
           {/*
-            * Start and end as named buttons. "Move the playhead and drag" is
-            * the general mechanism and is not what anyone asks for first —
-            * they ask to say where a thing begins and where it ends. Each
-            * button goes to that moment *and* keys it, so the artboard is
-            * showing the frame being defined.
+            * One action: put a keyframe where the playhead is.
+            *
+            * This replaced a pair of buttons called "Set start" and "Set end",
+            * which decided the times themselves — start meant zero and end
+            * meant the end of the scene, wherever the playhead happened to be.
+            * That is backwards. Moving the playhead *is* how you choose when
+            * something happens, and a keyframe is a note about that moment;
+            * anything that overrides the choice you just made with the scrubber
+            * is going to read as the tool not listening.
             */}
           <div className="mt-2 flex gap-1.5">
-            <Button onClick={() => { onGoTo(0); onAdd(0); }}>
-              {hasStart ? 'Go to start' : 'Set start'}
+            <Button
+              onClick={() => { onAdd(localMs); }}
+              disabled={atIndex >= 0 || !withinClip}
+            >
+              Add keyframe here
             </Button>
-            <Button onClick={() => { onGoTo(lastMs); onAdd(lastMs); }}>
-              {hasEnd ? 'Go to end' : 'Set end'}
+            <Button
+              variant="danger"
+              onClick={() => { onRemove(localMs); }}
+              disabled={atIndex < 0}
+            >
+              Remove
             </Button>
           </div>
 
           <EmptyNote>
-            With a start and an end set, move it while the playhead sits on one of them.
-            Anywhere else, dragging adds a keyframe of its own.
+            {times.length === 0
+              ? 'Move the playhead to where you want the motion to begin, then add a keyframe.'
+              : times.length === 1
+                ? 'One so far. Move the playhead to where the motion should end, drag the element '
+                  + 'there, and a second keyframe is made for you.'
+                : 'Drag the element while the playhead sits on a keyframe to change it. Anywhere '
+                  + 'else, dragging adds a new one.'}
           </EmptyNote>
 
           <p className="mt-2.5 mb-1 text-[10px] uppercase tracking-wide text-ink-faint">
@@ -117,12 +123,6 @@ export function KeyframeControls({
                 </button>
               </span>
             ))}
-          </div>
-
-          <div className="mt-2 flex gap-1.5">
-            <Button onClick={() => { onAdd(localMs); }} disabled={atIndex >= 0 || !withinClip}>
-              Add at playhead
-            </Button>
           </div>
 
           {!withinClip && (

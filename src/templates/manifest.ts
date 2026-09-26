@@ -152,6 +152,19 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     posterAtMs: 2_000,
   },
   {
+    id: 'split-grid',
+    name: 'Contact Sheet',
+    category: 'Split Frame',
+    kind: 'scene',
+    tier: 'free',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 3, max: 9 },
+    blurb: 'Photos assembling into a grid, one beat after another.',
+    // Once the sheet has filled.
+    posterAtMs: 2_600,
+  },
+  {
     id: 'kinetic-statement',
     name: 'Statement',
     category: 'Kinetic Type',

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Overlay } from '@/document/types';
-import { sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
+import {
+  sceneSpans, timelineSpanMs, totalDurationMs, type SceneSpan,
+} from '@/document/select/timeline';
 import { DEFAULT_OVERLAY_MS, DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } from '@/document/defaults';
 import * as actions from '@/document/actions';
 import { isAnimated, posesOf } from '@/document/select/overlay';
+import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
 import { useEditor } from '@/state/store';
 import { setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
@@ -71,10 +74,11 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
     const handle = setInterval(() => {
       setTimeMs(clock.timeMs);
       setPlaying(clock.playing);
-      setPlayhead(clock.timeMs);
+      // The shell publishes the playhead for the whole application; this
+      // interval is only the readout's own.
     }, 1000 / READOUT_HZ);
     return () => { clearInterval(handle); };
-  }, [clock, setPlayhead]);
+  }, [clock]);
 
   const laneRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<ClipDrag | null>(null);
@@ -119,6 +123,31 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
      */
     setPlayhead(clock.timeMs);
   }, [clock, laneMs, setPlayhead]);
+
+  /**
+   * Scrubbing from the lane background.
+   *
+   * Separate from the ruler's handlers only because the ruler captures the
+   * pointer for a continuous drag; here a press is a jump and a drag scrubs,
+   * which is what a click on a track is for.
+   */
+  const onLaneDown = (event: React.PointerEvent<HTMLDivElement>): void => {
+    // Only the background. A press that started on a clip has already been
+    // stopped, and one on a control inside a lane is not a scrub either.
+    if (event.target !== event.currentTarget && !(event.target as HTMLElement).dataset['lane']) {
+      return;
+    }
+    capturePointer(event.currentTarget, event.pointerId);
+    scrubTo(event.clientX);
+  };
+
+  const onLaneMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    if (event.buttons === 0) return;
+    if (event.target !== event.currentTarget && !(event.target as HTMLElement).dataset['lane']) {
+      return;
+    }
+    scrubTo(event.clientX);
+  };
 
   const onRulerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     capturePointer(event.currentTarget, event.pointerId);
@@ -377,7 +406,26 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           <Gutter>Music</Gutter>
         </div>
 
-        <div ref={laneRef} className="relative min-w-0 flex-1">
+        <div
+          ref={laneRef}
+          className="relative min-w-0 flex-1"
+          /*
+           * Clicking anywhere on the timeline moves the playhead.
+           *
+           * It used to be the thin ruler strip alone, which is a five-pixel
+           * target you have to know about — and everywhere else, a click did
+           * nothing at all. Every editor people have used moves the playhead
+           * when you click the timeline, and looking for a way to do the
+           * obvious thing is exactly the sort of friction that makes a tool
+           * feel like it is hiding something.
+           *
+           * Clips stop the event themselves (`beginClipDrag` calls
+           * stopPropagation), so dragging a scene or a music clip still does
+           * what it did; this only catches the empty space around them.
+           */
+          onPointerDown={onLaneDown}
+          onPointerMove={onLaneMove}
+        >
           {/* Ruler, which is also the scrub surface. */}
           <div
             className="relative h-5 cursor-ew-resize border-b border-edge"
@@ -416,7 +464,8 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
           {/* Scene track. Clip widths come from the spans, so a transition
               overlap is visible as two clips that touch rather than a gap. */}
-          <div className="relative h-9 border-b border-edge">
+          <div className="relative h-9 border-b border-edge" data-lane>
+            <SlotKeyframeMarks spans={spans} durationMs={durationMs} />
             {spans.map((span) => {
               const active = span.index === selectedScene && selectedOverlay === null;
               return (
@@ -631,6 +680,58 @@ function Keyframes({
           style={{
             left: `${Math.min(100, Math.max(0, (pose.atMs / span) * 100))}%`,
             background: active ? 'var(--c-accent)' : 'var(--c-ink-faint)',
+            borderColor: 'var(--c-panel)',
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+/**
+ * Keyframe diamonds for the selected template element, on the scene track.
+ *
+ * An overlay's keyframes sit on its own clip, which is where anyone would look
+ * for them. A template photo has no clip of its own — it belongs to a scene —
+ * so its keyframes belong on the scene it is part of. Without them the only
+ * evidence that a photo was animated lived in the inspector, and the timeline
+ * is where people look to see *when* anything happens.
+ */
+function SlotKeyframeMarks({
+  spans,
+  durationMs,
+}: {
+  spans: readonly SceneSpan[];
+  durationMs: number;
+}): React.JSX.Element | null {
+  const selectedSlot = useEditor((s) => s.selectedSlot);
+  const selectedScene = useEditor((s) => s.selectedScene);
+  const transform = useEditor((s) =>
+    selectedSlot === null
+      ? undefined
+      : s.project.scenes[s.selectedScene]?.inputs.slotTransforms[selectedSlot],
+  );
+
+  if (selectedSlot === null || !transform || !hasNudgePoses(transform)) return null;
+
+  const span = spans[selectedScene];
+  if (!span) return null;
+
+  // Scene time back to project time: poses are stored after §8.4's speed
+  // remap, so undoing it is what puts the mark under the moment it applies to.
+  const speed = span.scene.inputs.look.speed;
+
+  return (
+    <>
+      {nudgePoses(transform).map((pose) => (
+        <span
+          key={pose.atMs}
+          aria-hidden
+          data-slot-keyframe={Math.round(pose.atMs)}
+          className="pointer-events-none absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border"
+          style={{
+            left: `${msToPct(span.startMs + (speed === 0 ? pose.atMs : pose.atMs / speed), durationMs)}%`,
+            background: 'var(--c-accent)',
             borderColor: 'var(--c-panel)',
           }}
         />

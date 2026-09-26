@@ -224,23 +224,41 @@ test.describe('naming what it does', () => {
     await expect(page.getByText('A keyframe records where this overlay is')).toBeVisible();
   });
 
-  test('sets a start and an end by name, and travels between them', async ({ page }) => {
+  test('the playhead decides where a keyframe goes', async ({ page }) => {
+    /*
+     * The flow the buttons used to fight. There were two of them, "Set start"
+     * and "Set end", which chose the times themselves — start meant zero and
+     * end meant the end of the clip, wherever the playhead actually was. The
+     * scrubber is how someone says *when*; a control that overrides that reads
+     * as the tool not listening.
+     */
+    await overlayProject(page);
+    await movementSwitch(page).click();
+    await expect(chips(page)).toHaveCount(1);
+
+    await seek(page, 3_600);
+    await page.getByRole('button', { name: 'Add keyframe here' }).click();
+
+    // 3600 project − 1600 overlay start = 2.0s in the overlay's own time.
+    await expect(chips(page)).toHaveCount(2);
+    await expect(chips(page).last()).toHaveText('2.0s');
+  });
+
+  test('two keyframes make it travel between them', async ({ page }) => {
     await overlayProject(page);
     await movementSwitch(page).click();
 
-    // "Set end" goes to the end of the clip and keys it there, so the frame
-    // being defined is the one on screen.
-    await page.getByRole('button', { name: 'Set end' }).click();
-    await expect(chips(page)).toHaveCount(2);
-
+    await seek(page, 4_400);
     const box = await boxOf(page);
     await drag(page, centreOf(box), { x: centreOf(box).x + 120, y: centreOf(box).y + 80 });
+    await expect(chips(page)).toHaveCount(2);
 
-    // Both ends are now named and reachable.
-    await page.getByRole('button', { name: 'Go to start' }).click();
+    // Both ends are reachable from the list, which is the only place times are
+    // named now.
+    await chips(page).first().click();
     const start = centreOf(await boxOf(page));
 
-    await page.getByRole('button', { name: 'Go to end' }).click();
+    await chips(page).last().click();
     const end = centreOf(await boxOf(page));
 
     expect(end.x).toBeGreaterThan(start.x + 80);
@@ -250,7 +268,8 @@ test.describe('naming what it does', () => {
   test('each keyframe is listed with its time, and jumps the playhead', async ({ page }) => {
     await overlayProject(page);
     await movementSwitch(page).click();
-    await page.getByRole('button', { name: 'Set end' }).click();
+    await seek(page, 3_600);
+    await page.getByRole('button', { name: 'Add keyframe here' }).click();
 
     await expect(chips(page)).toHaveCount(2);
     await expect(chips(page).first()).toHaveText('0.0s');

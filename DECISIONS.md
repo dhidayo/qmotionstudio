@@ -1924,3 +1924,43 @@ half and lost on the other is the usual way this layout fails. The scrim needed
 an explicit position: a centre-anchored layer with no x/y draws at the origin,
 which is the top-left corner, so the first version put it in the corner and
 left the type with nothing behind it.
+
+## D-079 — the playhead decides where a keyframe goes
+
+"Set start" and "Set end" were wrong, and reported as wrong: they chose the
+times themselves — start meant zero, end meant the end of the clip — wherever
+the playhead actually was. Moving the scrubber *is* how someone says when
+something happens, and a control that overrides the choice they just made
+reads as the tool not listening.
+
+One action now: **Add keyframe here**, at the playhead, with **Remove** for the
+one under it. The hint below changes with the count, so the second keyframe —
+the one that turns a pose into motion — is asked for rather than assumed.
+
+**Keyframes show on the timeline.** An overlay's sit on its own clip, which is
+where anyone would look. A template photo has no clip of its own, so its
+keyframes now mark the scene track it belongs to. Without that the only
+evidence anything was animated lived in a panel.
+
+## D-080 — clicking the timeline moves the playhead
+
+It used to be the ruler strip alone: a five-pixel target you have to know
+about, with every other part of the timeline inert. Reported as "I keep looking
+for ways to bring the playhead to current location", which is the right
+complaint — every editor anyone has used scrubs when you click its timeline.
+
+Clips stop the event themselves, so dragging a scene or a music clip is
+unchanged; this catches the space around them.
+
+## D-081 — the playhead is published by the shell, not by the timeline
+
+Found while fixing the above, and worse than either. The published playhead was
+sampled by the Timeline's own interval — and the Timeline only exists in Motion
+Ads. In Showcase it therefore never moved off zero, so everything that *acts*
+on the playhead was silently wrong there: a keyframe added at four seconds was
+recorded at zero, and the canvas believed the element had not moved.
+
+The playhead is a property of the application, not of one panel that happens to
+draw it. The shell publishes it now, at the same 20Hz, and the timeline keeps
+only its own readout. The artboard still reads the clock directly every frame
+(§3A) and is unaffected.

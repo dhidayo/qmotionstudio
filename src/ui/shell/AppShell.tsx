@@ -80,6 +80,24 @@ export function AppShell(): React.JSX.Element {
 
   useEffect(() => { clock.setDuration(duration); }, [clock, duration]);
 
+  /*
+   * Publish the playhead, wherever the transport happens to be.
+   *
+   * This used to live in the Timeline, which only exists in Motion Ads — so in
+   * Showcase the published playhead never moved off zero, and everything that
+   * reads it was quietly wrong: a keyframe added at four seconds was recorded
+   * at zero, and the canvas believed nothing had moved. The playhead is a
+   * property of the application, not of one panel that happens to draw it.
+   *
+   * 20Hz, because this is for chrome that displays or acts on the time; the
+   * artboard reads the clock directly every frame (§3A).
+   */
+  const setPlayhead = useEditor((s) => s.setPlayhead);
+  useEffect(() => {
+    const handle = setInterval(() => { setPlayhead(clock.timeMs); }, 50);
+    return () => { clearInterval(handle); };
+  }, [clock, setPlayhead]);
+
 
 
   /**
