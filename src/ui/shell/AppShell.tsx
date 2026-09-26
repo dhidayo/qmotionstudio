@@ -10,6 +10,8 @@ import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { pendingAdTemplateId, useEditor } from '@/state/store';
 import { timelineSpanMs } from '@/document/select/timeline';
 import { MediaProvider } from '@/ui/media/MediaProvider';
+import { watermarked } from '@/entitlements';
+import { ClockProvider } from './ClockProvider';
 import { MediaStore } from '@/media/store';
 import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
 import { loadTemplate } from '@/templates/registry';
@@ -46,9 +48,36 @@ export function AppShell(): React.JSX.Element {
   // Created empty on purpose: duration is owned by the effect below, so the
   // clock never needs rebuilding when the document's length changes.
   const clock = useMemo(() => new PreviewClock(0), []);
-  const rig = useMemo(() => createRenderRig(media), [media]);
+  /*
+   * §12's watermark, on the preview as well as on the export.
+   *
+   * Showing it only at export would be a nasty surprise at exactly the wrong
+   * moment. The rig asks the entitlements module each frame rather than being
+   * handed a value, so the rig is built once and still follows a tier change
+   * immediately — rebuilding it would throw away every cache over a toggle.
+   */
+  const rig = useMemo(
+    () =>
+      createRenderRig(media, () => {
+        /*
+         * Not on a capture or a fixture.
+         *
+         * `?thumb=` is the thumbnail job photographing a template for the
+         * library, and `?scene=` is a render-core fixture. Neither is a
+         * document somebody is making, so neither should carry a mark that
+         * says a free user made it — a watermarked template thumbnail would
+         * be advertising the limitation rather than the template.
+         */
+        const params = renderParams();
+        if (params.thumbShortEdge !== null || params.scene !== null) return false;
+        return watermarked();
+      }),
+    [media],
+  );
 
   useEffect(() => { clock.setDuration(duration); }, [clock, duration]);
+
+
 
   /**
    * `?frozen=<ms>` parks the playhead at an exact time instead of playing.
@@ -253,6 +282,7 @@ export function AppShell(): React.JSX.Element {
 
   return (
     <MediaProvider store={media}>
+      <ClockProvider clock={clock}>
       <div className="flex h-full min-h-0 flex-1">
         <LibraryRail />
         <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
@@ -266,6 +296,7 @@ export function AppShell(): React.JSX.Element {
       </div>
       {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
       <Toast message={toast} onDone={() => { setToast(null); }} />
+      </ClockProvider>
     </MediaProvider>
   );
 }

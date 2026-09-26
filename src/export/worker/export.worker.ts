@@ -119,7 +119,8 @@ async function run(request: ExportRequest): Promise<void> {
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Export: could not acquire a 2D context in the worker.');
 
-    rig = createRenderRig(media);
+    // §12, from the request rather than from any ambient state in the worker.
+    rig = createRenderRig(media, () => request.watermark);
     const output = makeOutput(request.settings);
     const source = new CanvasSource(canvas, {
       codec: VIDEO_CODEC[request.settings.format],

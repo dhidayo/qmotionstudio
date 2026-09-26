@@ -88,6 +88,20 @@ export type RenderRig = {
    * here, because it changes every frame and the editor already knows it.
    */
   drawn: DrawnScene | null;
+  /**
+   * §12: "free exports carry a small watermark".
+   *
+   * Part of the rig rather than read from the entitlements module inside the
+   * renderer, so `renderFrame` stays a function of (project, time, rig) —
+   * D-001's whole premise — and so the export path can state it explicitly
+   * from the request rather than inheriting whatever the main thread happens
+   * to think the tier is.
+   *
+   * A function rather than a field because the tier can change under a running
+   * preview, and a rig is built once: this is the one thing about it that is
+   * read fresh each frame.
+   */
+  readonly watermark: () => boolean;
 };
 
 /** What `renderFrame` last drew for the scene under the playhead. */
@@ -98,7 +112,10 @@ export type DrawnScene = {
   readonly design: { readonly w: number; readonly h: number };
 };
 
-export function createRenderRig(media: MediaResolver = EMPTY_MEDIA): RenderRig {
+export function createRenderRig(
+  media: MediaResolver = EMPTY_MEDIA,
+  watermark: () => boolean = () => false,
+): RenderRig {
   return {
     buffers: new BufferPool(),
     layerCache: new Map(),
@@ -107,6 +124,7 @@ export function createRenderRig(media: MediaResolver = EMPTY_MEDIA): RenderRig {
     textCache: new Map(),
     media,
     drawn: null,
+    watermark,
     stats: { frameCount: 0, lastFrameMs: 0, lastBuildMs: 0, buildCount: 0 },
   };
 }

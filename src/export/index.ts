@@ -80,9 +80,11 @@ export function startExport(options: {
   project: Project;
   settings: ExportSettings;
   media: MediaStore;
+  /** §12. Passed in rather than read here: entitlements are a UI concern. */
+  watermark: boolean;
   onProgress: (progress: ExportProgress) => void;
 }): ExportHandle {
-  const { project, settings, media, onProgress } = options;
+  const { project, settings, media, watermark, onProgress } = options;
 
   if (!canUseOfflineExport()) {
     if (!canUseRealtimeExport()) {
@@ -192,6 +194,7 @@ export function startExport(options: {
         settings,
         size,
         durationMs,
+        watermark,
         media: usedMedia,
         ...(mix === null ? {} : { audio: mix }),
       };

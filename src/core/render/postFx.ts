@@ -92,3 +92,37 @@ export function drawVignette(ctx: Ctx2D, design: Size, amount: number): void {
   ctx.fillRect(0, 0, design.w, design.h);
   ctx.restore();
 }
+
+/**
+ * §12's free-tier watermark, and §6.4's step 5.
+ *
+ * Small, in the corner, inside the safe area so it survives a crop, and drawn
+ * in the project's own design units so it is the same size relative to the
+ * frame at every aspect and every export resolution.
+ *
+ * Deliberately legible rather than subtle. A watermark that has to be hunted
+ * for is not doing its job, and one that ruins the picture makes the free tier
+ * feel like a punishment rather than a sample.
+ */
+export function drawWatermark(ctx: Ctx2D, design: Size): void {
+  const unit = Math.min(design.w, design.h);
+  const size = unit * 0.026;
+  const pad = unit * 0.045;
+
+  ctx.save();
+  ctx.font = `600 ${size}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'alphabetic';
+
+  const text = 'Made with Motion Studio';
+  const x = design.w - pad;
+  const y = design.h - pad;
+
+  // A soft shadow rather than a plate behind it: the mark has to read on a
+  // bright sky and on a black frame, and a box would be the louder of the two.
+  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  ctx.shadowBlur = size * 0.7;
+  ctx.fillStyle = 'rgba(255,255,255,0.86)';
+  ctx.fillText(text, x, y);
+  ctx.restore();
+}

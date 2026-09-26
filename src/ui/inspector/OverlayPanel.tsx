@@ -2,7 +2,8 @@ import type { AnimPreset, TextStyle } from '@/document/types';
 import * as actions from '@/document/actions';
 import { ANIM_PRESETS } from '@/core/render/overlays';
 import { useEditor, useSelectedOverlay } from '@/state/store';
-import { isAnimated, poseAt, poseIndexAt, posesOf } from '@/document/select/overlay';
+import { isAnimated, poseAt } from '@/document/select/overlay';
+import { Keyframes } from './Keyframes';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from './controls';
 
@@ -47,9 +48,6 @@ export function OverlayPanel(): React.JSX.Element {
    */
   const localMs = Math.round(playheadMs - overlay.startMs);
   const animated = isAnimated(overlay);
-  const poses = posesOf(overlay);
-  const withinClip = localMs >= 0 && localMs <= overlay.endMs - overlay.startMs;
-  const onKeyframe = poseIndexAt(overlay, localMs, actions.POSE_TOLERANCE_MS) >= 0;
   /*
    * On an animated overlay the sliders edit the pose under the playhead, the
    * same as dragging does.
@@ -112,84 +110,9 @@ export function OverlayPanel(): React.JSX.Element {
         </Section>
       )}
 
+      <Keyframes overlay={overlay} />
+
       <Section title="Placement">
-        {/*
-          * Movement lives here rather than in a section of its own.
-          *
-          * Where something is and where it is *over time* are one question,
-          * and splitting them put the keyframe controls eleven hundred pixels
-          * down the panel under a heading — "Movement" — that sat directly
-          * below another one called "Motion". Nobody was going to find that.
-          */}
-        {/*
-          * Off by default, and one switch away.
-          *
-          * Keyframes are the feature most likely to make this app feel
-          * complicated, so anyone who does not want them never meets them: an
-          * overlay with no path behaves exactly as it did before this existed.
-          */}
-        <Toggle
-          checked={animated}
-          onChange={(on) => { dispatch(actions.setOverlayAnimated(id, on, localMs)); }}
-          label="Animate movement"
-        />
-
-        {!animated && (
-          <EmptyNote>
-            Turn this on, then move the playhead and drag the overlay. Each time you do, its
-            position at that moment is remembered.
-          </EmptyNote>
-        )}
-
-        {animated && (
-          <>
-            <p className="tabular mt-2 text-[11px] text-ink-muted">
-              {poses.length === 1 ? '1 keyframe' : `${poses.length} keyframes`}
-              {onKeyframe ? ' · playhead is on one' : ''}
-            </p>
-
-            <div className="mt-2 flex gap-1.5">
-              <Button
-                onClick={() => { dispatch(actions.setOverlayPose(id, localMs, {})); }}
-                disabled={onKeyframe || !withinClip}
-              >
-                Add keyframe here
-              </Button>
-              <Button
-                variant="danger"
-                onClick={() => { dispatch(actions.removeOverlayPose(id, localMs)); }}
-                disabled={!onKeyframe}
-              >
-                Remove
-              </Button>
-            </div>
-
-            {!withinClip && (
-              <EmptyNote>Move the playhead inside this clip to add a keyframe.</EmptyNote>
-            )}
-
-            {/*
-              * One easing for the whole overlay, not one per keyframe. A curve
-              * editor is the point where a motion tool starts needing to be
-              * taught, and three named choices cover what anyone actually
-              * reaches for.
-              */}
-            <div className="mt-2.5">
-              <Segmented
-                value={overlay.easing ?? 'smooth'}
-                options={[
-                  { value: 'smooth' as const, label: 'Smooth' },
-                  { value: 'linear' as const, label: 'Even' },
-                  { value: 'springy' as const, label: 'Springy' },
-                ]}
-                onChange={(easing) => { dispatch(actions.setOverlayEasing(id, easing)); }}
-                label="Between keyframes"
-                columns={3}
-              />
-            </div>
-          </>
-        )}
-
         {/* Normalised, so an overlay stays where it was put when the aspect
             changes (D-044). Percentages are what the user sees. */}
         <Slider

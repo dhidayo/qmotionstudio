@@ -53,6 +53,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
       project,
       settings,
       media,
+      watermark: limits.watermark,
       onProgress: (progress) => { setPhase({ kind: 'running', progress }); },
     });
     handle.current = started;
@@ -77,7 +78,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
         setPhase({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
       })
       .finally(() => { handle.current = null; });
-  }, [project, settings, media, totalFrames]);
+  }, [project, settings, media, totalFrames, limits.watermark]);
 
   useEffect(() => () => { handle.current?.cancel(); }, []);
 

@@ -67,8 +67,10 @@ async function overlayProject(page: Page): Promise<void> {
 
 const diamonds = (page: Page) => page.locator('[data-keyframe]');
 
-/** The Movement toggle renders as a switch with its label as text. */
-const movementSwitch = (page: Page) => page.getByRole('switch', { name: 'Animate movement' });
+/** The Keyframes toggle renders as a switch with its label as text. */
+const movementSwitch = (page: Page) => page.getByRole('switch', { name: 'Use keyframes' });
+
+const chips = (page: Page) => page.locator('[data-keyframe-chip]');
 
 test.describe('overlay keyframes', () => {
   test('are off until asked for, and start from where the overlay already is', async ({ page }) => {
@@ -79,7 +81,7 @@ test.describe('overlay keyframes', () => {
     await movementSwitch(page).click();
 
     // One keyframe is the same picture as none: nothing may move.
-    await expect(page.getByText('1 keyframe', { exact: false })).toBeVisible();
+    await expect(chips(page)).toHaveCount(1);
     await expect(diamonds(page)).toHaveCount(1);
 
     const after = await boxOf(page);
@@ -133,13 +135,13 @@ test.describe('overlay keyframes', () => {
     await expect(diamonds(page)).toHaveCount(2);
 
     // The playhead is on the keyframe just written, so Remove is live.
-    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    // Each keyframe carries its own remove button, labelled with its time.
+    await page.getByRole('button', { name: /^Remove the keyframe at/ }).last().click();
     await expect(diamonds(page)).toHaveCount(1);
 
-    await seek(page, 1_600);
-    await page.getByRole('button', { name: 'Remove', exact: true }).click();
+    await page.getByRole('button', { name: /^Remove the keyframe at/ }).first().click();
     await expect(diamonds(page)).toHaveCount(0);
-    await expect(page.getByText('Turn this on, then move the playhead')).toBeVisible();
+    await expect(page.getByText('A keyframe records where this overlay is')).toBeVisible();
   });
 
   test('turning movement off leaves it where the playhead showed it', async ({ page }) => {
@@ -206,5 +208,56 @@ test.describe('seeing the motion', () => {
 
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-motion-path]')).toHaveCount(0);
+  });
+});
+
+test.describe('naming what it does', () => {
+  test('says "keyframes" before anything is turned on', async ({ page }) => {
+    /*
+     * Reported as "nothing on the UI says keyframe, no place to add it or
+     * define keyframe start and keyframe end". The word only appeared *after*
+     * flipping a switch called "Animate movement", so anyone looking for
+     * keyframes found nothing at all.
+     */
+    await overlayProject(page);
+    await expect(page.getByText('Keyframes', { exact: true })).toBeVisible();
+    await expect(page.getByText('A keyframe records where this overlay is')).toBeVisible();
+  });
+
+  test('sets a start and an end by name, and travels between them', async ({ page }) => {
+    await overlayProject(page);
+    await movementSwitch(page).click();
+
+    // "Set end" goes to the end of the clip and keys it there, so the frame
+    // being defined is the one on screen.
+    await page.getByRole('button', { name: 'Set end' }).click();
+    await expect(chips(page)).toHaveCount(2);
+
+    const box = await boxOf(page);
+    await drag(page, centreOf(box), { x: centreOf(box).x + 120, y: centreOf(box).y + 80 });
+
+    // Both ends are now named and reachable.
+    await page.getByRole('button', { name: 'Go to start' }).click();
+    const start = centreOf(await boxOf(page));
+
+    await page.getByRole('button', { name: 'Go to end' }).click();
+    const end = centreOf(await boxOf(page));
+
+    expect(end.x).toBeGreaterThan(start.x + 80);
+    expect(end.y).toBeGreaterThan(start.y + 50);
+  });
+
+  test('each keyframe is listed with its time, and jumps the playhead', async ({ page }) => {
+    await overlayProject(page);
+    await movementSwitch(page).click();
+    await page.getByRole('button', { name: 'Set end' }).click();
+
+    await expect(chips(page)).toHaveCount(2);
+    await expect(chips(page).first()).toHaveText('0.0s');
+
+    // The chip for the moment the playhead is on is the current one.
+    await expect(chips(page).last()).toHaveAttribute('aria-current', 'true');
+    await chips(page).first().click();
+    await expect(chips(page).first()).toHaveAttribute('aria-current', 'true');
   });
 });

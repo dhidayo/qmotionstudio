@@ -733,6 +733,47 @@ export function moveScene(from: number, to: number): Action {
   };
 }
 
+/**
+ * Drops whatever does not fit inside the free tier's cap (§12).
+ *
+ * The spec's own words for the offer: "remove this scene to keep working with
+ * the first 15 seconds" — so afterwards the project has to actually *be*
+ * inside the cap. Keeping the scene that straddles it left the piece over
+ * length and the banner still up, which makes the button look broken.
+ *
+ * At least one scene always survives, because a project without one has
+ * nothing to render, and a single scene longer than the cap is the user's own
+ * to shorten.
+ */
+export function trimToLimit(maxDurationMs: number): Action {
+  return {
+    label: 'Remove the scenes past the limit',
+    apply: (project) => {
+      const kept: Scene[] = [];
+      let elapsed = 0;
+
+      for (const scene of project.scenes) {
+        // D-004: a transition overlaps its neighbours, so it does not add time.
+        const next = elapsed + scene.durationMs - (scene.transitionIn?.durationMs ?? 0);
+        if (kept.length > 0 && next > maxDurationMs) break;
+        kept.push(scene);
+        elapsed = next;
+      }
+
+      if (kept.length === project.scenes.length) return project;
+
+      // The first scene never carries a transition (D-004).
+      const first = kept[0];
+      const scenes = first ? [{ ...first, transitionIn: null }, ...kept.slice(1)] : kept;
+      return {
+        ...project,
+        scenes,
+        overlays: project.overlays.filter((overlay) => overlay.startMs < maxDurationMs),
+      };
+    },
+  };
+}
+
 export function setSceneTransition(index: number, patch: Partial<Transition>): Action {
   return {
     label: 'Change transition',

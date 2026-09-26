@@ -8,7 +8,7 @@ import { peekTemplate } from '@/templates/registry';
 import { structureKey } from '@/templates/schema';
 import { buildDemoScene } from '@/templates/_demo/demoScene';
 import { drawLayer, drawLayers } from './drawLayer';
-import { drawGrain, drawVignette } from './postFx';
+import { drawGrain, drawVignette, drawWatermark } from './postFx';
 import { drawPlaceholderFrame } from './placeholder';
 import { overlayKey, overlayLayer } from './overlays';
 import { applySlotTransforms, hasSlotTransforms, slotTransformKey } from './slots';
@@ -106,10 +106,12 @@ export function renderFrame(
   ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
   drawOverlays(dc, project.overlays, globalTimeMs, rig, vp);
 
-  //  5. Frame post-effects and, at M7, the free-tier watermark. Grain and
-  //     vignette belong to the scene's look, so they are applied per scene
-  //     inside drawScene — a crossfade between two looks has to blend them,
-  //     not apply the incoming one to both.
+  //  5. Frame post-effects. Grain and vignette belong to the scene's look, so
+  //     they are applied per scene inside drawScene — a crossfade between two
+  //     looks has to blend them, not apply the incoming one to both. The
+  //     watermark belongs to the *frame*, and goes over everything including
+  //     the overlays, or it would be something a user could cover up.
+  if (rig.watermark()) drawWatermark(ctx, vp.design);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 

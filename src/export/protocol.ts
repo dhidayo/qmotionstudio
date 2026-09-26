@@ -16,6 +16,8 @@ export type ExportRequest = {
   readonly settings: ExportSettings;
   readonly size: Size;
   readonly durationMs: number;
+  /** §12. Decided on the main thread, where the tier lives, and sent. */
+  readonly watermark: boolean;
   /** mediaId → source blob. */
   readonly media: readonly (readonly [string, Blob])[];
   /**

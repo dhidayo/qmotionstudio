@@ -1735,3 +1735,67 @@ page down faster than an IndexedDB transaction completes, so a test that edits
 and reloads immediately is testing the teardown race rather than persistence.
 The badge cannot help it decide: it reads "saved" from the previous write while
 the newest change is still inside the debounce.
+
+## D-071 — keyframes had to say "keyframe"
+
+Reported as "nothing on the UI says keyframe, no place to add it or define
+keyframe start and keyframe end". Both halves were true. The word appeared only
+*after* flipping a switch called "Animate movement", so anyone hunting for
+keyframes found nothing at all, and the only way to make one was the general
+mechanism — move the playhead, drag — which is not what people ask for first.
+They ask to say where a thing starts and where it ends.
+
+So: a **Keyframes** section, named, above Placement, explaining what a keyframe
+is before anything is turned on. **Set start** and **Set end** buttons that go
+to that moment *and* key it, so the frame being defined is the one on screen. A
+**list of keyframes with their times**, each one a button that jumps the
+playhead to it and carries its own remove. The general mechanism still works
+and is now the third way in rather than the only one.
+
+"Set end" keys `span - 1`, not `span`. A layer's time range is half-open
+(`timeMs < endMs`), so the exact end is the first instant the overlay is *gone*
+— the keyframe was real and there was no object on screen to drag.
+
+**Navigating publishes the playhead**, for the reason D-064 gave: everything
+that acts on it reads the published value, which the readout only refreshes at
+20Hz. Leaving that to catch up meant a drag straight after "Set end" wrote its
+keyframe at the time the playhead used to be, so both ends of the motion
+quietly became the same pose. It failed two runs in three before the fix.
+
+## D-072 — the watermark is a property of the rig, not of the renderer
+
+§12 gives the free tier a watermark and §6.4 draws it at step 5. The renderer
+cannot ask a React hook (D-001) and must not read ambient state, or it stops
+being a function of (project, time, rig).
+
+So the rig carries an accessor. The preview's asks the entitlements module each
+frame, which is what lets the dev toggle take effect without rebuilding the rig
+and discarding every cache; the export worker's returns the flag the *request*
+carried, so an export states its own tier rather than inheriting whatever the
+main thread believed.
+
+It is suppressed for `?thumb=` and `?scene=`. A thumbnail job photographing a
+template for the library, and a render-core fixture, are not documents anybody
+is making — and a watermarked template thumbnail would be advertising the
+limitation rather than the template.
+
+Shown on the preview, not only at export: finding out at export time that the
+picture has a mark on it is the worst possible moment to learn it.
+
+## D-073 — the duration cap offers both doors
+
+§12 asks for the inline upsell to offer either upgrade or "remove this scene to
+keep working with the first 15 seconds". Both, because offering only the
+upgrade makes a cap feel like a hostage situation, and the trim is genuinely
+what someone evaluating the app wants: a piece that exports, now, at the length
+they are allowed.
+
+Nothing is enforced behind the user's back — the project stays over the cap
+until they choose. Silently deleting a scene on a tier change would be far
+worse than an export that refuses.
+
+`trimToLimit` keeps only the scenes that *fit*. The first version kept the one
+straddling the cap, on the theory that cutting a beat in half is ruder; the
+result was a project still over length with the banner still up, which makes
+the button look broken. Whatever the spec's offer says it does, it has to
+actually do.

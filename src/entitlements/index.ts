@@ -20,6 +20,17 @@ export type Limits = {
 
 export type Mode = 'showcase' | 'motionAd';
 
+/**
+ * §12's watermark rule, on its own because the renderer needs it.
+ *
+ * It does not depend on the mode — only the tier — so exposing it separately
+ * saves every caller inventing a mode to ask about, and keeps the rule in this
+ * file where §12 requires it to be.
+ */
+export function watermarked(): boolean {
+  return getTier() === 'free';
+}
+
 export function getLimits(tier: Tier, mode: Mode): Limits {
   if (tier === 'pro') {
     return {
