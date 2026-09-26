@@ -1866,3 +1866,38 @@ A sheet covers the toolbar, so two cannot be swapped without closing one. That
 is how sheets behave everywhere else, and it is what makes tapping away the
 obvious way out — which is now what the test asserts, having first asserted the
 switching behaviour I had assumed and not built.
+
+## D-077 — the template's own elements get keyframes too
+
+Reported twice, the second time as "nothing on the UI says keyframe" from
+someone with a photo selected. Keyframes existed only for overlays (D-063), so
+selecting a template photo offered a Placement section containing nothing but
+"Reset to template". Searching the page for the word found nothing, and the
+reasonable conclusion was that the product did not have the feature.
+
+The reasoning behind overlays-only was that animating a template's element
+would fight the motion the template was designed around. That is a real
+tension, and it is not a reason to withhold the control — it is a reason to
+decide what the control *means*. What is keyframed is the **nudge**: how far
+the user has pulled the element from where the template put it. So the two
+motions compose rather than compete, the same way D-061's static nudge already
+did, and an element with keyframes still drifts the way its template intended.
+
+`KeyframeControls` is now one component serving both. An editor where some
+things animate and some do not, with nothing saying which, is exactly the
+confusion this set out to end.
+
+**One pose is keyframes *on*, not motion.** Two questions live here and
+conflating them cost three separate bugs in one sitting: the switch read "off"
+after seeding its first pose, the constant path read the resting values and
+ignored what that pose said, and `isIdentity` declared the element untouched
+and skipped it. `hasNudgePoses` answers "has the user turned this on";
+`animatedNudge` answers "does it move".
+
+**The composite is sampled at the union of both sets of keyframe times.** Two
+motions have to become one track and they do not share times, so the result is
+pinned wherever either curve changes direction and interpolated between. That
+is an approximation of "template easing plus user easing", and the right one —
+but it is only used when the nudge actually moves. A constant nudge keeps the
+exact path it had, because approximating something that needs no approximation
+would quietly cost fidelity to every project that never asked for this.

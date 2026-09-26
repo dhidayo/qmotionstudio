@@ -128,6 +128,29 @@ export type SlotTransform = {
    * "Reset to template" puts the stacking back too.
    */
   readonly z: number;
+  /**
+   * The nudge over time, when the user has keyframed it.
+   *
+   * Absent means the nudge is a constant, which is both the common case and
+   * the one that has to stay exactly as it was: a template's own motion is
+   * then shifted by a fixed amount and is otherwise untouched.
+   *
+   * `offsetX`/`offsetY`/`scale`/`rotation` above are the resting values and
+   * the seed for the first pose. `z` is deliberately not animatable — draw
+   * order changing mid-scene is a different kind of effect and not one anyone
+   * has asked for.
+   */
+  readonly poses?: readonly SlotPose[];
+};
+
+/** One moment in a slot's nudge. Mirrors `OverlayPose`, in slot terms. */
+export type SlotPose = {
+  /** Milliseconds from the start of the scene the slot belongs to. */
+  readonly atMs: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly scale: number;
+  readonly rotation: number;
 };
 
 export const NO_SLOT_TRANSFORM: SlotTransform = {

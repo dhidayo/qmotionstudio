@@ -8,7 +8,7 @@ import { NO_SLOT_TRANSFORM, type SlotKey, type SlotTransform } from '@/document/
 import { poseAt } from '@/document/select/overlay';
 import type { DrawnScene } from './rig';
 import { overlayLayer } from './overlays';
-import { slotKey, slotOf } from './slots';
+import { nudgeAt, slotKey, slotOf } from './slots';
 
 /**
  * Where things are on the frame, for direct manipulation.
@@ -374,7 +374,10 @@ export function slotBoxes(
     if (extent === null) continue;
 
     const props = resolveProps(layer.tracks, Math.max(0, sceneTimeMs - layer.startMs), createProps());
-    const nudge = transforms[key] ?? NO_SLOT_TRANSFORM;
+    // Sampled at this moment, not read as a constant: a keyframed nudge moves,
+    // and handles that stayed at its resting place would be pointing at where
+    // the element used to be.
+    const nudge = nudgeAt(transforms[key] ?? NO_SLOT_TRANSFORM, sceneTimeMs);
 
     // The nudge is already composed into the tracks the renderer draws, but
     // these are the *base* layers, so it has to be added here as well.

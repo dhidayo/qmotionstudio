@@ -1,6 +1,7 @@
 import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
 import { Button, EmptyNote, Section } from './controls';
+import { SlotKeyframes } from './SlotKeyframes';
 
 /**
  * Putting a nudged element back where the template had it (B).
@@ -30,6 +31,8 @@ export function SlotPlacement({ slotKey }: { slotKey: string }): React.JSX.Eleme
    * control until some unrelated edit had happened would be a way of hiding it
    * for good.
    */
+  const keyframes = selected ? <SlotKeyframes slotKey={slotKey} /> : null;
+
   const arrange = selected ? (
     <Section title="Arrange">
       <div className="flex gap-1.5">
@@ -43,7 +46,14 @@ export function SlotPlacement({ slotKey }: { slotKey: string }): React.JSX.Eleme
     </Section>
   ) : null;
 
-  if (!transform) return arrange;
+  if (!transform) {
+    return selected ? (
+      <>
+        {keyframes}
+        {arrange}
+      </>
+    ) : null;
+  }
 
   const moved = transform.offsetX !== 0 || transform.offsetY !== 0;
   const resized = transform.scale !== 1;
@@ -54,6 +64,7 @@ export function SlotPlacement({ slotKey }: { slotKey: string }): React.JSX.Eleme
   if (!moved && !resized && !turned) {
     return restacked ? (
       <>
+        {keyframes}
         {arrange}
         <Section title="Placement">
           <EmptyNote>Moved {transform.z > 0 ? 'in front of' : 'behind'} the rest of the scene.</EmptyNote>
@@ -64,11 +75,17 @@ export function SlotPlacement({ slotKey }: { slotKey: string }): React.JSX.Eleme
           </div>
         </Section>
       </>
-    ) : arrange;
+    ) : (
+      <>
+        {keyframes}
+        {arrange}
+      </>
+    );
   }
 
   return (
     <>
+    {keyframes}
     {arrange}
     <Section title="Placement">
       <EmptyNote>

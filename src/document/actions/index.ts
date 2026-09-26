@@ -2,6 +2,7 @@ import type { Palette, PaletteRole, PropValues } from '@/core/types';
 import { DEFAULT_LOGO, newId } from '../defaults';
 import { NO_SLOT_TRANSFORM } from '../types';
 import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
+import { nudgeAt, nudgePoses } from '@/core/render/slots';
 import type {
   AnimPreset,
   AudioClip,
@@ -20,6 +21,7 @@ import type {
   Scene,
   SceneInputs,
   SlotKey,
+  SlotPose,
   SlotTransform,
   TextStyle,
   Transition,
@@ -383,6 +385,110 @@ export function nudgeSlot(key: SlotKey, patch: Partial<SlotTransform>): Action {
         };
         return { ...inputs, slotTransforms: { ...inputs.slotTransforms, [key]: next } };
       }),
+  };
+}
+
+/**
+ * Keyframes for one of the template's own elements (B, animated).
+ *
+ * The same shape as an overlay's: a whole pose per moment rather than a track
+ * per property, seeded from whatever the nudge already is at that time so
+ * keying a move does not reset a resize made earlier.
+ */
+export function setSlotPose(key: SlotKey, atMs: number, patch: Partial<SlotPose>): Action {
+  return {
+    label: 'Move element',
+    coalesceKey: `slotPose:${key}:${Math.round(atMs / POSE_TOLERANCE_MS)}`,
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const current = inputs.slotTransforms[key] ?? NO_SLOT_TRANSFORM;
+        const at = Math.max(0, Math.round(atMs));
+        const base = nudgeAt(current, at);
+        const seeded: SlotPose = { ...base, ...patch, atMs: at };
+
+        const poses = nudgePoses(current);
+        const index = poses.findIndex((pose) => Math.abs(pose.atMs - at) <= POSE_TOLERANCE_MS);
+        const next =
+          index >= 0
+            ? poses.map((pose, i) => (i === index ? { ...seeded, atMs: pose.atMs } : pose))
+            : [...poses, seeded].sort((a, b) => a.atMs - b.atMs);
+
+        return {
+          ...inputs,
+          slotTransforms: { ...inputs.slotTransforms, [key]: { ...current, poses: next } },
+        };
+      }),
+  };
+}
+
+/** Turns a slot's keyframes on (seeded from where it is) or off (frozen there). */
+export function setSlotAnimated(key: SlotKey, animated: boolean, atMs: number): Action {
+  return {
+    label: animated ? 'Animate element' : 'Stop animating element',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const current = inputs.slotTransforms[key] ?? NO_SLOT_TRANSFORM;
+
+        if (animated) {
+          if ((current.poses?.length ?? 0) > 0) return inputs;
+          const seed: SlotPose = { atMs: 0, ...strip(current) };
+          return {
+            ...inputs,
+            slotTransforms: { ...inputs.slotTransforms, [key]: { ...current, poses: [seed] } },
+          };
+        }
+
+        const frozen = nudgeAt(current, atMs);
+        const { poses: _poses, ...rest } = current;
+        return {
+          ...inputs,
+          slotTransforms: {
+            ...inputs.slotTransforms,
+            [key]: { ...rest, ...strip(frozen) },
+          },
+        };
+      }),
+  };
+}
+
+export function removeSlotPose(key: SlotKey, atMs: number): Action {
+  return {
+    label: 'Remove keyframe',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const current = inputs.slotTransforms[key];
+        if (!current?.poses) return inputs;
+
+        const remaining = current.poses.filter(
+          (pose) => Math.abs(pose.atMs - atMs) > POSE_TOLERANCE_MS,
+        );
+        if (remaining.length === current.poses.length) return inputs;
+
+        // The last one going means the nudge stops moving, frozen where it was.
+        if (remaining.length === 0) {
+          const frozen = nudgeAt(current, atMs);
+          const { poses: _poses, ...rest } = current;
+          return {
+            ...inputs,
+            slotTransforms: { ...inputs.slotTransforms, [key]: { ...rest, ...strip(frozen) } },
+          };
+        }
+
+        return {
+          ...inputs,
+          slotTransforms: { ...inputs.slotTransforms, [key]: { ...current, poses: remaining } },
+        };
+      }),
+  };
+}
+
+/** A pose without its time, which is what the resting values are. */
+function strip(pose: Omit<SlotPose, 'atMs'>): Omit<SlotPose, 'atMs'> {
+  return {
+    offsetX: pose.offsetX,
+    offsetY: pose.offsetY,
+    scale: pose.scale,
+    rotation: pose.rotation,
   };
 }
 

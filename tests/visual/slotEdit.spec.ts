@@ -298,3 +298,66 @@ test.describe('stacking (Arrange)', () => {
     expect(await frameHash(page), 'reset puts the stacking back too').toBe(original);
   });
 });
+
+test.describe('keyframes on a template element', () => {
+  /*
+   * Reported twice, the second time as "nothing on the UI says keyframe" from
+   * someone with a photo selected. Keyframes existed only for overlays, so a
+   * selected photo offered a Placement section with nothing in it but "Reset
+   * to template" — which reads as the product not having the feature at all.
+   */
+  const chips = (page: Page) => page.locator('[data-keyframe-chip]');
+  const keyframeSwitch = (page: Page) => page.getByRole('switch', { name: 'Use keyframes' });
+
+  test('the section is there as soon as a photo is selected', async ({ page }) => {
+    await openScene(page);
+    await selectFrontPhoto(page);
+
+    await expect(page.getByText('Keyframes', { exact: true })).toBeVisible();
+    await expect(page.getByText('A keyframe records where you have moved this to')).toBeVisible();
+  });
+
+  test('a start and an end make the template element travel', async ({ page }) => {
+    await openScene(page);
+    await selectFrontPhoto(page);
+
+    await keyframeSwitch(page).click();
+    await expect(chips(page)).toHaveCount(1);
+
+    await page.getByRole('button', { name: 'Set end' }).click();
+    await expect(chips(page)).toHaveCount(2);
+
+    // Move it at the end keyframe …
+    const atEnd = await boxOf(page);
+    await drag(page, centreOf(atEnd), { x: centreOf(atEnd).x - 90, y: centreOf(atEnd).y - 70 });
+
+    // … and it is somewhere else at the start.
+    await page.getByRole('button', { name: 'Go to start' }).click();
+    const start = centreOf(await boxOf(page));
+    await page.getByRole('button', { name: 'Go to end' }).click();
+    const end = centreOf(await boxOf(page));
+
+    /*
+     * Less than the 90×70 dragged, and that is the point: this template's
+     * planes drift across the scene on their own, so the composite is the
+     * user's motion *plus* the template's rather than instead of it. A
+     * keyframe that simply replaced the template's motion would show the full
+     * drag here and would be the wrong behaviour.
+     */
+    expect(start.x - end.x).toBeGreaterThan(30);
+    expect(start.y - end.y).toBeGreaterThan(20);
+  });
+
+  test('one keyframe changes nothing about the template’s own motion', async ({ page }) => {
+    // Turning keyframes on must not move anything: one pose is a constant, and
+    // the constant is where the element already was.
+    await openScene(page);
+    await selectFrontPhoto(page);
+    const before = await frameHash(page);
+
+    await keyframeSwitch(page).click();
+    await page.waitForTimeout(300);
+
+    expect(await frameHash(page)).toBe(before);
+  });
+});

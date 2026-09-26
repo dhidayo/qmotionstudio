@@ -1,5 +1,8 @@
 import type { Keyframe, Layer, Size, SlotRef, Tracks } from '@/core/types';
-import { NO_SLOT_TRANSFORM, type SlotKey, type SlotTransform } from '@/document/types';
+import {
+  NO_SLOT_TRANSFORM, type SlotKey, type SlotPose, type SlotTransform,
+} from '@/document/types';
+import { sampleTrack } from '@/core/anim/interpolate';
 
 /**
  * Applying a user's nudge to a template's own elements (B).
@@ -39,7 +42,11 @@ export function slotTransformKey(transforms: Readonly<Record<SlotKey, SlotTransf
   return keys
     .map((key) => {
       const t = transforms[key];
-      return t ? `${key}:${t.offsetX},${t.offsetY},${t.scale},${t.rotation},${t.z}` : '';
+      if (!t) return '';
+      const path = (t.poses ?? [])
+        .map((pose) => `${pose.atMs}/${pose.offsetX}/${pose.offsetY}/${pose.scale}/${pose.rotation}`)
+        .join(';');
+      return `${key}:${t.offsetX},${t.offsetY},${t.scale},${t.rotation},${t.z}[${path}]`;
     })
     .join('|');
 }
@@ -126,35 +133,142 @@ function applyToLayer(
 }
 
 function isIdentity(t: SlotTransform): boolean {
+  if (animatedNudge(t)) return false;
+  // Through `nudgeAt` for the same reason `constantNudge` does: with a single
+  // pose the values that matter are the pose's, and reading the resting ones
+  // declared a keyframed element untouched and skipped it entirely.
+  const n = nudgeAt(t, 0);
   return (
-    t.offsetX === NO_SLOT_TRANSFORM.offsetX &&
-    t.offsetY === NO_SLOT_TRANSFORM.offsetY &&
-    t.scale === NO_SLOT_TRANSFORM.scale &&
-    t.rotation === NO_SLOT_TRANSFORM.rotation
+    n.offsetX === NO_SLOT_TRANSFORM.offsetX &&
+    n.offsetY === NO_SLOT_TRANSFORM.offsetY &&
+    n.scale === NO_SLOT_TRANSFORM.scale &&
+    n.rotation === NO_SLOT_TRANSFORM.rotation
   );
 }
 
 /**
- * Offsets add, scale multiplies, rotation adds — across every keyframe.
+ * Whether the user has turned keyframes on for this element.
  *
- * Doing it per keyframe rather than to a single value is what preserves the
- * template's motion: a photo that drifts across the scene keeps drifting, it
- * just drifts somewhere else. Replacing the track with one constant would
- * throw the animation away, which is the one thing a "nudge" must not do.
+ * Distinct from `movingNudge` below, and the distinction matters: one pose is
+ * keyframes *on* — the editor must say so, and a drag must write to that pose
+ * rather than to the resting values — while being a constant as far as the
+ * renderer is concerned. Conflating the two made the switch appear to do
+ * nothing, because seeding the first pose left it reading "off".
  */
+export function hasNudgePoses(t: SlotTransform): boolean {
+  return (t.poses?.length ?? 0) > 0;
+}
+
+/** More than one pose is the only thing that makes a nudge time-varying. */
+export function animatedNudge(t: SlotTransform): boolean {
+  return (t.poses?.length ?? 0) > 1;
+}
+
+/** The poses, or the single implied one for a nudge that does not move. */
+export function nudgePoses(t: SlotTransform): readonly SlotPose[] {
+  const { poses } = t;
+  if (poses && poses.length > 0) return poses;
+  return [{ atMs: 0, offsetX: t.offsetX, offsetY: t.offsetY, scale: t.scale, rotation: t.rotation }];
+}
+
+/** The nudge at one moment, in scene time. */
+export function nudgeAt(t: SlotTransform, atMs: number): SlotPose {
+  const poses = nudgePoses(t);
+  const only = poses[0];
+  if (poses.length === 1 && only) return { ...only, atMs };
+
+  const track = (pick: (pose: SlotPose) => number): readonly Keyframe[] =>
+    poses.map((pose) => ({ t: pose.atMs, v: pick(pose), ease: 'inOutCubic' as const }));
+
+  return {
+    atMs,
+    offsetX: sampleTrack(track((pose) => pose.offsetX), atMs) ?? 0,
+    offsetY: sampleTrack(track((pose) => pose.offsetY), atMs) ?? 0,
+    scale: sampleTrack(track((pose) => pose.scale), atMs) ?? 1,
+    rotation: sampleTrack(track((pose) => pose.rotation), atMs) ?? 0,
+  };
+}
+
 function nudgeTracks(tracks: Tracks, t: SlotTransform, design: Size): Tracks {
+  if (!animatedNudge(t)) return constantNudge(tracks, t, design);
+  return movingNudge(tracks, t, design);
+}
+
+/**
+ * A nudge that does not move: the template's motion, displaced.
+ *
+ * Every keyframe shifts by the same amount, so the shape of the motion is
+ * preserved exactly — a photo that drifts across the scene keeps drifting, it
+ * just drifts somewhere else. This is the common case and it is worth keeping
+ * exact rather than routing it through the resampling below.
+ */
+function constantNudge(tracks: Tracks, t: SlotTransform, design: Size): Tracks {
   const next: Tracks = { ...tracks };
 
-  const dx = t.offsetX * design.w;
-  const dy = t.offsetY * design.h;
+  /*
+   * Through `nudgeAt`, not off the resting fields.
+   *
+   * With keyframes on but only one pose the nudge is still a constant — and
+   * the constant is that pose, not the resting values it was seeded from. The
+   * first version read the resting values and so ignored everything a single
+   * keyframe said, which looked exactly like keyframes not working.
+   */
+  const n = nudgeAt(t, 0);
+  const dx = n.offsetX * design.w;
+  const dy = n.offsetY * design.h;
 
   if (dx !== 0) next.x = shift(tracks.x, dx, 0);
   if (dy !== 0) next.y = shift(tracks.y, dy, 0);
-  if (t.scale !== 1) {
-    next.scaleX = multiply(tracks.scaleX, t.scale);
-    next.scaleY = multiply(tracks.scaleY, t.scale);
+  if (n.scale !== 1) {
+    next.scaleX = multiply(tracks.scaleX, n.scale);
+    next.scaleY = multiply(tracks.scaleY, n.scale);
   }
-  if (t.rotation !== 0) next.rotation = shift(tracks.rotation, t.rotation, 0);
+  if (n.rotation !== 0) next.rotation = shift(tracks.rotation, n.rotation, 0);
+
+  return next;
+}
+
+/**
+ * A nudge with keyframes of its own, composed over the template's.
+ *
+ * Two motions have to become one track, and they do not share keyframe times.
+ * So the result is sampled at the union of both sets: at every moment either
+ * side has something to say, the composite records what the two say together.
+ * Between those moments it interpolates, which is an approximation of
+ * "template easing plus user easing" — and the right one, because both curves
+ * are pinned at every point where either actually changes direction.
+ *
+ * Deliberately not used when the nudge is constant: there the exact answer is
+ * cheap, and approximating something that needs no approximation would be a
+ * quiet loss of fidelity for every project that never asked for this.
+ */
+function movingNudge(tracks: Tracks, t: SlotTransform, design: Size): Tracks {
+  const poses = nudgePoses(t);
+  const next: Tracks = { ...tracks };
+
+  const times = (track: readonly Keyframe[] | undefined): readonly number[] => {
+    const set = new Set<number>(poses.map((pose) => pose.atMs));
+    for (const key of track ?? []) set.add(key.t);
+    set.add(0);
+    return [...set].sort((a, b) => a - b);
+  };
+
+  const compose = (
+    track: readonly Keyframe[] | undefined,
+    fallback: number,
+    combine: (base: number, pose: SlotPose) => number,
+  ): readonly Keyframe[] =>
+    times(track).map((at) => ({
+      t: at,
+      v: combine(sampleTrack(track ?? [], at) ?? fallback, nudgeAt(t, at)),
+      ease: 'inOutCubic' as const,
+    }));
+
+  next.x = compose(tracks.x, 0, (base, pose) => base + pose.offsetX * design.w);
+  next.y = compose(tracks.y, 0, (base, pose) => base + pose.offsetY * design.h);
+  next.scaleX = compose(tracks.scaleX, 1, (base, pose) => base * pose.scale);
+  next.scaleY = compose(tracks.scaleY, 1, (base, pose) => base * pose.scale);
+  next.rotation = compose(tracks.rotation, 0, (base, pose) => base + pose.rotation);
 
   return next;
 }

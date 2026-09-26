@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createProps, resolveProps } from '@/core/anim/interpolate';
 import { colorFill, type ImageLayer, type Layer, type Size, type TextLayer } from '@/core/types';
 import type { SlotKey, SlotTransform } from '@/document/types';
-import { applySlotTransforms, slotKey, slotOf, slotTransformKey } from './slots';
+import {
+  animatedNudge, applySlotTransforms, hasNudgePoses, nudgeAt, slotKey, slotOf, slotTransformKey,
+} from './slots';
 
 /**
  * Nudging the template's own elements (B).
@@ -271,5 +273,86 @@ describe('stacking', () => {
     const a = slotTransformKey({ 'photo:0': nudge({ z: 0 }) });
     const b = slotTransformKey({ 'photo:0': nudge({ z: -1 }) });
     expect(a).not.toBe(b);
+  });
+});
+
+describe('a keyframed nudge', () => {
+  const poses = (...entries: readonly [number, number][]): SlotTransform => ({
+    ...nudge(),
+    poses: entries.map(([atMs, offsetX]) => ({ atMs, offsetX, offsetY: 0, scale: 1, rotation: 0 })),
+  });
+
+  it('is still a constant while it has only one pose', () => {
+    // One pose is keyframes *on* but not yet moving, and the exact constant
+    // path must be kept — approximating something that needs no approximation
+    // would cost fidelity for every project that never asked for this.
+    const layer = photo(0, {
+      x: [{ t: 0, v: 400, ease: 'inOutSine' }, { t: 4_000, v: 600, ease: 'inOutSine' }],
+    });
+    const out = applySlotTransforms([layer], { 'photo:0': poses([0, 0.5]) }, design);
+    const [moved] = out;
+    expect(moved).toBeDefined();
+    if (!moved) return;
+
+    expect(at(moved, 0).x).toBeCloseTo(400 + 0.5 * design.w, 6);
+    expect(at(moved, 4_000).x).toBeCloseTo(600 + 0.5 * design.w, 6);
+    // The template's easing survives untouched: the midpoint is still the
+    // eased one, not a resampled straight line.
+    expect(at(moved, 2_000).x).toBeCloseTo(at(layer, 2_000).x + 0.5 * design.w, 6);
+  });
+
+  it('moves on top of whatever the template already does', () => {
+    const layer = photo(0, { x: [{ t: 0, v: 100, ease: 'linear' }, { t: 4_000, v: 300, ease: 'linear' }] });
+    const [moved] = applySlotTransforms(
+      [layer],
+      { 'photo:0': poses([0, 0], [4_000, 0.5]) },
+      design,
+    );
+    expect(moved).toBeDefined();
+    if (!moved) return;
+
+    // Both motions are present at both ends: the template's 100→300 and the
+    // user's 0→half a frame.
+    expect(at(moved, 0).x).toBeCloseTo(100, 6);
+    expect(at(moved, 4_000).x).toBeCloseTo(300 + 0.5 * design.w, 6);
+    // And in between it is past both, rather than following only one of them.
+    const middle = at(moved, 2_000).x;
+    expect(middle).toBeGreaterThan(200);
+    expect(middle).toBeLessThan(300 + 0.5 * design.w);
+  });
+
+  it('samples at every moment either side has something to say', () => {
+    // The composite has to be pinned wherever either curve changes direction,
+    // or one of the two motions gets smoothed away between its own keyframes.
+    const layer = photo(0, {
+      x: [
+        { t: 0, v: 0, ease: 'linear' },
+        { t: 1_000, v: 500, ease: 'linear' },
+        { t: 2_000, v: 0, ease: 'linear' },
+      ],
+    });
+    const [moved] = applySlotTransforms([layer], { 'photo:0': poses([0, 0], [2_000, 0]) }, design);
+    expect(moved).toBeDefined();
+    if (!moved) return;
+
+    // The template's spike at 1000 is still a spike.
+    expect(at(moved, 1_000).x).toBeCloseTo(500, 6);
+    expect(at(moved, 0).x).toBeCloseTo(0, 6);
+    expect(at(moved, 2_000).x).toBeCloseTo(0, 6);
+  });
+
+  it('tells "keyframes on" apart from "actually moving"', () => {
+    expect(hasNudgePoses(nudge())).toBe(false);
+    expect(hasNudgePoses(poses([0, 0]))).toBe(true);
+    expect(animatedNudge(poses([0, 0]))).toBe(false);
+    expect(animatedNudge(poses([0, 0], [1_000, 0.2]))).toBe(true);
+  });
+
+  it('samples the nudge itself between its poses', () => {
+    const t = poses([0, 0], [1_000, 1]);
+    expect(nudgeAt(t, 0).offsetX).toBeCloseTo(0, 6);
+    expect(nudgeAt(t, 1_000).offsetX).toBeCloseTo(1, 6);
+    expect(nudgeAt(t, 500).offsetX).toBeGreaterThan(0.2);
+    expect(nudgeAt(t, 500).offsetX).toBeLessThan(0.8);
   });
 });

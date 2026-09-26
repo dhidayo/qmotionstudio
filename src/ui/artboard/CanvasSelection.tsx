@@ -7,6 +7,7 @@ import type { DrawnScene } from '@/core/render/rig';
 import type { TextMeasureContext } from '@/core/text/layout';
 import * as actions from '@/document/actions';
 import { activeOverlaysAt, sceneSpans } from '@/document/select/timeline';
+import { hasNudgePoses } from '@/core/render/slots';
 import { isAnimated, poseIndexAt, posesOf } from '@/document/select/overlay';
 import type { Aspect, Size } from '@/core/types';
 import { NO_SLOT_TRANSFORM, type Overlay, type Project, type SlotKey, type SlotTransform } from '@/document/types';
@@ -100,6 +101,11 @@ type Target =
       readonly sceneIndex: number;
       /** The nudge in force when the drag began — deltas are measured from it. */
       readonly transform: SlotTransform;
+      /**
+       * Where a drag should write a keyframe, in the scene's own time, or null
+       * when the nudge is a constant and the drag simply sets it.
+       */
+      readonly poseAtMs: number | null;
       readonly box: OrientedBox;
       readonly label: string;
     };
@@ -177,11 +183,13 @@ export function CanvasSelection({
       const sceneTimeMs = span ? (playheadMs - span.startMs) * drawnScene.inputs.look.speed : 0;
       const transforms = drawnScene.inputs.slotTransforms;
       for (const slot of slotBoxes(drawn, sceneTimeMs, transforms, aspect, measure)) {
+        const transform = transforms[slot.key] ?? NO_SLOT_TRANSFORM;
         list.push({
           kind: 'slot',
           key: slot.key,
           sceneIndex,
-          transform: transforms[slot.key] ?? NO_SLOT_TRANSFORM,
+          transform,
+          poseAtMs: hasNudgePoses(transform) ? sceneTimeMs : null,
           box: slot.box,
           label: slot.label,
         });
@@ -415,10 +423,11 @@ export function CanvasSelection({
       // A slot's visible angle is the template's plus the nudge, so the nudge
       // takes the *delta* — setting it absolutely would throw away whatever
       // rotation the template had chosen.
+      const turned = { rotation: drag.target.transform.rotation + (degrees - drag.atDegrees) };
       dispatch(
-        actions.nudgeSlot(drag.target.key, {
-          rotation: drag.target.transform.rotation + (degrees - drag.atDegrees),
-        }),
+        drag.target.poseAtMs === null
+          ? actions.nudgeSlot(drag.target.key, turned)
+          : actions.setSlotPose(drag.target.key, drag.target.poseAtMs, turned),
       );
       return;
     }
@@ -685,10 +694,15 @@ function moveAction(target: Target, centre: Point, design: Size, aspect: Aspect)
      * there. Measured against the box as it was when the drag started, so a
      * long drag cannot accumulate rounding.
      */
-    return actions.nudgeSlot(target.key, {
+    const moved = {
       offsetX: target.transform.offsetX + (centre.x - target.box.cx) / design.w,
       offsetY: target.transform.offsetY + (centre.y - target.box.cy) / design.h,
-    });
+    };
+    // Auto-keyframe, the same as an overlay: with keyframes on, a drag records
+    // where the element is at *this* moment rather than for the whole scene.
+    return target.poseAtMs === null
+      ? actions.nudgeSlot(target.key, moved)
+      : actions.setSlotPose(target.key, target.poseAtMs, moved);
   }
 
   /*
@@ -773,11 +787,14 @@ function resizeAction(
     // One scale, both axes: a template photo's proportions are the frame
     // ratio's business (§8.1), not something a corner drag should override.
     // Position moves with it, in the same action, so the drag stays one step.
-    return actions.nudgeSlot(target.key, {
+    const sized = {
       scale: target.transform.scale * fx,
       offsetX: target.transform.offsetX + (newCentre.x - target.box.cx) / design.w,
       offsetY: target.transform.offsetY + (newCentre.y - target.box.cy) / design.h,
-    });
+    };
+    return target.poseAtMs === null
+      ? actions.nudgeSlot(target.key, sized)
+      : actions.setSlotPose(target.key, target.poseAtMs, sized);
   }
 
   const { transform } = target.overlay;
