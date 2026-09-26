@@ -107,7 +107,7 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
  * far better failure than one that reopens with the wrong text.
  */
 async function save(project: Project, media: MediaStore, known: Set<string>): Promise<void> {
-  await writeProject({ schemaVersion: SCHEMA_VERSION, project, savedAt: Date.now() });
+  await writeProject({ schemaVersion: SCHEMA_VERSION, project });
   await writeLastOpened(project.id);
   await persistMedia(media, known);
 }

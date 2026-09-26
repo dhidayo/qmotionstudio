@@ -18,7 +18,8 @@
     "lint:templates": "tsx scripts/lint-templates.ts",
     "thumbs": "tsx scripts/gen-thumbs.ts",
     "samples": "tsx scripts/gen-samples.ts",
-    "fixtures": "tsx scripts/gen-fixtures.ts"
+    "fixtures": "tsx scripts/gen-fixtures.ts",
+    "icons": "tsx scripts/gen-icons.ts"
   },
   "dependencies": {
     "@mediabunny/aac-encoder": "^1.58.1",
@@ -44,6 +45,7 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
     "vite": "^6.0.5",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^5.0.1"
   }
 }

@@ -12,6 +12,9 @@ import { timelineSpanMs } from '@/document/select/timeline';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { watermarked } from '@/entitlements';
 import { ClockProvider } from './ClockProvider';
+import { Sheet } from './Sheet';
+import { useLayout } from './useLayout';
+import { ProjectsDialog } from '@/ui/projects/ProjectsDialog';
 import { MediaStore } from '@/media/store';
 import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
 import { loadTemplate } from '@/templates/registry';
@@ -269,8 +272,14 @@ export function AppShell(): React.JSX.Element {
    * blank project the store starts with straight over the one on disk, which
    * is the single worst thing a save can do.
    */
+  const projectsOpen = useEditor((s) => s.projectsOpen);
+  const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
   const restore = useRestore(media);
   useAutosave(project, media, restore.phase === 'ready');
+
+  const layout = useLayout();
+  /** Which panel is open as a sheet, below desktop width. Never both. */
+  const [sheet, setSheet] = useState<'library' | 'inspector' | null>(null);
 
   const [toast, setToast] = useState<string | null>(null);
   const exporting = useEditor((s) => s.exporting);
@@ -284,18 +293,69 @@ export function AppShell(): React.JSX.Element {
     <MediaProvider store={media}>
       <ClockProvider clock={clock}>
       <div className="flex h-full min-h-0 flex-1">
-        <LibraryRail />
+        {/*
+          * §13. Below tablet width the two side columns stop being columns:
+          * at 1100px an artboard with both of them open is down to about
+          * 520px, which is the point the preview stops being the biggest
+          * thing on screen. They become sheets you open when you need them.
+          */}
+        {layout === 'desktop' && <LibraryRail />}
+
         <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
+          {layout !== 'desktop' && (
+            <div className="flex shrink-0 items-center gap-1.5 border-b border-edge bg-panel px-2 py-1.5">
+              <button
+                type="button"
+                onClick={() => { setSheet(sheet === 'library' ? null : 'library'); }}
+                aria-expanded={sheet === 'library'}
+                className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
+              >
+                Templates
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSheet(sheet === 'inspector' ? null : 'inspector'); }}
+                aria-expanded={sheet === 'inspector'}
+                className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
+              >
+                Edit
+              </button>
+            </div>
+          )}
+
           <div className="relative min-h-0 flex-1">
             <Artboard project={project} clock={clock} rig={rig} media={media} />
             <PerfOverlay rig={rig} />
           </div>
           {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}
         </main>
-        <Inspector />
+
+        {layout === 'desktop' && <Inspector />}
       </div>
+
+      {layout !== 'desktop' && (
+        <>
+          <Sheet
+            open={sheet === 'library'}
+            title="Templates"
+            side="left"
+            onClose={() => { setSheet(null); }}
+          >
+            <LibraryRail />
+          </Sheet>
+          <Sheet
+            open={sheet === 'inspector'}
+            title="Edit"
+            side="right"
+            onClose={() => { setSheet(null); }}
+          >
+            <Inspector />
+          </Sheet>
+        </>
+      )}
       {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
       <Toast message={toast} onDone={() => { setToast(null); }} />
+        {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </ClockProvider>
     </MediaProvider>
   );

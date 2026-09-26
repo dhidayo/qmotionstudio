@@ -10,17 +10,20 @@ export function TopBar(): React.JSX.Element {
   const setTheme = useEditor((s) => s.setTheme);
   const { tier } = useEntitlements(project.mode);
   const save = useEditor((s) => s.saveState);
+  const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
 
   return (
     <header
-      className="flex shrink-0 items-center gap-4 border-b border-edge bg-panel px-3"
+      className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge bg-panel px-3 lg:gap-4"
       style={{ height: 'var(--h-topbar)' }}
     >
-      <div className="flex items-center gap-2 pr-1">
+      <div className="flex shrink-0 items-center gap-2 pr-1">
         <span className="grid size-6 place-items-center rounded-md bg-accent text-[11px] font-bold text-accent-ink">
           M
         </span>
-        <span className="text-[13px] font-semibold tracking-tight">Motion Studio</span>
+        <span className="hidden text-[13px] font-semibold tracking-tight lg:inline">
+          Motion Studio
+        </span>
       </div>
 
       <ModeSwitch />
@@ -38,6 +41,14 @@ export function TopBar(): React.JSX.Element {
 
       <UndoRedo />
 
+      <button
+        type="button"
+        onClick={() => { setProjectsOpen(true); }}
+        className="rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
+      >
+        Projects
+      </button>
+
       <div className="ml-auto flex items-center gap-2">
         {/*
           * The save state, shown only when it is not the boring one.
@@ -47,7 +58,16 @@ export function TopBar(): React.JSX.Element {
           * that has to be believed when it says *not* saved (§16).
           */}
         <SaveBadge state={save} />
-        <span className="text-[11px] text-ink-faint">Nothing leaves your device</span>
+        {/*
+          * §9 requires the UI to say this, and it still does at every width —
+          * the Photos panel carries "Nothing is uploaded" where the files
+          * actually arrive, which is the more useful place for it on a small
+          * screen anyway. Here it is the first thing to go when the bar runs
+          * out of room, rather than being allowed to squeeze the controls.
+          */}
+        <span className="hidden text-[11px] text-ink-faint xl:inline">
+          Nothing leaves your device
+        </span>
         {/*
           * §12's dev toggle. The stub "returns a tier from local state with a
           * dev toggle", and without one the Pro paths — custom media most of

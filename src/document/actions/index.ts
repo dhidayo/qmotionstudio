@@ -830,6 +830,18 @@ export function applyAdTemplate(scenes: readonly Scene[], sourceAdTemplateId: st
   };
 }
 
+/**
+ * A copy under a new id, sharing the same media.
+ *
+ * The document holds only ids (§5), so duplicating is genuinely cheap — the
+ * photographs are not copied, they are referred to twice. That is also why the
+ * media store is keyed by `mediaId` across projects rather than per project.
+ */
+export function duplicateProject(project: Project): Project {
+  const copy = `${project.name} copy`.slice(0, 80);
+  return { ...project, id: newId('prj'), name: copy, createdAt: Date.now(), updatedAt: Date.now() };
+}
+
 export function setMode(mode: ProjectMode): Action {
   return {
     label: mode === 'motionAd' ? 'Switch to Motion Ads' : 'Switch to Showcase',

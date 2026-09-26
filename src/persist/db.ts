@@ -60,8 +60,17 @@ export async function readProject(id: string): Promise<StoredProject | null> {
   return (await get<StoredProject>(id, projectStore)) ?? null;
 }
 
-export async function writeProject(entry: StoredProject): Promise<void> {
-  await set(entry.project.id, entry, projectStore);
+/**
+ * Stamps `savedAt` itself rather than taking one.
+ *
+ * The moment a write happened is the store's own business, and asking callers
+ * for it put a clock reading in every one of them — including inside React
+ * components, where reading the clock while rendering is exactly the sort of
+ * impurity that makes a component's output depend on when it ran.
+ */
+export async function writeProject(entry: Omit<StoredProject, 'savedAt'>): Promise<void> {
+  const stored: StoredProject = { ...entry, savedAt: Date.now() };
+  await set(entry.project.id, stored, projectStore);
 }
 
 export async function deleteProject(id: string): Promise<void> {

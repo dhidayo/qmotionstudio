@@ -1,10 +1,55 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    /*
+     * §13: "PWA via vite-plugin-pwa, installable, offline-capable".
+     *
+     * Offline is not a nicety here — §9 says nothing ever leaves the device,
+     * so an editor that stops working without a network would be failing at
+     * its own premise. Everything it needs is already local: the templates are
+     * bundled, the media is in IndexedDB, and the encoders are the browser's.
+     */
+    VitePWA({
+      registerType: 'autoUpdate',
+      includeAssets: ['favicon.svg'],
+      manifest: {
+        name: 'Motion Studio',
+        short_name: 'Motion Studio',
+        description: 'Turn photographs into motion. Everything stays on your device.',
+        theme_color: '#0d0d10',
+        background_color: '#0d0d10',
+        display: 'standalone',
+        orientation: 'any',
+        start_url: '/',
+        icons: [
+          { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        /*
+         * The sample photographs and the template thumbnails are part of the
+         * app as far as a first run is concerned, and the WASM decoder is what
+         * makes HEIC work at all — none of it is optional offline.
+         */
+        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,wasm}'],
+        // A 30s 1080p encode is nothing next to the WASM decoder; the default
+        // 2MB cap would silently skip it and break HEIC on a second visit.
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+      },
+      // Left off in development: a service worker caching the dev server is a
+      // reliable way to spend an afternoon debugging yesterday's code.
+      devOptions: { enabled: false },
+    }),
+  ],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

@@ -154,3 +154,76 @@ test.describe('undo has a floor', () => {
     await expect(page.getByText('Scene 1 of 5')).toBeVisible();
   });
 });
+
+test.describe('the project list (§13)', () => {
+  const dialog = (page: Page) => page.getByRole('dialog', { name: 'Projects' });
+  const rows = (page: Page) => page.locator('[data-project]');
+
+  async function openList(page: Page): Promise<void> {
+    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    await expect(dialog(page)).toBeVisible();
+  }
+
+  test('lists the open project and lets it be renamed', async ({ page }) => {
+    await openEditor(page);
+    await settled(page);
+    await openList(page);
+
+    await expect(rows(page)).toHaveCount(1);
+    await expect(dialog(page)).toContainText('Open now');
+
+    await page.getByLabel('Project name').fill('Autumn campaign');
+    await expect(page.getByLabel('Project name')).toHaveValue('Autumn campaign');
+
+    // The name is document state, so it survives a reload like anything else.
+    await page.getByRole('button', { name: 'Close projects' }).click();
+    await settled(page);
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_500);
+    await openList(page);
+    await expect(page.getByLabel('Project name')).toHaveValue('Autumn campaign');
+  });
+
+  test('a new project starts clean and leaves the old one alone', async ({ page }) => {
+    await openEditor(page);
+    await page.getByRole('button', { name: 'Motion Ads' }).click();
+    await page.getByTitle('Add a text overlay').click();
+    await setOverlayText(page, MARKER);
+    await settled(page);
+
+    await openList(page);
+    await page.getByRole('button', { name: 'New project' }).click();
+    await expect(dialog(page)).toHaveCount(0);
+
+    // The new one has none of the old one's work …
+    await expect(page.getByTitle(MARKER)).toHaveCount(0);
+
+    // … and the old one is still there to go back to.
+    await settled(page);
+    await openList(page);
+    await expect(rows(page)).toHaveCount(2);
+  });
+
+  test('duplicates and deletes', async ({ page }) => {
+    await openEditor(page);
+    await settled(page);
+    await openList(page);
+
+    await page.getByLabel('Project name').fill('Original');
+    await page.getByRole('button', { name: /^Duplicate/ }).first().click();
+    await expect(dialog(page)).toHaveCount(0);
+
+    await settled(page);
+    await openList(page);
+    await expect(rows(page)).toHaveCount(2);
+    await expect(page.getByLabel('Project name')).toHaveValue('Original copy');
+
+    // Deleting the one that is not open leaves the editor where it is.
+    // Exact: "Delete Original" is also a prefix of "Delete Original copy",
+    // and a substring match here deletes the project under the cursor.
+    await page.getByRole('button', { name: 'Delete Original', exact: true }).click();
+    await expect(rows(page)).toHaveCount(1);
+    await expect(page.getByLabel('Project name')).toHaveValue('Original copy');
+  });
+});

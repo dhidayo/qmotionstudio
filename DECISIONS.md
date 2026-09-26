@@ -1799,3 +1799,70 @@ straddling the cap, on the theory that cutting a beat in half is ruder; the
 result was a project still over length with the banner still up, which makes
 the button look broken. Whatever the spec's offer says it does, it has to
 actually do.
+
+## D-074 — the project list is a dialog, and reads from disk
+
+§13 asks for a project list "on load, with rename, duplicate and delete". A
+dialog rather than a gallery screen: the editor is the application, and sending
+someone to a separate place to get back into their work adds a step to the
+thing they do most — opening the project they were just in, which autosave
+already does for them.
+
+It reads the list from disk every time it opens rather than mirroring it in
+React state. The list is small and looked at rarely, and a cached copy would be
+one more thing that can disagree with what is actually saved.
+
+**Switching projects flushes the one being left.** Autosave is debounced, so
+anything done in the last fraction of a second — renaming it in this very
+dialog, most obviously — has not reached disk. Without the flush, switching
+away saved the *new* project over that intent and the rename was gone. A test
+caught it as "Untitled project copy" where "Original copy" was expected.
+
+**Duplicate copies what is on screen**, not what is on disk, for the same
+reason. And it is genuinely cheap: the document holds only ids (§5), so a copy
+refers to the same photographs rather than duplicating them — which is also why
+deleting a project deliberately leaves its media alone. Blobs are shared, and
+reclaiming them needs to ask every remaining project what it still refers to.
+
+`writeProject` stamps `savedAt` itself. Asking callers for it put a clock
+reading in every one of them, including inside React components, where reading
+the clock during render is exactly the impurity that makes output depend on
+when it ran.
+
+## D-075 — offline is a requirement here, not a nicety
+
+§9 says nothing ever leaves the device, so an editor that stops working without
+a network would be failing at its own premise. Everything it needs is already
+local: templates are bundled, media is in IndexedDB, the encoders are the
+browser's.
+
+`vite-plugin-pwa` in `generateSW` mode, precaching the wasm and the fonts as
+well as the code — the HEIC decoder is what makes half the photo formats work,
+and the default 2MB cap would have silently skipped it. Disabled in
+development, because a service worker caching the dev server is a reliable way
+to spend an afternoon debugging yesterday's code.
+
+Icons are generated from `public/favicon.svg` by `npm run icons`, for the
+reason §7 forbids hand-made thumbnails: two files meant to be the same picture
+drift the moment one is edited.
+
+## D-076 — below tablet, the side columns become sheets
+
+§13's words. The test is not that things get narrower but that they change
+kind: at 1100px an artboard with both columns open is down to about 520px,
+which is the point the preview stops being the biggest thing on screen.
+
+The sheets hold *the same components* — `LibraryRail` and `Inspector`
+unchanged. Forking them into phone versions would be two of everything to keep
+in step for the rest of the project's life, and the first thing to drift would
+be exactly the controls a phone user has no other way to reach.
+
+Measured from the window through `useSyncExternalStore` rather than written as
+media queries, because the choice is structural rather than cosmetic, and
+reading the width during the first render avoids showing a desktop layout to a
+phone for a frame.
+
+A sheet covers the toolbar, so two cannot be swapped without closing one. That
+is how sheets behave everywhere else, and it is what makes tapping away the
+obvious way out — which is now what the test asserts, having first asserted the
+switching behaviour I had assumed and not built.

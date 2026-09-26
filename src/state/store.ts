@@ -87,6 +87,14 @@ type EditorState = {
   exporting: boolean;
   /** §13's autosave, surfaced so the top bar can say when it has failed. */
   saveState: SaveState;
+  /**
+   * Whether §13's project list is open.
+   *
+   * In the store because the button that opens it lives in the top bar and the
+   * dialog itself has to render inside the media provider — it restores
+   * photographs when it opens a project.
+   */
+  projectsOpen: boolean;
 
   selectScene: (index: number) => void;
   selectOverlay: (id: string | null) => void;
@@ -106,6 +114,7 @@ type EditorState = {
   setLoadedTemplate: (template: SceneTemplate | null) => void;
   setExporting: (exporting: boolean) => void;
   setSaveState: (state: SaveState) => void;
+  setProjectsOpen: (open: boolean) => void;
   dispatch: (action: actions.Action) => void;
   /** Ends a coalescing run — call on pointer-up after a drag. */
   endInteraction: () => void;
@@ -255,6 +264,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   isPlaying: true,
   inspectorTab: 'photos',
   saveState: 'idle',
+  projectsOpen: false,
   theme: readStoredTheme(),
   selectedPhoto: 0,
   favourites: readFavourites(),
@@ -341,6 +351,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   setExporting: (exporting) => { set({ exporting }); },
 
   setSaveState: (saveState) => { set({ saveState }); },
+
+  setProjectsOpen: (projectsOpen) => { set({ projectsOpen }); },
 
   /**
    * The one way the document changes.
