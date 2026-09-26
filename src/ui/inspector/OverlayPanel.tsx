@@ -2,6 +2,7 @@ import type { AnimPreset, TextStyle } from '@/document/types';
 import * as actions from '@/document/actions';
 import { ANIM_PRESETS } from '@/core/render/overlays';
 import { useEditor, useSelectedOverlay } from '@/state/store';
+import { isAnimated, poseAt, poseIndexAt, posesOf } from '@/document/select/overlay';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from './controls';
 
@@ -30,14 +31,41 @@ export function OverlayPanel(): React.JSX.Element {
   const overlay = useSelectedOverlay();
   const dispatch = useEditor((s) => s.dispatch);
   const selectOverlay = useEditor((s) => s.selectOverlay);
+  // Above the early return below — hooks run in the same order every render.
+  const playheadMs = useEditor((s) => s.playheadMs);
 
   if (!overlay) {
     return <EmptyNote>That overlay is gone. Pick another clip on the timeline.</EmptyNote>;
   }
 
-  const { id, transform } = overlay;
+  const { id } = overlay;
+
+  /*
+   * Keyframe times are in the overlay's own time, like every other layer time
+   * in §6.1 — so a clip dragged along the timeline takes its motion with it
+   * rather than having it re-interpreted against the project clock.
+   */
+  const localMs = Math.round(playheadMs - overlay.startMs);
+  const animated = isAnimated(overlay);
+  const poses = posesOf(overlay);
+  const withinClip = localMs >= 0 && localMs <= overlay.endMs - overlay.startMs;
+  const onKeyframe = poseIndexAt(overlay, localMs, actions.POSE_TOLERANCE_MS) >= 0;
+  /*
+   * On an animated overlay the sliders edit the pose under the playhead, the
+   * same as dragging does.
+   *
+   * They used to read and write `transform`, which is the *resting* placement
+   * and is ignored entirely while a path exists — so they showed a stale
+   * number and moving one appeared to do nothing at all. Two ways of saying
+   * the same thing have to say it to the same place.
+   */
+  const transform = animated ? poseAt(overlay, localMs) : overlay.transform;
   const set = (patch: Parameters<typeof actions.setOverlayTransform>[1]): void => {
-    dispatch(actions.setOverlayTransform(id, patch));
+    dispatch(
+      animated
+        ? actions.setOverlayPose(id, localMs, patch)
+        : actions.setOverlayTransform(id, patch),
+    );
   };
 
   return (
@@ -144,6 +172,77 @@ export function OverlayPanel(): React.JSX.Element {
           label="Exit"
           columns={3}
         />
+      </Section>
+
+      <Section title="Movement">
+        {/*
+          * Off by default, and one switch away.
+          *
+          * Keyframes are the feature most likely to make this app feel
+          * complicated, so anyone who does not want them never meets them: an
+          * overlay with no path behaves exactly as it did before this existed.
+          */}
+        <Toggle
+          checked={animated}
+          onChange={(on) => { dispatch(actions.setOverlayAnimated(id, on, localMs)); }}
+          label="Animate movement"
+        />
+
+        {!animated && (
+          <EmptyNote>
+            Turn this on, then move the playhead and drag the overlay. Each time you do, its
+            position at that moment is remembered.
+          </EmptyNote>
+        )}
+
+        {animated && (
+          <>
+            <p className="tabular mt-2 text-[11px] text-ink-muted">
+              {poses.length === 1 ? '1 keyframe' : `${poses.length} keyframes`}
+              {onKeyframe ? ' · playhead is on one' : ''}
+            </p>
+
+            <div className="mt-2 flex gap-1.5">
+              <Button
+                onClick={() => { dispatch(actions.setOverlayPose(id, localMs, {})); }}
+                disabled={onKeyframe || !withinClip}
+              >
+                Add keyframe here
+              </Button>
+              <Button
+                variant="danger"
+                onClick={() => { dispatch(actions.removeOverlayPose(id, localMs)); }}
+                disabled={!onKeyframe}
+              >
+                Remove
+              </Button>
+            </div>
+
+            {!withinClip && (
+              <EmptyNote>Move the playhead inside this clip to add a keyframe.</EmptyNote>
+            )}
+
+            {/*
+              * One easing for the whole overlay, not one per keyframe. A curve
+              * editor is the point where a motion tool starts needing to be
+              * taught, and three named choices cover what anyone actually
+              * reaches for.
+              */}
+            <div className="mt-2.5">
+              <Segmented
+                value={overlay.easing ?? 'smooth'}
+                options={[
+                  { value: 'smooth' as const, label: 'Smooth' },
+                  { value: 'linear' as const, label: 'Even' },
+                  { value: 'springy' as const, label: 'Springy' },
+                ]}
+                onChange={(easing) => { dispatch(actions.setOverlayEasing(id, easing)); }}
+                label="Between keyframes"
+                columns={3}
+              />
+            </div>
+          </>
+        )}
       </Section>
 
       <Section title="Track">

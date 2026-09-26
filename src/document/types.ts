@@ -158,6 +158,23 @@ export type OverlayContent =
   | { readonly kind: 'text'; readonly text: string; readonly style: TextStyle }
   | { readonly kind: 'customMedia'; readonly mediaId: string };
 
+/**
+ * One moment in an overlay's motion: where it is, how big, how turned.
+ *
+ * A whole pose rather than a track per property. Five separate lanes for x, y,
+ * scale, rotation and opacity is how a compositor works and is exactly the
+ * thing that makes compositors need explaining; people think "it is here at
+ * the start and there by the end", and a pose is that thought written down.
+ */
+export type OverlayPose = {
+  /** Milliseconds from the overlay's own start, like every other layer time. */
+  readonly atMs: number;
+  readonly transform: PropValues;
+};
+
+/** One choice for the whole overlay. Deliberately not per keyframe. */
+export type OverlayEasing = 'smooth' | 'linear' | 'springy';
+
 export type Overlay = {
   readonly id: string;
   /** 0 = L1, 1 = L2, … */
@@ -166,7 +183,16 @@ export type Overlay = {
   readonly endMs: number;
   readonly kind: OverlayContent['kind'];
   readonly content: OverlayContent;
+  /** Where it sits when it is not animated, and the seed for its first pose. */
   readonly transform: PropValues;
+  /**
+   * The motion path, when there is one.
+   *
+   * Absent for every overlay until someone turns animation on, which keeps the
+   * feature entirely out of the way of anyone who does not want it.
+   */
+  readonly poses?: readonly OverlayPose[];
+  readonly easing?: OverlayEasing;
   readonly enterAnim: AnimPreset;
   readonly exitAnim: AnimPreset;
 };

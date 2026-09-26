@@ -7,6 +7,7 @@ import type { DrawnScene } from '@/core/render/rig';
 import type { TextMeasureContext } from '@/core/text/layout';
 import * as actions from '@/document/actions';
 import { activeOverlaysAt, sceneSpans } from '@/document/select/timeline';
+import { isAnimated } from '@/document/select/overlay';
 import type { Aspect, Size } from '@/core/types';
 import type { Overlay, Project, SlotKey, SlotTransform } from '@/document/types';
 import { useEditor } from '@/state/store';
@@ -78,6 +79,11 @@ type Target =
       readonly kind: 'overlay';
       readonly key: string;
       readonly overlay: Overlay;
+      /**
+       * Where a drag should write a keyframe, in the overlay's own time, or
+       * null when it is not animated and the drag sets its resting place.
+       */
+      readonly poseAtMs: number | null;
       readonly box: PlacedBox;
       readonly label: string;
     }
@@ -183,12 +189,13 @@ export function CanvasSelection({
     }
 
     for (const overlay of activeOverlaysAt(project.overlays, playheadMs)) {
-      const box = overlayBox(overlay, aspect, measure);
+      const box = overlayBox(overlay, aspect, measure, playheadMs - overlay.startMs);
       if (!box) continue;
       list.push({
         kind: 'overlay',
         key: overlay.id,
         overlay,
+        poseAtMs: isAnimated(overlay) ? playheadMs - overlay.startMs : null,
         box,
         label:
           overlay.kind === 'text' ? 'Text overlay'
@@ -384,7 +391,12 @@ export function CanvasSelection({
       );
       return;
     }
-    dispatch(actions.setOverlayTransform(drag.target.key, { rotation: normaliseDegrees(degrees) }));
+    const turn = { rotation: normaliseDegrees(degrees) };
+    dispatch(
+      drag.target.poseAtMs === null
+        ? actions.setOverlayTransform(drag.target.key, turn)
+        : actions.setOverlayPose(drag.target.key, drag.target.poseAtMs, turn),
+    );
   };
 
   const onPointerUp = (): void => {
@@ -645,10 +657,17 @@ function moveAction(target: Target, centre: Point, design: Size, aspect: Aspect)
    * taken back out or every drag overshoots by a constant.
    */
   const position = shiftBy(centre, negate(target.box.anchorOffset), target.box.rotation);
-  return actions.setOverlayTransform(target.key, {
+  const placement = {
     x: clamp01(position.x / design.w),
     y: clamp01(position.y / design.h),
-  });
+  };
+
+  // Auto-keyframe: with animation on, dragging records where the overlay is at
+  // *this* moment rather than moving it for the whole clip. Move the playhead,
+  // drag, repeat — which is the entire interaction.
+  return target.poseAtMs === null
+    ? actions.setOverlayTransform(target.key, placement)
+    : actions.setOverlayPose(target.key, target.poseAtMs, placement);
 }
 
 function negate(point: Point): Point {
@@ -732,12 +751,16 @@ function resizeAction(
   const grown = { x: anchorOffset.x * fx, y: anchorOffset.y * fy };
   const position = shiftBy(newCentre, negate(grown), box.rotation);
 
-  return actions.setOverlayTransform(target.key, {
+  const sized = {
     scaleX: clamp(scaleX * fx, MIN_SCALE, MAX_SCALE),
     scaleY: clamp(scaleY * fy, MIN_SCALE, MAX_SCALE),
     x: clamp01(position.x / design.w),
     y: clamp01(position.y / design.h),
-  });
+  };
+
+  return target.poseAtMs === null
+    ? actions.setOverlayTransform(target.key, sized)
+    : actions.setOverlayPose(target.key, target.poseAtMs, sized);
 }
 
 function clamp(n: number, min: number, max: number): number {

@@ -1523,3 +1523,72 @@ different points. Missing that made every overlay drag overshoot by a constant
 — invisible horizontally, where the offset happens to be zero for centred text,
 and exactly half a line vertically. `PlacedBox.anchorOffset` carries the gap so
 both directions agree.
+
+## D-063 — overlay keyframes, in the shape people already know
+
+The render core has done keyframed motion since M1 — `Tracks`, easings and a
+spring solver are the heart of it. What was missing was any way for a user to
+say so. So this is almost entirely a translation problem, and the design
+decisions are about what *not* to build.
+
+**A pose, not a property track.** One keyframe holds position, size, rotation
+and opacity together. Five separate lanes is how a compositor works and is
+exactly the thing that makes compositors need explaining. People think "it is
+here at the start and over there by the end"; a pose is that thought written
+down.
+
+**Auto-keyframe.** Move the playhead, drag the overlay, repeat. There is no
+record button and no "add keyframe" step in the main path — the button in the
+panel exists for the case where you want one without moving anything.
+
+**One easing for the whole overlay**, named Smooth, Even and Springy. A curve
+editor is the point where a motion tool starts needing to be taught.
+
+**Off until asked for.** No `poses`, no behaviour change, no extra widget in
+anyone's way. Turning it on seeds a single pose from wherever the overlay
+already sits, so nothing moves — one keyframe is the same picture as none.
+
+**Presets compose over the path rather than competing with it.** An entrance
+and a motion path both want to control position. The entrance is transient, so
+`composePath` lays it over the first `enter` milliseconds, samples the path at
+the moment it settles and hands back. The exit does the same in reverse, which
+is why an overlay that travelled across the frame leaves from the far side
+rather than snapping home first.
+
+That also avoids the group wrapper the obvious implementation wants, and means
+there is one code path rather than two: an overlay with a single pose samples
+the same value everywhere and every track collapses to exactly the keyframes
+these functions produced before any of this existed. The nineteen existing
+overlay tests passed unchanged through the refactor, which is the evidence for
+that claim.
+
+**A new keyframe is seeded from everything the overlay is already doing.**
+Dropping one to move something sideways must not snap its size, rotation and
+opacity to their defaults at the same instant — the commonest way a keyframe
+editor surprises someone who only meant to nudge one thing. Verified against
+the unfixed version.
+
+The inspector's own placement sliders edit the pose under the playhead too.
+They wrote `transform` at first, which is the resting placement and is ignored
+while a path exists, so they showed a stale number and appeared to do nothing.
+
+**Scene content deliberately does not get this.** A template's elements are the
+template's, and animating them would fight the motion it was designed around.
+They keep the static nudges of D-061.
+
+## D-064 — a scrub publishes the playhead immediately
+
+`scrubTo` moved the clock and updated the ruler's own readout, leaving the
+store's `playheadMs` to the 20Hz sampler. Everything that *acts* on the
+playhead was therefore working from where it had been up to fifty milliseconds
+ago.
+
+That was survivable when the playhead only decided whether a music clip could
+be split. It is not survivable for keyframes: fifty milliseconds is inside the
+sixty-millisecond tolerance that decides whether two keyframes are the same
+one, so a drag straight after a scrub could land on the wrong keyframe, and
+switching animation off could freeze an overlay at the wrong moment. It did,
+and a test caught it.
+
+A scrub is a deliberate move to an exact time, so it now says so at once.
+Playback still publishes at 20Hz, which is all a readout needs.

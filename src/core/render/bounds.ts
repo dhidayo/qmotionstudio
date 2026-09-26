@@ -5,6 +5,7 @@ import type { Aspect, Layer, Rect, Size } from '@/core/types';
 import type { Overlay, SceneInputs } from '@/document/types';
 import { createProps, resolveProps } from '@/core/anim/interpolate';
 import { NO_SLOT_TRANSFORM, type SlotKey, type SlotTransform } from '@/document/types';
+import { poseAt } from '@/document/select/overlay';
 import type { DrawnScene } from './rig';
 import { overlayLayer } from './overlays';
 import { slotKey, slotOf } from './slots';
@@ -91,12 +92,15 @@ export type PlacedBox = OrientedBox & {
 /**
  * The box round an overlay, at rest.
  *
- * Deliberately built from the overlay's *static* transform rather than from
- * its animated tracks. An entrance preset moves and scales the content for its
- * first half-second, and handles that slid around during it would be
- * unusable — you would be chasing the thing you are trying to grab. What the
- * user drags is the placement; the animation is a property of the placement,
- * not a competitor to it.
+ * Built from the overlay's *placement*, not from the tracks the renderer ends
+ * up drawing. An entrance preset moves and scales the content for its first
+ * half-second, and handles that slid around during it would be unusable — you
+ * would be chasing the thing you are trying to grab.
+ *
+ * Where the overlay has a motion path, the placement is itself a function of
+ * time, so `atMs` picks the pose. That is still the placement rather than the
+ * preset: the handles sit where the overlay has been told to be at this
+ * moment, which is exactly what a drag is about to change.
  *
  * Returns null for an overlay with nothing to draw.
  */
@@ -104,6 +108,8 @@ export function overlayBox(
   overlay: Overlay,
   aspect: Aspect,
   measure: TextMeasureContext,
+  /** The overlay's own local time. Irrelevant unless it is animated. */
+  atMs = 0,
 ): PlacedBox | null {
   const design = projectDesign(aspect);
   const built = overlayLayer(overlay, { design, id: idFactory() });
@@ -112,7 +118,7 @@ export function overlayBox(
   const extent = layerExtent(content(built), measure);
   if (extent === null) return null;
 
-  const t = overlay.transform;
+  const t = poseAt(overlay, atMs);
   const scaleX = t.scaleX ?? 1;
   const scaleY = t.scaleY ?? t.scaleX ?? 1;
   const rotation = t.rotation ?? 0;

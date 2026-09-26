@@ -190,3 +190,82 @@ describe('content', () => {
     expect(layer.props.fill).toEqual({ kind: 'role', role: 'ink' });
   });
 });
+
+describe('a keyframed overlay (M-keyframes)', () => {
+  /**
+   * The composition property.
+   *
+   * Presets and a motion path both want to control position, and the whole
+   * design rests on them not fighting: an entrance is transient, so it lays
+   * itself over the path and hands back to it, rather than pinning the overlay
+   * to a fixed point it would then have to jump away from.
+   */
+
+  const path = (patch: Partial<Overlay> = {}): Overlay =>
+    make({
+      enterAnim: 'none',
+      exitAnim: 'none',
+      easing: 'linear',
+      poses: [
+        { atMs: 0, transform: { x: 0.2, y: 0.5 } },
+        { atMs: 3_000, transform: { x: 0.8, y: 0.5 } },
+      ],
+      ...patch,
+    });
+
+  it('moves between its keyframes', () => {
+    const tracks = build(path()).tracks;
+    expect(at(tracks, 0).x).toBeCloseTo(DESIGN.w * 0.2, 4);
+    expect(at(tracks, 1_500).x).toBeCloseTo(DESIGN.w * 0.5, 4);
+    expect(at(tracks, 3_000).x).toBeCloseTo(DESIGN.w * 0.8, 4);
+  });
+
+  it('hands the entrance back to the path instead of pinning it', () => {
+    /*
+     * With `slideIn`, the overlay starts offset from its *first pose* and has
+     * arrived by the time the entrance settles — after which the path takes
+     * over completely. Pinning it to one point instead would make the overlay
+     * snap the moment the preset finished.
+     */
+    const tracks = build(path({ enterAnim: 'slideIn' })).tracks;
+    const settled = 520; // ENTER_MS, well inside a 3s clip
+    // Where the path has already got to by the time the entrance finishes —
+    // not where it started. Arriving at the first pose would mean the overlay
+    // then had to jump forward to catch up with its own motion.
+    const onPathAtSettle = DESIGN.w * (0.2 + 0.6 * (settled / 3_000));
+
+    expect(at(tracks, 0).x, 'starts left of its first pose').toBeLessThan(DESIGN.w * 0.2);
+    expect(at(tracks, settled).x, 'arrives on the path').toBeCloseTo(onPathAtSettle, 0);
+    expect(at(tracks, 1_500).x, 'and then follows it').toBeCloseTo(DESIGN.w * 0.5, 0);
+    expect(at(tracks, 3_000).x).toBeCloseTo(DESIGN.w * 0.8, 0);
+  });
+
+  it('leaves from wherever the path has got to', () => {
+    // Not from the first pose: an overlay that travelled across the frame has
+    // to exit from the far side, which is where it now is.
+    const tracks = build(path({ exitAnim: 'slideIn' })).tracks;
+    expect(at(tracks, 3_000).x).toBeGreaterThan(DESIGN.w * 0.8);
+  });
+
+  it('fades over the path without flattening it', () => {
+    const tracks = build(path({ enterAnim: 'fade' })).tracks;
+    expect(at(tracks, 0).opacity).toBeCloseTo(0, 4);
+    expect(at(tracks, 520).opacity).toBeCloseTo(1, 2);
+    // The move carried on underneath the fade.
+    expect(at(tracks, 520).x).toBeGreaterThan(DESIGN.w * 0.2);
+  });
+
+  it('is keyed separately from the same overlay standing still', () => {
+    const moving = path();
+    const still = make({ enterAnim: 'none', exitAnim: 'none' });
+    expect(overlayKey(moving, DESIGN)).not.toBe(overlayKey(still, DESIGN));
+  });
+
+  it('changes its key when a keyframe moves, or the easing does', () => {
+    const a = path();
+    const b = path({ poses: [{ atMs: 0, transform: { x: 0.2 } }, { atMs: 3_000, transform: { x: 0.9 } }] });
+    const c = path({ easing: 'springy' });
+    expect(overlayKey(a, DESIGN)).not.toBe(overlayKey(b, DESIGN));
+    expect(overlayKey(a, DESIGN)).not.toBe(overlayKey(c, DESIGN));
+  });
+});

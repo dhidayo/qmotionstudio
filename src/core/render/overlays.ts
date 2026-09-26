@@ -3,6 +3,8 @@ import {
   type Direction, type Keyframe, type Layer, type Paint, type Size, type Tracks,
 } from '@/core/types';
 import type { AnimPreset, Overlay } from '@/document/types';
+import { easeOf, poseTrack } from '@/document/select/overlay';
+import { sampleTrack } from '@/core/anim/interpolate';
 
 /**
  * Overlays → layers (§3C, §6.4 step 4).
@@ -63,28 +65,36 @@ export function overlayLayer(overlay: Overlay, ctx: OverlayBuildContext): Layer 
 
   const { design } = ctx;
   const unit = Math.min(design.w, design.h);
-  const t = overlay.transform;
 
-  const x = design.w * (t.x ?? 0.5);
-  const y = design.h * (t.y ?? 0.5);
-  const scaleX = t.scaleX ?? 1;
-  const scaleY = t.scaleY ?? t.scaleX ?? 1;
-  const rotation = t.rotation ?? 0;
-  const opacity = t.opacity ?? 1;
+  /*
+   * The overlay's motion path, in the renderer's own units.
+   *
+   * An overlay that is not animated has exactly one pose, so there is one code
+   * path rather than two — and with a single pose every track below collapses
+   * to what it was before keyframes existed.
+   */
+  const pathX = poseTrack(overlay, 'x', (v) => design.w * v);
+  const pathY = poseTrack(overlay, 'y', (v) => design.h * v);
+  const pathScaleX = poseTrack(overlay, 'scaleX');
+  const pathScaleY = poseTrack(overlay, 'scaleY');
+  const pathRotation = poseTrack(overlay, 'rotation');
+  const pathOpacity = poseTrack(overlay, 'opacity');
 
   const content = contentLayer(overlay, ctx, unit, durationMs);
   if (!content) return null;
 
   const enter = Math.min(ENTER_MS, durationMs / 3);
   const exit = Math.min(EXIT_MS, durationMs / 3);
+  const pathEase = easeOf(overlay.easing);
 
+  const shape = { durationMs, enter, exit, pathEase };
   const tracks: Tracks = {
-    x: offsetTrack(x, unit, overlay.enterAnim, overlay.exitAnim, durationMs, enter, exit, 'x'),
-    y: offsetTrack(y, unit, overlay.enterAnim, overlay.exitAnim, durationMs, enter, exit, 'y'),
-    scaleX: scaleTrack(scaleX, overlay.enterAnim, overlay.exitAnim, durationMs, enter, exit),
-    scaleY: scaleTrack(scaleY, overlay.enterAnim, overlay.exitAnim, durationMs, enter, exit),
-    rotation: [kf(0, rotation)],
-    opacity: opacityTrack(opacity, overlay.enterAnim, overlay.exitAnim, durationMs, enter, exit),
+    x: offsetTrack(pathX, unit, overlay.enterAnim, overlay.exitAnim, shape, 'x'),
+    y: offsetTrack(pathY, unit, overlay.enterAnim, overlay.exitAnim, shape, 'y'),
+    scaleX: scaleTrack(pathScaleX, overlay.enterAnim, overlay.exitAnim, shape),
+    scaleY: scaleTrack(pathScaleY, overlay.enterAnim, overlay.exitAnim, shape),
+    rotation: pathRotation,
+    opacity: opacityTrack(pathOpacity, overlay.enterAnim, overlay.exitAnim, shape),
   };
 
   // wipeIn is the one preset that is not a transform: the content has to stay
@@ -215,82 +225,144 @@ function offsetFor(preset: AnimPreset, unit: number, axis: 'x' | 'y'): number {
   }
 }
 
+/** The shape of an overlay's entrance and exit, shared by every track. */
+type Shape = {
+  readonly durationMs: number;
+  readonly enter: number;
+  readonly exit: number;
+  readonly pathEase: Keyframe['ease'];
+};
+
+/**
+ * Lays an entrance and an exit over the user's path.
+ *
+ * The presets are transient: they act only in the first `enter` and last
+ * `exit` milliseconds, and in between the path is left exactly as it was. So
+ * the two compose rather than compete — "slide in" still slides in, and it
+ * slides in to wherever the path says the overlay should be by then, instead
+ * of to a fixed point it would then have to jump away from.
+ *
+ * Sampling the path at the boundaries is what makes that exact, and it is why
+ * this needs no group wrapper and no second code path: an overlay with one
+ * pose samples the same value everywhere, and every track below collapses to
+ * precisely the keyframes these functions produced before keyframes existed.
+ */
+function composePath(
+  path: readonly Keyframe[],
+  shape: Shape,
+  entrance: { readonly fromValue: number; readonly settleMs: number; readonly ease: Keyframe['ease'] } | null,
+  departure: { readonly toValue: number; readonly startMs: number; readonly ease: Keyframe['ease'] } | null,
+): readonly Keyframe[] {
+  const at = (t: number): number => sampleTrack(path, t) ?? 0;
+  const from = entrance ? entrance.settleMs : 0;
+  const until = departure ? departure.startMs : shape.durationMs;
+
+  const frames: Keyframe[] = [];
+
+  if (entrance) {
+    frames.push(kf(0, entrance.fromValue, 'linear'));
+    frames.push(kf(from, at(from), entrance.ease));
+  } else {
+    frames.push(kf(0, at(0), 'linear'));
+  }
+
+  for (const key of path) {
+    if (key.t > from && key.t < until) frames.push(key);
+  }
+
+  if (departure) {
+    frames.push(kf(until, at(until), shape.pathEase));
+    frames.push(kf(shape.durationMs, departure.toValue, departure.ease));
+  } else {
+    // Without an exit the path's own last keyframe is the end of the story,
+    // and the loop above stops short of it.
+    const last = path[path.length - 1];
+    if (last && last.t >= until && last.t > from) frames.push(last);
+  }
+
+  return frames;
+}
+
 function offsetTrack(
-  value: number,
+  path: readonly Keyframe[],
   unit: number,
   enterAnim: AnimPreset,
   exitAnim: AnimPreset,
-  durationMs: number,
-  enter: number,
-  exit: number,
+  shape: Shape,
   axis: 'x' | 'y',
 ): readonly Keyframe[] {
   const enterOffset = offsetFor(enterAnim, unit, axis);
   // Exits leave the way they would have come in, mirrored, so a slideIn/slideIn
   // pair travels across the frame rather than doubling back on itself.
   const exitOffset = -offsetFor(exitAnim, unit, axis);
+  const at = (t: number): number => sampleTrack(path, t) ?? 0;
 
-  const frames: Keyframe[] = [];
-  if (enterOffset !== 0) {
-    frames.push(kf(0, value + enterOffset), kf(enter, value, 'outCubic'));
-  } else {
-    frames.push(kf(0, value));
-  }
-  if (exitOffset !== 0) {
-    frames.push(kf(durationMs - exit, value), kf(durationMs, value + exitOffset, 'inCubic'));
-  }
-  return frames;
+  return composePath(
+    path,
+    shape,
+    enterOffset === 0
+      ? null
+      : { fromValue: at(0) + enterOffset, settleMs: shape.enter, ease: 'outCubic' },
+    exitOffset === 0
+      ? null
+      : {
+          toValue: at(shape.durationMs) + exitOffset,
+          startMs: shape.durationMs - shape.exit,
+          ease: 'inCubic',
+        },
+  );
 }
 
 function scaleTrack(
-  value: number,
+  path: readonly Keyframe[],
   enterAnim: AnimPreset,
   exitAnim: AnimPreset,
-  durationMs: number,
-  enter: number,
-  exit: number,
+  shape: Shape,
 ): readonly Keyframe[] {
-  const frames: Keyframe[] = [];
+  const at = (t: number): number => sampleTrack(path, t) ?? 1;
 
-  if (enterAnim === 'popIn') {
-    // A spring, because a pop that eases out does not pop (§6.1's solver is
-    // baked to a LUT at build time, so this costs nothing per frame).
-    frames.push(
-      kf(0, value * 0.82),
-      kf(enter * 1.6, value, { kind: 'spring', stiffness: 260, damping: 18, mass: 1 }),
-    );
-  } else {
-    frames.push(kf(0, value));
-  }
-
-  if (exitAnim === 'popIn') {
-    frames.push(kf(durationMs - exit, value), kf(durationMs, value * 0.86, 'inCubic'));
-  }
-  return frames;
+  return composePath(
+    path,
+    shape,
+    enterAnim === 'popIn'
+      ? {
+          fromValue: at(0) * 0.82,
+          settleMs: Math.min(shape.enter * 1.6, shape.durationMs),
+          // A spring, because a pop that eases out does not pop (§6.1's solver
+          // is baked to a LUT at build time, so this costs nothing per frame).
+          ease: { kind: 'spring', stiffness: 260, damping: 18, mass: 1 },
+        }
+      : null,
+    exitAnim === 'popIn'
+      ? {
+          toValue: at(shape.durationMs) * 0.86,
+          startMs: shape.durationMs - shape.exit,
+          ease: 'inCubic',
+        }
+      : null,
+  );
 }
 
 function opacityTrack(
-  value: number,
+  path: readonly Keyframe[],
   enterAnim: AnimPreset,
   exitAnim: AnimPreset,
-  durationMs: number,
-  enter: number,
-  exit: number,
+  shape: Shape,
 ): readonly Keyframe[] {
-  const frames: Keyframe[] = [];
-
   // Every preset but 'none' fades: an element that slides in at full opacity
   // reads as a glitch, not as a move. wipeIn is the exception — the mask is
   // already doing the reveal and a fade on top of it looks like a mistake.
   const fadesIn = enterAnim !== 'none' && enterAnim !== 'wipeIn';
   const fadesOut = exitAnim !== 'none' && exitAnim !== 'wipeIn';
 
-  if (fadesIn) frames.push(kf(0, 0), kf(enter, value));
-  else frames.push(kf(0, value));
-
-  if (fadesOut) frames.push(kf(durationMs - exit, value), kf(durationMs, 0, 'inCubic'));
-
-  return frames;
+  return composePath(
+    path,
+    shape,
+    fadesIn ? { fromValue: 0, settleMs: shape.enter, ease: 'outCubic' } : null,
+    fadesOut
+      ? { toValue: 0, startMs: shape.durationMs - shape.exit, ease: 'inCubic' }
+      : null,
+  );
 }
 
 function clipTrack(
@@ -329,6 +401,11 @@ export function overlayKey(overlay: Overlay, design: Size): string {
     overlay.enterAnim,
     overlay.exitAnim,
     overlay.transform,
+    // The path and its easing both change what is built, so both belong in the
+    // key. Without them a keyframe edit would be served the previous layer and
+    // the overlay would simply not move.
+    overlay.poses ?? null,
+    overlay.easing ?? null,
     content.kind,
     content.kind === 'text' ? [content.text, content.style] : content.mediaId,
   ]);

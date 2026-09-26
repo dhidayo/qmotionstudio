@@ -1,6 +1,7 @@
 import type { Palette, PaletteRole, PropValues } from '@/core/types';
 import { DEFAULT_LOGO, newId } from '../defaults';
 import { NO_SLOT_TRANSFORM } from '../types';
+import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
 import type {
   AnimPreset,
   AudioClip,
@@ -8,6 +9,8 @@ import type {
   LogoPlacement,
   Overlay,
   OverlayContent,
+  OverlayEasing,
+  OverlayPose,
   PhotoCropMode,
   PhotoFrame,
   PhotoInput,
@@ -851,6 +854,101 @@ export function setOverlayTransform(id: string, patch: PropValues): Action {
         ...overlay,
         transform: { ...overlay.transform, ...patch },
       })),
+  };
+}
+
+/** How close two keyframes have to be to count as the same moment. */
+export const POSE_TOLERANCE_MS = 60;
+
+/**
+ * Turns an overlay's motion path on or off.
+ *
+ * Switching on seeds a single pose from wherever the overlay already sits, so
+ * nothing moves and nothing is lost — one keyframe is the same picture as no
+ * keyframes. Switching off freezes it where the playhead is, which is the
+ * position the user is actually looking at when they decide they have had
+ * enough of animating it.
+ */
+export function setOverlayAnimated(id: string, animated: boolean, atMs: number): Action {
+  return {
+    label: animated ? 'Animate overlay' : 'Stop animating overlay',
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        if (animated) {
+          if (isAnimated(overlay)) return overlay;
+          return { ...overlay, poses: [{ atMs: 0, transform: { ...overlay.transform } }] };
+        }
+        const frozen = poseAt(overlay, atMs);
+        const { poses: _poses, ...rest } = overlay;
+        return { ...rest, transform: frozen };
+      }),
+  };
+}
+
+export function setOverlayEasing(id: string, easing: OverlayEasing): Action {
+  return {
+    label: 'Change overlay easing',
+    apply: (project) => editOverlay(project, id, (overlay) => ({ ...overlay, easing })),
+  };
+}
+
+/**
+ * Writes a keyframe at `atMs`, creating one if there is not already one there.
+ *
+ * The new pose is seeded from everything the overlay is *already* doing at
+ * that moment and then patched, rather than from the patch alone. Otherwise
+ * dropping a keyframe to move something sideways would snap its size, rotation
+ * and opacity to their defaults at the same instant — the classic way a
+ * keyframe editor surprises someone who only wanted to nudge one thing.
+ */
+export function setOverlayPose(id: string, atMs: number, patch: PropValues): Action {
+  return {
+    label: 'Move overlay',
+    // Per moment as well as per overlay: dragging at one keyframe and then at
+    // another is two undo steps, which is what it looks like from outside.
+    coalesceKey: `overlayPose:${id}:${Math.round(atMs / POSE_TOLERANCE_MS)}`,
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        const at = Math.max(0, Math.round(atMs));
+        const seeded: OverlayPose = { atMs: at, transform: { ...poseAt(overlay, at), ...patch } };
+
+        const poses = overlay.poses ?? [{ atMs: 0, transform: { ...overlay.transform } }];
+        const existing = poseIndexAt({ ...overlay, poses }, at, POSE_TOLERANCE_MS);
+
+        const next =
+          existing >= 0
+            ? poses.map((pose, index) =>
+                index === existing ? { ...seeded, atMs: pose.atMs } : pose,
+              )
+            : [...poses, seeded].sort((a, b) => a.atMs - b.atMs);
+
+        return { ...overlay, poses: next };
+      }),
+  };
+}
+
+/**
+ * Removes the keyframe at `atMs`.
+ *
+ * Taking away the last one turns animation off rather than leaving an overlay
+ * animated by an empty path, which would have no defined position at all.
+ */
+export function removeOverlayPose(id: string, atMs: number): Action {
+  return {
+    label: 'Remove keyframe',
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        const index = poseIndexAt(overlay, atMs, POSE_TOLERANCE_MS);
+        if (index < 0) return overlay;
+
+        const remaining = (overlay.poses ?? []).filter((_, at) => at !== index);
+        if (remaining.length === 0) {
+          const frozen = poseAt(overlay, atMs);
+          const { poses: _poses, ...rest } = overlay;
+          return { ...rest, transform: frozen };
+        }
+        return { ...overlay, poses: remaining };
+      }),
   };
 }
 

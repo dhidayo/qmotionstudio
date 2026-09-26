@@ -4,6 +4,7 @@ import type { Overlay } from '@/document/types';
 import { sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
 import { DEFAULT_OVERLAY_MS, DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } from '@/document/defaults';
 import * as actions from '@/document/actions';
+import { isAnimated, posesOf } from '@/document/select/overlay';
 import { useEditor } from '@/state/store';
 import { setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
@@ -106,7 +107,18 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const scrubTo = useCallback((clientX: number): void => {
     clock.seek(laneMs(clientX));
     setTimeMs(clock.timeMs);
-  }, [clock, laneMs]);
+    /*
+     * Published straight away, not left to the 20Hz sampler.
+     *
+     * A scrub is a deliberate move to an exact moment, and everything that
+     * acts on the playhead — where a keyframe gets written, whether a music
+     * clip can be split — would otherwise be working from where the playhead
+     * was up to fifty milliseconds ago. For keyframes that is inside the
+     * tolerance that decides whether two of them are the same one, so a drag
+     * immediately after a scrub could land on the wrong keyframe entirely.
+     */
+    setPlayhead(clock.timeMs);
+  }, [clock, laneMs, setPlayhead]);
 
   const onRulerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     capturePointer(event.currentTarget, event.pointerId);
@@ -473,6 +485,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                     >
                       <TrimHandle side="start" onDown={(e) => { beginClipDrag(e, overlay, 'trimStart'); }} onMove={onClipMove} onUp={endClipDrag} />
                       <span className="pointer-events-none block truncate px-2">{labelFor(overlay)}</span>
+                      <Keyframes overlay={overlay} active={active} />
                       <TrimHandle side="end" onDown={(e) => { beginClipDrag(e, overlay, 'trimEnd'); }} onMove={onClipMove} onUp={endClipDrag} />
                     </div>
                   );
@@ -584,5 +597,44 @@ function TrimHandle({
       className="absolute inset-y-0 w-2 cursor-ew-resize"
       style={{ [side === 'start' ? 'left' : 'right']: 0 }}
     />
+  );
+}
+
+/**
+ * Keyframe diamonds along an overlay's clip.
+ *
+ * Diamonds because that is what a keyframe looks like in every tool anyone has
+ * used, and being able to see at a glance that there are three of them — and
+ * roughly where — is most of what the timeline has to say about motion. They
+ * are markers, not handles: retiming one is a drag with a meaning of its own
+ * and can wait until there is a reason for it.
+ */
+function Keyframes({
+  overlay,
+  active,
+}: {
+  overlay: Overlay;
+  active: boolean;
+}): React.JSX.Element | null {
+  if (!isAnimated(overlay)) return null;
+
+  const span = Math.max(1, overlay.endMs - overlay.startMs);
+
+  return (
+    <>
+      {posesOf(overlay).map((pose) => (
+        <span
+          key={pose.atMs}
+          aria-hidden
+          data-keyframe={Math.round(pose.atMs)}
+          className="pointer-events-none absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border"
+          style={{
+            left: `${Math.min(100, Math.max(0, (pose.atMs / span) * 100))}%`,
+            background: active ? 'var(--c-accent)' : 'var(--c-ink-faint)',
+            borderColor: 'var(--c-panel)',
+          }}
+        />
+      ))}
+    </>
   );
 }
