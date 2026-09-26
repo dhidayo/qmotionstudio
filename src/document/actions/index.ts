@@ -3,6 +3,7 @@ import { DEFAULT_LOGO, newId } from '../defaults';
 import { NO_SLOT_TRANSFORM } from '../types';
 import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
 import { nudgeAt, nudgePoses } from '@/core/render/slots';
+import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../select/motion';
 import type {
   AnimPreset,
   AudioClip,
@@ -1100,6 +1101,158 @@ export function setOverlayAnimated(id: string, animated: boolean, atMs: number):
         return { ...rest, transform: frozen };
       }),
   };
+}
+
+/**
+ * Gives an overlay a motion running from `atMs` for the default length.
+ *
+ * Both ends start as the pose the overlay already holds, so adding a motion
+ * changes nothing until the element is moved at one end of it — which is the
+ * point: the bar appears on the timeline first, and the destination is set by
+ * dragging the thing itself.
+ */
+export function addOverlayMotion(id: string, atMs: number): Action {
+  return {
+    label: 'Add motion',
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        const limit = Math.max(MIN_MOTION_MS, overlay.endMs - overlay.startMs);
+        const span = newSpan(Math.max(0, atMs), limit);
+        const held = poseAt(overlay, span.startMs);
+        return {
+          ...overlay,
+          poses: [
+            { atMs: span.startMs, transform: { ...held } },
+            { atMs: span.endMs, transform: { ...held } },
+          ],
+        };
+      }),
+  };
+}
+
+/** Slides or stretches an overlay's motion on the timeline. */
+export function reshapeOverlayMotion(
+  id: string,
+  change: { move: number } | { edge: 'start' | 'end'; toMs: number },
+): Action {
+  return {
+    label: 'move' in change ? 'Move motion' : 'Change motion length',
+    coalesceKey: `overlayMotion:${id}`,
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        const poses = overlay.poses ?? [];
+        const span = spanOf(poses.map((pose) => pose.atMs));
+        if (!span) return overlay;
+
+        const limit = Math.max(MIN_MOTION_MS, overlay.endMs - overlay.startMs);
+        const next =
+          'move' in change
+            ? movedSpan(span, change.move, limit)
+            : resizedSpan(span, change.edge, change.toMs, limit);
+
+        return { ...overlay, poses: retimed(poses, span, next, (pose) => pose.atMs, (pose, atMs) => ({ ...pose, atMs })) };
+      }),
+  };
+}
+
+/** The same, for one of the template's own elements. */
+export function addSlotMotion(key: SlotKey, atMs: number, sceneMs: number): Action {
+  return {
+    label: 'Add motion',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const current = inputs.slotTransforms[key] ?? NO_SLOT_TRANSFORM;
+        const span = newSpan(Math.max(0, atMs), Math.max(MIN_MOTION_MS, sceneMs));
+        const held = nudgeAt(current, span.startMs);
+        return {
+          ...inputs,
+          slotTransforms: {
+            ...inputs.slotTransforms,
+            [key]: {
+              ...current,
+              poses: [
+                { ...held, atMs: span.startMs },
+                { ...held, atMs: span.endMs },
+              ],
+            },
+          },
+        };
+      }),
+  };
+}
+
+export function reshapeSlotMotion(
+  key: SlotKey,
+  sceneMs: number,
+  change: { move: number } | { edge: 'start' | 'end'; toMs: number },
+): Action {
+  return {
+    label: 'move' in change ? 'Move motion' : 'Change motion length',
+    coalesceKey: `slotMotion:${key}`,
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const current = inputs.slotTransforms[key];
+        const poses = current?.poses ?? [];
+        const span = spanOf(poses.map((pose) => pose.atMs));
+        if (!current || !span) return inputs;
+
+        const limit = Math.max(MIN_MOTION_MS, sceneMs);
+        const next =
+          'move' in change
+            ? movedSpan(span, change.move, limit)
+            : resizedSpan(span, change.edge, change.toMs, limit);
+
+        return {
+          ...inputs,
+          slotTransforms: {
+            ...inputs.slotTransforms,
+            [key]: {
+              ...current,
+              poses: retimed(poses, span, next, (pose) => pose.atMs, (pose, atMs) => ({ ...pose, atMs })),
+            },
+          },
+        };
+      }),
+  };
+}
+
+export function setSlotEasing(key: SlotKey, easing: OverlayEasing): Action {
+  return {
+    label: 'Change motion style',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const current = inputs.slotTransforms[key] ?? NO_SLOT_TRANSFORM;
+        return {
+          ...inputs,
+          slotTransforms: { ...inputs.slotTransforms, [key]: { ...current, easing } },
+        };
+      }),
+  };
+}
+
+/**
+ * Maps pose times from one span onto another.
+ *
+ * The ends land exactly on the new ends; anything between keeps its position
+ * *proportionally*, so stretching a three-point path stretches the whole path
+ * rather than dragging one end away from a stationary middle.
+ */
+function retimed<T>(
+  poses: readonly T[],
+  from: { startMs: number; endMs: number },
+  to: { startMs: number; endMs: number },
+  timeOf: (pose: T) => number,
+  withTime: (pose: T, atMs: number) => T,
+): readonly T[] {
+  const fromLength = Math.max(1, from.endMs - from.startMs);
+  const toLength = to.endMs - to.startMs;
+
+  return poses
+    .map((pose) => {
+      const ratio = (timeOf(pose) - from.startMs) / fromLength;
+      return withTime(pose, Math.round(to.startMs + ratio * toLength));
+    })
+    .sort((a, b) => timeOf(a) - timeOf(b));
 }
 
 export function setOverlayEasing(id: string, easing: OverlayEasing): Action {

@@ -61,14 +61,17 @@ export function SlotKeyframes({ slotKey }: { slotKey: string }): React.JSX.Eleme
       times={hasNudgePoses(current) ? nudgePoses(current).map((pose) => pose.atMs) : []}
       spanMs={scene.durationMs}
       localMs={localMs}
-      label="Use keyframes"
       explain={
-        'A keyframe records where you have moved this to at one moment. Give it two and it '
-        + 'travels between them, on top of whatever the template already does.'
+        'Give this a motion and it travels from where it is now to wherever you put it at the '
+        + 'end, on top of whatever the template already does. The motion shows on the timeline '
+        + 'as a bar you can move and stretch.'
       }
+      easing={{
+        value: current.easing ?? 'smooth',
+        onChange: (easing) => { dispatch(actions.setSlotEasing(slotKey, easing)); },
+      }}
       onToggle={(on) => { dispatch(actions.setSlotAnimated(slotKey, on, localMs)); }}
-      onAdd={(atMs) => { dispatch(actions.setSlotPose(slotKey, atMs, {})); }}
-      onRemove={(atMs) => { dispatch(actions.removeSlotPose(slotKey, atMs)); }}
+      onAdd={(atMs) => { dispatch(actions.addSlotMotion(slotKey, atMs, scene.durationMs)); }}
       onGoTo={goTo}
     />
   );

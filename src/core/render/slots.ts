@@ -2,6 +2,7 @@ import type { Keyframe, Layer, Size, SlotRef, Tracks } from '@/core/types';
 import {
   NO_SLOT_TRANSFORM, type SlotKey, type SlotPose, type SlotTransform,
 } from '@/document/types';
+import { easeOf } from '@/document/select/overlay';
 import { sampleTrack } from '@/core/anim/interpolate';
 
 /**
@@ -178,7 +179,7 @@ export function nudgeAt(t: SlotTransform, atMs: number): SlotPose {
   if (poses.length === 1 && only) return { ...only, atMs };
 
   const track = (pick: (pose: SlotPose) => number): readonly Keyframe[] =>
-    poses.map((pose) => ({ t: pose.atMs, v: pick(pose), ease: 'inOutCubic' as const }));
+    poses.map((pose) => ({ t: pose.atMs, v: pick(pose), ease: easeOf(t.easing) }));
 
   return {
     atMs,
@@ -261,7 +262,7 @@ function movingNudge(tracks: Tracks, t: SlotTransform, design: Size): Tracks {
     times(track).map((at) => ({
       t: at,
       v: combine(sampleTrack(track ?? [], at) ?? fallback, nudgeAt(t, at)),
-      ease: 'inOutCubic' as const,
+      ease: easeOf(t.easing),
     }));
 
   next.x = compose(tracks.x, 0, (base, pose) => base + pose.offsetX * design.w);

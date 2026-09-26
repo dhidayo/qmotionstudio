@@ -65,137 +65,109 @@ async function overlayProject(page: Page): Promise<void> {
   await page.getByRole('group', { name: 'Exit' }).getByRole('button', { name: 'None', exact: true }).click();
 }
 
-const diamonds = (page: Page) => page.locator('[data-keyframe]');
 
-/** The Keyframes toggle renders as a switch with its label as text. */
-const movementSwitch = (page: Page) => page.getByRole('switch', { name: 'Use keyframes' });
+const bar = (page: Page) => page.locator('[data-motion-bar]');
+const addMotion = (page: Page) => page.getByRole('button', { name: 'Add motion' });
 
-const chips = (page: Page) => page.locator('[data-keyframe-chip]');
+test.describe('motion is a span on the timeline', () => {
+  /*
+   * The model people arrive with, and the one every tool they have used gives
+   * them: a bar with a start and an end that can be dragged and stretched.
+   * Point keyframes came first and were repeatedly reported as confusing —
+   * "can't I have them on the timeline like other products have them".
+   */
 
-test.describe('overlay keyframes', () => {
-  test('are off until asked for, and start from where the overlay already is', async ({ page }) => {
+  test('adding a motion puts a bar on the timeline', async ({ page }) => {
     await overlayProject(page);
-    await expect(diamonds(page)).toHaveCount(0);
+    await expect(bar(page)).toHaveCount(0);
 
-    const before = await boxOf(page);
-    await movementSwitch(page).click();
+    await addMotion(page).click();
+    await expect(bar(page)).toHaveCount(1);
+    // Three seconds, not five: the default is clamped to the element, and this
+    // overlay is three seconds long.
+    await expect(bar(page)).toHaveAttribute('title', '0.0s → 3.0s');
+  });
 
-    // One keyframe is the same picture as none: nothing may move.
-    await expect(chips(page)).toHaveCount(1);
-    await expect(diamonds(page)).toHaveCount(1);
+  test('adding one changes nothing until the element is moved', async ({ page }) => {
+    await overlayProject(page);
+    const before = centreOf(await boxOf(page));
 
-    const after = await boxOf(page);
+    await addMotion(page).click();
+    await seek(page, 4_000);
+
+    // Both ends hold the pose it already had, so the overlay has not moved.
+    const after = centreOf(await boxOf(page));
     expect(after.x).toBeCloseTo(before.x, 0);
     expect(after.y).toBeCloseTo(before.y, 0);
   });
 
-  test('dragging at a new time records a keyframe there', async ({ page }) => {
+  test('the end of the bar is where the element ends up', async ({ page }) => {
     await overlayProject(page);
-    await movementSwitch(page).click();
+    await addMotion(page).click();
 
-    await seek(page, 4_400);
-    const box = await boxOf(page);
-    await drag(page, centreOf(box), { x: centreOf(box).x + 120, y: centreOf(box).y + 90 });
-
-    await expect(diamonds(page)).toHaveCount(2);
-    // 4400 project − 1600 overlay start = 2800 in the overlay's own time.
-    await expect(diamonds(page).nth(1)).toHaveAttribute('data-keyframe', '2800');
-  });
-
-  test('the overlay is genuinely between its keyframes in between', async ({ page }) => {
-    await overlayProject(page);
-    await movementSwitch(page).click();
-
-    await seek(page, 1_600);
-    const start = centreOf(await boxOf(page));
-
-    await seek(page, 4_400);
+    await page.getByRole('button', { name: 'Go to end' }).click();
     const from = centreOf(await boxOf(page));
-    await drag(page, from, { x: from.x + 120, y: from.y + 90 });
+    await drag(page, from, { x: from.x + 130, y: from.y + 90 });
+
+    await page.getByRole('button', { name: 'Go to start' }).click();
+    const start = centreOf(await boxOf(page));
+    await page.getByRole('button', { name: 'Go to end' }).click();
     const end = centreOf(await boxOf(page));
 
-    expect(end.x).toBeGreaterThan(start.x + 80);
-
-    await seek(page, 3_000);
-    const middle = centreOf(await boxOf(page));
-
-    expect(middle.x, 'past the start').toBeGreaterThan(start.x + 10);
-    expect(middle.x, 'short of the end').toBeLessThan(end.x - 10);
-    expect(middle.y).toBeGreaterThan(start.y + 5);
-    expect(middle.y).toBeLessThan(end.y - 5);
+    expect(end.x).toBeGreaterThan(start.x + 90);
+    expect(end.y).toBeGreaterThan(start.y + 60);
   });
 
-  test('a keyframe can be removed, and the last one turns movement off', async ({ page }) => {
+  test('dragging an end of the bar changes how long it takes', async ({ page }) => {
     await overlayProject(page);
-    await movementSwitch(page).click();
+    await addMotion(page).click();
+    await expect(bar(page)).toHaveAttribute('title', '0.0s → 3.0s');
 
-    await seek(page, 4_400);
-    const box = await boxOf(page);
-    await drag(page, centreOf(box), { x: centreOf(box).x + 100, y: centreOf(box).y });
-    await expect(diamonds(page)).toHaveCount(2);
+    const grip = await page.locator('[data-motion-grip="start"]').boundingBox();
+    if (!grip) throw new Error('no grip');
 
-    // The playhead is on the keyframe just written, so Remove is live.
-    // Each keyframe carries its own remove button, labelled with its time.
-    await page.getByRole('button', { name: /^Remove the keyframe at/ }).last().click();
-    await expect(diamonds(page)).toHaveCount(1);
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(grip.x + 60, grip.y + grip.height / 2, { steps: 6 });
+    await page.mouse.up();
 
-    await page.getByRole('button', { name: /^Remove the keyframe at/ }).first().click();
-    await expect(diamonds(page)).toHaveCount(0);
-    await expect(page.getByText('A keyframe records where this overlay is')).toBeVisible();
+    // Shorter, and still ending where it did.
+    const title = await bar(page).getAttribute('title');
+    expect(title).toMatch(/→ 3\.0s$/);
+    expect(title).not.toBe('0.0s → 3.0s');
   });
 
-  test('turning movement off leaves it where the playhead showed it', async ({ page }) => {
+  test('a motion can be removed', async ({ page }) => {
     await overlayProject(page);
-    await movementSwitch(page).click();
+    await addMotion(page).click();
+    await expect(bar(page)).toHaveCount(1);
 
-    await seek(page, 4_400);
-    const box = await boxOf(page);
-    await drag(page, centreOf(box), { x: centreOf(box).x + 130, y: centreOf(box).y });
-
-    await seek(page, 3_000);
-    const midway = centreOf(await boxOf(page));
-
-    await movementSwitch(page).click();
-    await expect(diamonds(page)).toHaveCount(0);
-
-    const frozen = centreOf(await boxOf(page));
-    expect(frozen.x).toBeCloseTo(midway.x, 0);
-    expect(frozen.y).toBeCloseTo(midway.y, 0);
+    await page.getByRole('button', { name: 'Remove motion' }).click();
+    await expect(bar(page)).toHaveCount(0);
+    await expect(addMotion(page)).toBeVisible();
   });
 
-  test('a whole drag at one keyframe is one undo step', async ({ page }) => {
+  test('the motion style can be changed', async ({ page }) => {
     await overlayProject(page);
-    await movementSwitch(page).click();
+    await addMotion(page).click();
 
-    await seek(page, 4_400);
-    const box = await boxOf(page);
-    const before = centreOf(box);
-    await drag(page, before, { x: before.x + 110, y: before.y });
-    expect(centreOf(await boxOf(page)).x).toBeGreaterThan(before.x + 80);
+    const styles = page.getByRole('group', { name: 'How it moves' });
+    await expect(styles.getByRole('button', { name: 'Smooth' })).toHaveAttribute('aria-pressed', 'true');
 
-    await page.keyboard.press('ControlOrMeta+z');
-    await page.waitForTimeout(200);
-    expect(centreOf(await boxOf(page)).x).toBeCloseTo(before.x, 0);
+    await styles.getByRole('button', { name: 'Soft bounce' }).click();
+    await expect(styles.getByRole('button', { name: 'Soft bounce' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
 
 test.describe('seeing the motion', () => {
-  test('draws the path across the artboard once there is one', async ({ page }) => {
-    /*
-     * The discoverability fix. With only a panel and a few small diamonds on
-     * the clip, nothing on screen answered the question anyone actually has
-     * while placing keyframes: where is this thing going?
-     */
+  test('draws the path across the artboard once the element has moved', async ({ page }) => {
     await overlayProject(page);
     await expect(page.locator('[data-motion-path]')).toHaveCount(0);
 
-    await movementSwitch(page).click();
-    // One pose is not a journey, but the dot still marks it.
-    await expect(page.locator('[data-path-pose]')).toHaveCount(1);
-
-    await seek(page, 4_400);
-    const box = await boxOf(page);
-    await drag(page, centreOf(box), { x: centreOf(box).x + 120, y: centreOf(box).y + 80 });
+    await addMotion(page).click();
+    await page.getByRole('button', { name: 'Go to end' }).click();
+    const from = centreOf(await boxOf(page));
+    await drag(page, from, { x: from.x + 120, y: from.y + 80 });
 
     await expect(page.locator('[data-motion-path] polyline')).toHaveCount(1);
     await expect(page.locator('[data-path-pose]')).toHaveCount(2);
@@ -203,80 +175,10 @@ test.describe('seeing the motion', () => {
 
   test('goes away when the overlay is deselected', async ({ page }) => {
     await overlayProject(page);
-    await movementSwitch(page).click();
+    await addMotion(page).click();
     await expect(page.locator('[data-motion-path]')).toHaveCount(1);
 
     await page.keyboard.press('Escape');
     await expect(page.locator('[data-motion-path]')).toHaveCount(0);
-  });
-});
-
-test.describe('naming what it does', () => {
-  test('says "keyframes" before anything is turned on', async ({ page }) => {
-    /*
-     * Reported as "nothing on the UI says keyframe, no place to add it or
-     * define keyframe start and keyframe end". The word only appeared *after*
-     * flipping a switch called "Animate movement", so anyone looking for
-     * keyframes found nothing at all.
-     */
-    await overlayProject(page);
-    await expect(page.getByText('Keyframes', { exact: true })).toBeVisible();
-    await expect(page.getByText('A keyframe records where this overlay is')).toBeVisible();
-  });
-
-  test('the playhead decides where a keyframe goes', async ({ page }) => {
-    /*
-     * The flow the buttons used to fight. There were two of them, "Set start"
-     * and "Set end", which chose the times themselves — start meant zero and
-     * end meant the end of the clip, wherever the playhead actually was. The
-     * scrubber is how someone says *when*; a control that overrides that reads
-     * as the tool not listening.
-     */
-    await overlayProject(page);
-    await movementSwitch(page).click();
-    await expect(chips(page)).toHaveCount(1);
-
-    await seek(page, 3_600);
-    await page.getByRole('button', { name: 'Add keyframe here' }).click();
-
-    // 3600 project − 1600 overlay start = 2.0s in the overlay's own time.
-    await expect(chips(page)).toHaveCount(2);
-    await expect(chips(page).last()).toHaveText('2.0s');
-  });
-
-  test('two keyframes make it travel between them', async ({ page }) => {
-    await overlayProject(page);
-    await movementSwitch(page).click();
-
-    await seek(page, 4_400);
-    const box = await boxOf(page);
-    await drag(page, centreOf(box), { x: centreOf(box).x + 120, y: centreOf(box).y + 80 });
-    await expect(chips(page)).toHaveCount(2);
-
-    // Both ends are reachable from the list, which is the only place times are
-    // named now.
-    await chips(page).first().click();
-    const start = centreOf(await boxOf(page));
-
-    await chips(page).last().click();
-    const end = centreOf(await boxOf(page));
-
-    expect(end.x).toBeGreaterThan(start.x + 80);
-    expect(end.y).toBeGreaterThan(start.y + 50);
-  });
-
-  test('each keyframe is listed with its time, and jumps the playhead', async ({ page }) => {
-    await overlayProject(page);
-    await movementSwitch(page).click();
-    await seek(page, 3_600);
-    await page.getByRole('button', { name: 'Add keyframe here' }).click();
-
-    await expect(chips(page)).toHaveCount(2);
-    await expect(chips(page).first()).toHaveText('0.0s');
-
-    // The chip for the moment the playhead is on is the current one.
-    await expect(chips(page).last()).toHaveAttribute('aria-current', 'true');
-    await chips(page).first().click();
-    await expect(chips(page).first()).toHaveAttribute('aria-current', 'true');
   });
 });

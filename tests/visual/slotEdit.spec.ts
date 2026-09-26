@@ -57,17 +57,6 @@ async function frameHash(page: Page): Promise<string> {
   });
 }
 
-/**
- * Moves the playhead.
- *
- * Showcase has no timeline — it has the scrub *slider* under the artboard —
- * so this drives that. The timeline's own click-to-scrub is covered where
- * there is a timeline to click.
- */
-async function seek(page: Page, ms: number): Promise<void> {
-  await page.getByLabel('Scrub').fill(String(ms));
-}
-
 /** Scoped: the Photos tab has frame-ratio buttons with the same labels. */
 const aspectButton = (page: Page, label: string) =>
   page.getByRole('group', { name: 'Aspect ratio' }).getByRole('button', { name: label, exact: true });
@@ -310,62 +299,53 @@ test.describe('stacking (Arrange)', () => {
   });
 });
 
-test.describe('keyframes on a template element', () => {
+test.describe('motion on a template element', () => {
   /*
-   * Reported twice, the second time as "nothing on the UI says keyframe" from
-   * someone with a photo selected. Keyframes existed only for overlays, so a
-   * selected photo offered a Placement section with nothing in it but "Reset
-   * to template" — which reads as the product not having the feature at all.
+   * The same span model as an overlay's, on the scene track — a template photo
+   * has no clip of its own. Reported twice before it worked at all: keyframes
+   * existed only for overlays, and then only as points in a panel.
    */
-  const chips = (page: Page) => page.locator('[data-keyframe-chip]');
-  const keyframeSwitch = (page: Page) => page.getByRole('switch', { name: 'Use keyframes' });
+  const bar = (page: Page) => page.locator('[data-motion-bar]');
 
   test('the section is there as soon as a photo is selected', async ({ page }) => {
     await openScene(page);
     await selectFrontPhoto(page);
 
-    await expect(page.getByText('Keyframes', { exact: true })).toBeVisible();
-    await expect(page.getByText('A keyframe records where you have moved this to')).toBeVisible();
+    await expect(page.getByText('Motion', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add motion' })).toBeVisible();
   });
 
-  test('a start and an end make the template element travel', async ({ page }) => {
+  test('a motion travels on top of the template’s own', async ({ page }) => {
     await openScene(page);
     await selectFrontPhoto(page);
 
-    await keyframeSwitch(page).click();
-    await expect(chips(page)).toHaveCount(1);
+    await page.getByRole('button', { name: 'Add motion' }).click();
+    await expect(bar(page)).toHaveCount(1);
 
-    // Move the playhead and drag: the second keyframe is made where the
-    // playhead is, which is the whole interaction.
-    await seek(page, 7_000);
-    const atEnd = await boxOf(page);
-    await drag(page, centreOf(atEnd), { x: centreOf(atEnd).x - 90, y: centreOf(atEnd).y - 70 });
-    await expect(chips(page)).toHaveCount(2);
+    await page.getByRole('button', { name: 'Go to end' }).click();
+    const from = centreOf(await boxOf(page));
+    await drag(page, from, { x: from.x - 100, y: from.y - 80 });
 
-    await chips(page).first().click();
+    await page.getByRole('button', { name: 'Go to start' }).click();
     const start = centreOf(await boxOf(page));
-    await chips(page).last().click();
+    await page.getByRole('button', { name: 'Go to end' }).click();
     const end = centreOf(await boxOf(page));
 
     /*
-     * Less than the 90×70 dragged, and that is the point: this template's
-     * planes drift across the scene on their own, so the composite is the
-     * user's motion *plus* the template's rather than instead of it. A
-     * keyframe that simply replaced the template's motion would show the full
-     * drag here and would be the wrong behaviour.
+     * Less than the 100×80 dragged, and that is the point: this template's
+     * planes drift on their own, so the composite is the user's motion *plus*
+     * the template's rather than instead of it.
      */
     expect(start.x - end.x).toBeGreaterThan(30);
     expect(start.y - end.y).toBeGreaterThan(20);
   });
 
-  test('one keyframe changes nothing about the template’s own motion', async ({ page }) => {
-    // Turning keyframes on must not move anything: one pose is a constant, and
-    // the constant is where the element already was.
+  test('adding a motion changes nothing until the element is moved', async ({ page }) => {
     await openScene(page);
     await selectFrontPhoto(page);
     const before = await frameHash(page);
 
-    await keyframeSwitch(page).click();
+    await page.getByRole('button', { name: 'Add motion' }).click();
     await page.waitForTimeout(300);
 
     expect(await frameHash(page)).toBe(before);

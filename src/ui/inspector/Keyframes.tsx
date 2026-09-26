@@ -28,7 +28,15 @@ export function Keyframes({ overlay }: { overlay: Overlay }): React.JSX.Element 
    * after "Set end" keyed the time the playhead used to be.
    */
   const goTo = (atMs: number): void => {
-    const at = overlay.startMs + atMs;
+    /*
+     * Never the exact end.
+     *
+     * A layer's range is half-open (`timeMs < endMs`), so the instant a motion
+     * finishes is the first instant the overlay is *gone* — standing there
+     * leaves nothing on screen to drag, which is exactly the moment someone
+     * wants to say where it finishes.
+     */
+    const at = overlay.startMs + Math.min(atMs, spanMs - 1);
     clock?.pause();
     clock?.seek(at);
     setPlayhead(at);
@@ -40,18 +48,16 @@ export function Keyframes({ overlay }: { overlay: Overlay }): React.JSX.Element 
       times={posesOf(overlay).map((pose) => pose.atMs)}
       spanMs={spanMs}
       localMs={localMs}
-      label="Use keyframes"
       explain={
-        'A keyframe records where this overlay is at one moment. Give it two and it travels '
-        + 'between them. Turn this on, then set a start and an end below.'
+        'Give this overlay a motion and it travels from where it is now to wherever you put '
+        + 'it at the end. The motion shows on the timeline as a bar you can move and stretch.'
       }
       easing={{
         value: overlay.easing ?? 'smooth',
         onChange: (easing) => { dispatch(actions.setOverlayEasing(id, easing)); },
       }}
       onToggle={(on) => { dispatch(actions.setOverlayAnimated(id, on, localMs)); }}
-      onAdd={(atMs) => { dispatch(actions.setOverlayPose(id, atMs, {})); }}
-      onRemove={(atMs) => { dispatch(actions.removeOverlayPose(id, atMs)); }}
+      onAdd={(atMs) => { dispatch(actions.addOverlayMotion(id, atMs)); }}
       onGoTo={goTo}
     />
   );

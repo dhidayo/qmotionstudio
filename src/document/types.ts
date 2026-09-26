@@ -141,6 +141,8 @@ export type SlotTransform = {
    * has asked for.
    */
   readonly poses?: readonly SlotPose[];
+  /** How the motion moves between poses. Same vocabulary as an overlay's. */
+  readonly easing?: OverlayEasing;
 };
 
 /** One moment in a slot's nudge. Mirrors `OverlayPose`, in slot terms. */

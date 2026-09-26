@@ -1964,3 +1964,37 @@ The playhead is a property of the application, not of one panel that happens to
 draw it. The shell publishes it now, at the same 20Hz, and the timeline keeps
 only its own readout. The artboard still reads the clock directly every frame
 (§3A) and is unaffected.
+
+## D-082 — motion is a span, and the span lives on the timeline
+
+Reported three times, finally plainly: "can't I have them on the timeline like
+other products have them". Every version before this asked the user to think in
+points — add a keyframe, add another, hope the gap between them is what you
+meant. That is the general case, and leading with the general case made the
+simple job (move this from here to there over a couple of seconds) as much work
+as the hard one.
+
+Motion is now a **bar**: it starts here, it ends there, drag the body to move
+it, drag an end to change how long it takes. Five seconds by default, clamped
+to the element — a three-second overlay gets a three-second motion rather than
+one that runs off the end.
+
+**Both ends start as the pose the element already holds**, so adding a motion
+changes nothing until you move the element at one end of it. That is what makes
+the bar the thing you reach for first and the canvas the thing you reach for
+second, instead of a keyframe silently teleporting something the moment it
+appears.
+
+Poses are still the model underneath, and three or more is still a path — the
+panel says "a custom path with several points" and the bar moves the whole
+thing. The general case did not go away; it stopped being the front door.
+
+**Showcase gets the bar on its scrubber.** It has no track timeline (§1.1), so
+a motion added there had nowhere to show and could only be edited through a
+panel. The slider is that mode's time axis, so the same bar goes on it.
+
+**The motion styles are named for what they look like**: Smooth, Soft bounce,
+Steady. The spring was retuned — damping 17 rather than 20 — because a "soft
+bounce" that does not visibly overshoot is just a slower move. Slots had no
+choice at all before this; their easing was hardcoded, which is part of why
+motion there felt like it dragged.

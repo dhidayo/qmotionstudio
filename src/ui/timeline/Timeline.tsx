@@ -8,6 +8,8 @@ import { DEFAULT_OVERLAY_MS, DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } fro
 import * as actions from '@/document/actions';
 import { isAnimated, posesOf } from '@/document/select/overlay';
 import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
+import { spanOf } from '@/document/select/motion';
+import { MotionBar } from './MotionBar';
 import { useEditor } from '@/state/store';
 import { setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
@@ -131,6 +133,13 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
    * pointer for a continuous drag; here a press is a jump and a drag scrubs,
    * which is what a click on a track is for.
    */
+  const seekTo = useCallback((projectMs: number): void => {
+    clock.pause();
+    clock.seek(projectMs);
+    setTimeMs(clock.timeMs);
+    setPlayhead(clock.timeMs);
+  }, [clock, setPlayhead]);
+
   const onLaneDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     // Only the background. A press that started on a clip has already been
     // stopped, and one on a control inside a lane is not a scrub either.
@@ -465,7 +474,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           {/* Scene track. Clip widths come from the spans, so a transition
               overlap is visible as two clips that touch rather than a gap. */}
           <div className="relative h-9 border-b border-edge" data-lane>
-            <SlotKeyframeMarks spans={spans} durationMs={durationMs} />
+            <SlotMotion spans={spans} durationMs={durationMs} onSeek={seekTo} />
             {spans.map((span) => {
               const active = span.index === selectedScene && selectedOverlay === null;
               return (
@@ -506,7 +515,10 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
           {/* Overlay tracks, L1 first (§6.4 draws them in this order). */}
           {Array.from({ length: rows }, (_, row) => (
-            <div key={row} className="relative h-7 border-b border-edge">
+            /* `data-lane` marks the row as a time axis: the motion bar
+               converts pointer positions against it, and a press on the bare
+               row scrubs like any other empty part of the timeline. */
+            <div key={row} className="relative h-7 border-b border-edge" data-lane>
               {project.overlays
                 .filter((o) => o.track === row)
                 .map((overlay) => {
@@ -534,7 +546,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                     >
                       <TrimHandle side="start" onDown={(e) => { beginClipDrag(e, overlay, 'trimStart'); }} onMove={onClipMove} onUp={endClipDrag} />
                       <span className="pointer-events-none block truncate px-2">{labelFor(overlay)}</span>
-                      <Keyframes overlay={overlay} active={active} />
+                      <OverlayMotion overlay={overlay} durationMs={durationMs} onSeek={seekTo} />
                       <TrimHandle side="end" onDown={(e) => { beginClipDrag(e, overlay, 'trimEnd'); }} onMove={onClipMove} onUp={endClipDrag} />
                     </div>
                   );
@@ -650,60 +662,24 @@ function TrimHandle({
 }
 
 /**
- * Keyframe diamonds along an overlay's clip.
+ * The selected template element's motion, on the scene track.
  *
- * Diamonds because that is what a keyframe looks like in every tool anyone has
- * used, and being able to see at a glance that there are three of them — and
- * roughly where — is most of what the timeline has to say about motion. They
- * are markers, not handles: retiming one is a drag with a meaning of its own
- * and can wait until there is a reason for it.
+ * A template photo has no clip of its own — it belongs to a scene — so its
+ * motion belongs on the scene it is part of. Diamonds came first and were not
+ * enough: they say *that* something happens and never how long it takes, which
+ * is the question a timeline exists to answer.
  */
-function Keyframes({
-  overlay,
-  active,
-}: {
-  overlay: Overlay;
-  active: boolean;
-}): React.JSX.Element | null {
-  if (!isAnimated(overlay)) return null;
-
-  const span = Math.max(1, overlay.endMs - overlay.startMs);
-
-  return (
-    <>
-      {posesOf(overlay).map((pose) => (
-        <span
-          key={pose.atMs}
-          aria-hidden
-          data-keyframe={Math.round(pose.atMs)}
-          className="pointer-events-none absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border"
-          style={{
-            left: `${Math.min(100, Math.max(0, (pose.atMs / span) * 100))}%`,
-            background: active ? 'var(--c-accent)' : 'var(--c-ink-faint)',
-            borderColor: 'var(--c-panel)',
-          }}
-        />
-      ))}
-    </>
-  );
-}
-
-/**
- * Keyframe diamonds for the selected template element, on the scene track.
- *
- * An overlay's keyframes sit on its own clip, which is where anyone would look
- * for them. A template photo has no clip of its own — it belongs to a scene —
- * so its keyframes belong on the scene it is part of. Without them the only
- * evidence that a photo was animated lived in the inspector, and the timeline
- * is where people look to see *when* anything happens.
- */
-function SlotKeyframeMarks({
+function SlotMotion({
   spans,
   durationMs,
+  onSeek,
 }: {
   spans: readonly SceneSpan[];
   durationMs: number;
+  onSeek: (projectMs: number) => void;
 }): React.JSX.Element | null {
+  const dispatch = useEditor((s) => s.dispatch);
+  const endInteraction = useEditor((s) => s.endInteraction);
   const selectedSlot = useEditor((s) => s.selectedSlot);
   const selectedScene = useEditor((s) => s.selectedScene);
   const transform = useEditor((s) =>
@@ -714,28 +690,64 @@ function SlotKeyframeMarks({
 
   if (selectedSlot === null || !transform || !hasNudgePoses(transform)) return null;
 
-  const span = spans[selectedScene];
-  if (!span) return null;
+  const span = spanOf(nudgePoses(transform).map((pose) => pose.atMs));
+  const sceneSpan = spans[selectedScene];
+  if (!span || !sceneSpan) return null;
 
-  // Scene time back to project time: poses are stored after §8.4's speed
-  // remap, so undoing it is what puts the mark under the moment it applies to.
-  const speed = span.scene.inputs.look.speed;
+  /*
+   * Scene time to project time. Poses are stored after §8.4's speed remap, so
+   * a scene at half speed spreads its motion over twice as much timeline —
+   * undoing the remap is what puts the bar under the moment it applies to.
+   */
+  const speed = sceneSpan.scene.inputs.look.speed;
+  const scale = speed === 0 ? 1 : 1 / speed;
+  const sceneMs = sceneSpan.scene.durationMs;
 
   return (
-    <>
-      {nudgePoses(transform).map((pose) => (
-        <span
-          key={pose.atMs}
-          aria-hidden
-          data-slot-keyframe={Math.round(pose.atMs)}
-          className="pointer-events-none absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border"
-          style={{
-            left: `${msToPct(span.startMs + (speed === 0 ? pose.atMs : pose.atMs / speed), durationMs)}%`,
-            background: 'var(--c-accent)',
-            borderColor: 'var(--c-panel)',
-          }}
-        />
-      ))}
-    </>
+    <MotionBar
+      span={span}
+      originMs={sceneSpan.startMs}
+      scale={scale}
+      laneMs={durationMs}
+      onChange={(change) => { dispatch(actions.reshapeSlotMotion(selectedSlot, sceneMs, change)); }}
+      onCommit={endInteraction}
+      onSeek={(atMs) => { onSeek(sceneSpan.startMs + atMs * scale); }}
+    />
+  );
+}
+
+/**
+ * An overlay's motion, on its own clip.
+ *
+ * Positioned against the clip rather than the lane, because an overlay's times
+ * are its own (§6.1) — dragging the clip along the timeline takes its motion
+ * with it.
+ */
+function OverlayMotion({
+  overlay,
+  durationMs,
+  onSeek,
+}: {
+  overlay: Overlay;
+  durationMs: number;
+  onSeek: (projectMs: number) => void;
+}): React.JSX.Element | null {
+  const dispatch = useEditor((s) => s.dispatch);
+  const endInteraction = useEditor((s) => s.endInteraction);
+
+  if (!isAnimated(overlay)) return null;
+  const span = spanOf(posesOf(overlay).map((pose) => pose.atMs));
+  if (!span) return null;
+
+  return (
+    <MotionBar
+      span={span}
+      originMs={overlay.startMs}
+      scale={1}
+      laneMs={durationMs}
+      onChange={(change) => { dispatch(actions.reshapeOverlayMotion(overlay.id, change)); }}
+      onCommit={endInteraction}
+      onSeek={(atMs) => { onSeek(overlay.startMs + atMs); }}
+    />
   );
 }

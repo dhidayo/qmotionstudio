@@ -37,12 +37,27 @@ export const POSE_DEFAULTS: Readonly<Record<PoseProp, number>> = Object.freeze({
   opacity: 1,
 });
 
-const SPRING: Ease = { kind: 'spring', stiffness: 170, damping: 20, mass: 1 };
+/**
+ * A spring soft enough to read as a settle rather than a wobble.
+ *
+ * Damping is the number that matters: below about 14 it oscillates visibly,
+ * which is a toy; this overshoots once and stops.
+ */
+const SOFT_BOUNCE: Ease = { kind: 'spring', stiffness: 150, damping: 17, mass: 1 };
 
+/**
+ * The motion styles, named for what they look like rather than for their maths.
+ *
+ * 'smooth' eases in and out, which is what almost everything should do — it is
+ * the difference between a move that feels considered and one that drags
+ * across the frame at a constant speed. 'linear' exists because a continuous
+ * drift (a Ken Burns pan, a ticker) genuinely wants no acceleration, and
+ * easing one looks like it is slowing down for no reason.
+ */
 export function easeOf(easing: OverlayEasing | undefined): Ease {
   switch (easing) {
     case 'linear': return 'linear';
-    case 'springy': return SPRING;
+    case 'springy': return SOFT_BOUNCE;
     default: return 'inOutCubic';
   }
 }
