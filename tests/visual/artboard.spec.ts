@@ -121,7 +121,7 @@ test.describe('M1 — render core', () => {
 });
 
 test.describe('M1 — the render loop', () => {
-  test('sustains 60fps on the hand-written scene', async ({ page }) => {
+  test('sustains 60fps on the hand-written scene @perf', async ({ page }) => {
     await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(400);
@@ -179,7 +179,7 @@ test.describe('M1 — the render loop', () => {
     expect(after - before, `cache grew from ${before} to ${after}`).toBe(0);
   });
 
-  test('keeps the frame and build budgets of §14', async ({ page }) => {
+  test('keeps the frame and build budgets of §14 @perf', async ({ page }) => {
     await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(800);

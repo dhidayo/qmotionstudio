@@ -110,7 +110,7 @@ test.describe('music (§10)', () => {
     await expect(page.getByLabel('Music inspector')).toBeHidden();
   });
 
-  test('the audio clock masters the preview (§10)', async ({ page }) => {
+  test('the audio clock masters the preview (§10) @perf', async ({ page }) => {
     // ?frozen parks the transport, so Play is available to click — and a real
     // click is the user gesture an AudioContext needs before it will resume.
     await page.goto('/?template=quick-pitch&aspect=9:16&frozen=0');

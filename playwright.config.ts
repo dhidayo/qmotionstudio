@@ -29,13 +29,38 @@ export default defineConfig({
     {
       name: 'app',
       testIgnore: /export\.spec\.ts/,
+      grepInvert: /@perf/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    /*
+     * The measurements, on a quiet machine.
+     *
+     * §14's frame and build budgets and §10's drift budget are the only tests
+     * here that measure *time*, and time is the one thing five parallel
+     * browsers make meaningless. Run alongside everything else they report the
+     * load on the machine rather than the cost of the code: a 60fps assertion
+     * that passes six times out of six on its own fails roughly one run in two
+     * inside a saturated pool, and the number it prints is real — the frames
+     * genuinely did not happen, because the CPU was busy running the rest of
+     * the suite.
+     *
+     * Same reasoning as D-042, which gave the export encodes their own phase,
+     * and the same remedy: make the phases disjoint so each one measures what
+     * it claims to.
+     */
+    {
+      name: 'perf',
+      testIgnore: /export\.spec\.ts/,
+      grep: /@perf/,
+      fullyParallel: false,
+      dependencies: ['app'],
       use: { ...devices['Desktop Chrome'] },
     },
     {
       name: 'export',
       testMatch: /export\.spec\.ts/,
       fullyParallel: false,
-      dependencies: ['app'],
+      dependencies: ['perf'],
       use: { ...devices['Desktop Chrome'] },
     },
   ],

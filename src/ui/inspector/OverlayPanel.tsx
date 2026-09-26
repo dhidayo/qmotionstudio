@@ -106,7 +106,7 @@ export function OverlayPanel(): React.JSX.Element {
         <Slider
           value={Math.round((transform.scaleX ?? 1) * 100)}
           min={20}
-          max={300}
+          max={600}
           onChange={(v) => { set({ scaleX: v / 100, scaleY: v / 100 }); }}
           label="Size"
           suffix="%"

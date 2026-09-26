@@ -6,6 +6,7 @@ import type { Project } from '@/document/types';
 import type { MediaStore } from '@/media/store';
 import { renderParams } from '@/dev/renderParams';
 import { usePreviewLoop } from './usePreviewLoop';
+import { CanvasSelection } from './CanvasSelection';
 
 /**
  * Preview renders at most this on the short edge regardless of display size.
@@ -53,19 +54,24 @@ export function Artboard({ project, clock, rig, media }: Props): React.JSX.Eleme
   return (
     <div ref={hostRef} className="relative grid h-full w-full place-items-center overflow-hidden p-6">
       {display.w > 0 && (
-        <canvas
-          ref={setCanvas}
-          width={backing.w}
-          height={backing.h}
-          aria-label={`Preview, ${project.aspect}`}
-          style={{
-            width: `${display.w}px`,
-            height: `${display.h}px`,
-            borderRadius: 'var(--r-md)',
-            boxShadow: 'var(--shadow-lg)',
-            display: 'block',
-          }}
-        />
+        /* The chrome has to sit exactly over the canvas, so the two share a
+           box rather than each being placed against the stage separately. */
+        <div className="relative" style={{ width: `${display.w}px`, height: `${display.h}px` }}>
+          <canvas
+            ref={setCanvas}
+            width={backing.w}
+            height={backing.h}
+            aria-label={`Preview, ${project.aspect}`}
+            style={{
+              width: `${display.w}px`,
+              height: `${display.h}px`,
+              borderRadius: 'var(--r-md)',
+              boxShadow: 'var(--shadow-lg)',
+              display: 'block',
+            }}
+          />
+          <CanvasSelection project={project} width={display.w} />
+        </div>
       )}
     </div>
   );

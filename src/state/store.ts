@@ -56,6 +56,15 @@ type EditorState = {
   selectedOverlay: string | null;
   /** The music clip the inspector is editing, or null (§10). */
   selectedAudio: string | null;
+  /**
+   * Whether §8.3's logo is the thing selected on the canvas.
+   *
+   * A flag rather than a member of a selection union: `selectedOverlay` is
+   * already wired through the timeline and the inspector, and collapsing the
+   * two into one discriminated value would touch far more than it earns. The
+   * three are kept mutually exclusive by their setters.
+   */
+  selectedLogo: boolean;
 
   playheadMs: number;
   isPlaying: boolean;
@@ -72,6 +81,7 @@ type EditorState = {
   selectScene: (index: number) => void;
   selectOverlay: (id: string | null) => void;
   selectAudio: (id: string | null) => void;
+  selectLogo: (selected: boolean) => void;
   setLoadedTemplate: (template: SceneTemplate | null) => void;
   setExporting: (exporting: boolean) => void;
   dispatch: (action: actions.Action) => void;
@@ -201,6 +211,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   selectedScene: 0,
   selectedOverlay: null,
   selectedAudio: null,
+  selectedLogo: false,
   playheadMs: 0,
   isPlaying: true,
   inspectorTab: 'photos',
@@ -217,13 +228,35 @@ export const useEditor = create<EditorState>((set, get) => ({
       const clamped = Math.max(0, Math.min(index, state.project.scenes.length - 1));
       return clamped === state.selectedScene && state.selectedOverlay === null && state.selectedAudio === null
         ? {}
-        : { selectedScene: clamped, selectedOverlay: null, selectedAudio: null, selectedPhoto: 0, template: null };
+        : {
+            selectedScene: clamped,
+            selectedOverlay: null,
+            selectedAudio: null,
+            selectedLogo: false,
+            selectedPhoto: 0,
+            template: null,
+          };
     });
   },
 
-  selectOverlay: (selectedOverlay) => { set({ selectedOverlay, selectedAudio: null }); },
+  selectOverlay: (selectedOverlay) => {
+    set({ selectedOverlay, selectedAudio: null, selectedLogo: false });
+  },
 
-  selectAudio: (selectedAudio) => { set({ selectedAudio, selectedOverlay: null }); },
+  selectAudio: (selectedAudio) => {
+    set({ selectedAudio, selectedOverlay: null, selectedLogo: false });
+  },
+
+  selectLogo: (selectedLogo) => {
+    // Picking something up on the canvas opens its own controls. Selecting an
+    // object and then having to go and find the panel that edits it is the
+    // sort of step people should never have to be told about.
+    set(
+      selectedLogo
+        ? { selectedLogo, selectedOverlay: null, selectedAudio: null, inspectorTab: 'logo' }
+        : { selectedLogo, selectedOverlay: null, selectedAudio: null },
+    );
+  },
 
   setLoadedTemplate: (template) => { set({ template }); },
 

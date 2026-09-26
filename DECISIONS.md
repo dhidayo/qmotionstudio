@@ -1368,3 +1368,82 @@ reference to. Nothing can then stop them and they play over the top of the new
 ones until the track ends. Only reachable around the first resume, since after
 that `play()` never actually suspends, which is precisely why it would have
 been diagnosed as unreproducible.
+
+## D-059 — direct manipulation lives in the DOM, over the canvas
+
+Placement was two sliders called "Across" and "Down". That is a way of typing
+coordinates, not a way of putting something where you want it, and §8.3's own
+logo panel had been promising "drag the logo on the artboard" since M3 without
+anything behind it.
+
+**The chrome is DOM, never pixels.** D-001 makes one `renderFrame` serve both
+the preview and the export, so a handle painted into the canvas would be
+encoded into the user's video and baked into every template thumbnail. Drawing
+it as absolutely-positioned elements over the canvas also gets focus, cursors
+and an accessible name for free, which a canvas cannot have.
+
+**One coordinate space, in design units.** `bounds.ts` returns every box in the
+project's design box — short edge 1080, the frame's aspect — and the view
+converts to CSS pixels once, through the same uniform scale `makeViewport`
+uses. Tracking CSS pixels instead would make rotation and resize depend on the
+size of the user's window.
+
+That one space turns out to cover scene content too, which was not obvious.
+Every design box in play has the frame's aspect and differs from this one only
+by a scalar, so anything expressed as a fraction of the short edge — which is
+how templates are written, and how the logo's size and the safe inset are both
+defined — lands in the same place in both. The logo therefore needed no second
+coordinate pathway, and neither will a scene photo.
+
+**Boxes come from the built layer, not from a second calculation.** `layerSize`
+reads the props of the layer `overlayLayer` actually produced, and text is
+measured with the spec the renderer measures. A selection box that is subtly
+wrong is worse than none, because it teaches the user that the handles lie. The
+one place the arithmetic genuinely is duplicated — the logo's placement, which
+the template chrome computes as a layer and this computes as a rectangle — is
+pinned by a test that builds the real layer and compares. Verified by
+introducing the obvious drift: it fails on all five aspects.
+
+**Handles are capped at a third of the box.** A one-line caption is about 20
+CSS pixels tall; an unclamped 13px hit zone on the north edge and another on
+the south met in the middle and swallowed the body, so pressing the centre of a
+caption stretched it instead of picking it up. Grabbing the body has to keep
+working at every size — it is the gesture people reach for first.
+
+**Resize projects onto the handle's own direction** rather than taking the
+distance from the anchor. The absolute version mirrored the object when an edge
+was dragged past its opposite: pulling the top edge downwards made the box
+taller *upwards*. Both of these are covered by tests that were checked against
+the unfixed code.
+
+Conventions chosen to match what people already know: corners keep the
+proportions, sides stretch one axis, ⇧ turns snapping off everywhere (matching
+the music track), rotation snaps to fifteens, arrows nudge and ⇧+arrows nudge
+further. Selecting the logo opens the logo panel, because selecting something
+and then having to go and find the panel that edits it is a step nobody should
+have to be told about.
+
+The drag and the Size slider share one set of bounds (20–600%). They did not at
+first, and a corner drag produced 416% while the slider stopped at 300% — the
+document then held a value the panel could not show, and the next touch of the
+slider would have snapped the overlay down without being asked.
+
+## D-060 — the measurements get a quiet phase
+
+Three tests measure time: §14's frame and build budgets, and §10's drift
+budget. Under five parallel browsers they measure the machine instead. The
+60fps assertion passes six times out of six on its own and fails about one run
+in two inside a saturated pool — and the number it prints is honest, in that
+the frames really did not happen, because the CPU was busy running the rest of
+the suite.
+
+This is D-042's problem again, and gets D-042's remedy: `app` → `perf` →
+`export`, three disjoint phases, each measuring what it claims to. The tests
+are tagged `@perf` in their titles and selected by `grep`.
+
+Worth recording what this is *not*. The suspicion was that the new selection
+layer had slowed the render loop, and it took a proper baseline to rule out —
+including one round where the diagnostic itself, an extra `AudioContext` opened
+to tell a starved audio device from an app fault, was heavy enough to skew the
+very numbers it was measuring. With the same 79 tests as before, the runtime
+change is neutral: 1.1m against a 1.0–1.1m baseline, all passing.

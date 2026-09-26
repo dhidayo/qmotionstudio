@@ -307,6 +307,53 @@ export function setLogoPlacement(placement: LogoPlacement): Action {
   };
 }
 
+/**
+ * §8.3's free placement, normalised against the safe box.
+ *
+ * Switches `placement` to 'free' as a side effect: dragging a logo that is
+ * pinned to a corner obviously means "stop pinning it", and making the user
+ * change a dropdown before the drag does anything is exactly the sort of modal
+ * detail nobody should have to learn.
+ */
+export function setLogoPosition(x: number, y: number): Action {
+  return {
+    label: 'Move logo',
+    coalesceKey: 'logoPlacementDrag',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({
+        ...inputs,
+        logo: { ...inputs.logo, placement: 'free', x: clamp(x, 0, 1), y: clamp(y, 0, 1) },
+      })),
+  };
+}
+
+/**
+ * Size and position together, for a resize drag.
+ *
+ * One action rather than `setLogoSize` followed by `setLogoPosition`, because
+ * `commit` only merges an entry with the one immediately before it: two
+ * dispatches per pointermove carry two different coalesce keys, so neither
+ * ever merges and a single drag pushes a hundred entries and evicts the real
+ * history. That bug has already been paid for once, on the music track.
+ */
+export function setLogoBox(sizePct: number, x: number, y: number): Action {
+  return {
+    label: 'Resize logo',
+    coalesceKey: 'logoPlacementDrag',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({
+        ...inputs,
+        logo: {
+          ...inputs.logo,
+          placement: 'free',
+          sizePct: clamp(sizePct, 2, 40),
+          x: clamp(x, 0, 1),
+          y: clamp(y, 0, 1),
+        },
+      })),
+  };
+}
+
 export function setLogoOpacity(opacity: number): Action {
   return {
     label: 'Change logo opacity',

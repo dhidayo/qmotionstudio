@@ -34,9 +34,9 @@ import type { AnimPreset, Overlay } from '@/document/types';
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
 /** A photo overlay at scale 1 covers this much of the frame's short edge. */
-const PHOTO_BASE = 0.34;
+export const PHOTO_BASE = 0.34;
 /** A text overlay at 100% is this much of the short edge. */
-const TEXT_BASE = 0.062;
+export const TEXT_BASE = 0.062;
 
 const ENTER_MS = 520;
 const EXIT_MS = 420;
