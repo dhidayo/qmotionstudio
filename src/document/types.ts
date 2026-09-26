@@ -119,10 +119,19 @@ export type SlotTransform = {
   readonly offsetY: number;
   readonly scale: number;
   readonly rotation: number;
+  /**
+   * Draw order against the rest of the scene. 0 is wherever the template put
+   * it; positive is in front, negative is behind.
+   *
+   * A nudge like the others — the template's stacking is the starting point
+   * and this says how far the user has lifted something out of it — so
+   * "Reset to template" puts the stacking back too.
+   */
+  readonly z: number;
 };
 
 export const NO_SLOT_TRANSFORM: SlotTransform = {
-  offsetX: 0, offsetY: 0, scale: 1, rotation: 0,
+  offsetX: 0, offsetY: 0, scale: 1, rotation: 0, z: 0,
 };
 
 /**

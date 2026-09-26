@@ -12,28 +12,71 @@ import { Button, EmptyNote, Section } from './controls';
  * really is just forgetting it. There is no original position to reconstruct
  * and nothing to get wrong.
  *
- * Renders nothing at all until the element has actually been moved, so the
- * panels stay as short as they were for anyone not using this.
+ * The reset half renders nothing until the element has actually been moved,
+ * so the panels stay as short as they were for anyone not using this. Arrange
+ * shows whenever the element is selected, because stacking is something people
+ * go looking for rather than discover by accident.
  */
 export function SlotPlacement({ slotKey }: { slotKey: string }): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
   const transform = useEditor(
     (s) => s.project.scenes[s.selectedScene]?.inputs.slotTransforms[slotKey],
   );
+  const selected = useEditor((s) => s.selectedSlot) === slotKey;
 
-  if (!transform) return null;
+  /*
+   * Arrange shows as soon as the element is selected, not only once it has
+   * been moved: stacking is a thing people go looking for, and hiding the
+   * control until some unrelated edit had happened would be a way of hiding it
+   * for good.
+   */
+  const arrange = selected ? (
+    <Section title="Arrange">
+      <div className="flex gap-1.5">
+        <Button onClick={() => { dispatch(actions.arrangeSlot(slotKey, 'front')); }}>
+          Bring to front
+        </Button>
+        <Button onClick={() => { dispatch(actions.arrangeSlot(slotKey, 'back')); }}>
+          Send to back
+        </Button>
+      </div>
+    </Section>
+  ) : null;
+
+  if (!transform) return arrange;
 
   const moved = transform.offsetX !== 0 || transform.offsetY !== 0;
   const resized = transform.scale !== 1;
   const turned = transform.rotation !== 0;
+  const restacked = transform.z !== 0;
+
+  // Only stacking changed, which is not "placement" — nothing to report here.
+  if (!moved && !resized && !turned) {
+    return restacked ? (
+      <>
+        {arrange}
+        <Section title="Placement">
+          <EmptyNote>Moved {transform.z > 0 ? 'in front of' : 'behind'} the rest of the scene.</EmptyNote>
+          <div className="mt-2 flex gap-1.5">
+            <Button onClick={() => { dispatch(actions.resetSlot(slotKey)); }}>
+              Reset to template
+            </Button>
+          </div>
+        </Section>
+      </>
+    ) : arrange;
+  }
 
   return (
+    <>
+    {arrange}
     <Section title="Placement">
       <EmptyNote>
         {[
           moved ? 'Moved' : null,
           resized ? `resized to ${Math.round(transform.scale * 100)}%` : null,
           turned ? `turned ${Math.round(transform.rotation)}°` : null,
+          restacked ? (transform.z > 0 ? 'brought forward' : 'sent back') : null,
         ]
           .filter((part) => part !== null)
           .join(', ') || 'Adjusted'}
@@ -45,6 +88,7 @@ export function SlotPlacement({ slotKey }: { slotKey: string }): React.JSX.Eleme
         </Button>
       </div>
     </Section>
+    </>
   );
 }
 

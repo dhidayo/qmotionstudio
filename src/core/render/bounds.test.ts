@@ -337,7 +337,7 @@ describe('boxes follow the layer\u2019s anchor', () => {
     const [box] = slotBoxes(
       drawnWith([layer]),
       0,
-      { 'photo:0': { offsetX: 0.25, offsetY: -0.1, scale: 2, rotation: 30 } },
+      { 'photo:0': { offsetX: 0.25, offsetY: -0.1, scale: 2, rotation: 30, z: 0 } },
       '9:16',
       measure,
     );

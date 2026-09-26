@@ -246,3 +246,55 @@ test.describe('the whole-scene reset', () => {
     await expect(page.getByText(/elements have been moved/)).toBeHidden();
   });
 });
+
+test.describe('stacking (Arrange)', () => {
+  test('sends an element behind the others without erasing it', async ({ page }) => {
+    await openScene(page);
+    await selectFrontPhoto(page);
+    const original = await frameHash(page);
+
+    await page.getByRole('button', { name: 'Send to back' }).click();
+    await page.waitForTimeout(300);
+
+    const sent = await frameHash(page);
+    expect(sent, 'the picture changed').not.toBe(original);
+
+    /*
+     * And the photo is still on screen. Restacking moves the template's own
+     * elements among themselves; the background is not one of them, so
+     * "send to back" cannot put a photo underneath it and wipe it out.
+     */
+    const box = await boxOf(page);
+    const canvas = await boxOf(page, 'canvas');
+    const sample = await page.evaluate(
+      ([cx, cy]: readonly number[]) => {
+        const canvasEl = document.querySelector('canvas');
+        if (!canvasEl) throw new Error('no canvas');
+        const ctx = canvasEl.getContext('2d');
+        if (!ctx) throw new Error('no context');
+        const rect = canvasEl.getBoundingClientRect();
+        const x = Math.round((((cx ?? 0) - rect.left) / rect.width) * canvasEl.width);
+        const y = Math.round((((cy ?? 0) - rect.top) / rect.height) * canvasEl.height);
+        const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
+        return (r ?? 0) + (g ?? 0) + (b ?? 0);
+      },
+      [box.x + box.width / 2, box.y + box.height * 0.9] as const,
+    );
+    expect(sample, 'still something drawn there, not bare background').toBeGreaterThan(40);
+    expect(canvas.width).toBeGreaterThan(0);
+  });
+
+  test('bringing it forward again restores the original picture', async ({ page }) => {
+    await openScene(page);
+    await selectFrontPhoto(page);
+    const original = await frameHash(page);
+
+    await page.getByRole('button', { name: 'Send to back' }).click();
+    await page.waitForTimeout(250);
+    expect(await frameHash(page)).not.toBe(original);
+
+    await page.getByRole('button', { name: 'Reset to template' }).click();
+    await page.waitForTimeout(250);
+    expect(await frameHash(page), 'reset puts the stacking back too').toBe(original);
+  });
+});

@@ -176,3 +176,35 @@ test.describe('overlay keyframes', () => {
     expect(centreOf(await boxOf(page)).x).toBeCloseTo(before.x, 0);
   });
 });
+
+test.describe('seeing the motion', () => {
+  test('draws the path across the artboard once there is one', async ({ page }) => {
+    /*
+     * The discoverability fix. With only a panel and a few small diamonds on
+     * the clip, nothing on screen answered the question anyone actually has
+     * while placing keyframes: where is this thing going?
+     */
+    await overlayProject(page);
+    await expect(page.locator('[data-motion-path]')).toHaveCount(0);
+
+    await movementSwitch(page).click();
+    // One pose is not a journey, but the dot still marks it.
+    await expect(page.locator('[data-path-pose]')).toHaveCount(1);
+
+    await seek(page, 4_400);
+    const box = await boxOf(page);
+    await drag(page, centreOf(box), { x: centreOf(box).x + 120, y: centreOf(box).y + 80 });
+
+    await expect(page.locator('[data-motion-path] polyline')).toHaveCount(1);
+    await expect(page.locator('[data-path-pose]')).toHaveCount(2);
+  });
+
+  test('goes away when the overlay is deselected', async ({ page }) => {
+    await overlayProject(page);
+    await movementSwitch(page).click();
+    await expect(page.locator('[data-motion-path]')).toHaveCount(1);
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('[data-motion-path]')).toHaveCount(0);
+  });
+});

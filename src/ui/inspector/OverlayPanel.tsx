@@ -113,68 +113,14 @@ export function OverlayPanel(): React.JSX.Element {
       )}
 
       <Section title="Placement">
-        {/* Normalised, so an overlay stays where it was put when the aspect
-            changes (D-044). Percentages are what the user sees. */}
-        <Slider
-          value={Math.round((transform.x ?? 0.5) * 100)}
-          min={0}
-          max={100}
-          onChange={(v) => { set({ x: v / 100 }); }}
-          label="Across"
-          suffix="%"
-        />
-        <Slider
-          value={Math.round((transform.y ?? 0.5) * 100)}
-          min={0}
-          max={100}
-          onChange={(v) => { set({ y: v / 100 }); }}
-          label="Down"
-          suffix="%"
-        />
-        <Slider
-          value={Math.round((transform.scaleX ?? 1) * 100)}
-          min={20}
-          max={600}
-          onChange={(v) => { set({ scaleX: v / 100, scaleY: v / 100 }); }}
-          label="Size"
-          suffix="%"
-        />
-        <Slider
-          value={Math.round(transform.rotation ?? 0)}
-          min={-180}
-          max={180}
-          onChange={(v) => { set({ rotation: v }); }}
-          label="Rotation"
-          suffix="°"
-        />
-        <Slider
-          value={Math.round((transform.opacity ?? 1) * 100)}
-          min={0}
-          max={100}
-          onChange={(v) => { set({ opacity: v / 100 }); }}
-          label="Opacity"
-          suffix="%"
-        />
-      </Section>
-
-      <Section title="Motion">
-        <Segmented
-          value={overlay.enterAnim}
-          options={ANIM_PRESETS.map((p) => ({ value: p, label: PRESET_LABELS[p] }))}
-          onChange={(preset) => { dispatch(actions.setOverlayAnim(id, 'enter', preset)); }}
-          label="Entrance"
-          columns={3}
-        />
-        <Segmented
-          value={overlay.exitAnim}
-          options={ANIM_PRESETS.map((p) => ({ value: p, label: PRESET_LABELS[p] }))}
-          onChange={(preset) => { dispatch(actions.setOverlayAnim(id, 'exit', preset)); }}
-          label="Exit"
-          columns={3}
-        />
-      </Section>
-
-      <Section title="Movement">
+        {/*
+          * Movement lives here rather than in a section of its own.
+          *
+          * Where something is and where it is *over time* are one question,
+          * and splitting them put the keyframe controls eleven hundred pixels
+          * down the panel under a heading — "Movement" — that sat directly
+          * below another one called "Motion". Nobody was going to find that.
+          */}
         {/*
           * Off by default, and one switch away.
           *
@@ -243,16 +189,88 @@ export function OverlayPanel(): React.JSX.Element {
             </div>
           </>
         )}
+
+        {/* Normalised, so an overlay stays where it was put when the aspect
+            changes (D-044). Percentages are what the user sees. */}
+        <Slider
+          value={Math.round((transform.x ?? 0.5) * 100)}
+          min={0}
+          max={100}
+          onChange={(v) => { set({ x: v / 100 }); }}
+          label="Across"
+          suffix="%"
+        />
+        <Slider
+          value={Math.round((transform.y ?? 0.5) * 100)}
+          min={0}
+          max={100}
+          onChange={(v) => { set({ y: v / 100 }); }}
+          label="Down"
+          suffix="%"
+        />
+        <Slider
+          value={Math.round((transform.scaleX ?? 1) * 100)}
+          min={20}
+          max={600}
+          onChange={(v) => { set({ scaleX: v / 100, scaleY: v / 100 }); }}
+          label="Size"
+          suffix="%"
+        />
+        <Slider
+          value={Math.round(transform.rotation ?? 0)}
+          min={-180}
+          max={180}
+          onChange={(v) => { set({ rotation: v }); }}
+          label="Rotation"
+          suffix="°"
+        />
+        <Slider
+          value={Math.round((transform.opacity ?? 1) * 100)}
+          min={0}
+          max={100}
+          onChange={(v) => { set({ opacity: v / 100 }); }}
+          label="Opacity"
+          suffix="%"
+        />
       </Section>
 
-      <Section title="Track">
+      <Section title="Entrance and exit">
         <Segmented
-          value={overlay.track}
-          options={[0, 1, 2, 3].map((t) => ({ value: t, label: `L${t + 1}` }))}
-          onChange={(track) => { dispatch(actions.setOverlayTrack(id, track)); }}
-          label="Layer"
+          value={overlay.enterAnim}
+          options={ANIM_PRESETS.map((p) => ({ value: p, label: PRESET_LABELS[p] }))}
+          onChange={(preset) => { dispatch(actions.setOverlayAnim(id, 'enter', preset)); }}
+          label="Entrance"
+          columns={3}
         />
-        <EmptyNote>Higher layers draw on top (§6.4).</EmptyNote>
+        <Segmented
+          value={overlay.exitAnim}
+          options={ANIM_PRESETS.map((p) => ({ value: p, label: PRESET_LABELS[p] }))}
+          onChange={(preset) => { dispatch(actions.setOverlayAnim(id, 'exit', preset)); }}
+          label="Exit"
+          columns={3}
+        />
+      </Section>
+
+      <Section title="Arrange">
+        <div className="flex gap-1.5">
+          <Button onClick={() => { dispatch(actions.arrangeOverlay(id, 'front')); }}>
+            Bring to front
+          </Button>
+          <Button onClick={() => { dispatch(actions.arrangeOverlay(id, 'back')); }}>
+            Send to back
+          </Button>
+        </div>
+        <div className="mt-2.5">
+          <Segmented
+            value={overlay.track}
+            options={[0, 1, 2, 3].map((t) => ({ value: t, label: `L${t + 1}` }))}
+            onChange={(track) => { dispatch(actions.setOverlayTrack(id, track)); }}
+            label="Lane"
+          />
+        </div>
+        <EmptyNote>
+          Higher lanes draw in front (§6.4). Within one lane, the buttons above decide.
+        </EmptyNote>
       </Section>
 
       <Section>

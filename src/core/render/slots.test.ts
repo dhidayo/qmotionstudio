@@ -50,7 +50,7 @@ function caption(key: string, tracks: TextLayer['tracks'] = {}): TextLayer {
 }
 
 const nudge = (patch: Partial<SlotTransform> = {}): SlotTransform => ({
-  offsetX: 0, offsetY: 0, scale: 1, rotation: 0, ...patch,
+  offsetX: 0, offsetY: 0, scale: 1, rotation: 0, z: 0, ...patch,
 });
 
 const at = (layer: Layer, timeMs: number): ReturnType<typeof resolveProps> =>
@@ -221,5 +221,55 @@ describe('the cache key', () => {
     const one = slotTransformKey({ 'photo:0': nudge({ scale: 2 }), 'text:a': nudge({ rotation: 5 }) });
     const two = slotTransformKey({ 'text:a': nudge({ rotation: 5 }), 'photo:0': nudge({ scale: 2 }) });
     expect(one).toBe(two);
+  });
+});
+
+describe('stacking', () => {
+  const background: Layer = {
+    id: 'bg',
+    type: 'shape',
+    startMs: 0,
+    endMs: 4_000,
+    tracks: {},
+    props: { shape: 'rect', w: 100, h: 100, fill: colorFill('#000000') },
+  };
+
+  it('sends a photo behind the others but not behind the background', () => {
+    // The background is not a slot, so it keeps its place at the bottom —
+    // otherwise "send to back" would put the photo under it and erase it.
+    const layers = [background, photo(0), photo(1)];
+    const out = applySlotTransforms(layers, { 'photo:1': nudge({ z: -1 }) }, design);
+    expect(out.map((l) => l.id)).toEqual(['bg', 'p1', 'p0']);
+  });
+
+  it('brings one in front', () => {
+    const layers = [background, photo(0), photo(1)];
+    const out = applySlotTransforms(layers, { 'photo:0': nudge({ z: 1 }) }, design);
+    expect(out.map((l) => l.id)).toEqual(['bg', 'p1', 'p0']);
+  });
+
+  it('keeps anything the template drew between the photos in place', () => {
+    const between: Layer = { ...background, id: 'deco' };
+    const layers = [background, photo(0), between, photo(1)];
+    const out = applySlotTransforms(layers, { 'photo:1': nudge({ z: -1 }) }, design);
+    expect(out.map((l) => l.id)).toEqual(['bg', 'p1', 'deco', 'p0']);
+  });
+
+  it('leaves the template order alone for everything untouched', () => {
+    const layers = [background, photo(0), photo(1), photo(2)];
+    const out = applySlotTransforms(layers, { 'photo:3': nudge({ z: 5 }) }, design);
+    expect(out.map((l) => l.id)).toEqual(['bg', 'p0', 'p1', 'p2']);
+  });
+
+  it('does not reorder when no one has been restacked', () => {
+    const layers = [background, photo(0), photo(1)];
+    expect(applySlotTransforms(layers, { 'photo:0': nudge({ offsetX: 0.1 }) }, design).map((l) => l.id))
+      .toEqual(['bg', 'p0', 'p1']);
+  });
+
+  it('is in the cache key, so a restack actually redraws', () => {
+    const a = slotTransformKey({ 'photo:0': nudge({ z: 0 }) });
+    const b = slotTransformKey({ 'photo:0': nudge({ z: -1 }) });
+    expect(a).not.toBe(b);
   });
 });

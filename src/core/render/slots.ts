@@ -39,7 +39,7 @@ export function slotTransformKey(transforms: Readonly<Record<SlotKey, SlotTransf
   return keys
     .map((key) => {
       const t = transforms[key];
-      return t ? `${key}:${t.offsetX},${t.offsetY},${t.scale},${t.rotation}` : '';
+      return t ? `${key}:${t.offsetX},${t.offsetY},${t.scale},${t.rotation},${t.z}` : '';
     })
     .join('|');
 }
@@ -62,11 +62,46 @@ export function applySlotTransforms(
 ): readonly Layer[] {
   if (!hasSlotTransforms(transforms)) return layers;
 
-  const next = layers.map((layer) => applyToLayer(layer, transforms, design));
+  const moved = layers.map((layer) => applyToLayer(layer, transforms, design));
+  const next = restack(moved, transforms);
 
   // Identity when nothing matched, so the caller's cache can keep the original
   // array and callers comparing by reference are not fooled into redrawing.
   return next.some((layer, i) => layer !== layers[i]) ? next : layers;
+}
+
+/**
+ * Reorders the scene's own elements by the user's stacking.
+ *
+ * Only the tagged drawables move, and they move *among the positions they
+ * already occupied* — so the background, and any decoration the template drew
+ * between them, stay exactly where they were. Sorting the whole array instead
+ * made "send to back" mean behind the background, which simply erased the
+ * photo: literally correct, and not what anybody means by sending something
+ * back.
+ *
+ * A stable sort on (z, original position), so anything nobody has lifted keeps
+ * the order the template chose.
+ */
+function restack(
+  layers: readonly Layer[],
+  transforms: Readonly<Record<SlotKey, SlotTransform>>,
+): readonly Layer[] {
+  const slots: { layer: Layer; index: number; z: number }[] = [];
+  layers.forEach((layer, index) => {
+    const slot = slotOf(layer);
+    if (slot) slots.push({ layer, index, z: transforms[slotKey(slot)]?.z ?? 0 });
+  });
+
+  if (slots.length < 2 || slots.every((entry) => entry.z === 0)) return layers;
+
+  const order = [...slots].sort((a, b) => a.z - b.z || a.index - b.index);
+  const next = layers.slice();
+  slots.forEach((entry, position) => {
+    const moved = order[position];
+    if (moved) next[entry.index] = moved.layer;
+  });
+  return next;
 }
 
 function applyToLayer(
@@ -83,6 +118,8 @@ function applyToLayer(
   if (!slot) return layer;
 
   const transform = transforms[slotKey(slot)];
+  // `z` is handled by `restack`, not here — a layer that has only been
+  // restacked needs no new tracks.
   if (!transform || isIdentity(transform)) return layer;
 
   return { ...layer, tracks: nudgeTracks(layer.tracks, transform, design) };

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, shiftBy, slotBoxes, toLocal,
   type OrientedBox, type PlacedBox,
@@ -7,9 +7,9 @@ import type { DrawnScene } from '@/core/render/rig';
 import type { TextMeasureContext } from '@/core/text/layout';
 import * as actions from '@/document/actions';
 import { activeOverlaysAt, sceneSpans } from '@/document/select/timeline';
-import { isAnimated } from '@/document/select/overlay';
+import { isAnimated, poseIndexAt, posesOf } from '@/document/select/overlay';
 import type { Aspect, Size } from '@/core/types';
-import type { Overlay, Project, SlotKey, SlotTransform } from '@/document/types';
+import { NO_SLOT_TRANSFORM, type Overlay, type Project, type SlotKey, type SlotTransform } from '@/document/types';
 import { useEditor } from '@/state/store';
 import { capturePointer } from '@/ui/timeline/pointerCapture';
 
@@ -181,7 +181,7 @@ export function CanvasSelection({
           kind: 'slot',
           key: slot.key,
           sceneIndex,
-          transform: transforms[slot.key] ?? { offsetX: 0, offsetY: 0, scale: 1, rotation: 0 },
+          transform: transforms[slot.key] ?? NO_SLOT_TRANSFORM,
           box: slot.box,
           label: slot.label,
         });
@@ -222,6 +222,37 @@ export function CanvasSelection({
       : t.kind === 'slot' ? t.key === selectedSlot
       : t.key === selectedOverlay,
     ) ?? null;
+
+  /*
+   * Escape clears the selection from anywhere.
+   *
+   * It was on the selection box alone, which meant it only worked while that
+   * box had focus — and the moment someone touched a control in the inspector
+   * it silently stopped working. Escape means "never mind" wherever you are.
+   */
+  useEffect(() => {
+    if (!selectedOverlay && !selectedLogo && !selectedSlot) return;
+
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+
+      // Not while typing, and not while a dialog is up: Escape belongs to
+      // whichever of those is in front.
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        if (target.isContentEditable) return;
+        if (/^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      }
+      if (document.querySelector('[role="dialog"]')) return;
+
+      selectOverlay(null);
+      selectLogo(false);
+      selectSlot(null);
+    };
+
+    window.addEventListener('keydown', onKey);
+    return () => { window.removeEventListener('keydown', onKey); };
+  }, [selectedOverlay, selectedLogo, selectedSlot, selectOverlay, selectLogo, selectSlot]);
 
   if (scale <= 0) return null;
 
@@ -474,6 +505,16 @@ export function CanvasSelection({
           }
         />
       ))}
+
+      {selected?.kind === 'overlay' && isAnimated(selected.overlay) && (
+        <MotionPath
+          overlay={selected.overlay}
+          aspect={aspect}
+          measure={measure}
+          atMs={playheadMs - selected.overlay.startMs}
+          px={px}
+        />
+      )}
 
       {selected && (
         <div
@@ -783,4 +824,73 @@ function useMeasureContext(): TextMeasureContext {
     if (!ctx) throw new Error('Could not get a 2D context to measure text with.');
     return ctx;
   }, []);
+}
+
+/**
+ * The route an animated overlay takes, drawn over the artboard.
+ *
+ * Without this, keyframes are invisible: the panel says there are three of
+ * them and the timeline shows three small diamonds, but nothing tells you
+ * *where* the overlay is going, which is the only question anyone actually has
+ * while placing them. A line through the poses with a dot at each answers it
+ * at a glance, and makes the feature discoverable to someone who never read
+ * the panel.
+ *
+ * Each dot comes from `overlayBox` at that pose's own time, so it sits exactly
+ * where the handles would be if the playhead were there — rather than at the
+ * raw stored position, which for anchored text is half a line away.
+ */
+function MotionPath({
+  overlay,
+  aspect,
+  measure,
+  atMs,
+  px,
+}: {
+  overlay: Overlay;
+  aspect: Aspect;
+  measure: TextMeasureContext;
+  atMs: number;
+  px: (n: number) => number;
+}): React.JSX.Element | null {
+  const poses = posesOf(overlay);
+  if (poses.length === 0) return null;
+
+  const here = poseIndexAt(overlay, atMs, actions.POSE_TOLERANCE_MS);
+
+  const points = poses.map((pose) => {
+    const box = overlayBox(overlay, aspect, measure, pose.atMs);
+    return { atMs: pose.atMs, x: px(box?.cx ?? 0), y: px(box?.cy ?? 0) };
+  });
+
+  return (
+    <svg
+      aria-hidden
+      data-motion-path
+      className="pointer-events-none absolute inset-0 size-full overflow-visible"
+    >
+      {points.length > 1 && (
+        <polyline
+          points={points.map((point) => `${point.x},${point.y}`).join(' ')}
+          fill="none"
+          stroke="var(--c-accent)"
+          strokeWidth={1.5}
+          strokeDasharray="5 4"
+          opacity={0.85}
+        />
+      )}
+      {points.map((point, index) => (
+        <circle
+          key={point.atMs}
+          data-path-pose={Math.round(point.atMs)}
+          cx={point.x}
+          cy={point.y}
+          r={index === here ? 5 : 3.5}
+          fill={index === here ? 'var(--c-accent)' : 'var(--c-panel)'}
+          stroke="var(--c-accent)"
+          strokeWidth={1.5}
+        />
+      ))}
+    </svg>
+  );
 }

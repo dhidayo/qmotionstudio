@@ -379,8 +379,35 @@ export function nudgeSlot(key: SlotKey, patch: Partial<SlotTransform>): Action {
           offsetY: patch.offsetY ?? current.offsetY,
           scale: clamp(patch.scale ?? current.scale, 0.1, 8),
           rotation: patch.rotation ?? current.rotation,
+          z: patch.z ?? current.z,
         };
         return { ...inputs, slotTransforms: { ...inputs.slotTransforms, [key]: next } };
+      }),
+  };
+}
+
+/**
+ * Stacking, for one of the template's own elements.
+ *
+ * Expressed as a z *nudge* like the rest of D-061, so it survives a template
+ * change and is undone by the same "Reset to template". Front and back rather
+ * than forward and backward by one: a step needs to know what the neighbours
+ * are, and the document holds nudges rather than the built layer list, so it
+ * cannot see them. Front and back is also what the question usually is.
+ */
+export function arrangeSlot(key: SlotKey, to: 'front' | 'back'): Action {
+  return {
+    label: to === 'front' ? 'Bring to front' : 'Send to back',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const all = Object.values(inputs.slotTransforms).map((t) => t.z);
+        const z = to === 'front' ? Math.max(0, ...all) + 1 : Math.min(0, ...all) - 1;
+        const current = inputs.slotTransforms[key] ?? NO_SLOT_TRANSFORM;
+        if (current.z === z) return inputs;
+        return {
+          ...inputs,
+          slotTransforms: { ...inputs.slotTransforms, [key]: { ...current, z } },
+        };
       }),
   };
 }
@@ -834,6 +861,34 @@ export function setOverlayTime(id: string, startMs: number, endMs: number): Acti
   };
 }
 
+/**
+ * Stacking, for an overlay.
+ *
+ * §6.4 draws overlays by track and then by their position in the list, so
+ * both have to move: the track is the coarse control the timeline already
+ * shows as lanes, and the list position settles ties inside one. Doing only
+ * the track would leave two overlays on the same lane stuck in whatever order
+ * they were added, which is exactly the case where someone reaches for this.
+ */
+export function arrangeOverlay(id: string, to: 'front' | 'back'): Action {
+  return {
+    label: to === 'front' ? 'Bring to front' : 'Send to back',
+    apply: (project) => {
+      const overlay = project.overlays.find((o) => o.id === id);
+      if (!overlay) return project;
+
+      const others = project.overlays.filter((o) => o.id !== id);
+      const track =
+        to === 'front'
+          ? Math.min(MAX_OVERLAY_TRACK, Math.max(0, ...others.map((o) => o.track)))
+          : 0;
+      const moved = { ...overlay, track };
+
+      return { ...project, overlays: to === 'front' ? [...others, moved] : [moved, ...others] };
+    },
+  };
+}
+
 export function setOverlayTrack(id: string, track: number): Action {
   return {
     label: 'Change overlay track',
@@ -856,6 +911,9 @@ export function setOverlayTransform(id: string, patch: PropValues): Action {
       })),
   };
 }
+
+/** Matches the timeline's row cap; nothing is ever pushed past it. */
+const MAX_OVERLAY_TRACK = 7;
 
 /** How close two keyframes have to be to count as the same moment. */
 export const POSE_TOLERANCE_MS = 60;

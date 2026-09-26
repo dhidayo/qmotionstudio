@@ -627,7 +627,7 @@ function Keyframes({
           key={pose.atMs}
           aria-hidden
           data-keyframe={Math.round(pose.atMs)}
-          className="pointer-events-none absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rotate-45 border"
+          className="pointer-events-none absolute top-1/2 size-2 -translate-x-1/2 -translate-y-1/2 rotate-45 border"
           style={{
             left: `${Math.min(100, Math.max(0, (pose.atMs / span) * 100))}%`,
             background: active ? 'var(--c-accent)' : 'var(--c-ink-faint)',

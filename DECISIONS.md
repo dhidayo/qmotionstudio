@@ -1592,3 +1592,61 @@ and a test caught it.
 
 A scrub is a deliberate move to an exact time, so it now says so at once.
 Playback still publishes at 20Hz, which is all a readout needs.
+
+## D-065 — stacking, as a nudge
+
+Nothing let anyone say which element should be in front. Overlays had lanes,
+which are stacking but do not read as it; the template's own elements had no
+control at all.
+
+**For scene elements, `z` joins the slot nudge.** Same shape as the rest of
+D-061 — the template's stacking is the starting point and this records how far
+the user has lifted something out of it — so it survives a template change and
+"Reset to template" puts the order back along with everything else.
+
+**Only the tagged elements are reordered, and only among the positions they
+already occupied.** The first version sorted the whole layer list, which made
+"Send to back" mean *behind the background*: the photo did go to the back, and
+it vanished. Literally correct and not what anyone means. The background and
+any decoration the template drew between the photos now stay exactly where they
+were, and the content is permuted around them.
+
+**Front and back, not forward and backward.** A single step needs to know what
+the neighbours are, and the document holds nudges rather than the built layer
+list, so it cannot see them. Front and back is also the question people
+actually ask.
+
+**For overlays, both halves move.** §6.4 draws by track and then by position in
+the list, so bringing one to the front sets its track *and* puts it last.
+Changing only the track would leave two overlays sharing a lane stuck in
+whatever order they were added — which is exactly when someone reaches for
+this. The lane control stays, relabelled, because the timeline shows lanes and
+they are useful for organising clips in time.
+
+## D-066 — keyframes had to be visible before they were useful
+
+Reported as "I do not understand what it does as I do not see anything that
+shows it on the app", and measuring the page bore that out exactly: the
+controls sat **1102 pixels** down the inspector, under a heading called
+"Movement" that was directly below another one called "Motion". Nothing on the
+canvas or the timeline said the feature existed.
+
+**A motion path on the artboard.** A dashed line through the poses with a dot
+at each, and the one under the playhead filled. This is the fix that matters:
+it answers the only question anyone has while placing keyframes — where is this
+thing going — and it makes the feature discoverable to someone who never opens
+the panel. Each dot comes from `overlayBox` at that pose's own time, so it sits
+exactly where the handles would be if the playhead were there, rather than at
+the raw stored position, which for anchored text is half a line away.
+
+**Movement folded into Placement.** Where something is and where it is *over
+time* are one question. Splitting them is what put the controls below the fold
+in the first place, and "Motion" and "Movement" as adjacent headings was a
+distinction nobody should be asked to hold.
+
+**The diamonds got bigger.** Six pixels on a thin clip is not a signal.
+
+**Escape now works from anywhere.** It was bound to the selection box, so it
+only worked while that box had focus — touch any control in the inspector and
+it silently stopped. It skips text fields and defers to an open dialog, both of
+which have a better claim to the key.
