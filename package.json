@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "@mediabunny/aac-encoder": "^1.58.1",
+    "idb-keyval": "^6.3.0",
     "libheif-js": "^1.23.2",
     "mediabunny": "^1.58.1",
     "react": "^18.3.1",

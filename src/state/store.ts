@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Aspect } from '@/core/types';
 import type { Project, ProjectMode, SlotKey } from '@/document/types';
+import type { SaveState } from '@/ui/persist/saveState';
 import {
   createProject, DEFAULT_PHOTO_COUNT, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID,
 } from '@/document/defaults';
@@ -84,14 +85,27 @@ type EditorState = {
   libraryTierFilter: 'all' | 'free' | 'pro';
   libraryShowFavourites: boolean;
   exporting: boolean;
+  /** §13's autosave, surfaced so the top bar can say when it has failed. */
+  saveState: SaveState;
 
   selectScene: (index: number) => void;
   selectOverlay: (id: string | null) => void;
   selectAudio: (id: string | null) => void;
   selectLogo: (selected: boolean) => void;
   selectSlot: (key: SlotKey | null, tab?: InspectorTab, photoIndex?: number) => void;
+
+  /**
+   * Replaces the whole document (§13's project list).
+   *
+   * History is dropped rather than carried across. Undo is a property of a
+   * session with *one* document — letting ⌘Z walk backwards out of the project
+   * you just opened and into the one you left would be a genuinely alarming
+   * thing for an editor to do.
+   */
+  openProject: (project: Project) => void;
   setLoadedTemplate: (template: SceneTemplate | null) => void;
   setExporting: (exporting: boolean) => void;
+  setSaveState: (state: SaveState) => void;
   dispatch: (action: actions.Action) => void;
   /** Ends a coalescing run — call on pointer-up after a drag. */
   endInteraction: () => void;
@@ -224,6 +238,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   playheadMs: 0,
   isPlaying: true,
   inspectorTab: 'photos',
+  saveState: 'idle',
   theme: readStoredTheme(),
   selectedPhoto: 0,
   favourites: readFavourites(),
@@ -279,6 +294,21 @@ export const useEditor = create<EditorState>((set, get) => ({
    * it, and for a photo selects that photo — so the controls on screen are
    * always the ones for the thing you just clicked.
    */
+  openProject: (project) => {
+    set({
+      project,
+      history: emptyHistory,
+      selectedScene: 0,
+      selectedOverlay: null,
+      selectedAudio: null,
+      selectedLogo: false,
+      selectedSlot: null,
+      selectedPhoto: 0,
+      template: null,
+      playheadMs: 0,
+    });
+  },
+
   selectSlot: (selectedSlot, tab, photoIndex) => {
     set({
       selectedSlot,
@@ -293,6 +323,8 @@ export const useEditor = create<EditorState>((set, get) => ({
   setLoadedTemplate: (template) => { set({ template }); },
 
   setExporting: (exporting) => { set({ exporting }); },
+
+  setSaveState: (saveState) => { set({ saveState }); },
 
   /**
    * The one way the document changes.

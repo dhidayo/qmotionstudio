@@ -17,6 +17,8 @@ import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { renderParams } from '@/dev/renderParams';
 import { useKeyboard } from '@/ui/hooks/useKeyboard';
 import { useAudioPlayback } from '@/ui/audio/useAudioPlayback';
+import { useAutosave } from '@/ui/persist/useAutosave';
+import { useRestore } from '@/ui/persist/useRestore';
 import { Toast } from './Toast';
 import { ExportDialog } from '@/ui/export/ExportDialog';
 
@@ -230,6 +232,16 @@ export function AppShell(): React.JSX.Element {
    * round (D-054).
    */
   useAudioPlayback(clock, project.audio, media, duration);
+
+  /*
+   * §13. Reopen the last project, then keep saving it.
+   *
+   * Autosave waits for the restore: writing before reading would save the
+   * blank project the store starts with straight over the one on disk, which
+   * is the single worst thing a save can do.
+   */
+  const restore = useRestore(media);
+  useAutosave(project, media, restore.phase === 'ready');
 
   const [toast, setToast] = useState<string | null>(null);
   const exporting = useEditor((s) => s.exporting);

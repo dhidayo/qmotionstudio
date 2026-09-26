@@ -1,6 +1,7 @@
 import { ASPECTS, type Aspect } from '@/core/types';
 import { useEditor } from '@/state/store';
 import { setTier, useEntitlements } from '@/entitlements';
+import type { SaveState } from '@/ui/persist/saveState';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -8,6 +9,7 @@ export function TopBar(): React.JSX.Element {
   const theme = useEditor((s) => s.theme);
   const setTheme = useEditor((s) => s.setTheme);
   const { tier } = useEntitlements(project.mode);
+  const save = useEditor((s) => s.saveState);
 
   return (
     <header
@@ -37,6 +39,14 @@ export function TopBar(): React.JSX.Element {
       <UndoRedo />
 
       <div className="ml-auto flex items-center gap-2">
+        {/*
+          * The save state, shown only when it is not the boring one.
+          *
+          * "Saved" as a permanent badge is noise that stops being read within
+          * a minute, which is the worst possible state for the one indicator
+          * that has to be believed when it says *not* saved (§16).
+          */}
+        <SaveBadge state={save} />
         <span className="text-[11px] text-ink-faint">Nothing leaves your device</span>
         {/*
           * §12's dev toggle. The stub "returns a tier from local state with a
@@ -206,5 +216,31 @@ function AspectButton({
     >
       {aspect}
     </button>
+  );
+}
+
+function SaveBadge({ state }: { state: SaveState }): React.JSX.Element | null {
+  if (state === 'idle' || state === 'saved') {
+    return (
+      <span className="text-[11px] text-ink-faint" data-save-state={state}>
+        {state === 'saved' ? 'Saved' : ''}
+      </span>
+    );
+  }
+
+  const failed = state === 'failed';
+  return (
+    <span
+      data-save-state={state}
+      role={failed ? 'alert' : undefined}
+      className="rounded-sm px-1.5 py-0.5 text-[10px] font-semibold"
+      style={
+        failed
+          ? { background: 'var(--c-pro-soft)', color: 'var(--c-danger)' }
+          : { color: 'var(--c-ink-faint)' }
+      }
+    >
+      {failed ? 'Not saved' : 'Saving…'}
+    </span>
   );
 }

@@ -52,3 +52,27 @@ export function videoDemandsWithLead(
   const seen = new Set(now.map((d) => d.mediaId));
   return [...now, ...soon.filter((d) => !seen.has(d.mediaId))];
 }
+
+/**
+ * Every media id the project refers to (§13).
+ *
+ * The document holds ids and the store holds blobs (§5), so this is the list
+ * that has to be on disk for a project to reopen looking like itself — and the
+ * list to read back when it does.
+ */
+export function referencedMedia(project: Project): ReadonlySet<string> {
+  const ids = new Set<string>();
+
+  for (const scene of project.scenes) {
+    for (const photo of scene.inputs.photos) ids.add(photo.mediaId);
+    if (scene.inputs.logo.mediaId !== null) ids.add(scene.inputs.logo.mediaId);
+  }
+  for (const overlay of project.overlays) {
+    if (overlay.content.kind !== 'text') ids.add(overlay.content.mediaId);
+  }
+  for (const clip of project.audio) ids.add(clip.mediaId);
+
+  if (project.brand.logo) ids.add(project.brand.logo.mediaId);
+
+  return ids;
+}

@@ -1650,3 +1650,39 @@ distinction nobody should be asked to hold.
 only worked while that box had focus — touch any control in the inspector and
 it silently stopped. It skips text fields and defers to an open dialog, both of
 which have a better claim to the key.
+
+## D-067 — persistence: documents and blobs are stored apart (M7, in progress)
+
+Two IndexedDB stores, because the halves have nothing in common. A document is
+a few kilobytes of ids and numbers rewritten on every edit; a photograph is
+megabytes written once and never touched again. Together they would mean
+rewriting the photographs every time someone dragged a slider. Media is keyed
+by `mediaId` and shared across projects, exactly as §5's "the document holds
+only ids" implies, so duplicating a project will copy a list of ids rather than
+a pile of blobs.
+
+**What is stored is the original blob, never the decoded form.** An
+`ImageBitmap` cannot be written to IndexedDB, an `AudioBuffer` is many times
+the size of the file it came from, and a `VideoClip` holds an open reader. A
+restore therefore runs the same decoders the uploader runs, which is what makes
+a reopened project behave identically to one just imported rather than nearly
+identically.
+
+**Autosave is debounced at 700ms and waits for the restore.** Writing before
+reading would save the blank project the store starts with straight over the
+one on disk, which is the worst thing a save can do. Blobs are written once
+each and tracked, so an edit costs one small document write.
+
+**A deep link wins over the last project.** `?template=` and `?scene=` mean
+"show me this" — they are how `npm run thumbs` and the whole visual suite drive
+the app — so a URL that names something always starts fresh, and only a plain
+visit reopens previous work. It is also what a link is for: sending someone a
+template and having it open their own half-finished ad would be worse than
+useless.
+
+**`migrate.ts` exists now that saves do.** One step per version, so adding a
+version means adding a function. It refuses a document written by a newer build
+rather than guessing, because forwards is not a migration. The v1 → v2 step is
+kept even though no v1 document was ever written — persistence arrived with
+v2 — so the chain stays honest and the mechanism has something real to be
+tested against.
