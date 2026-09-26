@@ -3,7 +3,11 @@ import { layoutText, type TextMeasureContext } from '@/core/text/layout';
 import { fontString } from '@/fonts/registry';
 import type { Aspect, Layer, Rect, Size } from '@/core/types';
 import type { Overlay, SceneInputs } from '@/document/types';
+import { createProps, resolveProps } from '@/core/anim/interpolate';
+import { NO_SLOT_TRANSFORM, type SlotKey, type SlotTransform } from '@/document/types';
+import type { DrawnScene } from './rig';
 import { overlayLayer } from './overlays';
+import { slotKey, slotOf } from './slots';
 
 /**
  * Where things are on the frame, for direct manipulation.
@@ -70,6 +74,21 @@ export type OrientedBox = {
 };
 
 /**
+ * A box, plus how to get back from it to the thing that positions it.
+ *
+ * `anchorOffset` is the gap between the layer's own (x, y) and the centre of
+ * what it draws, in the layer's unrotated frame and already scaled. Editing
+ * needs it in both directions: the box is drawn at the centre, but a drag has
+ * to write back a *position*, and for an anchored layer those are not the same
+ * point. Getting this wrong makes every drag overshoot by a constant — which
+ * is invisible for a centre-anchored photo and exactly half a line of text for
+ * a caption.
+ */
+export type PlacedBox = OrientedBox & {
+  readonly anchorOffset: { readonly x: number; readonly y: number };
+};
+
+/**
  * The box round an overlay, at rest.
  *
  * Deliberately built from the overlay's *static* transform rather than from
@@ -85,24 +104,33 @@ export function overlayBox(
   overlay: Overlay,
   aspect: Aspect,
   measure: TextMeasureContext,
-): OrientedBox | null {
+): PlacedBox | null {
   const design = projectDesign(aspect);
   const built = overlayLayer(overlay, { design, id: idFactory() });
   if (!built) return null;
 
-  const size = layerSize(content(built), measure);
-  if (size === null) return null;
+  const extent = layerExtent(content(built), measure);
+  if (extent === null) return null;
 
   const t = overlay.transform;
   const scaleX = t.scaleX ?? 1;
   const scaleY = t.scaleY ?? t.scaleX ?? 1;
+  const rotation = t.rotation ?? 0;
+
+  const anchorOffset = { x: extent.offset.x * scaleX, y: extent.offset.y * scaleY };
+  const centre = shiftBy(
+    { x: design.w * (t.x ?? 0.5), y: design.h * (t.y ?? 0.5) },
+    anchorOffset,
+    rotation,
+  );
 
   return {
-    cx: design.w * (t.x ?? 0.5),
-    cy: design.h * (t.y ?? 0.5),
-    w: size.w * scaleX,
-    h: size.h * scaleY,
-    rotation: t.rotation ?? 0,
+    cx: centre.x,
+    cy: centre.y,
+    w: extent.size.w * scaleX,
+    h: extent.size.h * scaleY,
+    rotation,
+    anchorOffset,
   };
 }
 
@@ -113,7 +141,7 @@ export function overlayBox(
  * that is what `placementOf` in the template chrome does with them, and the
  * two have to agree or the selection box lands somewhere the logo is not.
  */
-export function logoBox(inputs: SceneInputs, aspect: Aspect): OrientedBox | null {
+export function logoBox(inputs: SceneInputs, aspect: Aspect): PlacedBox | null {
   const { logo } = inputs;
   if (logo.mediaId === null) return null;
 
@@ -133,7 +161,8 @@ export function logoBox(inputs: SceneInputs, aspect: Aspect): OrientedBox | null
     }
   })();
 
-  return { cx, cy, w: size, h: size, rotation: 0 };
+  // The logo image is centre-anchored, so its position is its centre.
+  return { cx, cy, w: size, h: size, rotation: 0, anchorOffset: { x: 0, y: 0 } };
 }
 
 /** The inverse of `logoBox`: a point on the frame back to normalised safe-box coords. */
@@ -171,6 +200,20 @@ export function toFrame(box: OrientedBox, local: { x: number; y: number }): { x:
   };
 }
 
+/** `point` plus a local offset turned by `degrees`. */
+export function shiftBy(
+  point: { x: number; y: number },
+  local: { x: number; y: number },
+  degrees: number,
+): { x: number; y: number } {
+  if (local.x === 0 && local.y === 0) return point;
+  const radians = (degrees * Math.PI) / 180;
+  return {
+    x: point.x + local.x * Math.cos(radians) - local.y * Math.sin(radians),
+    y: point.y + local.x * Math.sin(radians) + local.y * Math.cos(radians),
+  };
+}
+
 /** Deterministic ids, as `OverlayBuildContext` requires. Never rendered. */
 function idFactory(): (prefix: string) => string {
   let counter = 0;
@@ -194,15 +237,37 @@ function content(layer: Layer): Layer {
  * disagree silently, and a selection box that is subtly wrong is worse than
  * none at all.
  */
-function layerSize(layer: Layer, measure: TextMeasureContext): Size | null {
+type Extent = {
+  readonly size: Size;
+  /**
+   * Where the drawn rectangle's centre sits relative to the layer's own
+   * (x, y), before scale and rotation.
+   *
+   * Not always zero, which was the assumption that put every selection box in
+   * the wrong place for text. `drawLayer` positions a layer by its *anchor*,
+   * which defaults to the centre but which templates set to the top-left
+   * forty times over — and for text the anchor box is the declared wrap width
+   * by zero height, so the glyphs always run downwards from y whatever
+   * `anchorY` says.
+   */
+  readonly offset: { readonly x: number; readonly y: number };
+};
+
+function layerExtent(layer: Layer, measure: TextMeasureContext): Extent | null {
+  const anchorX = layer.anchorX ?? 0.5;
+  const anchorY = layer.anchorY ?? 0.5;
+
   switch (layer.type) {
     case 'image':
     case 'video':
-      return { w: layer.props.w, h: layer.props.h };
-
     case 'shape':
-    case 'mask':
-      return { w: layer.props.w, h: layer.props.h };
+    case 'mask': {
+      const size = { w: layer.props.w, h: layer.props.h };
+      return {
+        size,
+        offset: { x: size.w * (0.5 - anchorX), y: size.h * (0.5 - anchorY) },
+      };
+    }
 
     case 'text': {
       const props = layer.props;
@@ -217,13 +282,133 @@ function layerSize(layer: Layer, measure: TextMeasureContext): Size | null {
       });
       // A pill draws outside the glyphs, and it is the part the eye reads as
       // the edge of the object, so it is the part the handles have to sit on.
+      // Symmetric, so it grows the box without moving its centre.
       const padX = props.pill ? props.pill.paddingX : 0;
       const padY = props.pill ? props.pill.paddingY : 0;
-      return { w: run.width + padX * 2, h: run.height + padY * 2 };
+
+      /*
+       * `drawLayer` uses (maxWidthPx ?? 0) × 0 as the anchor box for text and
+       * `drawText` lays the lines out rightwards and downwards from there,
+       * aligned within the same declared width. The handles go round the
+       * glyphs, not round the block, so the alignment offset has to be walked
+       * back in — otherwise a centred caption gets a box the width of its
+       * whole wrap column.
+       */
+      const blockWidth = props.maxWidthPx ?? run.width;
+      const alignOffset =
+        props.align === 'left' ? 0
+        : props.align === 'right' ? blockWidth - run.width
+        : (blockWidth - run.width) / 2;
+
+      return {
+        size: { w: run.width + padX * 2, h: run.height + padY * 2 },
+        offset: {
+          x: alignOffset + run.width / 2 - (props.maxWidthPx ?? 0) * anchorX,
+          y: run.height / 2,
+        },
+      };
     }
 
     case 'gradient':
     case 'group':
       return null;
   }
+}
+
+/**
+ * A box round one of the template's own elements (B).
+ *
+ * `slot` identifies it in the document, so the same value can be handed
+ * straight to `nudgeSlot`.
+ */
+export type SlotBox = {
+  readonly key: SlotKey;
+  readonly box: OrientedBox;
+  readonly label: string;
+};
+
+/**
+ * Boxes for every element the template tagged, in the frame's design units.
+ *
+ * Two things are combined here, and keeping them apart is the point. The base
+ * position comes from the layers *as the template built them*, evaluated at
+ * the scene's current time — so a photo that drifts across the scene has its
+ * box where the photo actually is. The nudge comes from the document and is
+ * added on top, so during a drag the box follows the pointer immediately
+ * rather than waiting for the next frame to be rendered and read back.
+ *
+ * Scene design units are converted to the frame's. Both boxes share the
+ * frame's aspect and differ only by a scalar, so this is one multiply — the
+ * same fact that let the logo skip having a coordinate space of its own.
+ */
+export function slotBoxes(
+  drawn: DrawnScene,
+  /** Scene-local time, after §8.4's speed remap. */
+  sceneTimeMs: number,
+  transforms: Readonly<Record<SlotKey, SlotTransform>>,
+  aspect: Aspect,
+  measure: TextMeasureContext,
+): readonly SlotBox[] {
+  const frame = projectDesign(aspect);
+  const toFrameUnits = frame.w / drawn.design.w;
+  const seen = new Set<SlotKey>();
+  const boxes: SlotBox[] = [];
+
+  for (const layer of flatten(drawn.layers)) {
+    const slot = slotOf(layer);
+    if (!slot) continue;
+
+    const key = slotKey(slot);
+    // A template may build several drawables from one slot — a photo and its
+    // reflection, say. They all move together, but only the first gets the
+    // handles, and it is the one the template drew first.
+    if (seen.has(key)) continue;
+
+    const extent = layerExtent(layer, measure);
+    if (extent === null) continue;
+
+    const props = resolveProps(layer.tracks, Math.max(0, sceneTimeMs - layer.startMs), createProps());
+    const nudge = transforms[key] ?? NO_SLOT_TRANSFORM;
+
+    // The nudge is already composed into the tracks the renderer draws, but
+    // these are the *base* layers, so it has to be added here as well.
+    const scaleX = props.scaleX * nudge.scale;
+    const scaleY = props.scaleY * nudge.scale;
+    const rotation = props.rotation + nudge.rotation;
+
+    const centre = shiftBy(
+      { x: props.x, y: props.y },
+      { x: extent.offset.x * scaleX, y: extent.offset.y * scaleY },
+      rotation,
+    );
+
+    seen.add(key);
+    boxes.push({
+      key,
+      label: slot.kind === 'photo' ? `Photo ${slot.index + 1}` : labelFor(slot.key),
+      box: {
+        cx: centre.x * toFrameUnits + nudge.offsetX * frame.w,
+        cy: centre.y * toFrameUnits + nudge.offsetY * frame.h,
+        w: extent.size.w * scaleX * toFrameUnits,
+        h: extent.size.h * scaleY * toFrameUnits,
+        rotation,
+      },
+    });
+  }
+
+  return boxes;
+}
+
+/** Groups and masks hold children; a tagged drawable may be inside either. */
+function* flatten(layers: readonly Layer[]): Generator<Layer> {
+  for (const layer of layers) {
+    yield layer;
+    if (layer.type === 'group' || layer.type === 'mask') yield* flatten(layer.children);
+  }
+}
+
+/** "headline" reads better as "Headline" in a selection label. */
+function labelFor(key: string): string {
+  const spaced = key.replace(/[-_]/g, ' ');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }

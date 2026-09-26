@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Aspect } from '@/core/types';
-import type { Project, ProjectMode } from '@/document/types';
+import type { Project, ProjectMode, SlotKey } from '@/document/types';
 import {
   createProject, DEFAULT_PHOTO_COUNT, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID,
 } from '@/document/defaults';
@@ -65,6 +65,13 @@ type EditorState = {
    * three are kept mutually exclusive by their setters.
    */
   selectedLogo: boolean;
+  /**
+   * The template element selected on the canvas (B), by `slotKey()`.
+   *
+   * Editor state like the rest of the selection: it must not be undoable and
+   * it must not be saved.
+   */
+  selectedSlot: SlotKey | null;
 
   playheadMs: number;
   isPlaying: boolean;
@@ -82,6 +89,7 @@ type EditorState = {
   selectOverlay: (id: string | null) => void;
   selectAudio: (id: string | null) => void;
   selectLogo: (selected: boolean) => void;
+  selectSlot: (key: SlotKey | null, tab?: InspectorTab, photoIndex?: number) => void;
   setLoadedTemplate: (template: SceneTemplate | null) => void;
   setExporting: (exporting: boolean) => void;
   dispatch: (action: actions.Action) => void;
@@ -212,6 +220,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   selectedOverlay: null,
   selectedAudio: null,
   selectedLogo: false,
+  selectedSlot: null,
   playheadMs: 0,
   isPlaying: true,
   inspectorTab: 'photos',
@@ -233,6 +242,7 @@ export const useEditor = create<EditorState>((set, get) => ({
             selectedOverlay: null,
             selectedAudio: null,
             selectedLogo: false,
+            selectedSlot: null,
             selectedPhoto: 0,
             template: null,
           };
@@ -240,11 +250,11 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   selectOverlay: (selectedOverlay) => {
-    set({ selectedOverlay, selectedAudio: null, selectedLogo: false });
+    set({ selectedOverlay, selectedAudio: null, selectedLogo: false, selectedSlot: null });
   },
 
   selectAudio: (selectedAudio) => {
-    set({ selectedAudio, selectedOverlay: null, selectedLogo: false });
+    set({ selectedAudio, selectedOverlay: null, selectedLogo: false, selectedSlot: null });
   },
 
   selectLogo: (selectedLogo) => {
@@ -253,9 +263,31 @@ export const useEditor = create<EditorState>((set, get) => ({
     // sort of step people should never have to be told about.
     set(
       selectedLogo
-        ? { selectedLogo, selectedOverlay: null, selectedAudio: null, inspectorTab: 'logo' }
+        ? {
+            selectedLogo,
+            selectedOverlay: null,
+            selectedAudio: null,
+            selectedSlot: null,
+            inspectorTab: 'logo' as const,
+          }
         : { selectedLogo, selectedOverlay: null, selectedAudio: null },
     );
+  },
+
+  /**
+   * Picking a template element on the canvas also opens the panel that edits
+   * it, and for a photo selects that photo — so the controls on screen are
+   * always the ones for the thing you just clicked.
+   */
+  selectSlot: (selectedSlot, tab, photoIndex) => {
+    set({
+      selectedSlot,
+      selectedOverlay: null,
+      selectedAudio: null,
+      selectedLogo: false,
+      ...(tab === undefined ? {} : { inspectorTab: tab }),
+      ...(photoIndex === undefined ? {} : { selectedPhoto: photoIndex }),
+    });
   },
 
   setLoadedTemplate: (template) => { set({ template }); },

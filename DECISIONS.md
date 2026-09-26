@@ -1447,3 +1447,79 @@ including one round where the diagnostic itself, an extra `AudioContext` opened
 to tell a starved audio device from an app fault, was heavy enough to skew the
 very numbers it was measuring. With the same 79 tests as before, the runtime
 change is neutral: 1.1m against a 1.0–1.1m baseline, all passing.
+
+## D-061 — the template's own elements move, by offset (B)
+
+Choosing B over C. C would have let each template declare which of its
+elements may be moved, which sounds safer and is worse: some things would drag
+and some would not, with no way to tell which without trying. For an editor
+whose whole claim is that it needs no training, unpredictable is worse than
+either extreme — people would conclude it was broken rather than that the
+headline was protected. So everything moves, and "Reset to template" is what
+makes that safe.
+
+**A nudge is an offset, never a position.** The template still decides where
+things go; the document records how far the user pulled each one from there.
+That is the difference between "you may adjust this layout" and "you have taken
+this layout over", and it is what keeps §1.3 true: switching aspect still
+re-lays-out, switching template still works, and a photo that moves because its
+neighbours changed takes its nudge with it. Reset is then just forgetting the
+entry — there is no original position to reconstruct, so there is nothing to
+get wrong.
+
+**Nothing in any template changed.** `photoProps` and `textFor` are the two
+funnels every template's photos and text already pass through, and both are
+handed the slot's identity anyway, so the tag is applied there. Templates not
+written yet get it for free, and none of the nine had to be touched.
+
+**Composed into the layer's own tracks, after the build.** Per keyframe, so a
+photo that drifts across its scene keeps drifting — it just drifts somewhere
+else. Replacing the track with a constant would have thrown the motion away,
+which is the one thing a nudge must not do. Scale multiplies and rotation adds
+for the same reason.
+
+Applied *after* `structureKey` rather than folded into it: a drag changes these
+values on every pointer move, and putting them in the build key would re-run
+`build()`, with its text measurement, sixty times a second for the length of
+the drag — §16's forbidden build-in-the-render-loop wearing a different hat.
+With nothing nudged, `applySlotTransforms` returns the cached array by
+reference, so a project that never uses this pays nothing at all.
+
+**The editor reads what the renderer drew.** `rig.drawn` records the primary
+scene's built layers, and the preview loop publishes it to React when its
+identity changes — which is when the scene or its layers change, not once a
+frame. The current time is deliberately not in that record: it changes every
+frame, and the editor can work it out from the playhead. The first version put
+it there and the boxes simply never appeared, because React read the scratch
+once at mount and never looked again.
+
+Slots get corners and rotation but not edge handles: one uniform scale is all a
+nudge carries, and a template photo's proportions are the frame-ratio control's
+business (§8.1).
+
+## D-062 — text is aligned within its declared wrap width
+
+Found while fitting selection boxes to text, and a real rendering bug rather
+than a measuring one.
+
+`drawLayer` anchors a text layer on `maxWidthPx`, deliberately, so that a
+centred heading does not shift about as its content changes length. `drawText`
+then aligned its lines within the *measured* width instead. The two disagreed,
+so a centred caption with wrapping on was drawn half the slack to the left of
+where its anchor said it was: "Across 50%" did not put it in the middle of the
+frame, and the demo scene's own headline sat about twenty-six pixels left of
+the artwork beneath it.
+
+The block has to be the same width in both places or centring cannot mean
+anything, so the paint now uses the declared width. The five demo-scene
+baselines moved, and the new ones are visibly better centred.
+
+The matching arithmetic in `bounds.ts` walks the alignment offset back out,
+because the handles go round the glyphs rather than round the wrap column.
+
+**And the write-back has to invert it.** A box is drawn at the centre of what
+is painted, but a drag writes a *position*, and for an anchored layer those are
+different points. Missing that made every overlay drag overshoot by a constant
+— invisible horizontally, where the offset happens to be zero for centred text,
+and exactly half a line vertically. `PlacedBox.anchorOffset` carries the gap so
+both directions agree.

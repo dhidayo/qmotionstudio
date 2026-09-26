@@ -11,9 +11,10 @@ import { drawLayer, drawLayers } from './drawLayer';
 import { drawGrain, drawVignette } from './postFx';
 import { drawPlaceholderFrame } from './placeholder';
 import { overlayKey, overlayLayer } from './overlays';
+import { applySlotTransforms, hasSlotTransforms, slotTransformKey } from './slots';
 import { transitionFn } from './transitions';
 import type { DrawContext } from './drawContext';
-import type { RenderRig } from './rig';
+import type { DrawnScene, RenderRig } from './rig';
 
 /**
  * THE render function (§3A, amended by D-001).
@@ -80,15 +81,15 @@ export function renderFrame(
     drawPlaceholderFrame(ctx, vp, palette, globalTimeMs);
   } else if (!active.incoming) {
     //  2a. One scene: straight to the output, no buffer round trip.
-    drawScene(ctx, project, active.current, globalTimeMs, rig, px);
+    drawScene(ctx, project, active.current, globalTimeMs, rig, px, true);
   } else {
     //  2b. Two scenes, each into its own buffer …
     rig.buffers.resize(px);
     const a = rig.buffers.clear(0);
     const b = rig.buffers.clear(1);
 
-    drawScene(a.ctx, project, active.current, globalTimeMs, rig, px);
-    drawScene(b.ctx, project, active.incoming, globalTimeMs, rig, px);
+    drawScene(a.ctx, project, active.current, globalTimeMs, rig, px, true);
+    drawScene(b.ctx, project, active.incoming, globalTimeMs, rig, px, false);
 
     //  3. … composited through the transition.
     const transition = active.incoming.transitionIn;
@@ -139,6 +140,8 @@ function drawScene(
   globalTimeMs: number,
   rig: RenderRig,
   px: Size,
+  /** Only the scene under the playhead is recorded for editing. */
+  primary: boolean,
 ): void {
   const { scene } = span;
   const template = scene.templateId.startsWith('__') ? null : peekTemplate(scene.templateId);
@@ -168,13 +171,41 @@ function drawScene(
 
   if (scene.templateId === '__placeholder__') {
     drawPlaceholderFrame(target, vp, palette, localTimeMs);
+    if (primary) rig.drawn = null;
   } else {
-    const layers = memoisedLayers(rig, vp, scene, palette);
-    if (layers) drawLayers(dc, layers, localTimeMs);
+    const built = memoisedLayers(rig, vp, scene, palette);
+    if (built) drawLayers(dc, built.placed, localTimeMs);
+    if (primary) rig.drawn = recordDrawn(rig.drawn, scene.id, built?.base ?? null, vp.design);
   }
 
   drawGrain(target, vp.design, look.grain, rawLocalMs);
   drawVignette(target, vp.design, look.vignette);
+}
+
+/**
+ * Keeps the previous record when nothing about it has changed.
+ *
+ * Allocating a fresh object every frame would make its identity useless as a
+ * change signal and would have the editor re-rendering sixty times a second to
+ * be told the same thing.
+ */
+function recordDrawn(
+  previous: DrawnScene | null,
+  sceneId: string,
+  layers: readonly Layer[] | null,
+  design: Size,
+): DrawnScene | null {
+  if (!layers) return null;
+  if (
+    previous &&
+    previous.sceneId === sceneId &&
+    previous.layers === layers &&
+    previous.design.w === design.w &&
+    previous.design.h === design.h
+  ) {
+    return previous;
+  }
+  return { sceneId, layers, design: { w: design.w, h: design.h } };
 }
 
 /** §6.4 step 4. Each overlay's layer is memoised on its own content. */
@@ -227,11 +258,11 @@ function memoisedLayers(
   vp: Viewport,
   scene: Scene,
   palette: Palette,
-): readonly Layer[] | null {
+): { base: readonly Layer[]; placed: readonly Layer[] } | null {
   const key = structureKey(scene.templateId, scene.inputs, vp.aspect, vp.design, scene.durationMs);
 
   const hit = rig.layerCache.get(key);
-  if (hit) return hit;
+  if (hit) return { base: hit, placed: placed(rig, scene, hit, key, vp.design) };
 
   const buildStarted = now();
   const buildCtx = createBuildContext({
@@ -258,7 +289,38 @@ function memoisedLayers(
   rig.stats.buildCount += 1;
 
   rig.layerCache.set(key, layers);
-  return layers;
+  return { base: layers, placed: placed(rig, scene, layers, key, vp.design) };
+}
+
+/**
+ * The user's nudges (B), composed over the template's output.
+ *
+ * Applied *after* the memo rather than folded into `structureKey`, which
+ * matters: a drag changes these values on every pointer move, and putting them
+ * in the build key would re-run `build()` — with its text measurement — sixty
+ * times a second for the duration of the drag. That is §16's forbidden
+ * `build()` in the render loop wearing a different hat.
+ *
+ * With nothing nudged this returns the cached array untouched, so a project
+ * that never uses the feature pays nothing for it.
+ */
+function placed(
+  rig: RenderRig,
+  scene: Scene,
+  layers: readonly Layer[],
+  baseKey: string,
+  design: Size,
+): readonly Layer[] {
+  const { slotTransforms } = scene.inputs;
+  if (!hasSlotTransforms(slotTransforms)) return layers;
+
+  const key = `${baseKey}|${slotTransformKey(slotTransforms)}`;
+  const hit = rig.placedCache.get(scene.id);
+  if (hit && hit.key === key) return hit.layers;
+
+  const next = applySlotTransforms(layers, slotTransforms, design);
+  rig.placedCache.set(scene.id, { key, layers: next });
+  return next;
 }
 
 /**

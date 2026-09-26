@@ -7,6 +7,7 @@ import type { SceneTemplate } from '@/templates/schema';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { Button, EmptyNote, Section, Segmented, Slider, Stepper } from '../controls';
+import { SlotPlacement } from '../SlotPlacement';
 
 /** §8.1. Every control here goes through dispatch; none touches the document. */
 export function PhotosTab({ template }: { template: SceneTemplate | null }): React.JSX.Element {
@@ -134,6 +135,8 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
           <EmptyNote>Select a photo above to change its frame, size and crop.</EmptyNote>
         </Section>
       ) : (
+        <>
+        <SlotPlacement slotKey={`photo:${selected ?? 0}`} />
         <Section title={`Photo ${(selected ?? 0) + 1}`}>
           <Segmented<PhotoFrame>
             label="Frame ratio"
@@ -185,6 +188,7 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
             onChange={(cropMode) => { dispatch(actions.setPhotoCropMode(selected ?? 0, cropMode)); }}
           />
         </Section>
+        </>
       )}
     </div>
   );

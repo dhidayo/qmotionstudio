@@ -117,12 +117,19 @@ test.describe('moving things on the canvas', () => {
     expect(Number(await down(page))).toBe(50);
   });
 
-  test('clicking empty canvas clears the selection', async ({ page }) => {
+  test('Escape clears the selection', async ({ page }) => {
+    /*
+     * Escape rather than a click on bare canvas. Since the template's own
+     * elements became selectable there is often no bare canvas left to click:
+     * beat one of this ad is a full-bleed photo, so the corner of the frame
+     * selects that photo, which is correct and is what makes the keyboard the
+     * reliable way out. Clicking through to nothing is covered in
+     * slotEdit.spec.ts, on a template that has visible background.
+     */
     await addTextOverlay(page);
-    const canvas = await boxOf(page, 'canvas');
+    await page.locator(SELECTION).click();
 
-    // Top-left corner of the frame, well clear of a centred caption.
-    await page.mouse.click(canvas.x + 12, canvas.y + 12);
+    await page.keyboard.press('Escape');
     await expect(page.locator(SELECTION)).toHaveCount(0);
   });
 

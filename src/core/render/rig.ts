@@ -55,10 +55,47 @@ export type RenderRig = {
    * `build()` in the render loop wearing a different hat.
    */
   readonly overlayCache: Map<string, Layer>;
+  /**
+   * Layers with the user's slot nudges composed in (B), keyed by scene id.
+   *
+   * Separate from `layerCache` and deliberately one entry per scene rather
+   * than one per distinct nudge: dragging a photo produces a new set of values
+   * on every pointer move, and an unbounded map would grow an entry for each
+   * of them. Keyed by scene because a transition has two scenes on screen at
+   * once, and a single slot would thrash between them for the whole overlap.
+   *
+   * Empty for any project that has never nudged anything, which is the case
+   * that must stay free.
+   */
+  readonly placedCache: Map<string, { key: string; layers: readonly Layer[] }>;
   /** Laid-out glyph runs, keyed by every field that can change a measurement. §6.3. */
   readonly textCache: Map<string, GlyphRun>;
   readonly media: MediaResolver;
   readonly stats: RenderStats;
+  /**
+   * The scene the last frame drew, for direct manipulation (B).
+   *
+   * Layers as the *template* built them, before any of the user's nudges. The
+   * editor adds the nudge itself when it draws a selection box, so the box
+   * tracks a drag at React's speed instead of waiting for the next frame to
+   * be rendered and read back — the difference between handles that stay on
+   * the object and handles that trail behind it.
+   *
+   * Replaced only when the scene, its built layers or its design box actually
+   * change — never once a frame. That is what makes its identity a usable
+   * signal: the preview loop compares it after each frame and tells React only
+   * when it has really moved on. The current *time* is deliberately not in
+   * here, because it changes every frame and the editor already knows it.
+   */
+  drawn: DrawnScene | null;
+};
+
+/** What `renderFrame` last drew for the scene under the playhead. */
+export type DrawnScene = {
+  readonly sceneId: string;
+  readonly layers: readonly Layer[];
+  /** The scene's own design box — its template's, not the project's. */
+  readonly design: { readonly w: number; readonly h: number };
 };
 
 export function createRenderRig(media: MediaResolver = EMPTY_MEDIA): RenderRig {
@@ -66,8 +103,10 @@ export function createRenderRig(media: MediaResolver = EMPTY_MEDIA): RenderRig {
     buffers: new BufferPool(),
     layerCache: new Map(),
     overlayCache: new Map(),
+    placedCache: new Map(),
     textCache: new Map(),
     media,
+    drawn: null,
     stats: { frameCount: 0, lastFrameMs: 0, lastBuildMs: 0, buildCount: 0 },
   };
 }

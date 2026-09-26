@@ -1,13 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-  hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, toLocal,
-  type OrientedBox,
+  hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, shiftBy, slotBoxes, toLocal,
+  type OrientedBox, type PlacedBox,
 } from '@/core/render/bounds';
+import type { DrawnScene } from '@/core/render/rig';
 import type { TextMeasureContext } from '@/core/text/layout';
 import * as actions from '@/document/actions';
-import { activeOverlaysAt } from '@/document/select/timeline';
+import { activeOverlaysAt, sceneSpans } from '@/document/select/timeline';
 import type { Aspect, Size } from '@/core/types';
-import type { Overlay, Project } from '@/document/types';
+import type { Overlay, Project, SlotKey, SlotTransform } from '@/document/types';
 import { useEditor } from '@/state/store';
 import { capturePointer } from '@/ui/timeline/pointerCapture';
 
@@ -77,13 +78,22 @@ type Target =
       readonly kind: 'overlay';
       readonly key: string;
       readonly overlay: Overlay;
-      readonly box: OrientedBox;
+      readonly box: PlacedBox;
       readonly label: string;
     }
   | {
       readonly kind: 'logo';
       readonly key: 'logo';
       readonly sizePct: number;
+      readonly box: PlacedBox;
+      readonly label: string;
+    }
+  | {
+      readonly kind: 'slot';
+      readonly key: SlotKey;
+      readonly sceneIndex: number;
+      /** The nudge in force when the drag began — deltas are measured from it. */
+      readonly transform: SlotTransform;
       readonly box: OrientedBox;
       readonly label: string;
     };
@@ -100,9 +110,12 @@ type Guide = { readonly axis: 'x' | 'y'; readonly at: number };
 
 export function CanvasSelection({
   project,
+  drawn,
   width,
 }: {
   project: Project;
+  /** What the preview loop last drew, which is what the slot boxes need. */
+  drawn: DrawnScene | null;
   /** The canvas's CSS width. Height follows from the aspect. */
   width: number;
 }): React.JSX.Element | null {
@@ -113,6 +126,9 @@ export function CanvasSelection({
   const selectOverlay = useEditor((s) => s.selectOverlay);
   const selectLogo = useEditor((s) => s.selectLogo);
   const selectedScene = useEditor((s) => s.selectedScene);
+  const selectedSlot = useEditor((s) => s.selectedSlot);
+  const selectSlot = useEditor((s) => s.selectSlot);
+  const selectScene = useEditor((s) => s.selectScene);
   const playheadMs = useEditor((s) => s.playheadMs);
 
   const dragRef = useRef<Drag | null>(null);
@@ -132,6 +148,39 @@ export function CanvasSelection({
    */
   const targets = useMemo((): readonly Target[] => {
     const list: Target[] = [];
+
+    /*
+     * The template's own elements, underneath everything else.
+     *
+     * Taken from the scene the last frame actually drew rather than from the
+     * selected one: what you click has to be what you edit, and in a
+     * multi-scene ad the playhead can easily be sitting over a beat other than
+     * the one the inspector happens to be showing. Selecting one of these
+     * selects its scene too, so the edit lands where the click did.
+     */
+    const sceneIndex = drawn ? project.scenes.findIndex((s) => s.id === drawn.sceneId) : -1;
+    const drawnScene = sceneIndex >= 0 ? project.scenes[sceneIndex] : undefined;
+    if (drawn && drawnScene) {
+      /*
+       * The scene's own clock: the playhead is global, a scene starts part way
+       * through it, and §8.4's speed multiplier remaps time before layers are
+       * evaluated. Getting any of those wrong puts the boxes where the
+       * elements were a moment ago.
+       */
+      const span = sceneSpans(project.scenes).find((s) => s.scene.id === drawn.sceneId);
+      const sceneTimeMs = span ? (playheadMs - span.startMs) * drawnScene.inputs.look.speed : 0;
+      const transforms = drawnScene.inputs.slotTransforms;
+      for (const slot of slotBoxes(drawn, sceneTimeMs, transforms, aspect, measure)) {
+        list.push({
+          kind: 'slot',
+          key: slot.key,
+          sceneIndex,
+          transform: transforms[slot.key] ?? { offsetX: 0, offsetY: 0, scale: 1, rotation: 0 },
+          box: slot.box,
+          label: slot.label,
+        });
+      }
+    }
 
     for (const overlay of activeOverlaysAt(project.overlays, playheadMs)) {
       const box = overlayBox(overlay, aspect, measure);
@@ -158,10 +207,14 @@ export function CanvasSelection({
     }
 
     return list;
-  }, [project.overlays, project.scenes, aspect, playheadMs, selectedScene, measure]);
+  }, [project.overlays, project.scenes, aspect, playheadMs, selectedScene, measure, drawn]);
 
   const selected =
-    targets.find((t) => (t.kind === 'logo' ? selectedLogo : t.key === selectedOverlay)) ?? null;
+    targets.find((t) =>
+      t.kind === 'logo' ? selectedLogo
+      : t.kind === 'slot' ? t.key === selectedSlot
+      : t.key === selectedOverlay,
+    ) ?? null;
 
   if (scale <= 0) return null;
 
@@ -182,11 +235,25 @@ export function CanvasSelection({
     if (target === null) {
       selectOverlay(null);
       selectLogo(false);
-    } else if (target.kind === 'logo') {
-      selectLogo(true);
-    } else {
-      selectOverlay(target.key);
+      selectSlot(null);
+      return;
     }
+    if (target.kind === 'logo') {
+      selectLogo(true);
+      return;
+    }
+    if (target.kind === 'slot') {
+      // The scene first, so the edit is scoped to the beat that was clicked.
+      if (target.sceneIndex !== selectedScene) selectScene(target.sceneIndex);
+      const photo = /^photo:(\d+)$/.exec(target.key);
+      selectSlot(
+        target.key,
+        photo ? 'photos' : 'text',
+        photo?.[1] === undefined ? undefined : Number(photo[1]),
+      );
+      return;
+    }
+    selectOverlay(target.key);
   };
 
   /** Which handle of the current selection is under `point`, if any. */
@@ -196,7 +263,7 @@ export function CanvasSelection({
     const local = toLocal(box, point);
     const reach = HANDLE_HIT_PX / scale;
 
-    if (selected.kind === 'overlay') {
+    if (selected.kind !== 'logo') {
       const rotateY = -box.h / 2 - ROTATE_OFFSET_PX / scale;
       if (Math.hypot(local.x, local.y - rotateY) <= reach) return 'rotate';
     }
@@ -302,9 +369,21 @@ export function CanvasSelection({
     }
 
     setGuides([]);
-    if (drag.target.kind !== 'overlay') return;
+    if (drag.target.kind === 'logo') return;
     const turned = drag.atDegrees + (angleOf(drag.target.box, point) - drag.fromDegrees);
     const degrees = free ? turned : Math.round(turned / SNAP_DEGREES) * SNAP_DEGREES;
+
+    if (drag.target.kind === 'slot') {
+      // A slot's visible angle is the template's plus the nudge, so the nudge
+      // takes the *delta* — setting it absolutely would throw away whatever
+      // rotation the template had chosen.
+      dispatch(
+        actions.nudgeSlot(drag.target.key, {
+          rotation: drag.target.transform.rotation + (degrees - drag.atDegrees),
+        }),
+      );
+      return;
+    }
     dispatch(actions.setOverlayTransform(drag.target.key, { rotation: normaliseDegrees(degrees) }));
   };
 
@@ -403,11 +482,10 @@ export function CanvasSelection({
           {CORNERS.map((corner) => (
             <Dot key={corner} grip={corner} rotation={selected.box.rotation} />
           ))}
-          {selected.kind === 'overlay' && (
+          {selected.kind === 'overlay' &&
+            SIDES.map((side) => <Dot key={side} grip={side} rotation={selected.box.rotation} />)}
+          {selected.kind !== 'logo' && (
             <>
-              {SIDES.map((side) => (
-                <Dot key={side} grip={side} rotation={selected.box.rotation} />
-              ))}
               <span
                 aria-hidden
                 data-grip="rotate"
@@ -546,10 +624,35 @@ function moveAction(target: Target, centre: Point, design: Size, aspect: Aspect)
     const free = logoFreeFrom(centre, aspect);
     return actions.setLogoPosition(free.x, free.y);
   }
+
+  if (target.kind === 'slot') {
+    /*
+     * A nudge is a delta, never a position (B). The template keeps deciding
+     * where the element belongs; this records how far the user pulled it from
+     * there. Measured against the box as it was when the drag started, so a
+     * long drag cannot accumulate rounding.
+     */
+    return actions.nudgeSlot(target.key, {
+      offsetX: target.transform.offsetX + (centre.x - target.box.cx) / design.w,
+      offsetY: target.transform.offsetY + (centre.y - target.box.cy) / design.h,
+    });
+  }
+
+  /*
+   * `centre` is where the *drawing* should end up; `transform` holds where the
+   * layer's anchor goes. For a centre-anchored photo those are the same point,
+   * and for a caption they are half a line apart — so the offset has to be
+   * taken back out or every drag overshoots by a constant.
+   */
+  const position = shiftBy(centre, negate(target.box.anchorOffset), target.box.rotation);
   return actions.setOverlayTransform(target.key, {
-    x: clamp01(centre.x / design.w),
-    y: clamp01(centre.y / design.h),
+    x: clamp01(position.x / design.w),
+    y: clamp01(position.y / design.h),
   });
+}
+
+function negate(point: Point): Point {
+  return { x: -point.x, y: -point.y };
 }
 
 /**
@@ -606,15 +709,34 @@ function resizeAction(
     return actions.setLogoBox(Math.round(pct * 10) / 10, free.x, free.y);
   }
 
+  if (target.kind === 'slot') {
+    // One scale, both axes: a template photo's proportions are the frame
+    // ratio's business (§8.1), not something a corner drag should override.
+    // Position moves with it, in the same action, so the drag stays one step.
+    return actions.nudgeSlot(target.key, {
+      scale: target.transform.scale * fx,
+      offsetX: target.transform.offsetX + (newCentre.x - target.box.cx) / design.w,
+      offsetY: target.transform.offsetY + (newCentre.y - target.box.cy) / design.h,
+    });
+  }
+
   const { transform } = target.overlay;
   const scaleX = transform.scaleX ?? 1;
   const scaleY = transform.scaleY ?? transform.scaleX ?? 1;
 
+  // The anchor offset scales with the drawing, so the correction has to use
+  // the size the layer is about to be, not the size it currently is.
+  // `target.box` rather than the destructured `box`: only the overlay variant
+  // carries an anchor offset, and this branch is the one that has narrowed.
+  const { anchorOffset } = target.box;
+  const grown = { x: anchorOffset.x * fx, y: anchorOffset.y * fy };
+  const position = shiftBy(newCentre, negate(grown), box.rotation);
+
   return actions.setOverlayTransform(target.key, {
     scaleX: clamp(scaleX * fx, MIN_SCALE, MAX_SCALE),
     scaleY: clamp(scaleY * fy, MIN_SCALE, MAX_SCALE),
-    x: clamp01(newCentre.x / design.w),
-    y: clamp01(newCentre.y / design.h),
+    x: clamp01(position.x / design.w),
+    y: clamp01(position.y / design.h),
   });
 }
 

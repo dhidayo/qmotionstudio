@@ -175,7 +175,23 @@ export type GradientProps = {
   readonly angle?: number;
 };
 
+/**
+ * Which document slot a drawable came from.
+ *
+ * Carried on the props rather than on the layer because `photoProps` and
+ * `textFor` are the two funnels every template's photos and text already pass
+ * through, and both are handed the slot's identity anyway. Tagging there means
+ * no template has to remember to do it — including templates not written yet.
+ *
+ * The renderer ignores it entirely. It exists so the editor can find the
+ * drawable that belongs to a slot, and so a user's nudge can be applied to it.
+ */
+export type SlotRef =
+  | { readonly kind: 'photo'; readonly index: number }
+  | { readonly kind: 'text'; readonly key: string };
+
 export type ImageProps = {
+  readonly slot?: SlotRef;
   readonly mediaId: string;
   readonly w: number;
   readonly h: number;
@@ -189,6 +205,7 @@ export type ImageProps = {
 };
 
 export type TextProps = {
+  readonly slot?: SlotRef;
   readonly text: string;
   readonly fontId: string;
   readonly fontSizePx: number;

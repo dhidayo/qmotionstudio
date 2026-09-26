@@ -49,7 +49,7 @@ export function Artboard({ project, clock, rig, media }: Props): React.JSX.Eleme
   const wanted = thumb ?? Math.min(Math.min(display.w, display.h) * dpr, MAX_PREVIEW_SHORT_EDGE);
   const backing = renderSizeFor(project.aspect, Math.max(2, Math.round(wanted)));
 
-  usePreviewLoop(canvas, project, clock, rig, media);
+  const drawn = usePreviewLoop(canvas, project, clock, rig, media);
 
   return (
     <div ref={hostRef} className="relative grid h-full w-full place-items-center overflow-hidden p-6">
@@ -70,7 +70,7 @@ export function Artboard({ project, clock, rig, media }: Props): React.JSX.Eleme
               display: 'block',
             }}
           />
-          <CanvasSelection project={project} width={display.w} />
+          <CanvasSelection project={project} drawn={drawn} width={display.w} />
         </div>
       )}
     </div>

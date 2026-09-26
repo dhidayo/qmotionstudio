@@ -65,9 +65,21 @@ export function drawText(
   const run = dc.measurer.measure({ ...spec, text: displayText });
   const tracked = Math.abs(letterSpacingBoostPx) > 0.01;
   // Extra tracking widens every line by one gap per character after the first.
-  const blockWidth = tracked
+  const measuredWidth = tracked
     ? run.lines.reduce((widest, line) => Math.max(widest, lineWidthWithBoost(line, letterSpacingBoostPx)), 0)
     : run.width;
+
+  /*
+   * Lines are aligned within the *declared* wrap width where there is one.
+   *
+   * `drawLayer` anchors a text layer on `maxWidthPx` precisely so a centred
+   * heading does not shift about as its content changes length. Aligning
+   * within the measured width instead made the two disagree: a centred caption
+   * with wrapping on was drawn half the slack left of where its anchor said it
+   * was, so "Across 50%" did not put it in the middle of the frame. The block
+   * has to be the same width in both places or centring cannot mean anything.
+   */
+  const blockWidth = props.maxWidthPx ?? measuredWidth;
 
   if (props.pill) {
     const { paddingX, paddingY, radius } = props.pill;

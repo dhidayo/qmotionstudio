@@ -4,6 +4,7 @@ import type { BackgroundTreatment } from '@/document/types';
 import { useEditor } from '@/state/store';
 import type { SceneTemplate } from '@/templates/schema';
 import { ColorField, EmptyNote, Row, Section, Segmented, Slider } from '../controls';
+import { SceneLayoutReset } from '../SlotPlacement';
 
 const ROLE_LABELS: Record<PaletteRole, string> = {
   bg: 'Background',
@@ -151,6 +152,8 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
           }}
         />
       </Section>
+
+      <SceneLayoutReset />
     </div>
   );
 }

@@ -82,10 +82,13 @@ export type PhotoLayerOptions = {
 
 /** Builds ImageProps for one photo at the template's nominal size. */
 export function photoProps(
-  photo: PhotoInput,
+  photo: PhotoInput | FilledSlot,
   baseSize: number,
   options: PhotoLayerOptions = {},
 ): ImageProps {
+  // Tagged here, not in each template: every template's photos come through
+  // this function, including templates not written yet.
+  const slotIndex = 'slotIndex' in photo ? photo.slotIndex : null;
   const box = frameBox(photo.frame, baseSize);
   const scale = boxScale(photo);
   const w = box.w * scale;
@@ -95,6 +98,7 @@ export function photoProps(
 
   return {
     mediaId: photo.mediaId,
+    ...(slotIndex === null ? {} : { slot: { kind: 'photo' as const, index: slotIndex } }),
     w,
     h,
     // Cover throughout: 'contain' would letterbox inside the frame, which is
@@ -115,7 +119,17 @@ export function photoProps(
  * Templates declare a slot count and must always receive exactly that many
  * entries, so an empty project still composes rather than collapsing.
  */
-export function fillSlots(photos: readonly PhotoInput[], count: number): PhotoInput[] {
+export type FilledSlot = PhotoInput & {
+  /**
+   * Which slot this is, 0-based. Carried here because it is the one place that
+   * knows: a template asks for N slots and gets N entries back, and beyond the
+   * supplied photos those entries repeat — so the slot and the photo are not
+   * the same thing, and only the slot is stable enough to hang a nudge off.
+   */
+  readonly slotIndex: number;
+};
+
+export function fillSlots(photos: readonly PhotoInput[], count: number): FilledSlot[] {
   if (count <= 0) return [];
   if (photos.length === 0) {
     return Array.from({ length: count }, (_, i) => ({
@@ -124,11 +138,12 @@ export function fillSlots(photos: readonly PhotoInput[], count: number): PhotoIn
       sizeMode: 'template' as const,
       sizePct: 100,
       cropMode: 'template' as const,
+      slotIndex: i,
     }));
   }
   return Array.from({ length: count }, (_, i) => {
     const source = photos[i % photos.length];
     if (!source) throw new Error('fillSlots: photo list changed length mid-iteration');
-    return source;
+    return { ...source, slotIndex: i };
   });
 }

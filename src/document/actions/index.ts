@@ -1,5 +1,6 @@
 import type { Palette, PaletteRole, PropValues } from '@/core/types';
 import { DEFAULT_LOGO, newId } from '../defaults';
+import { NO_SLOT_TRANSFORM } from '../types';
 import type {
   AnimPreset,
   AudioClip,
@@ -15,6 +16,8 @@ import type {
   ProjectMode,
   Scene,
   SceneInputs,
+  SlotKey,
+  SlotTransform,
   TextStyle,
   Transition,
   TransitionKind,
@@ -351,6 +354,65 @@ export function setLogoBox(sizePct: number, x: number, y: number): Action {
           y: clamp(y, 0, 1),
         },
       })),
+  };
+}
+
+/**
+ * Nudging one of the template's own elements (B).
+ *
+ * The values are offsets, so this composes: dragging twice adds up, and the
+ * template still owns the layout underneath. One coalesce key per slot, so a
+ * whole drag is one undo step and dragging a different slot starts a new one.
+ */
+export function nudgeSlot(key: SlotKey, patch: Partial<SlotTransform>): Action {
+  return {
+    label: 'Move element',
+    coalesceKey: `slotTransform:${key}`,
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const current = inputs.slotTransforms[key] ?? NO_SLOT_TRANSFORM;
+        const next: SlotTransform = {
+          offsetX: patch.offsetX ?? current.offsetX,
+          offsetY: patch.offsetY ?? current.offsetY,
+          scale: clamp(patch.scale ?? current.scale, 0.1, 8),
+          rotation: patch.rotation ?? current.rotation,
+        };
+        return { ...inputs, slotTransforms: { ...inputs.slotTransforms, [key]: next } };
+      }),
+  };
+}
+
+/**
+ * Puts one element back where the template had it.
+ *
+ * This is what makes B safe to offer at all. Letting people move anything is
+ * only reasonable if getting back to the designed layout is one click, and
+ * because a nudge is stored as an offset, "reset" really is just forgetting
+ * it — there is no original position to try to reconstruct.
+ */
+export function resetSlot(key: SlotKey): Action {
+  return {
+    label: 'Reset element',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        if (!(key in inputs.slotTransforms)) return inputs;
+        const next = Object.fromEntries(
+          Object.entries(inputs.slotTransforms).filter(([entry]) => entry !== key),
+        );
+        return { ...inputs, slotTransforms: next };
+      }),
+  };
+}
+
+export function resetSceneLayout(): Action {
+  return {
+    label: 'Reset layout',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) =>
+        Object.keys(inputs.slotTransforms).length === 0
+          ? inputs
+          : { ...inputs, slotTransforms: {} },
+      ),
   };
 }
 

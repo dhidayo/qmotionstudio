@@ -9,7 +9,7 @@ import type { Aspect, Direction, Palette, PropValues, Rect } from '@/core/types'
  */
 
 /** Bumped whenever this shape changes; migrate.ts upgrades older saves. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export type MediaRef = { readonly mediaId: string };
 
@@ -101,12 +101,45 @@ export type LogoSettings = {
   readonly lockupText: string;
 };
 
+/**
+ * A user's nudge to one of the template's own elements (B).
+ *
+ * Stored as an *offset* from wherever the template put the element, never as
+ * an absolute position. That is the whole difference between "you may adjust
+ * this layout" and "you have taken this layout over": the template still
+ * decides where things go, so switching aspect still re-lays-out (§1.3),
+ * switching template still works, and a photo that moves because its
+ * neighbours changed takes its nudge with it. Resetting is clearing the entry.
+ *
+ * `offsetX`/`offsetY` are fractions of the frame; `scale` multiplies whatever
+ * the template chose; `rotation` is degrees added to it.
+ */
+export type SlotTransform = {
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly scale: number;
+  readonly rotation: number;
+};
+
+export const NO_SLOT_TRANSFORM: SlotTransform = {
+  offsetX: 0, offsetY: 0, scale: 1, rotation: 0,
+};
+
+/**
+ * Keyed by slot rather than held on `PhotoInput`, because §8.1 lets the photo
+ * count exceed the supplied photos — slot 4 of a six-slot template may have no
+ * document entry of its own to hang anything off.
+ */
+export type SlotKey = string;
+
 export type SceneInputs = {
   readonly photos: readonly PhotoInput[];
   readonly texts: Readonly<Record<string, string>>;
   readonly logo: LogoSettings;
   readonly look: LookSettings;
   readonly styleOverrides: StyleOverrides;
+  /** Per-slot nudges, keyed by `slotKey()`. Absent means untouched. */
+  readonly slotTransforms: Readonly<Record<SlotKey, SlotTransform>>;
 };
 
 export type Scene = {

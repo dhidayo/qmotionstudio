@@ -56,6 +56,7 @@ export function emptySceneInputs(): SceneInputs {
     logo: DEFAULT_LOGO,
     look: DEFAULT_LOOK,
     styleOverrides: { texts: {} },
+    slotTransforms: {},
   };
 }
 

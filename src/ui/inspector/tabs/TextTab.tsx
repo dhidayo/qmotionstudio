@@ -5,6 +5,7 @@ import { useEditor } from '@/state/store';
 import type { SceneTemplate, TextSlotDef } from '@/templates/schema';
 import { resolveStyle } from '@/templates/_shared/text';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from '../controls';
+import { SlotPlacement } from '../SlotPlacement';
 
 const WEIGHTS: readonly { value: TextStyle['weight']; label: string }[] = [
   { value: 400, label: 'Regular' },
@@ -57,6 +58,8 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
   ): void => { dispatch(actions.setTextStyle(slot.id, fields, options)); };
 
   return (
+    <>
+    <SlotPlacement slotKey={`text:${slot.id}`} />
     <Section title={slot.label}>
       <div className="mb-2.5">
         <TextInput
@@ -192,5 +195,6 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
         </div>
       )}
     </Section>
+    </>
   );
 }

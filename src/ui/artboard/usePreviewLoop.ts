@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Project } from '@/document/types';
 import type { PreviewClock } from '@/core/time/clock';
-import type { RenderRig } from '@/core/render/rig';
+import type { DrawnScene, RenderRig } from '@/core/render/rig';
 import { renderFrame } from '@/core/render/renderFrame';
 import { videoDemandsWithLead } from '@/document/select/media';
 import { totalDurationMs } from '@/document/select/timeline';
@@ -27,7 +27,19 @@ export function usePreviewLoop(
   clock: PreviewClock,
   rig: RenderRig,
   media: MediaStore,
-): void {
+): DrawnScene | null {
+  /*
+   * What the loop last drew, published to React (B).
+   *
+   * The rig is scratch that the loop mutates, so nothing in React would ever
+   * learn that a frame had happened — the selection layer read it once at
+   * mount, found nothing, and never looked again. The record only changes
+   * identity when the scene or its built layers change, so this sets state
+   * rarely rather than once a frame.
+   */
+  const [drawn, setDrawn] = useState<DrawnScene | null>(null);
+  const lastDrawn = useRef<DrawnScene | null>(null);
+
   useEffect(() => {
     if (!canvas) return;
 
@@ -75,6 +87,13 @@ export function usePreviewLoop(
 
       renderFrame(ctx, project, renderMs, rig);
 
+      // Identity comparison, not a deep one: renderFrame keeps the same object
+      // until the scene or its layers actually change.
+      if (rig.drawn !== lastDrawn.current) {
+        lastDrawn.current = rig.drawn;
+        setDrawn(rig.drawn);
+      }
+
       frame = requestAnimationFrame(tick);
     };
 
@@ -85,4 +104,6 @@ export function usePreviewLoop(
       cancelAnimationFrame(frame);
     };
   }, [canvas, project, clock, rig, media]);
+
+  return drawn;
 }

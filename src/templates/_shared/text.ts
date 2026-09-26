@@ -75,6 +75,9 @@ export function textFor(
 
   return {
     text,
+    // Same reasoning as photoProps: this is the funnel every template's text
+    // passes through, and it is handed the slot's identity already.
+    slot: { kind: 'text', key: slot.id },
     fontId: style.fontId,
     fontSizePx,
     weight: style.weight,

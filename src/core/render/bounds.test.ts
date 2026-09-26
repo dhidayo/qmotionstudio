@@ -3,10 +3,12 @@ import { createBuildContext } from '@/templates/buildContext';
 import { logoLayers } from '@/templates/_shared/chrome';
 import { resolveProps, createProps } from '@/core/anim/interpolate';
 import type { TextMeasureContext } from '@/core/text/layout';
-import type { Aspect, Palette } from '@/core/types';
+import { colorFill, type Aspect, type Layer, type Palette } from '@/core/types';
 import type { LogoPlacement, Overlay, SceneInputs, TextStyle } from '@/document/types';
+import type { DrawnScene } from './rig';
 import {
-  DESIGN_SHORT_EDGE, hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, toFrame, toLocal,
+  DESIGN_SHORT_EDGE, hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, slotBoxes,
+  toFrame, toLocal,
 } from './bounds';
 
 /**
@@ -70,6 +72,7 @@ function inputs(logo: Partial<SceneInputs['logo']>): SceneInputs {
       palette, background: 'solid', grain: 0, vignette: 0, speed: 1, cornerRadius: 0,
     },
     styleOverrides: { texts: {} },
+    slotTransforms: {},
   };
 }
 
@@ -222,5 +225,125 @@ describe('the logo box', () => {
       expect(free.x).toBeCloseTo(0.22, 6);
       expect(free.y).toBeCloseTo(0.64, 6);
     }
+  });
+});
+
+describe('boxes follow the layer\u2019s anchor', () => {
+  /**
+   * `drawLayer` positions a layer by its *anchor*, which defaults to the
+   * centre but which the templates set to the top-left in forty places. A box
+   * that assumes centre-anchoring is half the element's width and height out,
+   * which in practice meant the headline could not be clicked at all.
+   *
+   * Asserted arithmetically rather than through the UI. The end-to-end version
+   * of this test probed a few points down the type band until it found the
+   * headline, and that tolerance made it pass with the anchor handling removed
+   * — it found the box in the wrong place and was satisfied.
+   */
+  const drawnWith = (layers: readonly Layer[]): DrawnScene => ({
+    sceneId: 's1',
+    layers,
+    design: projectDesign('9:16'),
+  });
+
+  it('puts a top-left anchored image box at x+w/2, y+h/2', () => {
+    const layer: Layer = {
+      id: 'p',
+      type: 'image',
+      startMs: 0,
+      endMs: 4_000,
+      anchorX: 0,
+      anchorY: 0,
+      tracks: {
+        x: [{ t: 0, v: 100, ease: 'linear' }],
+        y: [{ t: 0, v: 200, ease: 'linear' }],
+      },
+      props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 400, h: 300, fit: 'cover' },
+    };
+
+    const [box] = slotBoxes(drawnWith([layer]), 0, {}, '9:16', measure);
+    expect(box?.box.cx).toBeCloseTo(300, 6);
+    expect(box?.box.cy).toBeCloseTo(350, 6);
+    expect(box?.box.w).toBeCloseTo(400, 6);
+  });
+
+  it('puts a centre-anchored image box on its own x and y', () => {
+    const layer: Layer = {
+      id: 'p',
+      type: 'image',
+      startMs: 0,
+      endMs: 4_000,
+      tracks: {
+        x: [{ t: 0, v: 100, ease: 'linear' }],
+        y: [{ t: 0, v: 200, ease: 'linear' }],
+      },
+      props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 400, h: 300, fit: 'cover' },
+    };
+
+    const [box] = slotBoxes(drawnWith([layer]), 0, {}, '9:16', measure);
+    expect(box?.box.cx).toBeCloseTo(100, 6);
+    expect(box?.box.cy).toBeCloseTo(200, 6);
+  });
+
+  it('lays text out rightwards and downwards from its anchor', () => {
+    // `drawText` starts at the anchor and runs on from there, whatever
+    // `anchorY` says — the anchor box for text is (wrap width × zero).
+    const layer: Layer = {
+      id: 't',
+      type: 'text',
+      startMs: 0,
+      endMs: 4_000,
+      anchorX: 0,
+      anchorY: 0,
+      tracks: {
+        x: [{ t: 0, v: 60, ease: 'linear' }],
+        y: [{ t: 0, v: 90, ease: 'linear' }],
+      },
+      props: {
+        text: 'hello',
+        slot: { kind: 'text', key: 'headline' },
+        fontId: 'headline',
+        fontSizePx: 60,
+        weight: 700,
+        letterSpacingPct: 0,
+        lineHeight: 1.2,
+        align: 'left',
+        fill: colorFill('#ffffff'),
+        maxWidthPx: null,
+        reveal: { kind: 'none' },
+      },
+    };
+
+    // The stub measures 10px a character, so "hello" is 50 wide and one line
+    // of 60px text at 1.2 line height is 72 tall.
+    const [box] = slotBoxes(drawnWith([layer]), 0, {}, '9:16', measure);
+    expect(box?.box.cx).toBeCloseTo(60 + 25, 6);
+    expect(box?.box.cy).toBeCloseTo(90 + 36, 6);
+    expect(box?.box.w).toBeCloseTo(50, 6);
+    expect(box?.box.h).toBeCloseTo(72, 6);
+  });
+
+  it('adds the user\u2019s nudge on top of the template\u2019s position', () => {
+    const layer: Layer = {
+      id: 'p',
+      type: 'image',
+      startMs: 0,
+      endMs: 4_000,
+      tracks: { x: [{ t: 0, v: 100, ease: 'linear' }], y: [{ t: 0, v: 200, ease: 'linear' }] },
+      props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 400, h: 300, fit: 'cover' },
+    };
+    const frame = projectDesign('9:16');
+
+    const [box] = slotBoxes(
+      drawnWith([layer]),
+      0,
+      { 'photo:0': { offsetX: 0.25, offsetY: -0.1, scale: 2, rotation: 30 } },
+      '9:16',
+      measure,
+    );
+    expect(box?.box.cx).toBeCloseTo(100 + 0.25 * frame.w, 6);
+    expect(box?.box.cy).toBeCloseTo(200 - 0.1 * frame.h, 6);
+    expect(box?.box.w).toBeCloseTo(800, 6);
+    expect(box?.box.rotation).toBeCloseTo(30, 6);
   });
 });
