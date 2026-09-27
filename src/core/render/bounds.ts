@@ -360,7 +360,7 @@ export function slotBoxes(
   const seen = new Set<SlotKey>();
   const boxes: SlotBox[] = [];
 
-  for (const layer of flatten(drawn.layers)) {
+  for (const { layer, parent } of flatten(drawn.layers, sceneRoot(sceneTimeMs))) {
     const slot = slotOf(layer);
     if (!slot) continue;
 
@@ -373,23 +373,47 @@ export function slotBoxes(
     const extent = layerExtent(layer, measure);
     if (extent === null) continue;
 
-    const props = resolveProps(layer.tracks, Math.max(0, sceneTimeMs - layer.startMs), createProps());
-    // Sampled at this moment, not read as a constant: a keyframed nudge moves,
-    // and handles that stayed at its resting place would be pointing at where
-    // the element used to be.
-    const nudge = nudgeAt(transforms[key] ?? NO_SLOT_TRANSFORM, sceneTimeMs);
+    // The layer's own clock, which is its parent's minus its own start — not
+    // the scene's. For anything a template put inside a group or a mask the two
+    // differ, and so did the box and the photograph it was supposed to be on.
+    const localMs = Math.max(0, parent.timeMs - layer.startMs);
+    const props = resolveProps(layer.tracks, localMs, createProps());
+
+    /*
+     * Sampled at this moment, not read as a constant: a keyframed nudge moves,
+     * and handles that stayed at its resting place would be pointing at where
+     * the element used to be.
+     *
+     * On the *layer's* clock, because that is the clock the renderer reads it
+     * on: a nudge becomes keyframes inside this layer's own tracks, so its pose
+     * times are local times by the time anything is drawn. Sampling it against
+     * the scene put the handles somewhere else entirely on every template whose
+     * elements start partway through — which is most of the cycling ones.
+     */
+    const nudge = nudgeAt(transforms[key] ?? NO_SLOT_TRANSFORM, localMs);
 
     // The nudge is already composed into the tracks the renderer draws, but
     // these are the *base* layers, so it has to be added here as well.
-    const scaleX = props.scaleX * nudge.scale;
-    const scaleY = props.scaleY * nudge.scale;
-    const rotation = props.rotation + nudge.rotation;
+    const ownScaleX = props.scaleX * nudge.scale;
+    const ownScaleY = props.scaleY * nudge.scale;
+    const ownRotation = props.rotation + nudge.rotation;
 
-    const centre = shiftBy(
+    // Two steps, because the two offsets live in different spaces: the anchor
+    // offset is in the layer's own, and the layer's position is in its parent's.
+    const inParent = shiftBy(
       { x: props.x, y: props.y },
-      { x: extent.offset.x * scaleX, y: extent.offset.y * scaleY },
-      rotation,
+      { x: extent.offset.x * ownScaleX, y: extent.offset.y * ownScaleY },
+      ownRotation,
     );
+    const centre = shiftBy(
+      { x: parent.x, y: parent.y },
+      { x: inParent.x * parent.scaleX, y: inParent.y * parent.scaleY },
+      parent.rotation,
+    );
+
+    const scaleX = ownScaleX * parent.scaleX;
+    const scaleY = ownScaleY * parent.scaleY;
+    const rotation = ownRotation + parent.rotation;
 
     seen.add(key);
     boxes.push({
@@ -408,11 +432,58 @@ export function slotBoxes(
   return boxes;
 }
 
+/**
+ * Where a layer's parent sits in the scene, and what time it is showing.
+ *
+ * A group or a mask is a coordinate space and a clock, not just a container:
+ * `drawLayer` draws its children inside its own transform and hands them its
+ * own local time. A child's `x` of 0 therefore means "at my parent's centre",
+ * not "at the left edge of the frame".
+ *
+ * Nothing carried this down, so every tagged drawable inside a mask was
+ * measured as though it were a top-level layer. Phrase Swap puts its
+ * photographs inside a mask at the centre of the frame, scaling from 0.6 to
+ * 1.12, and its selection box sat in the top-left corner at the wrong size for
+ * the whole scene.
+ */
+type Ancestry = {
+  readonly timeMs: number;
+  readonly x: number;
+  readonly y: number;
+  readonly scaleX: number;
+  readonly scaleY: number;
+  readonly rotation: number;
+};
+
+function sceneRoot(timeMs: number): Ancestry {
+  return { timeMs, x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 };
+}
+
 /** Groups and masks hold children; a tagged drawable may be inside either. */
-function* flatten(layers: readonly Layer[]): Generator<Layer> {
+function* flatten(
+  layers: readonly Layer[],
+  parent: Ancestry,
+): Generator<{ layer: Layer; parent: Ancestry }> {
   for (const layer of layers) {
-    yield layer;
-    if (layer.type === 'group' || layer.type === 'mask') yield* flatten(layer.children);
+    yield { layer, parent };
+    if (layer.type !== 'group' && layer.type !== 'mask') continue;
+
+    const localMs = Math.max(0, parent.timeMs - layer.startMs);
+    const own = resolveProps(layer.tracks, localMs, createProps());
+    const origin = shiftBy(
+      { x: parent.x, y: parent.y },
+      { x: own.x * parent.scaleX, y: own.y * parent.scaleY },
+      parent.rotation,
+    );
+
+    yield* flatten(layer.children, {
+      timeMs: localMs,
+      x: origin.x,
+      y: origin.y,
+      scaleX: parent.scaleX * own.scaleX,
+      scaleY: parent.scaleY * own.scaleY,
+      rotation: parent.rotation + own.rotation,
+    });
   }
 }
 

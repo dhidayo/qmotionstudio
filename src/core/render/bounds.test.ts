@@ -347,3 +347,150 @@ describe('boxes follow the layer\u2019s anchor', () => {
     expect(box?.box.rotation).toBeCloseTo(30, 6);
   });
 });
+
+describe('a drawable the template nested', () => {
+  /**
+   * A group or a mask is a coordinate space and a clock, both of which
+   * `drawLayer` hands to its children and neither of which the boxes carried.
+   *
+   * Phrase Swap is the template that exposed it: its photographs live inside a
+   * mask at the centre of the frame that scales from 0.6 to 1.12, and their own
+   * tracks put them at (0, 0) — the mask's centre. Measured as top-level layers
+   * they were reported at the frame's top-left corner, at the wrong size, for
+   * the whole scene. Selecting that photograph put the handles nowhere near it.
+   */
+  const drawnWith = (layers: readonly Layer[]): DrawnScene => ({
+    sceneId: 's1',
+    layers,
+    design: projectDesign('1:1'),
+  });
+
+  const photo = (): Layer => ({
+    id: 'p',
+    type: 'image',
+    startMs: 0,
+    endMs: 4_000,
+    tracks: { x: [{ t: 0, v: 0, ease: 'linear' }], y: [{ t: 0, v: 0, ease: 'linear' }] },
+    props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 400, h: 300, fit: 'cover' },
+  });
+
+  it('is measured from its parent\u2019s centre, not from the frame\u2019s corner', () => {
+    const mask: Layer = {
+      id: 'mask',
+      type: 'mask',
+      startMs: 0,
+      endMs: 4_000,
+      tracks: { x: [{ t: 0, v: 200, ease: 'linear' }], y: [{ t: 0, v: 500, ease: 'linear' }] },
+      props: { shape: 'ellipse', w: 600, h: 600 },
+      children: [photo()],
+    };
+
+    const [box] = slotBoxes(drawnWith([mask]), 0, {}, '1:1', measure);
+    expect(box?.box.cx).toBeCloseTo(200, 6);
+    expect(box?.box.cy).toBeCloseTo(500, 6);
+  });
+
+  it('carries the parent\u2019s scale into its own size', () => {
+    const mask: Layer = {
+      id: 'mask',
+      type: 'mask',
+      startMs: 0,
+      endMs: 4_000,
+      tracks: {
+        x: [{ t: 0, v: 200, ease: 'linear' }],
+        y: [{ t: 0, v: 500, ease: 'linear' }],
+        scaleX: [{ t: 0, v: 1.5, ease: 'linear' }],
+        scaleY: [{ t: 0, v: 1.5, ease: 'linear' }],
+      },
+      props: { shape: 'ellipse', w: 600, h: 600 },
+      children: [photo()],
+    };
+
+    const [box] = slotBoxes(drawnWith([mask]), 0, {}, '1:1', measure);
+    expect(box?.box.w).toBeCloseTo(600, 6);
+    expect(box?.box.h).toBeCloseTo(450, 6);
+  });
+
+  it('is offset by the parent\u2019s own position, scaled', () => {
+    // The child sits 100 to the right of its parent inside a parent scaled by
+    // two, so it is 200 to the right of the parent in the scene.
+    const child = photo();
+    const group: Layer = {
+      id: 'g',
+      type: 'group',
+      startMs: 0,
+      endMs: 4_000,
+      tracks: {
+        x: [{ t: 0, v: 300, ease: 'linear' }],
+        y: [{ t: 0, v: 300, ease: 'linear' }],
+        scaleX: [{ t: 0, v: 2, ease: 'linear' }],
+        scaleY: [{ t: 0, v: 2, ease: 'linear' }],
+      },
+      props: {},
+      children: [{ ...child, tracks: { x: [{ t: 0, v: 100, ease: 'linear' }], y: [{ t: 0, v: 0, ease: 'linear' }] } }],
+    };
+
+    const [box] = slotBoxes(drawnWith([group]), 0, {}, '1:1', measure);
+    expect(box?.box.cx).toBeCloseTo(500, 6);
+    expect(box?.box.cy).toBeCloseTo(300, 6);
+  });
+
+  it('reads its parent\u2019s clock, so a nested photo is where the parent has moved it', () => {
+    const group: Layer = {
+      id: 'g',
+      type: 'group',
+      // The group starts a second in, so at a scene time of 1500 it is only
+      // 500 into its own timeline and halfway along the move below.
+      startMs: 1_000,
+      endMs: 5_000,
+      tracks: {
+        x: [{ t: 0, v: 0, ease: 'linear' }, { t: 1_000, v: 400, ease: 'linear' }],
+        y: [{ t: 0, v: 0, ease: 'linear' }],
+      },
+      props: {},
+      children: [photo()],
+    };
+
+    const [box] = slotBoxes(drawnWith([group]), 1_500, {}, '1:1', measure);
+    expect(box?.box.cx).toBeCloseTo(200, 6);
+  });
+});
+
+describe('a nudge on an element that starts partway through', () => {
+  /**
+   * A nudge with poses becomes keyframes inside the element's *own* tracks, so
+   * by the time anything is drawn its pose times are local times. Sampling it
+   * against the scene clock instead put the handles somewhere else entirely on
+   * every template whose elements start partway through — which is most of the
+   * ones that cycle.
+   */
+  it('is sampled on the element\u2019s clock rather than the scene\u2019s', () => {
+    const layer: Layer = {
+      id: 'p',
+      type: 'image',
+      startMs: 2_000,
+      endMs: 6_000,
+      tracks: { x: [{ t: 0, v: 100, ease: 'linear' }], y: [{ t: 0, v: 100, ease: 'linear' }] },
+      props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 400, h: 300, fit: 'cover' },
+    };
+    const frame = projectDesign('1:1');
+    const drawn: DrawnScene = { sceneId: 's1', layers: [layer], design: frame };
+
+    // A motion from no offset to a quarter of the frame over the element's
+    // first second. At a scene time of 2500 the element is 500 into itself, so
+    // the nudge is half applied.
+    const transforms = {
+      'photo:0': {
+        offsetX: 0, offsetY: 0, scale: 1, rotation: 0, z: 0,
+        easing: 'linear' as const,
+        poses: [
+          { atMs: 0, offsetX: 0, offsetY: 0, scale: 1, rotation: 0 },
+          { atMs: 1_000, offsetX: 0.25, offsetY: 0, scale: 1, rotation: 0 },
+        ],
+      },
+    };
+
+    const [box] = slotBoxes(drawn, 2_500, transforms, '1:1', measure);
+    expect(box?.box.cx).toBeCloseTo(100 + 0.125 * frame.w, 6);
+  });
+});

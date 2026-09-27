@@ -7,7 +7,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { backgroundLayer, logoLayers } from '../_shared/chrome';
+import { backgroundLayer, contentFloor, logoLayers } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -78,7 +78,7 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const headRun = ctx.measure(specFor(headline, fontString(headline.fontId, headline.fontSizePx, headline.weight)));
   const supportRun = ctx.measure(specFor(support, fontString(support.fontId, support.fontSizePx, support.weight)));
 
-  const supportTop = safe.y + safe.h - supportRun.height;
+  const supportTop = contentFloor(design, safe) - supportRun.height;
   const headTop = supportTop - unit * 0.05 - headRun.height;
   const stageBottom = headTop - unit * 0.06;
   const stageH = Math.max(unit * 0.24, stageBottom - safe.y);
@@ -87,7 +87,14 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
 
   layers.push(backgroundLayer(inputs, ctx));
 
-  // A ring behind the mask, slowly counter-rotating.
+  /*
+   * A ring behind the mask, slowly counter-rotating — and the thing that opens.
+   *
+   * The opening used to be a spring on the mask itself, which looked right and
+   * was wrong: a mask is a coordinate space, so a user's drag on a photograph
+   * inside it was scaled by however far the iris had got (D-085). The ring is a
+   * sibling and scales nothing, so it can carry the same flourish for free.
+   */
   layers.push({
     id: ctx.id('ring'),
     type: 'shape',
@@ -97,7 +104,9 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
       x: [kf(0, design.w / 2)],
       y: [kf(0, maskCentreY)],
       rotation: [kf(0, 0, 'linear'), kf(durationMs, -360, 'linear')],
-      opacity: [kf(0, 0), kf(900, 1)],
+      scaleX: [kf(0, 0.6), kf(900, 1, SPRINGS.snappy)],
+      scaleY: [kf(0, 0.6), kf(900, 1, SPRINGS.snappy)],
+      opacity: [kf(0, 0), kf(700, 1)],
     },
     props: {
       shape: 'ellipse',
@@ -147,12 +156,11 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     type: 'mask',
     startMs: 0,
     endMs: durationMs,
+    // Deliberately no scale and no rotation: see the ring above (D-085).
     tracks: {
       x: [kf(0, design.w / 2)],
       y: [kf(0, maskCentreY)],
-      scaleX: [kf(0, 0.6), kf(900, 1, SPRINGS.snappy)],
-      scaleY: [kf(0, 0.6), kf(900, 1, SPRINGS.snappy)],
-      opacity: [kf(0, 0), kf(420, 1)],
+      opacity: [kf(0, 0), kf(620, 1)],
     },
     props: { shape: 'ellipse', w: maskSize, h: maskSize },
     children,

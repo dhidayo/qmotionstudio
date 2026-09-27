@@ -6,7 +6,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_BLEED_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { logoLayers } from '../_shared/chrome';
+import { contentFloor, logoLayers } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -111,7 +111,7 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const headRun = ctx.measure(specFor(headline, fontString(headline.fontId, headline.fontSizePx, headline.weight)));
   const footRun = ctx.measure(specFor(footer, fontString(footer.fontId, footer.fontSizePx, footer.weight)));
 
-  const footTop = safe.y + safe.h - footRun.height;
+  const footTop = contentFloor(design, safe) - footRun.height;
   const headTop = footTop - unit * 0.045 - headRun.height;
 
   // A short accent rule above the headline, wiping in with it.

@@ -1998,3 +1998,95 @@ Steady. The spring was retuned — damping 17 rather than 20 — because a "soft
 bounce" that does not visibly overshoot is just a slower move. Slots had no
 choice at all before this; their easing was hardcoded, which is part of why
 motion there felt like it dragged.
+
+## D-083 — a nested drawable is measured in its parent's space, and on its parent's clock
+
+Found while planning a template that wanted a rotating ring, and it turned out
+to be a defect already shipped. A group or a mask is not a container: it is a
+coordinate space *and* a clock. `drawLayer` draws children inside its own
+transform and hands them its own local time, so a child's `x` of 0 means "at my
+parent's centre", not "at the left edge of the frame".
+
+`slotBoxes` carried neither. It walked into groups and masks to find tagged
+drawables — correctly — and then read their positions as though they were
+top-level layers. Phrase Swap puts its photographs inside a mask at the centre
+of the frame that scales from 0.6 to 1.12, so **its photo's selection box sat in
+the frame's top-left corner, at the wrong size, for the whole scene.** Selecting
+that photograph put the handles nowhere near it.
+
+The ancestry — position, scale, rotation and time — is now accumulated on the
+way down and composed into the box. At the top level the composition is the
+identity, so nothing about the common case changes.
+
+Rejected: forbidding masks around tagged drawables. Masking is how a photograph
+gets a shape that is not a rectangle, and three of the new templates want it.
+
+## D-084 — a nudge is sampled on the element's own clock
+
+The same bug from the other side, and worse because it affected templates with
+no nesting at all. A nudge with poses becomes keyframes *inside the element's own
+tracks*, so by the time anything is drawn its pose times are local times. The
+boxes sampled it against the scene clock.
+
+For a layer starting at zero the two are the same, which is why this survived —
+most template layers do. But every template that cycles gives its elements a
+start time of their own: Card Stack, Flip Cards, Spotlight. On those, a motion on
+a photo put the handles somewhere the photo had never been.
+
+Both halves are pinned by tests that fail without them. Five of them, and they
+were watched failing against the reverted file before this was called fixed.
+
+## D-085 — slot-tagged drawables are not put inside a transformed container
+
+The constraint that falls out of D-083, and it binds template authors rather
+than the renderer.
+
+Composing the ancestry fixes where the *handles* are drawn. It does not fix
+where a *drag* goes, because a nudge is applied inside the layer's own tracks and
+is therefore scaled and rotated by every ancestor before it reaches the screen.
+Dragging a photograph rightwards on a ring turned 30° would send it off at 30°.
+In a feature whose entire promise is that things go where you put them, that is
+indefensible.
+
+So Pinwheel is not built as a rotating group, although a turning ring is exactly
+what a group is for: the orbit is sampled into each photograph's own tracks
+instead — twenty linear samples, because the turn is linear and a pinwheel that
+eases looks like one winding down. Rotation needs no sampling at all, being two
+keyframes, and the entrance is a spring on scale rather than a flight out from
+the centre, which is what keeps the position tracks pure orbit.
+
+Where a container is genuinely needed, it stays an **identity** transform and the
+motion goes elsewhere: Panels, List Drop and Side Band slide the photograph
+*inside* a static window, and Pull Quote scales the photograph inside a circle
+that never scales. Identical to look at; exact to drag. `clipProgress` is the
+one animation a container may have, because it moves the window and not the
+child.
+
+## D-086 — twenty-five templates, five in each of five categories
+
+§15's M8 asks for 25 across at least five categories. Distributed evenly rather
+than by filling the easiest category, because the category list is the top-level
+navigation: a library of 5 / 2 / 2 / 2 / 14 teaches the user that four of the
+five tabs are not worth opening.
+
+What each new one is *for* drove the choice, not what was easy to draw. The
+library could show a photograph beautifully and could not make a list, a
+statistic, a testimonial, or a photograph beside a block of copy with a button in
+it — which between them are most of what anybody actually posts. Hence Big
+Number, List Drop, Pull Quote and Side Band, none of which are camera moves.
+
+Three deliberate constraints came out of writing them:
+
+- **An empty text slot is removed, not skipped.** List Drop has four item slots;
+  a project using three has to read as a list of three. Reserving the space
+  leaves a hole that looks like a bug in the export, so the items are measured
+  before anything is placed.
+- **Layers are stations, not photographs**, wherever photographs cycle through
+  positions. Draw order is fixed at build time and a cycling arrangement's depth
+  order is not, so the layer has to be the place and the photograph has to be
+  the thing passing through it. Card Stack found this first; Depth Tunnel and
+  Spotlight are built the same way.
+- **Pull Focus is capped at four photographs**, and that is a render-cost
+  decision rather than a design one: every photograph is alive for the whole
+  scene and all but one is blurred, so each costs an offscreen pass per frame
+  (§14).

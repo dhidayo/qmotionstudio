@@ -1,4 +1,4 @@
-import { colorFill, roleFill, type Keyframe, type Layer, type Size } from '@/core/types';
+import { colorFill, roleFill, type Keyframe, type Layer, type Rect, type Size } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import type { SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
@@ -12,6 +12,27 @@ const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe
  * to behave the same everywhere. A template that rolled its own would mean
  * "Blurred photo" doing something different in each one.
  */
+
+/**
+ * The lowest a template's own content should reach.
+ *
+ * §12's watermark is drawn over everything, in the bottom-right corner, and
+ * inside the safe area so that it survives a crop. Anything a template anchors
+ * to the bottom of the safe box therefore lands on top of it — which four of
+ * these templates did, and which reads as two pieces of text fighting rather
+ * than as a mark on a picture.
+ *
+ * Reserved unconditionally even though only free exports carry the mark. A
+ * composition that rearranges itself the moment somebody upgrades is a worse
+ * problem than a band of spare pixels nobody notices.
+ */
+export function contentFloor(design: Size, safe: Rect): number {
+  const unit = Math.min(design.w, design.h);
+  // The mark occupies roughly [h - 0.071u, h - 0.045u]. Clearing it by a hair
+  // is not enough: two pieces of small white text one line apart still read as
+  // a collision, so the gap is about half the mark's own height again.
+  return Math.min(safe.y + safe.h, design.h - unit * 0.125);
+}
 
 /** §8.4's background treatment, as the bottom layer of a scene. */
 export function backgroundLayer(inputs: SceneInputs, ctx: BuildContext): Layer {
