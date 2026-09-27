@@ -113,7 +113,8 @@ function ShowcaseMotion({
 
   if (selectedSlot === null || !scene || !transform || !hasNudgePoses(transform)) return null;
 
-  const span = spanOf(nudgePoses(transform).map((pose) => pose.atMs));
+  const times = nudgePoses(transform).map((pose) => pose.atMs);
+  const span = spanOf(times);
   if (!span) return null;
 
   const speed = scene.inputs.look.speed;
@@ -122,6 +123,7 @@ function ShowcaseMotion({
   return (
     <MotionBar
       span={span}
+      poseTimes={times}
       originMs={0}
       scale={scale}
       laneMs={Math.max(1, clock.durationMs)}

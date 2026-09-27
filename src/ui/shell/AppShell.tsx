@@ -89,13 +89,34 @@ export function AppShell(): React.JSX.Element {
    * at zero, and the canvas believed nothing had moved. The playhead is a
    * property of the application, not of one panel that happens to draw it.
    *
-   * 20Hz, because this is for chrome that displays or acts on the time; the
-   * artboard reads the clock directly every frame (§3A).
+   * Every frame, not on a timer.
+   *
+   * It was 20Hz, on the reasoning that this only feeds chrome that displays the
+   * time — which was true until the selection box started following a moving
+   * element. The artboard draws that element at 60fps and the outline round it
+   * was being placed 20 times a second, so during playback the picture moved
+   * smoothly and its outline stepped along behind it. Reported exactly that
+   * way: "the image moved fast and the outline moves slowly".
+   *
+   * Published only when it has actually changed, so a paused editor does no
+   * work at all and nothing re-renders while nothing is happening.
    */
   const setPlayhead = useEditor((s) => s.setPlayhead);
   useEffect(() => {
-    const handle = setInterval(() => { setPlayhead(clock.timeMs); }, 50);
-    return () => { clearInterval(handle); };
+    let handle = 0;
+    let last = -1;
+
+    const tick = (): void => {
+      const now = clock.timeMs;
+      if (now !== last) {
+        last = now;
+        setPlayhead(now);
+      }
+      handle = requestAnimationFrame(tick);
+    };
+
+    handle = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(handle); };
   }, [clock, setPlayhead]);
 
 

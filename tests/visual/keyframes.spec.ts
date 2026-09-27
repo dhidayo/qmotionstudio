@@ -182,3 +182,106 @@ test.describe('seeing the motion', () => {
     await expect(page.locator('[data-motion-path]')).toHaveCount(0);
   });
 });
+
+test.describe('the motion bar is a control you can see and hit', () => {
+  /*
+   * Reported after the span model landed and worked: "while the start and end
+   * of the frame can be moved, it is too tiny to know that I can move it…
+   * keyframes are represented by a diamond shape".
+   *
+   * Both halves of that were true. The bar was drawn *inside the clip*, so its
+   * lane percentages were percentages of the clip — a three-second motion on a
+   * three-second overlay came out about eighteen pixels long, tucked in a
+   * corner — and its ends were two-pixel strips with no shape at all.
+   */
+
+  test('lives on its own lane, not inside the clip', async ({ page }) => {
+    await overlayProject(page);
+    await addMotion(page).click();
+
+    const clip = page.locator('[role="button"]', { hasText: 'New caption' }).first();
+    const clipBox = await clip.boundingBox();
+    const barBox = await bar(page).boundingBox();
+    if (!clipBox || !barBox) throw new Error('no boxes');
+
+    // Below the clip's row, on a row of its own.
+    expect(barBox.y).not.toBeCloseTo(clipBox.y, 0);
+
+    /*
+     * The bar covers the same three seconds as the clip, so it is the same
+     * width. Nested inside the clip it was a fraction of that, which is the
+     * arithmetic this pins: the bar is positioned against the lane.
+     */
+    expect(barBox.width).toBeGreaterThan(clipBox.width * 0.9);
+  });
+
+  test('has ends big enough to hit', async ({ page }) => {
+    await overlayProject(page);
+    await addMotion(page).click();
+
+    for (const side of ['start', 'end']) {
+      const grip = await page.locator(`[data-motion-grip="${side}"]`).boundingBox();
+      if (!grip) throw new Error(`no ${side} grip`);
+      // Fitts's law, roughly: below about twenty pixels a target on a timeline
+      // is one people miss, and missing an end drags the whole motion instead.
+      expect(grip.width).toBeGreaterThanOrEqual(20);
+      expect(grip.height).toBeGreaterThanOrEqual(14);
+    }
+  });
+});
+
+test.describe('clicking the timeline moves the playhead', () => {
+  /*
+   * "When I click an element on the timeline, the playhead does not move to
+   * that click location… I keep looking for ways to bring the playhead to
+   * current location."
+   *
+   * The rule that came out of it: the first click on a clip chooses the thing,
+   * and a second click on the thing already chosen says which moment of it.
+   * Dragging is unaffected, because a drag is not a click.
+   */
+
+  const now = async (page: Page): Promise<number> =>
+    Number(await page.getByLabel('Scrub').getAttribute('aria-valuenow'));
+
+  test('a second click on an already-selected clip seeks to it', async ({ page }) => {
+    await page.goto('/?template=quick-pitch&aspect=9:16&frozen=8000');
+    await page.waitForSelector('canvas');
+
+    // Scene 2, because scene 1 is selected the moment the project opens — and
+    // a click on something already selected is the *second* kind of click.
+    const clip = page.getByRole('button', { name: /2\. angle-fan/ });
+    await expect(clip).toHaveAttribute('aria-pressed', 'false');
+
+    const box = await clip.boundingBox();
+    if (!box) throw new Error('no clip');
+    const at = { x: box.x + box.width * 0.4, y: box.y + box.height / 2 };
+
+    const before = await now(page);
+    await page.mouse.click(at.x, at.y);
+    // The first click chose the scene and left the playhead where it was.
+    await expect(clip).toHaveAttribute('aria-pressed', 'true');
+    expect(await now(page)).toBe(before);
+
+    await page.mouse.click(at.x, at.y);
+    expect(await now(page)).toBeLessThan(before);
+  });
+
+  test('the empty music row is a time axis like any other', async ({ page }) => {
+    /*
+     * It was not: the "No music" note sat over most of the row and swallowed
+     * the press, so the one row with nothing in it was the one row a click did
+     * nothing on.
+     */
+    await page.goto('/?template=quick-pitch&aspect=9:16&frozen=8000');
+    await page.waitForSelector('canvas');
+
+    const note = page.getByText('No music.', { exact: false });
+    const box = await note.boundingBox();
+    if (!box) throw new Error('no music row');
+
+    const before = await now(page);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    expect(await now(page)).not.toBe(before);
+  });
+});

@@ -37,6 +37,8 @@ import {
  */
 const READOUT_HZ = 20;
 const SNAP_MS = 100;
+/** Pointer slop below which a press counts as a click rather than a drag. */
+const CLICK_SLOP_PX = 3;
 const MIN_OVERLAY_MS = 300;
 
 export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
@@ -83,7 +85,12 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   }, [clock]);
 
   const laneRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<ClipDrag | null>(null);
+  /**
+      * A press on a clip is a drag *or* a click, and which one it was is only
+      * known when it ends. So the press records where it started and whether
+      * the clip was already selected, and the release decides (D-087).
+      */
+  const dragRef = useRef<(ClipDrag & { downX: number; moved: boolean; wasSelected: boolean }) | null>(null);
 
   /**
    * The lane's pixel width, measured rather than read from the ref during
@@ -177,6 +184,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   ): void => {
     event.stopPropagation();
     capturePointer(event.currentTarget, event.pointerId);
+    const wasSelected = selectedOverlay === overlay.id;
     selectOverlay(overlay.id);
     dragRef.current = {
       mode,
@@ -184,12 +192,17 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
       startMs: overlay.startMs,
       endMs: overlay.endMs,
       pointerMs: laneMs(event.clientX),
+      downX: event.clientX,
+      moved: false,
+      wasSelected,
     };
   };
 
   const onClipMove = (event: React.PointerEvent<HTMLElement>): void => {
     const drag = dragRef.current;
     if (!drag || event.buttons === 0) return;
+    // A few pixels of jitter between press and release is a click, not a drag.
+    if (Math.abs(event.clientX - drag.downX) > CLICK_SLOP_PX) drag.moved = true;
 
     const next = dragResult(drag, laneMs(event.clientX), { durationMs, minLengthMs: MIN_OVERLAY_MS });
     // ⌥ suspends snapping, which is the convention everywhere else and the only
@@ -203,8 +216,23 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   };
 
   const endClipDrag = (): void => {
-    if (!dragRef.current) return;
+    const drag = dragRef.current;
+    if (!drag) return;
     dragRef.current = null;
+
+    /*
+     * Clicking a clip that was already selected moves the playhead there.
+     *
+     * The first click is for choosing the thing; a second says "and take me to
+     * this moment in it". Reported as the missing half of selection: "when I
+     * click an element on the timeline, the playhead does not move to that
+     * click location… I keep looking for ways to bring the playhead to current
+     * location" (D-087).
+     */
+    if (drag.mode === 'move' && !drag.moved && drag.wasSelected) {
+      seekTo(laneMs(drag.downX));
+      return;
+    }
     // One undo step for the whole drag, not one per pointermove.
     endInteraction();
   };
@@ -408,9 +436,13 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
       {/* Tracks. The label gutter is fixed so every row's time axis lines up. */}
       <div className="flex min-h-0 flex-1 overflow-y-auto">
-        <div className="w-14 shrink-0 border-r border-edge">
+        {/* Wide enough for the labels to be words. At w-14 they read
+            "SCEN…" and "MOTI…", which is a gutter that has stopped being a
+            gutter and become a puzzle. */}
+        <div className="w-20 shrink-0 border-r border-edge">
           <Gutter>Time</Gutter>
           <Gutter tall>Scenes</Gutter>
+          <Gutter>Motion</Gutter>
           {Array.from({ length: rows }, (_, i) => <Gutter key={i}>{`L${i + 1}`}</Gutter>)}
           <Gutter>Music</Gutter>
         </div>
@@ -474,14 +506,18 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           {/* Scene track. Clip widths come from the spans, so a transition
               overlap is visible as two clips that touch rather than a gap. */}
           <div className="relative h-9 border-b border-edge" data-lane>
-            <SlotMotion spans={spans} durationMs={durationMs} onSeek={seekTo} />
             {spans.map((span) => {
               const active = span.index === selectedScene && selectedOverlay === null;
               return (
                 <button
                   key={span.scene.id}
                   type="button"
-                  onClick={() => { selectScene(span.index); }}
+                  onClick={(e) => {
+                    // Already selected? Then this click is about the moment,
+                    // not the choice (D-087).
+                    if (active) seekTo(laneMs(e.clientX));
+                    else selectScene(span.index);
+                  }}
                   aria-pressed={active}
                   title={`${span.scene.templateId} · ${formatSeconds(span.scene.durationMs)}`}
                   className="absolute inset-y-1 overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
@@ -511,6 +547,19 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                 </button>
               );
             })}
+          </div>
+
+          {/*
+            * The selected element's motion, on a lane of its own.
+            *
+            * It used to be drawn inside the clip, which was wrong twice over: a
+            * bar positioned in lane percentages inside a four-second clip came
+            * out a few pixels long in the wrong place, and there was no room
+            * for an end you could actually grab. A motion is a span of time, so
+            * it belongs on the same time axis as everything else.
+            */}
+          <div className="relative h-7 border-b border-edge" data-lane>
+            <MotionLane spans={spans} durationMs={durationMs} onSeek={seekTo} />
           </div>
 
           {/* Overlay tracks, L1 first (§6.4 draws them in this order). */}
@@ -546,7 +595,6 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                     >
                       <TrimHandle side="start" onDown={(e) => { beginClipDrag(e, overlay, 'trimStart'); }} onMove={onClipMove} onUp={endClipDrag} />
                       <span className="pointer-events-none block truncate px-2">{labelFor(overlay)}</span>
-                      <OverlayMotion overlay={overlay} durationMs={durationMs} onSeek={seekTo} />
                       <TrimHandle side="end" onDown={(e) => { beginClipDrag(e, overlay, 'trimEnd'); }} onMove={onClipMove} onUp={endClipDrag} />
                     </div>
                   );
@@ -560,6 +608,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
             durationMs={durationMs}
             videoMs={videoMs}
             laneWidth={laneWidth}
+            onSeek={seekTo}
           />
 
           {/*
@@ -662,14 +711,18 @@ function TrimHandle({
 }
 
 /**
- * The selected template element's motion, on the scene track.
+ * Whatever is selected, and what its motion is doing.
  *
- * A template photo has no clip of its own — it belongs to a scene — so its
- * motion belongs on the scene it is part of. Diamonds came first and were not
- * enough: they say *that* something happens and never how long it takes, which
- * is the question a timeline exists to answer.
+ * One lane for all of them. An overlay, a template photograph and a block of
+ * template text are three different things in the document and exactly the same
+ * thing here — something with a span of time attached — so giving each its own
+ * row would be three rows of which two are always empty.
+ *
+ * The lane says something even when there is no motion, because the commonest
+ * report about this feature was never that it worked badly. It was that nobody
+ * could find it.
  */
-function SlotMotion({
+function MotionLane({
   spans,
   durationMs,
   onSeek,
@@ -677,51 +730,118 @@ function SlotMotion({
   spans: readonly SceneSpan[];
   durationMs: number;
   onSeek: (projectMs: number) => void;
-}): React.JSX.Element | null {
+}): React.JSX.Element {
+  const overlay = useEditor((s) => s.project.overlays.find((o) => o.id === s.selectedOverlay) ?? null);
+  const selectedSlot = useEditor((s) => s.selectedSlot);
+
+  if (overlay) return <OverlayMotion overlay={overlay} durationMs={durationMs} onSeek={onSeek} />;
+  if (selectedSlot !== null) {
+    return <SlotMotion slotKey={selectedSlot} spans={spans} durationMs={durationMs} onSeek={onSeek} />;
+  }
+  return <LaneNote>Select a photo, some text or an overlay to give it motion.</LaneNote>;
+}
+
+function LaneNote({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return (
+    <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-[10px] text-ink-faint">
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The way in, on the lane rather than only in the panel.
+ *
+ * Named "+ Motion" to sit alongside "+ Photo" and "+ Text" in the toolbar
+ * above, and so that it does not collide with the panel's own "Add motion" —
+ * two controls with one name is a worse problem than a slightly terser label.
+ */
+function AddMotionHere({ onAdd }: { onAdd: () => void }): React.JSX.Element {
+  return (
+    <div className="absolute inset-y-0 left-2 flex items-center gap-2">
+      <button
+        type="button"
+        onPointerDown={(e) => { e.stopPropagation(); }}
+        onClick={onAdd}
+        title="Give the selected element a motion"
+        className="rounded-md border px-2 py-0.5 text-[10px] font-semibold"
+        style={{ borderColor: 'var(--c-accent)', color: 'var(--c-accent)', background: 'var(--c-accent-soft)' }}
+      >
+        + Motion
+      </button>
+      <span className="pointer-events-none text-[10px] text-ink-faint">
+        Then put the playhead at the end and drag it to say where it finishes.
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The selected template element's motion.
+ *
+ * Times are in the scene's own clock, after §8.4's speed remap, so they have to
+ * be mapped back out to the project's before anything is drawn — a scene played
+ * at half speed spreads its motion over twice as much timeline.
+ */
+function SlotMotion({
+  slotKey,
+  spans,
+  durationMs,
+  onSeek,
+}: {
+  slotKey: string;
+  spans: readonly SceneSpan[];
+  durationMs: number;
+  onSeek: (projectMs: number) => void;
+}): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const endInteraction = useEditor((s) => s.endInteraction);
-  const selectedSlot = useEditor((s) => s.selectedSlot);
+  const playheadMs = useEditor((s) => s.playheadMs);
   const selectedScene = useEditor((s) => s.selectedScene);
-  const transform = useEditor((s) =>
-    selectedSlot === null
-      ? undefined
-      : s.project.scenes[s.selectedScene]?.inputs.slotTransforms[selectedSlot],
-  );
+  const transform = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.slotTransforms[slotKey]);
 
-  if (selectedSlot === null || !transform || !hasNudgePoses(transform)) return null;
-
-  const span = spanOf(nudgePoses(transform).map((pose) => pose.atMs));
   const sceneSpan = spans[selectedScene];
-  if (!span || !sceneSpan) return null;
+  if (!sceneSpan) return <LaneNote>No scene selected.</LaneNote>;
 
-  /*
-   * Scene time to project time. Poses are stored after §8.4's speed remap, so
-   * a scene at half speed spreads its motion over twice as much timeline —
-   * undoing the remap is what puts the bar under the moment it applies to.
-   */
   const speed = sceneSpan.scene.inputs.look.speed;
   const scale = speed === 0 ? 1 : 1 / speed;
   const sceneMs = sceneSpan.scene.durationMs;
+  const localMs = Math.max(0, Math.min(Math.round((playheadMs - sceneSpan.startMs) * speed), sceneMs));
+
+  if (!transform || !hasNudgePoses(transform)) {
+    return (
+      <AddMotionHere
+        onAdd={() => {
+          dispatch(actions.setSlotAnimated(slotKey, true, localMs));
+          dispatch(actions.addSlotMotion(slotKey, localMs, sceneMs));
+        }}
+      />
+    );
+  }
+
+  const times = nudgePoses(transform).map((pose) => pose.atMs);
+  const span = spanOf(times);
+  if (!span) return <LaneNote>No motion on this element.</LaneNote>;
 
   return (
     <MotionBar
       span={span}
+      poseTimes={times}
       originMs={sceneSpan.startMs}
       scale={scale}
       laneMs={durationMs}
-      onChange={(change) => { dispatch(actions.reshapeSlotMotion(selectedSlot, sceneMs, change)); }}
+      onChange={(change) => { dispatch(actions.reshapeSlotMotion(slotKey, sceneMs, change)); }}
       onCommit={endInteraction}
-      onSeek={(atMs) => { onSeek(sceneSpan.startMs + atMs * scale); }}
+      onSeek={(atMs) => { onSeek(sceneSpan.startMs + Math.min(atMs, sceneMs - 1) * scale); }}
     />
   );
 }
 
 /**
- * An overlay's motion, on its own clip.
+ * An overlay's motion.
  *
- * Positioned against the clip rather than the lane, because an overlay's times
- * are its own (§6.1) — dragging the clip along the timeline takes its motion
- * with it.
+ * Times are the overlay's own (§6.1), so dragging the clip along the timeline
+ * takes the motion with it and the bar follows on the next render.
  */
 function OverlayMotion({
   overlay,
@@ -731,23 +851,44 @@ function OverlayMotion({
   overlay: Overlay;
   durationMs: number;
   onSeek: (projectMs: number) => void;
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const endInteraction = useEditor((s) => s.endInteraction);
+  const playheadMs = useEditor((s) => s.playheadMs);
 
-  if (!isAnimated(overlay)) return null;
-  const span = spanOf(posesOf(overlay).map((pose) => pose.atMs));
-  if (!span) return null;
+  const spanMs = Math.max(1, overlay.endMs - overlay.startMs);
+  const localMs = Math.max(0, Math.min(Math.round(playheadMs - overlay.startMs), spanMs));
+
+  if (!isAnimated(overlay)) {
+    return (
+      <AddMotionHere
+        onAdd={() => {
+          dispatch(actions.setOverlayAnimated(overlay.id, true, localMs));
+          dispatch(actions.addOverlayMotion(overlay.id, localMs));
+        }}
+      />
+    );
+  }
+
+  const times = posesOf(overlay).map((pose) => pose.atMs);
+  const span = spanOf(times);
+  if (!span) return <LaneNote>No motion on this overlay.</LaneNote>;
 
   return (
     <MotionBar
       span={span}
+      poseTimes={times}
       originMs={overlay.startMs}
       scale={1}
       laneMs={durationMs}
       onChange={(change) => { dispatch(actions.reshapeOverlayMotion(overlay.id, change)); }}
       onCommit={endInteraction}
-      onSeek={(atMs) => { onSeek(overlay.startMs + atMs); }}
+      /*
+       * Never the exact end: a layer's range is half-open, so the instant a
+       * motion finishes is the first instant the overlay is gone, and standing
+       * there leaves nothing on screen to drag.
+       */
+      onSeek={(atMs) => { onSeek(overlay.startMs + Math.min(atMs, spanMs - 1)); }}
     />
   );
 }

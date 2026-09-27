@@ -18,7 +18,15 @@ import { dragResult, msToPct, pxToMs, snap, type ClipDrag } from './timelineGeom
  * wants. ⌥ while dragging the body.
  */
 type MusicDragMode = ClipDrag['mode'] | 'slip';
-type MusicDrag = Omit<ClipDrag, 'mode'> & { readonly mode: MusicDragMode };
+type MusicDrag = Omit<ClipDrag, 'mode'> & {
+  readonly mode: MusicDragMode;
+  readonly downX: number;
+  readonly wasSelected: boolean;
+  moved: boolean;
+};
+
+/** Pointer slop below which a press counts as a click rather than a drag. */
+const CLICK_SLOP_PX = 3;
 
 /**
  * §1.2's dedicated music track, and §10's waveform preview.
@@ -48,6 +56,7 @@ export function MusicTrack({
   durationMs,
   videoMs,
   laneWidth,
+  onSeek,
 }: {
   clips: readonly AudioClip[];
   /** The lane's span, which includes anything past the end of the video. */
@@ -55,11 +64,21 @@ export function MusicTrack({
   /** What actually renders and exports. */
   videoMs: number;
   laneWidth: number;
+  onSeek: (projectMs: number) => void;
 }): React.JSX.Element {
   if (clips.length === 0) {
     return (
       <div className="relative h-7 border-b border-edge" data-lane>
-        <span className="absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
+        {/*
+          * `pointer-events-none`, so the row underneath gets the press.
+          *
+          * Without it the note was the click target for most of the row's
+          * width, and the timeline's scrub handler — which only acts on the
+          * lane itself — quietly did nothing. Reported precisely: "when I click
+          * the Music section with the text 'No music…' the playhead is not
+          * adjusted".
+          */}
+        <span className="pointer-events-none absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
           No music. Use “+ Music” above.
         </span>
       </div>
@@ -75,6 +94,7 @@ export function MusicTrack({
           durationMs={durationMs}
           videoMs={videoMs}
           laneWidth={laneWidth}
+          onSeek={onSeek}
         />
       ))}
     </div>
@@ -86,11 +106,13 @@ function MusicClip({
   durationMs,
   videoMs,
   laneWidth,
+  onSeek,
 }: {
   clip: AudioClip;
   durationMs: number;
   videoMs: number;
   laneWidth: number;
+  onSeek: (projectMs: number) => void;
 }): React.JSX.Element {
   const media = useMediaStore();
   useMediaRevision();
@@ -121,6 +143,7 @@ function MusicClip({
   const begin = (event: React.PointerEvent<HTMLElement>, mode: MusicDragMode): void => {
     event.stopPropagation();
     capturePointer(event.currentTarget, event.pointerId);
+    const wasSelected = selectedAudio === clip.id;
     selectAudio(clip.id);
     dragRef.current = {
       // `slip` is not a ClipDrag mode — dragResult knows nothing about it, and
@@ -130,12 +153,16 @@ function MusicClip({
       startMs: clip.startMs,
       endMs: clip.startMs + length,
       pointerMs: laneMs(event.clientX, event.currentTarget),
+      downX: event.clientX,
+      wasSelected,
+      moved: false,
     };
   };
 
   const move = (event: React.PointerEvent<HTMLElement>): void => {
     const drag = dragRef.current;
     if (!drag || event.buttons === 0) return;
+    if (Math.abs(event.clientX - drag.downX) > CLICK_SLOP_PX) drag.moved = true;
 
     const pointerMs = laneMs(event.clientX, event.currentTarget);
     // ⇧ bypasses snapping. ⌥ is taken: it is the slip modifier.
@@ -187,9 +214,17 @@ function MusicClip({
     dispatch(actions.trimAudioEnd(clip.id, delta, sourceMs));
   };
 
-  const end = (): void => {
-    if (!dragRef.current) return;
+  const end = (event: React.PointerEvent<HTMLElement>): void => {
+    const drag = dragRef.current;
+    if (!drag) return;
     dragRef.current = null;
+
+    // Clicking a clip that was already selected moves the playhead there, the
+    // same rule the scene and overlay clips follow (D-087).
+    if (drag.mode === 'move' && !drag.moved && drag.wasSelected) {
+      onSeek(laneMs(drag.downX, event.currentTarget));
+      return;
+    }
     endInteraction();
   };
 
@@ -303,7 +338,7 @@ function TrimHandle({
   side: 'start' | 'end';
   onDown: (event: React.PointerEvent<HTMLElement>) => void;
   onMove: (event: React.PointerEvent<HTMLElement>) => void;
-  onUp: () => void;
+  onUp: (event: React.PointerEvent<HTMLElement>) => void;
 }): React.JSX.Element {
   return (
     <span

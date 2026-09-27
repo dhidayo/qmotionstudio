@@ -2090,3 +2090,76 @@ Three deliberate constraints came out of writing them:
   decision rather than a design one: every photograph is alive for the whole
   scene and all but one is blurred, so each costs an offscreen pass per frame
   (§14).
+
+## D-087 — a click on the timeline is selection *and* time
+
+Reported after everything else about the timeline worked: "when I click an
+element on the timeline, the playhead does not move to that click location… I
+keep looking for ways to bring the playhead to current location."
+
+Every editor moves the playhead when you click empty timeline, and none of them
+move it when you click a clip — clicking a clip selects it, because a selection
+you cannot make without also losing your place is not a selection. Both
+conventions are right, and following only the second leaves no way at all to say
+"take me to this moment in this thing".
+
+So the rule is **the first click chooses the thing, and a second click on the
+thing already chosen says which moment of it.** No modifier to learn, nothing to
+discover, and the case that prompted it — wanting the playhead somewhere inside a
+clip — takes two clicks in the place you were already pointing.
+
+A drag is not a click. The press records where it started and whether the clip
+was already selected, and the release decides: more than three pixels of travel
+and it was a drag, so the clip moved and the playhead did not.
+
+Rejected: seeking on *every* click, which the same report offered as its first
+suggestion. It makes selecting something destroy where you were, and you cannot
+open a clip's panel without losing your frame.
+
+**The empty music row was a special case of the same complaint**, and a plainer
+bug: its "No music" note sat over most of the row and swallowed the press, so the
+one row with nothing in it was the one row where clicking did nothing. It is
+`pointer-events-none` now.
+
+## D-088 — motion is a lane, and its ends are diamonds
+
+The span model (D-082) was right and the drawing of it was not. Two faults,
+reported together.
+
+**It was nested inside the clip.** The bar's positions are lane percentages, so
+inside a four-second clip they were percentages of four seconds: a three-second
+motion came out about eighteen pixels long, in the wrong place, tucked into a
+corner of the clip it belonged to. "It is too tiny to know that I can move it"
+was a generous reading of a bar that was also in the wrong place.
+
+**And its ends had no shape.** A control that can be dragged has to look like
+one, and for a keyframe that means a diamond — the shape every timeline has used
+for this for thirty years and the one people arrive already knowing. Asked for
+by name: "keyframes are represented by a diamond shape".
+
+So motion has a lane of its own, on the same time axis as every other row, with
+diamonds at the ends sitting in 24-pixel targets. A custom path shows a smaller
+diamond at each point it passes through; a plain A-to-B does not, because there
+the two ends are the whole story and a third diamond would be inventing one.
+
+The lane also says something when there is nothing on it. The commonest report
+about this feature was never that it worked badly — it was that nobody could find
+it — so an element with no motion yet gets a **+ Motion** button on the lane,
+next to a line saying what to do after pressing it.
+
+## D-089 — the playhead is published every frame
+
+"The image moved fast and the outline moves slowly as expected over the duration
+of the frame."
+
+Measured under scrubbing, the selection box and the element agree exactly. Under
+*playback* they could not: the artboard draws at 60fps from the clock, and the
+playhead everything else reads was published on a 50ms timer. The picture moved
+smoothly and its outline stepped along a third as often.
+
+20Hz was a defensible choice when the only things reading it displayed a number.
+It stopped being one when the selection box started following a moving element.
+
+Published on every animation frame now, and only when it has actually changed —
+so a paused editor does no work and nothing re-renders while nothing is
+happening.
