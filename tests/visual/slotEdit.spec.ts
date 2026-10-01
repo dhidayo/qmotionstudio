@@ -351,3 +351,47 @@ test.describe('motion on a template element', () => {
     expect(await frameHash(page)).toBe(before);
   });
 });
+
+test.describe('a Soft Pop card (D-090, D-091)', () => {
+  /*
+   * A Soft Pop photo is a group — a halo and a window onto the photo — that
+   * later breaks into pieces. The group carries the slot, so selecting and
+   * dragging go through the container path rather than an image's. And every
+   * photo in the reel sits on the same spot, so only the one on screen may
+   * answer a click.
+   */
+  async function openPop(page: Page, frozenMs: number): Promise<void> {
+    await page.goto(`/?template=pop-scatter&aspect=9:16&frozen=${frozenMs}`);
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+  }
+
+  async function clickCentre(page: Page): Promise<string | null> {
+    const canvas = await boxOf(page, 'canvas');
+    await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height * 0.5);
+    await expect(page.locator(SELECTION)).toBeVisible();
+    return page.locator(SELECTION).getAttribute('aria-label');
+  }
+
+  test('selects the photo that is on screen, not one stacked beneath it', async ({ page }) => {
+    // Early in the reel: the first photo is settled and no other has begun.
+    await openPop(page, 900);
+    expect(await clickCentre(page)).toMatch(/Photo 1/);
+
+    // Late in the second turn: the first photo has long gone, the second is up.
+    await openPop(page, 3_400);
+    expect(await clickCentre(page)).toMatch(/Photo 2/);
+  });
+
+  test('moves when dragged, as one piece', async ({ page }) => {
+    await openPop(page, 900);
+    await clickCentre(page);
+    const before = centreOf(await boxOf(page));
+
+    await drag(page, before, { x: before.x - 60, y: before.y - 50 });
+    const after = centreOf(await boxOf(page));
+
+    expect(after.x - before.x).toBeCloseTo(-60, -1);
+    expect(after.y - before.y).toBeCloseTo(-50, -1);
+  });
+});

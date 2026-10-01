@@ -147,3 +147,18 @@ export function fillSlots(photos: readonly PhotoInput[], count: number): FilledS
     return { ...source, slotIndex: i };
   });
 }
+
+/**
+ * The same photo, without its slot.
+ *
+ * For a photo drawn as part of something larger that already carries the slot
+ * — a card that breaks into pieces, a window it is seen through. Tagging both
+ * would apply a user's nudge twice, once to the container and again to the
+ * photo inside it (D-090).
+ */
+export function untagged(props: ImageProps): ImageProps {
+  const copy: { -readonly [K in keyof ImageProps]: ImageProps[K] } = { ...props };
+  delete copy.slot;
+  return copy;
+}
+

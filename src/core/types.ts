@@ -223,7 +223,15 @@ export type TextProps = {
   readonly reveal: Reveal;
 };
 
-export type GroupProps = Record<string, never>;
+/**
+ * A group's only prop is optional: the slot it stands for.
+ *
+ * A container carries a slot when the *whole* container is the user's element
+ * — a photograph that breaks into pieces as it leaves, say, where the pieces
+ * are the photo and have to follow it when someone has dragged it. The pieces
+ * themselves are then untagged, or the nudge would be applied twice (D-090).
+ */
+export type GroupProps = { readonly slot?: SlotRef };
 
 export type MaskProps = {
   readonly shape: 'rect' | 'ellipse';
@@ -240,6 +248,8 @@ export type MaskProps = {
    * nobody has asked for.
    */
   readonly clipFrom?: Direction;
+  /** As on a group: set when the masked window *is* the user's element (D-090). */
+  readonly slot?: SlotRef;
 };
 
 export type VideoProps = {

@@ -2163,3 +2163,98 @@ It stopped being one when the selection box started following a moving element.
 Published on every animation frame now, and only when it has actually changed —
 so a paused editor does no work and nothing re-renders while nothing is
 happening.
+
+## D-090 — a container may stand for an element
+
+Until now only an image or a text block could carry a slot, so only an image
+or a text block could be dragged. Soft Pop's exits break a photo into pieces —
+twelve for Scatter, thirty-five for Blowout — and those pieces *are* the photo.
+If someone has dragged the photo, the pieces have to come apart from where it
+was dragged to.
+
+Tagging each piece does not work: each piece is a window onto the photo, and
+nudging what is inside a window slides the picture within it rather than moving
+the window. So a group or a mask may now carry the slot itself. The nudge goes
+on the container's tracks, once, in the scene's own space, and everything inside
+moves together — which is exactly what a container is.
+
+This sits beside D-085 rather than against it. D-085 forbids a tagged drawable
+*inside* a scaled or rotated container, because the nudge would be applied
+along the container's axes. Here the container is the tagged thing, and a
+group scales and rotates about its own origin — so a Soft Pop card, whose group
+sits at the photo's centre, scales and turns about its centre exactly as an
+image does.
+
+Two rules come with it, and the library test enforces both for every template
+at every aspect:
+
+- **Nothing tagged inside a tagged container.** The photo inside a card is
+  untagged (`untagged()` in `_shared/photo.ts`), or a drag would move it twice.
+- **A tagged group's handles come from its first child with a size**, at that
+  child's resting place, since a group has no box of its own.
+
+## D-091 — the handles are only on what is on screen
+
+A layer outside its own time window draws nothing, and the selection boxes did
+not know that. Every template that shows photographs one after another puts
+them in the same place, so at any moment several boxes were stacked on the
+spot the visible photo occupied — and a click picked whichever was on top,
+which was often one you could not see.
+
+Boxes now skip layers outside their window, and containers outside theirs take
+their children with them. Skipped *before* the one-box-per-slot rule, so a
+slot's visible layer still gets the handles when an invisible one came first.
+
+Soft Pop needed it outright. Card Stack, Flip Cards and Spotlight had been
+quietly wrong in the same way since they were written.
+
+## D-092 — Soft Pop: what "soothing" means, in numbers
+
+Asked for as "a soothing pop out… very soothing to the eyes and heart". A mood
+cannot be tested, so the family is held to rules that can:
+
+- **Nothing is quick.** Entrances take most of a second and exits well over
+  one. The shortest motion anywhere in the family is longer than the longest in
+  Kinetic Type.
+- **Nothing jolts.** Every curve is a sine or a cubic ease. The one spring
+  (`SOFT_POP`) has a damping ratio near 0.86: it overshoots by about one percent
+  and settles once — felt, not seen.
+- **Something is always moving, slowly.** Each photo eases back from 110% for
+  the whole time it is on screen, so no frame is a still waiting for a cut.
+- **Arrivals overlap departures.** The next photo is coming in before the last
+  has gone, so there is never an empty beat between them.
+- **Type arrives slowly too.** Words a beat apart, a caption that takes over a
+  second to fade up. Type that snaps in breaks a calm reel faster than a cut.
+
+The photo zooms *inside* a still frame rather than the card itself shrinking —
+a masked window — because a picture settling within its frame is far calmer
+than a frame changing size.
+
+Each exit carries its own rule about direction and order, because that is where
+calm is won or lost:
+
+- **Scatter** — pieces leave from the edges inward, so the photo unravels
+  rather than bursts and no piece crosses another. Some of each delay is left to
+  chance, or the grid's rows hold together all the way out.
+- **Blowout** — a breeze crosses left to right, so the photo is never gone at
+  once. Every piece flies for the same time however late it sets off, and lifts
+  as much as it drifts, so the pieces clear the part of the photo still whole.
+- **Fizzle** — the photo is gone within most of the exit; its motes live on
+  past it. The last thing on screen is a few points of light, still rising.
+- **Flip Out** — the page leaves and nothing comes back. The next photo is
+  already lying beneath, still, before the turn begins.
+- **Float Away** — one direction only. Arrival and departure both travel
+  upward, so they pass rather than cross. The departing card is drawn behind,
+  because receding is further away.
+- **Dream Fade** — the incoming photo fades in *over* the outgoing one, which
+  stays fully opaque until covered. A two-way crossfade is half transparent at
+  its middle, and the frame visibly dims there.
+
+The card's shadow is a halo — a radial gradient stretched to the card's
+proportions — rather than a filled box. A filled box shows its own colour
+through every gap the moment a photo breaks apart or fades. A halo shows only
+shade, which is what the eye expects under something lifting away.
+
+`Soft Showcase` strings the family into a product ad, with every hand-over a
+crossfade of the same length: the variety is in how each beat's photographs
+leave, not in the cuts between them.

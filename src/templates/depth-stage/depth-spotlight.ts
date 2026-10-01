@@ -200,8 +200,10 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     startMs: 0,
     endMs: durationMs,
     anchorX: 0.5,
-    anchorY: 1,
-    tracks: { x: [kf(0, design.w / 2)], y: [kf(0, floor)] },
+    anchorY: 0,
+    // Text runs downward from its anchor whatever anchorY says, so the line
+    // is placed by its top: one line above the floor.
+    tracks: { x: [kf(0, design.w / 2)], y: [kf(0, floor - capRun.height)] },
     props: caption,
   });
 

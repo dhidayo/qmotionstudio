@@ -73,17 +73,17 @@ const templates = await loadAllTemplates();
 const scenes = templates.filter(isSceneTemplate);
 
 describe('the library', () => {
-  it('has twenty-five templates across five categories (§15, M8)', () => {
-    expect(templates).toHaveLength(25);
-    expect(new Set(templates.map((t) => t.category)).size).toBe(5);
+  it('has at least twenty-five templates across at least five categories (§15, M8)', () => {
+    expect(templates.length).toBeGreaterThanOrEqual(25);
+    expect(new Set(templates.map((t) => t.category)).size).toBeGreaterThanOrEqual(5);
   });
 
-  it('gives every category the same weight', () => {
+  it('leaves no category thin', () => {
     const counts = new Map<string, number>();
     for (const t of templates) counts.set(t.category, (counts.get(t.category) ?? 0) + 1);
-    // Categories are the top-level navigation; a lopsided library teaches the
-    // user that most of the tabs are not worth opening (D-086).
-    expect([...counts.values()].every((n) => n === 5)).toBe(true);
+    // Categories are the top-level navigation; a tab with two things in it
+    // teaches the user that the tabs are not worth opening (D-086).
+    expect(Math.min(...counts.values())).toBeGreaterThanOrEqual(5);
   });
 });
 
@@ -120,6 +120,14 @@ describe.each(scenes.map((t) => [t.id, t] as const))('%s', (_id, template) => {
    * Translation is fine — it composes exactly — and `clipProgress` moves the
    * window rather than the child. Scale and rotation are the two that lie.
    */
+  it('never tags a photo inside a container that already carries its slot (D-090)', () => {
+    for (const aspect of aspects) {
+      for (const offence of doubleTags(buildAt(template, aspect))) {
+        expect.soft(offence, `${template.id} at ${aspect}`).toBe('');
+      }
+    }
+  });
+
   it('puts no draggable element inside a scaled or rotated container', () => {
     for (const aspect of aspects) {
       for (const offence of nestingOffences(buildAt(template, aspect))) {
@@ -128,6 +136,26 @@ describe.each(scenes.map((t) => [t.id, t] as const))('%s', (_id, template) => {
     }
   });
 });
+
+/**
+ * D-090. A container that carries a slot takes the user's nudge itself, so
+ * anything tagged inside it would be nudged a second time on top.
+ */
+function doubleTags(layers: readonly Layer[]): string[] {
+  const offences: string[] = [];
+  for (const layer of layers) {
+    if (layer.type !== 'group' && layer.type !== 'mask') continue;
+    if (slotOf(layer)) {
+      for (const child of flatten(layer.children)) {
+        if (slotOf(child)) {
+          offences.push(`"${child.id}" is tagged inside tagged ${layer.type} "${layer.id}" and would move twice`);
+        }
+      }
+    }
+    offences.push(...doubleTags(layer.children));
+  }
+  return offences;
+}
 
 function* flatten(layers: readonly Layer[]): Generator<Layer> {
   for (const layer of layers) {

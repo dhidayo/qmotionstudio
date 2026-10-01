@@ -1,0 +1,201 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Motion Studio on Phones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  /* Layout: one reading column, a summary panel up top, wide tables scroll inside their own frame. */
+  :root {
+    --bg: #f5f6f9;
+    --surface: #ffffff;
+    --ink: #14161d;
+    --muted: #596071;
+    --line: #dde1e9;
+    --accent: #4f43e0;
+    --accent-soft: #ecebfd;
+    --ok: #1d7a4c;
+    --ok-soft: #e4f4ec;
+    --warn: #9a5b00;
+    --warn-soft: #fbf0dc;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101219; --surface: #171a23; --ink: #e8eaf1; --muted: #9aa1b3; --line: #2a2f3c;
+      --accent: #8d84ff; --accent-soft: #24224a; --ok: #5fcf95; --ok-soft: #15291f;
+      --warn: #f0b45a; --warn-soft: #2d2313; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101219; --surface: #171a23; --ink: #e8eaf1; --muted: #9aa1b3; --line: #2a2f3c;
+    --accent: #8d84ff; --accent-soft: #24224a; --ok: #5fcf95; --ok-soft: #15291f;
+    --warn: #f0b45a; --warn-soft: #2d2313; color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--ink); font: 400 17px/1.62 var(--body); }
+  .page { max-width: 760px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 72px; display: grid; gap: 44px; }
+  h1, h2 { font-family: var(--display); line-height: 1.12; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 700; }
+  h2 { font-size: 24px; font-weight: 600; }
+  p { margin: 0; max-width: 66ch; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  section { display: grid; gap: 16px; min-width: 0; }
+  .eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  header { display: grid; gap: 14px; }
+  .lede { font-size: 20px; color: var(--muted); }
+
+  .summary { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; display: grid; gap: 14px; }
+  .summary ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .summary li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; }
+  .summary li::before { content: ""; width: 8px; height: 8px; margin-top: 9px; transform: rotate(45deg); background: var(--accent); border-radius: 1px; }
+  .summary strong { font-weight: 600; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 15px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  thead th { font: 500 11px/1.3 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); background: color-mix(in srgb, var(--surface) 60%, var(--bg)); }
+  tbody th { font-weight: 600; width: 22%; color: var(--ink); }
+  td.num { font-variant-numeric: tabular-nums; }
+  .pick { background: var(--accent-soft); }
+  .chip { display: inline-block; font: 500 10.5px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 7px; border-radius: 99px; vertical-align: 2px; margin-left: 6px; }
+  .chip.ok { color: var(--ok); background: var(--ok-soft); }
+  .chip.warn { color: var(--warn); background: var(--warn-soft); }
+
+  ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 18px; }
+  ol.steps li { counter-increment: step; display: grid; grid-template-columns: 34px 1fr; gap: 12px; }
+  ol.steps li::before { content: counter(step); font: 600 15px/34px var(--display); text-align: center; width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); }
+  ol.steps .what { font-weight: 600; display: block; }
+  ol.steps .when { font: 500 12px/1 var(--mono); color: var(--muted); margin-left: 8px; letter-spacing: 0.04em; }
+
+  ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 10px; max-width: 66ch; }
+  ul.checks { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; max-width: 66ch; }
+  ul.checks li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+  ul.checks li::before { content: ""; width: 14px; height: 14px; margin-top: 5px; border: 1.5px solid var(--muted); border-radius: 4px; }
+
+  .note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 14px 16px; border-radius: 0 8px 8px 0; font-size: 15.5px; max-width: 66ch; }
+  .sources { font-size: 14px; color: var(--muted); }
+  .sources ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 0; }
+</style>
+
+<main class="page">
+  <header>
+    <span class="eyebrow">Advice · 1 October 2026</span>
+    <h1>Getting Motion Studio onto iPhone and Android</h1>
+    <p class="lede">Easier than usual, because of how the app is already built. Most of what remains is product and business work rather than porting.</p>
+  </header>
+
+  <section class="summary" aria-labelledby="short">
+    <h2 id="short">The short answer</h2>
+    <ul>
+      <li><span><strong>It already runs on phones.</strong> Motion Studio is a web app that does everything on the device and works offline, and it is already installable as a home-screen app. Nothing has to be rewritten to reach phones.</span></li>
+      <li><span><strong>The engine it needs now exists on iPhone.</strong> Export uses the browser's built-in video encoder (WebCodecs). Safari has had the video half since iOS 16.4 and the audio half since iOS 26, so an iPhone on iOS 26 has everything the export uses. Every browser and every app's web view on iPhone uses Safari's engine, so this one fact settles the question for both the web app and an App Store app.</span></li>
+      <li><span><strong>Store listings are a wrapper, not a rebuild.</strong> The same code can ship to the App Store and Google Play inside a thin native shell called Capacitor.</span></li>
+      <li><span><strong>The real work is elsewhere:</strong> a phone-sized way of editing, subscriptions and accounts, and proving export speed on real, older iPhones.</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="routes">
+    <h2 id="routes">Three ways to get there</h2>
+    <p>From cheapest to most expensive. The highlighted column is the one I would build towards; the web app comes first because it costs days and tests everything else.</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col"></th><th scope="col">Web app, installable</th><th scope="col" class="pick">Store apps (Capacitor)</th><th scope="col">Native rebuild</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">What people get</th><td>Opens from a link. "Add to Home Screen" turns it into an app icon. Works offline.</td><td class="pick">Listed in the App Store and Google Play. The same app plus native sharing, save to Photos and store subscriptions.</td><td>Separate native apps for each platform.</td></tr>
+          <tr><th scope="row">Code reused</th><td class="num">All of it</td><td class="pick num">About 95%, plus small native add-ons</td><td>Renderer and export rewritten, two codebases</td></tr>
+          <tr><th scope="row">Time</th><td class="num">Days</td><td class="pick num">4–8 weeks for both stores, including review</td><td class="num">4–9 months</td></tr>
+          <tr><th scope="row">Fixed costs</th><td class="num">Domain and hosting, $0–20 a month</td><td class="pick num">Apple $99 a year, Google $25 once</td><td>The same, plus far more engineering</td></tr>
+          <tr><th scope="row">Payment fee</th><td class="num">Card processing only, about 3%</td><td class="pick num">Store billing, 15–30% (see fees below)</td><td>Same as the stores</td></tr>
+          <tr><th scope="row">Main risk</th><td>Hard to discover. On iPhone, installing is hidden in the Share menu.</td><td class="pick">Apple rejecting it as "just a website" (guideline 4.2). Native features avoid that.</td><td>Cost, time, and two apps to keep in step</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="order">
+    <h2 id="order">The order I recommend</h2>
+    <ol class="steps">
+      <li><div><span class="what">Put the web app on a real address <span class="when">days</span></span>
+        It needs a domain with HTTPS. This is also the only honest way to test on a phone: the video encoder only works on secure pages, so a phone pointed at the development computer over Wi-Fi will look broken when it is not. Run the device checks further down.</div></li>
+      <li><div><span class="what">Design the phone flow <span class="when">the biggest piece</span></span>
+        The current editor is a desktop tool built around a timeline. Most people on a phone will do five things: pick a template, add photos, change the words, preview, then export and share. Give phones that guided path and keep the timeline for tablets and desktop. This decides whether the app feels good on a phone far more than any technical choice does.</div></li>
+      <li><div><span class="what">Wrap it for the stores with Capacitor <span class="when">4–8 weeks</span></span>
+        Add what a website cannot do well: share straight to Instagram, TikTok and LinkedIn, save to Photos, the native photo picker, and store subscriptions. Those native features are also what gets an app past Apple's rule against apps that are only a website.</div></li>
+      <li><div><span class="what">Add accounts and subscriptions <span class="when">alongside step 3</span></span>
+        Covered in the next section.</div></li>
+    </ol>
+    <p>I would not rebuild natively. It only pays off if real iPhones turn out to be too slow at exporting, and even then the cheaper fix is a small native export add-on inside the Capacitor app rather than a second codebase.</p>
+  </section>
+
+  <section aria-labelledby="subs">
+    <h2 id="subs">What subscribers need that v1 left out</h2>
+    <p>The build spec deliberately keeps accounts, payments and servers out of version 1, and today "Pro" is a switch inside the app. Paying subscribers need three things the app does not have yet:</p>
+    <ul class="plain">
+      <li>A record of who has paid that works across all their devices.</li>
+      <li>"Restore purchases" when they get a new phone.</li>
+      <li>Receipt checking, so a subscription cannot be faked.</li>
+    </ul>
+    <p>A service such as RevenueCat handles all three for Apple, Google and web payments together. It is free to start and then takes roughly 1% of revenue. Photos and projects can stay on the device: only the subscription status has to be online, so the promise that nothing is uploaded still holds. That promise is a real selling point against the big editors and worth keeping.</p>
+    <p>If the iPhone app offers sign-in with Google or another account provider, Apple also requires a privacy-focused option such as Sign in with Apple.</p>
+  </section>
+
+  <section aria-labelledby="fees">
+    <h2 id="fees">Store fees as of October 2026</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Route</th><th scope="col">Fee</th><th scope="col">What to know</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Apple in-app subscription</th><td class="num">30% in year one, 15% after a year of continuous subscription. 15% from the start in the Small Business Program (under $1M a year).</td><td>The default for any subscription sold inside an iPhone app.</td></tr>
+          <tr><th scope="row">Apple, US link to your own web checkout</th><td>Allowed. The commission is still in court. <span class="chip warn">unsettled</span></td><td>The Supreme Court agreed in April 2026 to hear Apple's appeal and refused in May to pause the lower ruling. A district court is meant to set a "reasonable" rate. Plan on in-app purchase and treat the link-out as a bonus to recheck before launch.</td></tr>
+          <tr><th scope="row">Google Play Billing, subscription</th><td class="num">15%</td><td>The default on Android.</td></tr>
+          <tr><th scope="row">Google, US alternative billing or external link</th><td class="num">10% for subscriptions, 20% for other digital items</td><td>Google began charging these from 1 October 2026. External links also carry a per-install fee.</td></tr>
+          <tr><th scope="row">Your own web checkout</th><td class="num">About 3% card processing <span class="chip ok">cheapest</span></td><td>For the web app. No store fees, but also no store to be found in.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="test">
+    <h2 id="test">What to test on real iPhones first</h2>
+    <p class="note">I could not test this from here. This Mac has Xcode's command-line tools but not Xcode itself, so there is no iPhone simulator, and a simulator would not show real memory and heat limits anyway. These checks need the oldest iPhone you want to support.</p>
+    <ul class="checks">
+      <li><span>Export a 15-second 1080p video. Note how long it takes, whether the phone gets hot, and whether the page reloads. iOS closes web pages that use too much memory.</span></li>
+      <li><span>Switch to another app during an export. iOS pauses pages in the background, so the export will need to ask people to keep the app open.</span></li>
+      <li><span>Check that text in the exported video uses the right fonts.</span></li>
+      <li><span>Add HEIC photos straight from the camera roll.</span></li>
+      <li><span>Share the finished MP4 to Instagram from the share sheet. This works from a web app on both platforms already.</span></li>
+      <li><span>Add it to the Home Screen and open it again a week later. Safari can clear a website's saved data after seven days without a visit, but apps added to the Home Screen keep theirs. That is a good reason to nudge iPhone users to install it.</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="decide">
+    <h2 id="decide">Decisions for you</h2>
+    <ol class="steps">
+      <li><div><span class="what">Web first, or stores at launch?</span>I would go web first. It takes days rather than weeks and tests everything else.</div></li>
+      <li><div><span class="what">What exactly is Pro, and what does it cost?</span>Monthly and yearly prices, and which templates, lengths and export sizes it unlocks.</div></li>
+      <li><div><span class="what">When does sign-in happen?</span>At first launch, or only when someone subscribes. Later is friendlier and keeps the free app account-free.</div></li>
+    </ol>
+  </section>
+
+  <hr>
+
+  <section class="sources" aria-labelledby="src">
+    <span class="eyebrow" id="src">Sources</span>
+    <ul>
+      <li><a href="https://caniuse.com/webcodecs">Can I use: WebCodecs API</a> (Safari and iOS version support)</li>
+      <li><a href="https://techcrunch.com/2026/04/06/apple-epic-games-lawsuit-supreme-court-appeal-app-store-commission/">TechCrunch, 6 April 2026: Supreme Court to hear Apple's appeal</a></li>
+      <li><a href="https://thenextweb.com/news/supreme-court-apple-epic-contempt-stay-denial">The Next Web, 6 May 2026: stay denied</a></li>
+      <li><a href="https://support.google.com/googleplay/android-developer/answer/15582165?hl=en">Google Play Console Help: US external links and alternative billing</a></li>
+      <li><a href="https://foxdata.com/en/blogs/google-play-store-opens-external-billing-fees-drop-to-10-starting-june-30-2026/">FoxData: Google Play external billing fees</a></li>
+    </ul>
+  </section>
+</main>
+
+</body></html>

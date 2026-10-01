@@ -315,8 +315,30 @@ function layerExtent(layer: Layer, measure: TextMeasureContext): Extent | null {
       };
     }
 
+    case 'group': {
+      /*
+       * A group has no box of its own — its children are positioned in its
+       * space, about its origin. When a group stands for an element (D-090),
+       * the handles go round its first child that has a size, at that child's
+       * resting place: for a photo that breaks apart as it leaves, that is the
+       * photo before it breaks.
+       */
+      for (const child of layer.children) {
+        const inner = layerExtent(child, measure);
+        if (!inner) continue;
+        const rest = resolveProps(child.tracks, 0, createProps());
+        return {
+          size: inner.size,
+          offset: {
+            x: rest.x + inner.offset.x * rest.scaleX,
+            y: rest.y + inner.offset.y * rest.scaleY,
+          },
+        };
+      }
+      return null;
+    }
+
     case 'gradient':
-    case 'group':
       return null;
   }
 }
@@ -369,6 +391,18 @@ export function slotBoxes(
     // reflection, say. They all move together, but only the first gets the
     // handles, and it is the one the template drew first.
     if (seen.has(key)) continue;
+
+    /*
+     * Only what is on screen now.
+     *
+     * A layer outside its own time window draws nothing, so it must not be
+     * clickable either. Templates that show photographs one after another put
+     * them all in the same place — Card Stack, Flip Cards, every Soft Pop reel
+     * — and without this a click on the photograph you can see selected one
+     * you could not. Skipped *before* `seen`, so the same slot's visible layer
+     * still gets the handles.
+     */
+    if (parent.timeMs < layer.startMs || parent.timeMs >= layer.endMs) continue;
 
     const extent = layerExtent(layer, measure);
     if (extent === null) continue;
@@ -467,6 +501,8 @@ function* flatten(
   for (const layer of layers) {
     yield { layer, parent };
     if (layer.type !== 'group' && layer.type !== 'mask') continue;
+    // A container that is not drawn now draws none of its children either.
+    if (parent.timeMs < layer.startMs || parent.timeMs >= layer.endMs) continue;
 
     const localMs = Math.max(0, parent.timeMs - layer.startMs);
     const own = resolveProps(layer.tracks, localMs, createProps());

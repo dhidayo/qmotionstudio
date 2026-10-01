@@ -26,8 +26,15 @@ export function slotKey(slot: SlotRef): SlotKey {
 
 /** The slot a drawable belongs to, or null if the template did not tag it. */
 export function slotOf(layer: Layer): SlotRef | null {
-  if (layer.type === 'image' || layer.type === 'text') return layer.props.slot ?? null;
-  return null;
+  switch (layer.type) {
+    case 'image':
+    case 'text':
+    case 'group':
+    case 'mask':
+      return layer.props.slot ?? null;
+    default:
+      return null;
+  }
 }
 
 /**
@@ -117,20 +124,28 @@ function applyToLayer(
   transforms: Readonly<Record<SlotKey, SlotTransform>>,
   design: Size,
 ): Layer {
-  if (layer.type === 'group' || layer.type === 'mask') {
+  /*
+   * A container is a coordinate space, so a nudge applied to its tracks moves
+   * everything in it together — which is exactly right when the container is
+   * the element, and why a tagged one takes the nudge itself rather than
+   * passing it down (D-090). Children are still walked, for the ordinary case
+   * of an untagged group holding tagged drawables.
+   */
+  const walked = ((): Layer => {
+    if (layer.type !== 'group' && layer.type !== 'mask') return layer;
     const children = applySlotTransforms(layer.children, transforms, design);
     return children === layer.children ? layer : { ...layer, children };
-  }
+  })();
 
-  const slot = slotOf(layer);
-  if (!slot) return layer;
+  const slot = slotOf(walked);
+  if (!slot) return walked;
 
   const transform = transforms[slotKey(slot)];
   // `z` is handled by `restack`, not here — a layer that has only been
   // restacked needs no new tracks.
-  if (!transform || isIdentity(transform)) return layer;
+  if (!transform || isIdentity(transform)) return walked;
 
-  return { ...layer, tracks: nudgeTracks(layer.tracks, transform, design) };
+  return { ...walked, tracks: nudgeTracks(walked.tracks, transform, design) };
 }
 
 function isIdentity(t: SlotTransform): boolean {

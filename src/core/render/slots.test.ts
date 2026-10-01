@@ -356,3 +356,47 @@ describe('a keyframed nudge', () => {
     expect(nudgeAt(t, 500).offsetX).toBeLessThan(0.8);
   });
 });
+
+describe('a container that stands for an element (D-090)', () => {
+  /*
+   * A photo that breaks into pieces as it leaves is still one photo. When
+   * someone has dragged it, the pieces have to appear where it was dragged to,
+   * so the nudge goes on the container that holds them — once, in the scene's
+   * own space — and not on each piece.
+   */
+  const piece = (id: string, x: number): Layer => ({
+    id,
+    type: 'shape',
+    startMs: 0,
+    endMs: 4_000,
+    tracks: { x: [{ t: 0, v: x, ease: 'linear' }] },
+    props: { shape: 'rect', w: 10, h: 10, fill: colorFill('#000000') },
+  });
+
+  const tagged = (): Layer => ({
+    id: 'card',
+    type: 'group',
+    startMs: 0,
+    endMs: 4_000,
+    tracks: { x: [{ t: 0, v: 500, ease: 'linear' }], y: [{ t: 0, v: 800, ease: 'linear' }] },
+    props: { slot: { kind: 'photo', index: 0 } },
+    children: [piece('a', -20), piece('b', 20)],
+  });
+
+  it('is found by its slot like any drawable', () => {
+    expect(slotOf(tagged())).toEqual({ kind: 'photo', index: 0 });
+  });
+
+  it('takes the nudge on its own tracks', () => {
+    const [out] = applySlotTransforms([tagged()], { 'photo:0': nudge({ offsetX: 0.1 }) }, design);
+    if (!out) throw new Error('no layer');
+    expect(at(out, 0).x).toBeCloseTo(500 + 0.1 * design.w, 6);
+  });
+
+  it('leaves the pieces where they are inside it, so they move exactly once', () => {
+    const before = tagged();
+    const [out] = applySlotTransforms([before], { 'photo:0': nudge({ offsetX: 0.1 }) }, design);
+    if (out?.type !== 'group' || before.type !== 'group') throw new Error('not a group');
+    expect(out.children).toBe(before.children);
+  });
+});

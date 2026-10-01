@@ -50,7 +50,7 @@ export type TemplateSummary = {
 };
 
 export const CATEGORIES: readonly string[] = [
-  'Story Ads', 'Depth Stage', 'Angle Stage', 'Kinetic Type', 'Split Frame',
+  'Story Ads', 'Soft Pop', 'Depth Stage', 'Angle Stage', 'Kinetic Type', 'Split Frame',
 ];
 
 export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
@@ -124,6 +124,106 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     blurb: 'Six beats of evidence: the claim, the number, the detail, the voice.',
     // Inside the opening statement, before the first cut.
     posterAtMs: 1_800,
+  },
+  {
+    id: 'soft-showcase',
+    name: 'Soft Showcase',
+    category: 'Story Ads',
+    kind: 'ad',
+    tier: 'pro',
+    isNew: true,
+    supportedAspects: ['9:16', '4:5', '1:1', '4:3', '16:9'],
+    photoSlots: { min: 1, max: 3 },
+    sceneCount: 5,
+    durationMs: 24_000,
+    blurb: 'A calm product ad: the range drifts and lifts, a customer speaks, then the offer.',
+    // In the opening beat, once the first photo has come into focus. Timed for the 10s scene a
+    // `?template=` link opens, which is what `npm run thumbs` photographs.
+    posterAtMs: 1_250,
+  },
+  {
+    id: 'pop-scatter',
+    name: 'Scatter',
+    category: 'Soft Pop',
+    kind: 'scene',
+    tier: 'free',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 2, max: 8 },
+    blurb: 'Each photo drifts apart in soft pieces as the next settles beneath.',
+    // Mid-scatter, so the card shows the exit rather than a still photo. Timed for the 10s scene a
+    // `?template=` link opens, which is what `npm run thumbs` photographs.
+    posterAtMs: 1_850,
+  },
+  {
+    id: 'pop-blowout',
+    name: 'Blowout',
+    category: 'Soft Pop',
+    kind: 'scene',
+    tier: 'pro',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 2, max: 8 },
+    blurb: 'Each photo is lifted away in fine pieces on a passing breeze.',
+    // Mid-sweep: part of the photo still whole, part carried off. Timed for the 10s scene a
+    // `?template=` link opens, which is what `npm run thumbs` photographs.
+    posterAtMs: 1_800,
+  },
+  {
+    id: 'pop-fizzle',
+    name: 'Fizzle',
+    category: 'Soft Pop',
+    kind: 'scene',
+    tier: 'pro',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 2, max: 8 },
+    blurb: 'Each photo softens and fades as points of light rise from it.',
+    // Half dissolved, with the motes at their brightest. Timed for the 10s scene a
+    // `?template=` link opens, which is what `npm run thumbs` photographs.
+    posterAtMs: 1_950,
+  },
+  {
+    id: 'pop-flip',
+    name: 'Flip Out',
+    category: 'Soft Pop',
+    kind: 'scene',
+    tier: 'free',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 2, max: 8 },
+    blurb: 'Each photo turns away like an album page, uncovering the next.',
+    // Half-way through the turn, with the next photo showing beneath. Timed for the 10s scene a
+    // `?template=` link opens, which is what `npm run thumbs` photographs.
+    posterAtMs: 1_900,
+  },
+  {
+    id: 'pop-float',
+    name: 'Float Away',
+    category: 'Soft Pop',
+    kind: 'scene',
+    tier: 'free',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 2, max: 8 },
+    blurb: 'Each photo drifts up and away as the next rises into place.',
+    // Both photos in the air at once, passing in the same direction. Timed for the 10s scene a
+    // `?template=` link opens, which is what `npm run thumbs` photographs.
+    posterAtMs: 2_000,
+  },
+  {
+    id: 'pop-dream',
+    name: 'Dream Fade',
+    category: 'Soft Pop',
+    kind: 'scene',
+    tier: 'free',
+    isNew: true,
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 2, max: 8 },
+    blurb: 'Full-frame photos that ease back and dissolve through soft focus.',
+    // The first photo sharp and settled, before the first hand-over. Timed for the 10s scene a
+    // `?template=` link opens, which is what `npm run thumbs` photographs.
+    posterAtMs: 1_250,
   },
   {
     id: 'depth-parallax',

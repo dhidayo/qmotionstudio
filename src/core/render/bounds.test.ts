@@ -494,3 +494,101 @@ describe('a nudge on an element that starts partway through', () => {
     expect(box?.box.cx).toBeCloseTo(100 + 0.125 * frame.w, 6);
   });
 });
+
+describe('a group that stands for an element (D-090)', () => {
+  /*
+   * A group has no box of its own. When it carries a slot, the handles go round
+   * its first child with a size, at that child's resting place.
+   */
+  it('takes its box from its first measurable child', () => {
+    const group: Layer = {
+      id: 'card',
+      type: 'group',
+      startMs: 0,
+      endMs: 4_000,
+      tracks: { x: [{ t: 0, v: 400, ease: 'linear' }], y: [{ t: 0, v: 600, ease: 'linear' }] },
+      props: { slot: { kind: 'photo', index: 0 } },
+      children: [
+        {
+          id: 'shadow',
+          type: 'shape',
+          startMs: 0,
+          endMs: 4_000,
+          tracks: {},
+          props: { shape: 'rect', w: 300, h: 400, fill: colorFill('#000000') },
+        },
+      ],
+    };
+    const drawn: DrawnScene = { sceneId: 's1', layers: [group], design: projectDesign('1:1') };
+
+    const [box] = slotBoxes(drawn, 0, {}, '1:1', measure);
+    expect(box?.box.cx).toBeCloseTo(400, 6);
+    expect(box?.box.cy).toBeCloseTo(600, 6);
+    expect(box?.box.w).toBeCloseTo(300, 6);
+    expect(box?.box.h).toBeCloseTo(400, 6);
+  });
+
+  it('follows a child anchored at an edge, as a page that turns is', () => {
+    const group: Layer = {
+      id: 'card',
+      type: 'group',
+      startMs: 0,
+      endMs: 4_000,
+      tracks: { x: [{ t: 0, v: 400, ease: 'linear' }], y: [{ t: 0, v: 600, ease: 'linear' }] },
+      props: { slot: { kind: 'photo', index: 0 } },
+      children: [
+        {
+          id: 'page',
+          type: 'shape',
+          startMs: 0,
+          endMs: 4_000,
+          anchorX: 0,
+          tracks: { x: [{ t: 0, v: -150, ease: 'linear' }] },
+          props: { shape: 'rect', w: 300, h: 400, fill: colorFill('#000000') },
+        },
+      ],
+    };
+    const drawn: DrawnScene = { sceneId: 's1', layers: [group], design: projectDesign('1:1') };
+
+    const [box] = slotBoxes(drawn, 0, {}, '1:1', measure);
+    // Hinged at its left edge, 150 left of the group's origin: centred on it.
+    expect(box?.box.cx).toBeCloseTo(400, 6);
+  });
+});
+
+describe('only what is on screen gets handles (D-091)', () => {
+  /*
+   * Templates that show photographs one after another put them all in the
+   * same place. A box for a layer that is not drawn right now is a click
+   * target for something nobody can see.
+   */
+  const at = (id: string, index: number, startMs: number, endMs: number, x: number): Layer => ({
+    id,
+    type: 'image',
+    startMs,
+    endMs,
+    tracks: { x: [{ t: 0, v: x, ease: 'linear' }], y: [{ t: 0, v: 500, ease: 'linear' }] },
+    props: { mediaId: 'm', slot: { kind: 'photo', index }, w: 300, h: 300, fit: 'cover' },
+  });
+  const drawn = (layers: readonly Layer[]): DrawnScene => ({ sceneId: 's1', layers, design: projectDesign('1:1') });
+
+  it('gives no box to a layer outside its own time window', () => {
+    const boxes = slotBoxes(drawn([at('a', 0, 0, 1_000, 300), at('b', 1, 1_000, 2_000, 300)]), 1_500, {}, '1:1', measure);
+    expect(boxes.map((b) => b.key)).toEqual(['photo:1']);
+  });
+
+  it('still finds the visible layer when an invisible one of the same slot came first', () => {
+    const boxes = slotBoxes(drawn([at('early', 0, 0, 1_000, 100), at('late', 0, 1_000, 2_000, 700)]), 1_500, {}, '1:1', measure);
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]?.box.cx).toBeCloseTo(700, 6);
+  });
+
+  it('hides everything inside a container that is off screen', () => {
+    const group: Layer = {
+      id: 'g', type: 'group', startMs: 0, endMs: 1_000, tracks: {}, props: {},
+      children: [at('inner', 2, 0, 5_000, 400)],
+    };
+    expect(slotBoxes(drawn([group]), 1_500, {}, '1:1', measure)).toHaveLength(0);
+  });
+});
+
