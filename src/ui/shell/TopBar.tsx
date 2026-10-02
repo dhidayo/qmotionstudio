@@ -1,6 +1,6 @@
 import { ASPECTS, type Aspect } from '@/core/types';
 import { useEditor } from '@/state/store';
-import { setTier, useEntitlements } from '@/entitlements';
+import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import type { SaveState } from '@/ui/persist/saveState';
 
 export function TopBar(): React.JSX.Element {
@@ -74,16 +74,27 @@ export function TopBar(): React.JSX.Element {
           * all — cannot be reached, let alone tested. The upsell UI and the
           * free-tier watermark remain M7; this is only the switch.
           */}
-        <button
-          type="button"
-          onClick={() => { setTier(tier === 'pro' ? 'free' : 'pro'); }}
-          title={`Development toggle — currently ${tier}. Click for ${tier === 'pro' ? 'free' : 'pro'}.`}
-          aria-label={`Tier: ${tier}. Switch to ${tier === 'pro' ? 'free' : 'pro'}.`}
-          className="rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
-          style={{ background: 'var(--c-pro-soft)', color: 'var(--c-pro)' }}
-        >
-          {tier}
-        </button>
+        {TIER_SWITCHABLE ? (
+          <button
+            type="button"
+            onClick={() => { setTier(tier === 'pro' ? 'free' : 'pro'); }}
+            title={`Development toggle — currently ${tier}. Click for ${tier === 'pro' ? 'free' : 'pro'}.`}
+            aria-label={`Tier: ${tier}. Switch to ${tier === 'pro' ? 'free' : 'pro'}.`}
+            className="rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            style={{ background: 'var(--c-pro-soft)', color: 'var(--c-pro)' }}
+          >
+            {tier}
+          </button>
+        ) : (
+          // The plan, stated. Not a control: there is nothing to switch to yet.
+          <span
+            title="Pro plans are coming soon"
+            className="rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+            style={{ background: 'var(--c-pro-soft)', color: 'var(--c-pro)' }}
+          >
+            {tier}
+          </span>
+        )}
         <button
           type="button"
           onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); }}

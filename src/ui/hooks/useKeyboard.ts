@@ -24,6 +24,14 @@ export function useKeyboard(clock: PreviewClock, options: { onExport: () => void
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      /*
+       * Something closer to the key already handled it — the selection box
+       * nudging its element with an arrow, say. Acting as well made every
+       * nudge also step the playhead, so on an element with motion each press
+       * edited a pose at a different moment.
+       */
+      if (event.defaultPrevented) return;
+
       const target = event.target;
       const typing =
         target instanceof HTMLElement &&

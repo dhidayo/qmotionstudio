@@ -11,7 +11,7 @@ import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
 import { spanOf } from '@/document/select/motion';
 import { MotionBar } from './MotionBar';
 import { useEditor } from '@/state/store';
-import { setTier, useEntitlements } from '@/entitlements';
+import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { useUpload, AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE } from '@/ui/media/useUpload';
 import { capturePointer } from './pointerCapture';
@@ -409,14 +409,18 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
         {proNote && !limits.customMedia && (
           <span className="flex items-center gap-1.5 text-[10px] text-ink-muted">
             Video overlays are Pro.
-            <button
-              type="button"
-              onClick={() => { setTier('pro'); setProNote(false); }}
-              className="rounded-md border px-1.5 py-0.5 text-[10px]"
-              style={{ borderColor: 'var(--c-pro)', color: 'var(--c-pro)' }}
-            >
-              Switch to Pro ({tier === 'free' ? 'dev' : 'on'})
-            </button>
+            {TIER_SWITCHABLE ? (
+              <button
+                type="button"
+                onClick={() => { setTier('pro'); setProNote(false); }}
+                className="rounded-md border px-1.5 py-0.5 text-[10px]"
+                style={{ borderColor: 'var(--c-pro)', color: 'var(--c-pro)' }}
+              >
+                Switch to Pro ({tier === 'free' ? 'dev' : 'on'})
+              </button>
+            ) : (
+              <span>Pro plans are coming soon.</span>
+            )}
           </span>
         )}
 

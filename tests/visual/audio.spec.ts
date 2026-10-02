@@ -111,6 +111,7 @@ test.describe('music (§10)', () => {
   });
 
   test('the audio clock masters the preview (§10) @perf', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     // ?frozen parks the transport, so Play is available to click — and a real
     // click is the user gesture an AudioContext needs before it will resume.
     await page.goto('/?template=quick-pitch&aspect=9:16&frozen=0');
@@ -310,6 +311,7 @@ test.describe('a track longer than the video (§10)', () => {
 
 test.describe('music follows the timeline (§10)', () => {
   test('the audio loops with the video instead of running on past it', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     /*
      * The bug this exists for. Web Audio sources play once, so the picture
      * looped and the music did not — and because the clock is *mastered* by
@@ -351,6 +353,7 @@ test.describe('music follows the timeline (§10)', () => {
   });
 
   test('a clip placed later starts later, not immediately', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     await page.goto('/?template=quick-pitch&aspect=9:16&frozen=0');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(2_000);
@@ -401,6 +404,7 @@ test.describe('the transport belongs to the user (§10)', () => {
     });
 
   test('a paused preview stays paused when music changes the length', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     // No ?frozen: the editor opens playing, as a user finds it.
     await page.goto('/?template=quick-pitch&aspect=9:16');
     await page.waitForSelector('canvas');
@@ -417,6 +421,7 @@ test.describe('the transport belongs to the user (§10)', () => {
   });
 
   test('a playing preview keeps playing when music changes the length', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     /*
      * The mirror image, and the one that made the clock test flaky rather than
      * failing: a Motion Ad expands asynchronously, so its duration can land
@@ -510,6 +515,7 @@ test.describe('auditioning the whole track (§10)', () => {
   });
 
   test('music past the end of the video is still audible', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     await page.goto('/?template=quick-pitch&aspect=9:16&frozen=25000');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(2_000);

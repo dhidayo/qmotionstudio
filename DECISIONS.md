@@ -2258,3 +2258,66 @@ shade, which is what the eye expects under something lifting away.
 `Soft Showcase` strings the family into a product ad, with every hand-over a
 crossfade of the same length: the variety is in how each beat's photographs
 leave, not in the cuts between them.
+
+## D-093 — the tier switch does not ship
+
+v1 has no payments (§12), so the only road to Pro was a switch: the FREE badge
+in the top bar, "Go Pro" in the duration upsell, and "Switch to Pro" beside the
+video-overlay note. The spec meant it as a developer's tool, and it shipped in
+the production build exactly as written — anyone could make themselves Pro with
+one click, which made every Pro limit decoration.
+
+`TIER_SWITCHABLE` is on in development and off in a production build unless
+that build is made with `VITE_TIER_TOGGLE=1` (a private staging copy). In the
+public build the badge is a label, the upsells say Pro is coming, and a tier
+left in storage by a dev session — or typed in by hand — is ignored.
+
+When subscriptions arrive, `TIER_SWITCHABLE` and `setTier` are what they
+replace, still inside `src/entitlements` as §12 requires.
+
+## D-094 — host configuration is generated, and tested
+
+`deploy/headers.ts` defines the security policy and caching rules once. The
+build writes them as `_headers` (Cloudflare Pages) and `.htaccess` (Apache, and
+so cPanel), and `vite preview` sends the same headers — so `npm run e2e:prod`
+runs the whole suite under the policy users will actually get.
+
+The Content Security Policy was reasoned from what the bundle does rather than
+copied: WebAssembly for the HEIC decoder and AAC encoder (`'wasm-unsafe-eval'`,
+not the broader `'unsafe-eval'`, since nothing uses eval), `blob:` workers for
+Mediabunny's helpers, inline style attributes for React. No third-party origin
+appears anywhere, which is §9's promise stated as policy. The theme script
+moved out of `index.html` into `public/theme-boot.js` so inline scripts can be
+forbidden outright.
+
+The suite had only ever run against the dev server. The production build
+bundles the export worker differently and is the only build with a service
+worker — so until now the thing that ships had never been tested. Both runs now
+exist: `npm run e2e` and `npm run e2e:prod`.
+
+## D-095 — ask the browser to keep the user's work
+
+Projects and photographs live only on the device. Without asking for
+persistent storage, a browser short of space may clear a site's data, and
+Safari clears that of sites not visited for a week — deleting every project
+without warning. Autosave now asks once, after the first save succeeds. Most
+browsers decide silently from usage (an installed app is usually granted it);
+Firefox asks. Refusal is logged, not treated as an error.
+
+## D-096 — arrow keys nudge what you clicked
+
+The selection box's label says "Arrow keys move it", and they did not. Clicking
+an element never gave its box keyboard focus, so the arrows went to the global
+shortcuts and stepped the playhead while the element stayed put — and on an
+element with motion, each press edited a pose at a different moment.
+
+Two fixes, both needed. The box takes focus on pointer *up*: on pointer down,
+the browser's own mousedown follows and moves focus to the non-focusable
+overlay, so a focus set then is lost — it only appeared to work in the dev
+build because React scheduled it later there. And the global shortcuts now step
+back when something closer has already handled the key.
+
+The first version of the test passed while the bug was plain to see, twice:
+`?frozen` parks the transport, and on a drifting template stepping the playhead
+moves the photo by itself. It now uses a still template without `?frozen`, and
+fails against either fix reverted.

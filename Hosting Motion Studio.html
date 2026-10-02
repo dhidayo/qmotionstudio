@@ -1,0 +1,237 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Hosting Motion Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+  /* Layout: one reading column; a verdict panel up top; tables and code scroll inside their own frames. */
+  :root {
+    --bg: #f5f6f9;
+    --surface: #ffffff;
+    --ink: #14161d;
+    --muted: #596071;
+    --line: #dde1e9;
+    --accent: #4f43e0;
+    --accent-soft: #ecebfd;
+    --ok: #1d7a4c;
+    --ok-soft: #e4f4ec;
+    --warn: #9a5b00;
+    --warn-soft: #fbf0dc;
+    --no: #b3261e;
+    --no-soft: #fbe7e5;
+    --code-bg: #f0f1f6;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101219; --surface: #171a23; --ink: #e8eaf1; --muted: #9aa1b3; --line: #2a2f3c;
+      --accent: #8d84ff; --accent-soft: #24224a; --ok: #5fcf95; --ok-soft: #15291f;
+      --warn: #f0b45a; --warn-soft: #2d2313; --no: #ff8a80; --no-soft: #2e1716; --code-bg: #1d2130; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101219; --surface: #171a23; --ink: #e8eaf1; --muted: #9aa1b3; --line: #2a2f3c;
+    --accent: #8d84ff; --accent-soft: #24224a; --ok: #5fcf95; --ok-soft: #15291f;
+    --warn: #f0b45a; --warn-soft: #2d2313; --no: #ff8a80; --no-soft: #2e1716; --code-bg: #1d2130; color-scheme: dark;
+  }
+
+  body { background: var(--bg); color: var(--ink); font: 400 17px/1.62 var(--body); }
+  .page { max-width: 780px; margin: 0 auto; padding-inline: 20px; padding-block: 48px 72px; display: grid; gap: 44px; }
+  h1, h2, h3 { font-family: var(--display); line-height: 1.14; text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+  h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 700; }
+  h2 { font-size: 24px; font-weight: 600; }
+  h3 { font-size: 18px; font-weight: 600; }
+  p { margin: 0; max-width: 68ch; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  code { font: 500 0.86em var(--mono); background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  section { display: grid; gap: 16px; min-width: 0; }
+  .eyebrow { font: 500 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  header { display: grid; gap: 14px; }
+  .lede { font-size: 20px; color: var(--muted); }
+
+  .verdict { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; display: grid; gap: 14px; }
+  .verdict ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .verdict li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; }
+  .verdict li::before { content: ""; width: 8px; height: 8px; margin-top: 9px; transform: rotate(45deg); background: var(--accent); border-radius: 1px; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 15px; line-height: 1.45; }
+  th, td { text-align: left; vertical-align: top; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  tr:last-child td, tr:last-child th { border-bottom: 0; }
+  thead th { font: 500 11px/1.3 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); background: color-mix(in srgb, var(--surface) 60%, var(--bg)); }
+  tbody th { font-weight: 600; width: 24%; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .chip { display: inline-block; font: 500 10.5px/1 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 5px 7px; border-radius: 99px; white-space: nowrap; }
+  .chip.ok { color: var(--ok); background: var(--ok-soft); }
+  .chip.warn { color: var(--warn); background: var(--warn-soft); }
+  .chip.no { color: var(--no); background: var(--no-soft); }
+
+  ol.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 16px; }
+  ol.steps > li { counter-increment: step; display: grid; grid-template-columns: 32px 1fr; gap: 12px; min-width: 0; }
+  ol.steps > li::before { content: counter(step); font: 600 14px/32px var(--display); text-align: center; width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid var(--accent); color: var(--accent); }
+  ol.steps > li > div { min-width: 0; display: grid; gap: 6px; }
+  ol.steps .what { font-weight: 600; }
+
+  .route { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; display: grid; gap: 16px; }
+  .route.pick { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .route-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+
+  ul.plain { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 68ch; }
+  .note { border-left: 3px solid var(--warn); background: var(--warn-soft); padding: 14px 16px; border-radius: 0 8px 8px 0; font-size: 15.5px; max-width: 68ch; }
+  .stack { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font: 500 13px/1 var(--mono); }
+  .stack span.node { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .stack span.arrow { color: var(--muted); }
+  .sources { font-size: 14px; color: var(--muted); }
+  .sources ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 0; }
+</style>
+
+<main class="page">
+  <header>
+    <span class="eyebrow">Advice · 2 October 2026</span>
+    <h1>How to host and publish Motion Studio</h1>
+    <p class="lede">The app needs much less than you might expect today, and much more once accounts and posting arrive. This covers both.</p>
+  </header>
+
+  <section class="verdict" aria-labelledby="short">
+    <h2 id="short">The short answer</h2>
+    <ul>
+      <li><span><strong>Today you need only a domain and a static host with HTTPS.</strong> The finished app is 156 files, 12 MB in total, with no server and no database. Editing, saving and exporting all happen in the user's browser.</span></li>
+      <li><span><strong>cPanel hosting is enough, but it is not what I'd choose.</strong> Every update becomes a manual upload, and someone who opens the app halfway through an upload can get a broken mix of old and new files.</span></li>
+      <li><span><strong>My recommendation is GitHub plus Cloudflare Pages, with your domain staying at Namecheap.</strong> It is free, allowed for a business, has a fast global network, renews HTTPS by itself, and publishes automatically every time the code changes.</span></li>
+      <li><span><strong>Two well-known free hosts don't allow a paid product.</strong> GitHub Pages forbids commercial sites, and Vercel's free plan is for personal, non-commercial use.</span></li>
+      <li><span><strong>A database only comes with accounts, subscriptions and social posting.</strong> cPanel's MySQL and PHP are the wrong tools for that. Use a managed backend; I recommend Supabase.</span></li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="needs">
+    <h2 id="needs">What any host must do for this app</h2>
+    <p>These come from the actual production build rather than general advice.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Requirement</th><th scope="col">Why</th><th scope="col">Cloudflare Pages</th><th scope="col">cPanel</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">HTTPS</th><td>Browsers only allow the video encoder and offline mode on secure pages. Without it, export simply does not exist.</td><td><span class="chip ok">automatic</span></td><td><span class="chip ok">AutoSSL</span> switch on</td></tr>
+          <tr><th scope="row">Correct file types</th><td>The app ships <code>.webmanifest</code>, <code>.webm</code>, <code>.woff2</code> and module workers. A wrong type breaks install, previews or export.</td><td><span class="chip ok">automatic</span></td><td><span class="chip warn">needs .htaccess</span></td></tr>
+          <tr><th scope="row">Short caching on two files</th><td><code>index.html</code> and <code>sw.js</code> must never be cached for long, or people keep the old version for days after you publish an update.</td><td><span class="chip warn">needs _headers</span></td><td><span class="chip warn">needs .htaccess</span></td></tr>
+          <tr><th scope="row">Long caching on the rest</th><td>Everything in <code>/assets/</code> has a unique name per build, so it can be cached for a year. That is what makes return visits instant.</td><td><span class="chip warn">needs _headers</span></td><td><span class="chip warn">needs .htaccess</span></td></tr>
+          <tr><th scope="row">Rewrite rules</th><td>None needed. The app is one page and uses only <code>?</code> parameters.</td><td>—</td><td>—</td></tr>
+          <tr><th scope="row">Special isolation headers</th><td>None needed. The app does not use the features that require them.</td><td>—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>I'll add both configuration files to the project as part of the MVP review, so whichever host you choose is a matter of switching it on.</p>
+  </section>
+
+  <section aria-labelledby="routes">
+    <h2 id="routes">Your options</h2>
+
+    <div class="route pick">
+      <div class="route-head"><h3>A. GitHub + Cloudflare Pages + your Namecheap domain</h3><span class="chip ok">recommended</span></div>
+      <p>Cost: <strong>$0 a month</strong>, plus the domain at roughly $10–15 a year. Unlimited bandwidth, up to 500 publishes a month, and a 25 MB limit per file, against our largest of 2 MB.</p>
+      <ol class="steps">
+        <li><div><span class="what">Put the code on GitHub, as a private repository</span>The project is already tracked with git, so this is a single push.</div></li>
+        <li><div><span class="what">Create a free Cloudflare account and connect the repository</span>Workers &amp; Pages, then Create, then Pages, then connect to GitHub and pick the repository.</div></li>
+        <li><div><span class="what">Enter the build settings</span>Framework preset <code>Vite</code>, build command <code>npm run build</code>, output folder <code>dist</code>, and an environment variable <code>NODE_VERSION</code> set to <code>22</code>.</div></li>
+        <li><div><span class="what">Connect your domain</span>In the Pages project, open Custom domains and add yours. The simplest route is to point the domain's nameservers at Cloudflare from your Namecheap dashboard. The domain stays registered with Namecheap and Cloudflare handles DNS for free.</div></li>
+        <li><div><span class="what">Publish by pushing</span>Every change pushed to the main branch goes live in about a minute. Every other branch gets its own private preview address, which is how you test before your users see anything.</div></li>
+      </ol>
+    </div>
+
+    <div class="route">
+      <div class="route-head"><h3>B. cPanel shared hosting (Namecheap, SpeedyConnect or similar)</h3><span class="chip warn">works, with friction</span></div>
+      <p>Cost: whatever your hosting plan costs, often $2–10 a month. Fine for the MVP.</p>
+      <ol class="steps">
+        <li><div><span class="what">Build on your computer</span>Run <code>npm run build</code>. It creates the <code>dist</code> folder.</div></li>
+        <li><div><span class="what">Upload the contents of <code>dist</code> into <code>public_html</code></span>Use cPanel File Manager or FTP. Upload the files inside the folder, not the folder itself, and include the <code>.htaccess</code> I'll provide.</div></li>
+        <li><div><span class="what">Turn on HTTPS</span>Run AutoSSL or Let's Encrypt in cPanel's SSL/TLS section, and redirect all visits to HTTPS (the <code>.htaccess</code> does this).</div></li>
+        <li><div><span class="what">Repeat steps 1 and 2 for every update</span>This is the weak point: it is manual, there are no previews, and a half-finished upload can break the app for anyone who loads it at that moment. Shared hosts also limit file counts and rarely have a global network.</div></li>
+      </ol>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Host</th><th scope="col">Verdict</th><th scope="col">Why</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Cloudflare Pages</th><td><span class="chip ok">yes</span></td><td>Free, allowed for business, fast everywhere, publishes from GitHub.</td></tr>
+          <tr><th scope="row">cPanel shared hosting</th><td><span class="chip warn">works</span></td><td>Fine for static files. Manual updates, no previews, usually no global network.</td></tr>
+          <tr><th scope="row">Vercel Pro</th><td><span class="chip warn">works, paid</span></td><td>$20 per user per month. The free Hobby plan forbids commercial use.</td></tr>
+          <tr><th scope="row">GitHub Pages</th><td><span class="chip no">no</span></td><td>Its terms forbid commercial sites. Use GitHub to store the code, not to host the app.</td></tr>
+          <tr><th scope="row">A VPS or your own server</th><td><span class="chip no">not now</span></td><td>You'd be maintaining a server for an app that doesn't need one.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="later">
+    <h2 id="later">What each roadmap feature will need</h2>
+    <p>None of this is needed for the MVP. It's listed so the hosting choice you make now still fits later. Everything below plugs into the Cloudflare route without moving anything.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Feature</th><th scope="col">Service</th><th scope="col">Starting cost</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Sign-in with Apple, Google and email</th><td>Supabase Auth. Google needs a free Google Cloud project; Apple needs the Apple Developer Program. Email sign-in needs a sending service such as Resend.</td><td class="num">Supabase free tier to build; Apple $99 a year</td></tr>
+          <tr><th scope="row">Profiles, plans, organisations</th><td>Supabase database. The free tier pauses after a week without visits, so production needs the Pro plan.</td><td class="num">$25 a month (Pro)</td></tr>
+          <tr><th scope="row">FREE, PRO, PRO MAX subscriptions</th><td>Stripe on the web, including invoices for organisations. A small function updates the user's plan when Stripe confirms a payment. Add RevenueCat later for the App Store and Google Play.</td><td class="num">About 3% per payment, no monthly fee</td></tr>
+          <tr><th scope="row">Connected social accounts and posting</th><td>A server is required: platform tokens must never live in the browser. Supabase Edge Functions for the logic, a scheduled job for timed and bulk posting, and file storage (Cloudflare R2) to hold each video while it is posted.</td><td class="num">R2 is a few cents per GB stored</td></tr>
+          <tr><th scope="row">Errors and usage</th><td>Sentry for crash reports and Cloudflare Web Analytics for privacy-friendly visits.</td><td class="num">Free tiers</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="stack" aria-label="Recommended stack">
+      <span class="node">Namecheap · domain</span><span class="arrow">→</span>
+      <span class="node">Cloudflare · DNS, hosting, R2</span><span class="arrow">→</span>
+      <span class="node">GitHub · code</span><span class="arrow">→</span>
+      <span class="node">Supabase · accounts, data, functions</span><span class="arrow">→</span>
+      <span class="node">Stripe · subscriptions</span>
+    </div>
+  </section>
+
+  <section aria-labelledby="careful">
+    <h2 id="careful">Three things to plan for before building those features</h2>
+    <ol class="steps">
+      <li><div><span class="what">Posting to social media changes the privacy promise</span>The app currently says nothing leaves your device. To post through Instagram's or TikTok's API, the video has to sit at a public web address their servers can fetch, so it must be uploaded first. The honest promise becomes "nothing leaves your device unless you choose to post it". Delete each file as soon as it has been posted.</div></li>
+      <li><div><span class="what">Every platform must approve your app before it can post for users</span>
+        <ul class="plain">
+          <li><strong>Instagram:</strong> business and creator accounts only, after Meta reviews your app. Each account can publish up to 100 posts through the API in 24 hours.</li>
+          <li><strong>TikTok:</strong> until your app passes TikTok's audit, every post it makes is forced to private and only 5 users can post per day.</li>
+          <li><strong>LinkedIn, YouTube and X:</strong> each has its own approval, quota or paid API tier.</li>
+        </ul>
+        Applying takes weeks. A posting service such as Ayrshare already holds these approvals and sells access monthly, which is the faster way to launch bulk posting. You can build your own connections later.</div></li>
+      <li><div><span class="what">Watermark and PRO MAX rules will run on the user's device</span>Export happens in the browser, so the check for PRO and PRO MAX elements happens there too. That is enough to stop ordinary users. A technical user could get around any check that runs on their own machine, which is normal for apps like this, but it means PRO MAX limits are a deterrent rather than a lock. The only true lock would be rendering on your servers, which costs money for every video.</div></li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="cost">
+    <h2 id="cost">Running costs at each stage</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Stage</th><th scope="col">Monthly</th><th scope="col">What it includes</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">MVP launch</th><td class="num">≈ $1</td><td>Domain only. Hosting on Cloudflare Pages is free.</td></tr>
+          <tr><th scope="row">With accounts and subscriptions</th><td class="num">≈ $35</td><td>Supabase Pro, a share of the Apple Developer fee, and Stripe's cut of each payment.</td></tr>
+          <tr><th scope="row">With social posting</th><td class="num">$35 plus usage</td><td>Video storage while posting, plus either a posting service's monthly plan or any paid API tier you choose (X's, for example).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <section class="sources" aria-labelledby="src">
+    <span class="eyebrow" id="src">Sources</span>
+    <ul>
+      <li><a href="https://developers.cloudflare.com/pages/platform/limits/">Cloudflare Pages limits</a></li>
+      <li><a href="https://conductatlas.com/platform/vercel/vercel-terms-of-service/provision/CA-P-048642/hobby-plan-personal-non-commercial-use-only/">Vercel terms: Hobby is personal, non-commercial use only</a></li>
+      <li><a href="https://makerkit.dev/blog/md/saas/supabase-pricing">Supabase pricing in 2026</a></li>
+      <li><a href="https://developers.tiktok.com/doc/content-sharing-guidelines">TikTok content sharing guidelines</a></li>
+      <li><a href="https://developers.facebook.com/documentation/instagram-platform/content-publishing">Instagram content publishing</a></li>
+    </ul>
+  </section>
+</main>
+
+</body></html>

@@ -52,11 +52,29 @@ export function getLimits(tier: Tier, mode: Mode): Limits {
 
 // ── v1 stub: tier lives in local state with a dev toggle ────────────────────
 
+/**
+ * Whether the tier can be switched from inside the app (D-093).
+ *
+ * v1 has no payments (§12), so the only road to Pro is a switch — a
+ * developer's tool. Shipped, it handed Pro to anyone who clicked the badge in
+ * the top bar or the "Go Pro" button, which made every Pro limit decoration.
+ *
+ * On in development. Off in a production build unless that build is made
+ * with `VITE_TIER_TOGGLE=1`, which is for a private staging copy and for
+ * `npm run e2e:prod` — never for the public site. When real subscriptions
+ * arrive, this and `setTier` are what they replace.
+ */
+export const TIER_SWITCHABLE: boolean =
+  import.meta.env.DEV || import.meta.env.VITE_TIER_TOGGLE === '1';
+
 const TIER_KEY = 'ms.tier';
 let currentTier: Tier = readTier();
 const listeners = new Set<() => void>();
 
 function readTier(): Tier {
+  // A tier left in storage by a development session, or typed in by hand,
+  // must not survive into a build where nobody can choose it.
+  if (!TIER_SWITCHABLE) return 'free';
   try {
     return localStorage.getItem(TIER_KEY) === 'pro' ? 'pro' : 'free';
   } catch {
@@ -69,6 +87,7 @@ export function getTier(): Tier {
 }
 
 export function setTier(tier: Tier): void {
+  if (!TIER_SWITCHABLE) return;
   currentTier = tier;
   try {
     localStorage.setItem(TIER_KEY, tier);

@@ -19,7 +19,8 @@
     "thumbs": "tsx scripts/gen-thumbs.ts",
     "samples": "tsx scripts/gen-samples.ts",
     "fixtures": "tsx scripts/gen-fixtures.ts",
-    "icons": "tsx scripts/gen-icons.ts"
+    "icons": "tsx scripts/gen-icons.ts",
+    "e2e:prod": "PW_PROD=1 playwright test"
   },
   "dependencies": {
     "@mediabunny/aac-encoder": "^1.58.1",

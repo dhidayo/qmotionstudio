@@ -1,5 +1,18 @@
 import { defineConfig, devices } from '@playwright/test';
 
+/*
+ * `PW_PROD=1` runs the suite against the production build instead of the dev
+ * server (`npm run e2e:prod`).
+ *
+ * The dev server and the build are different programs. The export worker is
+ * bundled differently, the service worker only exists in the build, and the
+ * build is what people actually load — so a suite that has only ever seen the
+ * dev server has never tested the thing that ships. Port 4173 so the two can
+ * run side by side.
+ */
+const PROD = process.env['PW_PROD'] === '1';
+const BASE_URL = PROD ? 'http://localhost:4173' : 'http://localhost:5173';
+
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
@@ -7,7 +20,7 @@ export default defineConfig({
   retries: process.env['CI'] ? 2 : 0,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: BASE_URL,
     trace: 'on-first-retry',
   },
   /*
@@ -65,8 +78,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
+    command: PROD ? 'npm run build && npm run preview -- --port 4173 --strictPort' : 'npm run dev',
+    url: BASE_URL,
     reuseExistingServer: !process.env['CI'],
+    timeout: 180_000,
   },
 });

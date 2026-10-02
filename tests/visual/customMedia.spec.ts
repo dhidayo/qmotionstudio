@@ -19,6 +19,8 @@ import {
 test.use({ viewport: { width: 1500, height: 940 } });
 
 test.describe('custom media (§9)', () => {
+  test.skip(process.env['PW_PROD'] === '1', 'Custom media is Pro, reached through the development switch the public build does not have (D-093).');
+
   test('the Pro gate explains itself instead of being a dead button', async ({ page }) => {
     await page.addInitScript(() => { localStorage.setItem('ms.tier', 'free'); });
     await page.goto('/?template=quick-pitch&aspect=9:16');

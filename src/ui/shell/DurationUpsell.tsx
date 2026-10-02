@@ -1,6 +1,6 @@
 import * as actions from '@/document/actions';
 import { totalDurationMs } from '@/document/select/timeline';
-import { setTier, useEntitlements } from '@/entitlements';
+import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import { useEditor } from '@/state/store';
 
 /**
@@ -49,20 +49,23 @@ export function DurationUpsell(): React.JSX.Element | null {
         >
           Keep the first {capSeconds}s
         </button>
-        <button
-          type="button"
-          /*
-           * §12's stub: v1 has no payments, and must not pretend to. The dev
-           * toggle is the whole upgrade path, and saying so is more honest
-           * than a button that opens a checkout that does not exist.
-           */
-          onClick={() => { setTier('pro'); }}
-          title="Development toggle — v1 has no payments (§12)."
-          className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
-          style={{ background: 'var(--c-pro)', color: 'var(--c-panel)' }}
-        >
-          Go Pro
-        </button>
+        {TIER_SWITCHABLE ? (
+          <button
+            type="button"
+            /*
+             * §12's stub: v1 has no payments, and must not pretend to. The dev
+             * toggle is the whole upgrade path in development (D-093).
+             */
+            onClick={() => { setTier('pro'); }}
+            title="Development toggle — v1 has no payments (§12)."
+            className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+            style={{ background: 'var(--c-pro)', color: 'var(--c-panel)' }}
+          >
+            Go Pro
+          </button>
+        ) : (
+          <span style={{ color: 'var(--c-ink-muted)' }}>Pro plans are coming soon.</span>
+        )}
       </div>
     </div>
   );

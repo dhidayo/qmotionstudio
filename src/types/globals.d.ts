@@ -15,4 +15,10 @@ interface WorkerGlobalScope {
   readonly fonts: FontFaceSet;
 }
 
+/** Build-time switches. Read through `src/entitlements` only. */
+interface ImportMetaEnv {
+  /** "1" to allow switching tier inside a production build (D-093). */
+  readonly VITE_TIER_TOGGLE?: string;
+}
+
 export {};

@@ -11,14 +11,9 @@
     <meta name="theme-color" content="#0d0d10" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
     <title>Motion Studio</title>
-    <script>
-      // Applied before first paint so the shell never flashes the wrong theme.
-      try {
-        const stored = localStorage.getItem('ms.theme');
-        const theme = stored ?? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.dataset.theme = theme;
-      } catch { document.documentElement.dataset.theme = 'light'; }
-    </script>
+    <!-- Before first paint, so the shell never flashes the wrong theme. A file
+         rather than inline, so the security policy can forbid inline scripts. -->
+    <script src="/theme-boot.js"></script>
   </head>
   <body>
     <div id="root"></div>

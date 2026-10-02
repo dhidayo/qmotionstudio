@@ -122,6 +122,7 @@ test.describe('M1 — render core', () => {
 
 test.describe('M1 — the render loop', () => {
   test('sustains 60fps on the hand-written scene @perf', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(400);
@@ -135,6 +136,7 @@ test.describe('M1 — the render loop', () => {
   });
 
   test('never calls build() inside the render loop', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     // §16, and the reason §3B exists. build() runs once per (template, inputs,
     // aspect) change; if this count tracks the frame count, the memo key is
     // churning and the 16ms build budget is being paid sixty times a second.
@@ -151,6 +153,7 @@ test.describe('M1 — the render loop', () => {
   });
 
   test('rebuilds exactly once when the aspect changes', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(300);
@@ -164,6 +167,7 @@ test.describe('M1 — the render loop', () => {
   });
 
   test('does not churn the text cache while letter spacing animates', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     // The demo scene animates the subhead's tracking. If the animated value
     // reaches the measurement cache key, every frame is a miss and the whole
     // string is laid out sixty times a second — §6.3's cache defeated exactly
@@ -180,6 +184,7 @@ test.describe('M1 — the render loop', () => {
   });
 
   test('keeps the frame and build budgets of §14 @perf', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     await page.goto('/?scene=demo');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(800);

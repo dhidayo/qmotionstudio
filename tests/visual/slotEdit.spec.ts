@@ -395,3 +395,42 @@ test.describe('a Soft Pop card (D-090, D-091)', () => {
     expect(after.y - before.y).toBeCloseTo(-50, -1);
   });
 });
+
+test.describe('arrow keys on a selected element', () => {
+  /*
+   * Arrows nudge the selection; with nothing selected they step the playhead
+   * a frame. Both handlers listened, and the global one ignored that the
+   * selection had already used the key — so every nudge also moved the
+   * playhead, and on an element with motion each press edited a pose at a
+   * different moment.
+   */
+  test('nudge the element and leave the playhead alone', async ({ page }) => {
+    /*
+     * Not `?frozen`: that mode parks the transport, which hid exactly this —
+     * the test passed under it while the bug was plainly there without it.
+     *
+     * And Split Pair, whose halves are still once they have landed. On a
+     * template that drifts, stepping the playhead moves the photo by itself,
+     * so "the photo moved" passed even when the arrows only stepped time.
+     */
+    await page.goto('/?template=split-pair&aspect=16:9');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_500);
+    await page.getByRole('button', { name: 'Pause' }).click();
+    const canvas = await boxOf(page, 'canvas');
+    await page.mouse.click(canvas.x + canvas.width * 0.25, canvas.y + canvas.height * 0.3);
+    await expect(page.locator(SELECTION)).toBeVisible();
+    const before = centreOf(await boxOf(page));
+    // Read strictly: a missing scrubber must fail the test, not compare
+    // null with null and pass.
+    const scrub = page.getByLabel('Scrub');
+    const timeBefore = Number(await scrub.inputValue());
+
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('ArrowRight');
+
+    const after = centreOf(await boxOf(page));
+    expect(after.x).toBeGreaterThan(before.x);
+    expect(Number(await scrub.inputValue())).toBe(timeBefore);
+  });
+});

@@ -47,6 +47,7 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
       setState('saving');
       void save(latest.current.project, latest.current.media, known.current)
         .then(() => {
+          void askToKeep();
           if (!cancelled) setState('saved');
         })
         .catch((error: unknown) => {
@@ -126,3 +127,33 @@ export function reachableMedia(projects: readonly Project[]): ReadonlySet<string
   }
   return reachable;
 }
+
+let askedToKeep = false;
+
+/**
+ * Asks the browser to keep this site's storage rather than clearing it under
+ * pressure (D-095).
+ *
+ * Projects and photographs live only on this device. Without this request a
+ * browser short of disk space may clear the site's data — and Safari clears
+ * that of sites not visited for a week — which would delete every project
+ * without warning: the worst thing this app can do.
+ *
+ * Asked once, after the first save actually succeeds, so it is tied to there
+ * being something worth keeping. Most browsers decide silently from how the
+ * site is used (an installed app is usually granted it); Firefox asks the
+ * person. Refusal is not an error, so it is logged and nothing more.
+ */
+async function askToKeep(): Promise<void> {
+  if (askedToKeep) return;
+  askedToKeep = true;
+  try {
+    if (typeof navigator === 'undefined' || !('storage' in navigator)) return;
+    if (await navigator.storage.persisted()) return;
+    const granted = await navigator.storage.persist();
+    if (!granted) console.info('Storage may be cleared by the browser under pressure; projects are not guaranteed to persist.');
+  } catch (error: unknown) {
+    console.warn('Could not ask the browser to keep storage.', error);
+  }
+}
+

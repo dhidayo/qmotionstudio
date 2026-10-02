@@ -1,13 +1,47 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
+import { apacheHtaccess, cloudflareHeaders, headersFor } from './deploy/headers';
+
+/**
+ * The host configuration, from one definition (D-094).
+ *
+ * Writes `_headers` for Cloudflare Pages and `.htaccess` for Apache/cPanel into
+ * the build, and sends the same headers from `vite preview` — so
+ * `npm run e2e:prod` runs the whole suite under the real security policy
+ * rather than discovering on launch day that it blocks something.
+ */
+function hostConfig(): Plugin {
+  return {
+    name: 'motion-studio:host-config',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: '_headers', source: cloudflareHeaders() });
+      this.emitFile({ type: 'asset', fileName: '.htaccess', source: apacheHtaccess() });
+    },
+  };
+}
+
+function previewHeaders(): Plugin {
+  return {
+    name: 'motion-studio:preview-headers',
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        for (const [name, value] of Object.entries(headersFor(req.url ?? '/'))) res.setHeader(name, value);
+        next();
+      });
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
+    hostConfig(),
+    previewHeaders(),
     /*
      * §13: "PWA via vite-plugin-pwa, installable, offline-capable".
      *

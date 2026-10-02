@@ -442,6 +442,7 @@ test.describe('a multi-scene ad exports (M5)', () => {
  */
 test.describe('custom media exports (§9)', () => {
   test('the exported file contains the decoded clip', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reaches Pro through the development switch, which the public build does not have (D-093).');
     test.setTimeout(180_000);
 
     await page.addInitScript(() => {

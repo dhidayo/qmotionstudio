@@ -144,6 +144,31 @@ export function CanvasSelection({
   const playheadMs = useEditor((s) => s.playheadMs);
 
   const dragRef = useRef<Drag | null>(null);
+
+  /*
+   * The selection box takes keyboard focus when something is clicked on the
+   * canvas, so the arrow keys its label promises actually reach it.
+   *
+   * Nothing did this. The box is focusable, but a click lands on the overlay
+   * underneath it — which is not — so focus stayed wherever it was and the
+   * arrows went to the global shortcuts instead, stepping the playhead while
+   * the element sat still. It only appeared to work when the browser happened
+   * to render the box under the pointer before the mousedown's own focus
+   * change, which is a race, not a feature.
+   *
+   * Only for selections made *here*. Taking focus when something is chosen
+   * from the timeline or a panel would yank the keyboard away from whatever
+   * the person was using.
+   *
+   * On pointer *up*, never down. The browser's own mousedown runs after
+   * pointerdown and moves focus to whatever was clicked — here the overlay,
+   * which is not focusable, so focus falls to the page body. Focusing during
+   * pointerdown was undone a moment later; it only appeared to work in the
+   * dev build, where React happened to schedule the focus after that
+   * mousedown, and failed in the production build every time.
+   */
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const focusOnRelease = useRef(false);
   const [guides, setGuides] = useState<readonly Guide[]>([]);
   const [hovered, setHovered] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string>('default');
@@ -356,6 +381,7 @@ export function CanvasSelection({
     // resizes the thing it belongs to.
     const handle = handleAt(point);
     if (handle && selected) {
+      focusOnRelease.current = true;
       capturePointer(event.currentTarget, event.pointerId);
       dragRef.current =
         handle === 'rotate'
@@ -370,6 +396,7 @@ export function CanvasSelection({
     }
 
     const target = pick(point);
+    focusOnRelease.current = target !== null;
     select(target);
     if (!target) return;
 
@@ -440,6 +467,10 @@ export function CanvasSelection({
   };
 
   const onPointerUp = (): void => {
+    if (focusOnRelease.current) {
+      focusOnRelease.current = false;
+      boxRef.current?.focus({ preventScroll: true });
+    }
     if (!dragRef.current) return;
     dragRef.current = null;
     setGuides([]);
@@ -527,6 +558,7 @@ export function CanvasSelection({
 
       {selected && (
         <div
+          ref={boxRef}
           role="button"
           tabIndex={0}
           data-selection-box={selected.key}

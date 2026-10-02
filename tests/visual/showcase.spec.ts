@@ -68,6 +68,7 @@ test.describe('library', () => {
   });
 
   test('picking a template changes what renders', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     const before = await readStats(page);
     await page.getByTitle(/full-bleed photo/).click();
     await page.waitForTimeout(900);
@@ -116,6 +117,7 @@ test.describe('inspector', () => {
   });
 
   test('editing text reflects in the render without rebuilding per keystroke', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     await page.getByRole('tab', { name: 'Text' }).click();
     const field = page.getByRole('textbox', { name: 'Headline' });
 
@@ -131,6 +133,7 @@ test.describe('inspector', () => {
   });
 
   test('a palette change repaints without rebuilding (D-006)', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
     await page.getByRole('tab', { name: 'Look' }).click();
     await page.waitForTimeout(200);
 
