@@ -5,6 +5,8 @@ import type { PreviewClock } from '@/core/time/clock';
 import type { Project } from '@/document/types';
 import type { MediaStore } from '@/media/store';
 import { renderParams } from '@/dev/renderParams';
+import { useEditor } from '@/state/store';
+import { NO_ZOOM, useOverlays } from '@/ui/shell/overlays';
 import { usePreviewLoop } from './usePreviewLoop';
 import { CanvasSelection } from './CanvasSelection';
 
@@ -15,9 +17,16 @@ import { CanvasSelection } from './CanvasSelection';
  */
 const MAX_PREVIEW_SHORT_EDGE = 1080;
 
-type Props = { project: Project; clock: PreviewClock; rig: RenderRig; media: MediaStore };
+type Props = {
+  project: Project;
+  clock: PreviewClock;
+  rig: RenderRig;
+  media: MediaStore;
+  /** Room round the picture. A phone has none to spare (D-109). */
+  padding?: number;
+};
 
-export function Artboard({ project, clock, rig, media }: Props): React.JSX.Element {
+export function Artboard({ project, clock, rig, media, padding = 24 }: Props): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -50,13 +59,39 @@ export function Artboard({ project, clock, rig, media }: Props): React.JSX.Eleme
   const backing = renderSizeFor(project.aspect, Math.max(2, Math.round(wanted)));
 
   const drawn = usePreviewLoop(canvas, project, clock, rig, media);
+  // A pinch on a phone zooms the view, never the document (D-110).
+  const zoom = useOverlays((o) => o.viewZoom);
+  const setZoom = useOverlays((o) => o.setViewZoom);
+  const zoomed = zoom.scale !== 1;
 
   return (
-    <div ref={hostRef} className="relative grid h-full w-full place-items-center overflow-hidden p-6">
+    <div
+      ref={hostRef}
+      className="relative grid h-full w-full place-items-center overflow-hidden"
+      style={{ padding }}
+      /*
+       * Pressing the empty stage round the picture puts down whatever was
+       * selected (point 9) — the picture's own edge is not the only "outside".
+       */
+      onPointerDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        const s = useEditor.getState();
+        s.selectOverlay(null);
+        s.selectSlot(null);
+        s.selectLogo(false);
+      }}
+    >
       {display.w > 0 && (
         /* The chrome has to sit exactly over the canvas, so the two share a
            box rather than each being placed against the stage separately. */
-        <div className="relative" style={{ width: `${display.w}px`, height: `${display.h}px` }}>
+        <div
+          className="relative"
+          style={{
+            width: `${display.w}px`,
+            height: `${display.h}px`,
+            ...(zoomed ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`, transformOrigin: '0 0' } : {}),
+          }}
+        >
           <canvas
             ref={setCanvas}
             width={backing.w}
@@ -72,6 +107,17 @@ export function Artboard({ project, clock, rig, media }: Props): React.JSX.Eleme
           />
           <CanvasSelection project={project} drawn={drawn} width={display.w} />
         </div>
+      )}
+      {zoomed && (
+        <button
+          type="button"
+          onClick={() => { setZoom(NO_ZOOM); }}
+          aria-label="Fit the picture to the screen"
+          className="tabular absolute right-2 top-2 rounded-full border border-edge bg-panel px-2.5 py-1 text-[12px] font-semibold"
+          style={{ boxShadow: 'var(--shadow-md)' }}
+        >
+          {Math.round(zoom.scale * 100)}% · Fit
+        </button>
       )}
     </div>
   );

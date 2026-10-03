@@ -366,3 +366,19 @@ test.describe('Lifestyle (D-106)', () => {
     expect(Number(await scrub.getAttribute('max'))).toBe(Math.round(before / 2));
   });
 });
+
+test.describe('picking something stops the preview (D-110)', () => {
+  const playing = (page: Page): Promise<boolean> =>
+    page.evaluate(() => (globalThis as unknown as { __motionStudio: { clock: { playing: () => boolean } } }).__motionStudio.clock.playing());
+
+  test('clicking a clip on the timeline pauses playback where it is', async ({ page }) => {
+    await openAd(page);
+    await addText(page);
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect.poll(() => playing(page)).toBe(true);
+    // Something else selected first, so the click below is a fresh pick.
+    await page.keyboard.press('Escape');
+    await clips(page).first().click();
+    await expect.poll(() => playing(page)).toBe(false);
+  });
+});

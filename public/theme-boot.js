@@ -3,7 +3,9 @@
 // can forbid inline scripts entirely (deploy/headers.ts).
 try {
   var stored = localStorage.getItem('ms.theme');
-  var theme = stored || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  // Light unless someone has chosen dark (D-109): it reads better on phones,
+  // in daylight, and is what most people expect of a creative tool.
+  var theme = stored === 'dark' ? 'dark' : 'light';
   document.documentElement.dataset.theme = theme;
 } catch (error) {
   document.documentElement.dataset.theme = 'light';

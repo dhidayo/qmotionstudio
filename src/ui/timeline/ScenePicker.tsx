@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as actions from '@/document/actions';
 import { createSceneFrom } from '@/document/defaults';
 import { userPhotoIds } from '@/document/select/media';
+import { PlayingPreview, noHover } from '@/ui/library/PlayingPreview';
 import { useEntitlements } from '@/entitlements';
 import { CATEGORIES, posterUrl, previewUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
 import { loadSceneTemplate } from '@/templates/registry';
@@ -123,12 +124,13 @@ export function ScenePicker({
       role="dialog"
       aria-modal="true"
       aria-label={title}
-      className="fixed inset-0 z-50 grid place-items-center p-4"
+      /* A sheet from the bottom on a phone (D-109), a window on a computer. */
+      className="fixed inset-0 z-50 grid items-end sm:place-items-center sm:p-4"
       style={{ background: 'rgb(0 0 0 / 0.45)' }}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <div className="flex max-h-[86vh] w-[880px] max-w-full flex-col rounded-lg border border-edge bg-panel shadow-lg">
-        <div className="flex flex-wrap items-center gap-3 border-b border-edge px-4 py-3">
+      <div className="flex max-h-[88dvh] w-full flex-col rounded-t-2xl border border-edge bg-panel shadow-lg sm:w-[880px] sm:max-w-full sm:rounded-lg">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-[14px] font-semibold">{title}</h2>
             <p className="text-[11px] text-ink-faint">{hint}</p>
@@ -140,7 +142,7 @@ export function ScenePicker({
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder="Search designs"
             aria-label="Search designs"
-            className="w-48 rounded-md border border-edge bg-panel-alt px-2 py-1 text-[12px] focus:border-accent focus:outline-none"
+            className="order-last w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
           />
           <button
             type="button"
@@ -187,7 +189,7 @@ export function ScenePicker({
           {groups.map((group) => (
             <section key={group.category} className="mb-4">
               <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">{group.category}</h3>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6">
                 {group.templates.map((template) => (
                   <PickerCard
                     key={template.id}
@@ -234,6 +236,7 @@ function PickerCard({
       style={{ borderColor: current ? 'var(--c-accent)' : 'var(--c-edge)' }}
     >
       <span className="relative block aspect-square w-full" style={{ background: 'var(--c-panel-alt)' }}>
+        {noHover() ? <PlayingPreview id={template.id} /> : <>
         <img
           src={posterUrl(template.id)}
           alt=""
@@ -251,6 +254,7 @@ function PickerCard({
           onMouseEnter={(e) => { void e.currentTarget.play().catch(() => undefined); }}
           onMouseLeave={(e) => { e.currentTarget.pause(); }}
         />
+        </>}
         {loading && (
           <span
             className="absolute inset-0 grid place-items-center text-[11px] font-semibold"

@@ -8,6 +8,7 @@ import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { capturePointer } from './pointerCapture';
 import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
+import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { audioMenu } from '@/ui/editing/commands';
 import { dragResult, msToPct, pxToMs, snap, type ClipDrag } from './timelineGeometry';
 
@@ -127,9 +128,12 @@ function MusicClip({
   const dragRef = useRef<MusicDrag | null>(null);
   const openMenu = useOverlays((o) => o.openMenu);
   const longPress = useRef(new LongPress());
+  /** Picking a clip stops the preview where it is (D-110). */
+  const holdStill = useHoldStill();
 
   const openClipMenu = (x: number, y: number, element: HTMLElement): void => {
     selectAudio(clip.id);
+    holdStill();
     openMenu({ x, y, title: 'Music', items: audioMenu(clip.id, onSeek, laneMs(x, element)) });
   };
 
@@ -161,6 +165,7 @@ function MusicClip({
     capturePointer(event.currentTarget, event.pointerId);
     const wasSelected = selectedAudio === clip.id;
     selectAudio(clip.id);
+    holdStill();
     dragRef.current = {
       // `slip` is not a ClipDrag mode — dragResult knows nothing about it, and
       // the slip branch above returns before ever calling it.

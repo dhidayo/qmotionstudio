@@ -28,7 +28,7 @@ test.describe('at desktop width', () => {
   test('both side panels are columns', async ({ page }) => {
     await open(page);
     await expect(page.getByRole('complementary', { name: 'Template library' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Templates', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Choose a design', exact: true })).toHaveCount(0);
     await expect(page.locator('[data-sheet]')).toHaveCount(0);
   });
 });
@@ -42,14 +42,14 @@ test.describe('at tablet width', () => {
     await expect(page.getByRole('complementary', { name: 'Template library' })).toHaveCount(0);
     const wide = await canvasWidth(page);
 
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Edit' })).toBeVisible();
+    await page.getByRole('button', { name: 'Photos, text and style', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Photos, text and style' })).toBeVisible();
 
     // The inspector's own controls are in there — the same component, not a
     // cut-down copy of it.
     await expect(page.getByRole('tab', { name: 'Photos' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Close edit' }).click();
+    await page.getByRole('button', { name: 'Close photos, text and style' }).click();
     await expect(page.locator('[data-sheet]')).toHaveCount(0);
 
     // Closing gives the artboard its width back rather than leaving a gap.
@@ -64,8 +64,8 @@ test.describe('at tablet width', () => {
      */
     await open(page);
 
-    await page.getByRole('button', { name: 'Templates', exact: true }).click();
-    const sheet = page.getByRole('dialog', { name: 'Templates' });
+    await page.getByRole('button', { name: 'Choose a design', exact: true }).click();
+    const sheet = page.getByRole('dialog', { name: 'Choose a design' });
     await expect(sheet).toBeVisible();
 
     // Well above the sheet, over the dimmed area.
@@ -73,8 +73,8 @@ test.describe('at tablet width', () => {
     await expect(page.locator('[data-sheet]')).toHaveCount(0);
 
     // And the other one opens now that nothing is in the way.
-    await page.getByRole('button', { name: 'Edit', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Edit' })).toBeVisible();
+    await page.getByRole('button', { name: 'Photos, text and style', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Photos, text and style' })).toBeVisible();
   });
 });
 
@@ -102,8 +102,9 @@ test.describe('at phone width', () => {
   test('the template library opens as a sheet and can pick a template', async ({ page }) => {
     await open(page);
 
-    await page.getByRole('button', { name: 'Templates', exact: true }).click();
-    const sheet = page.getByRole('dialog', { name: 'Templates' });
+    // A phone has its own layout (D-109): the library is "Designs" in the toolbar.
+    await page.locator('[data-phone-toolbar]').getByRole('button', { name: 'Designs' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Choose a design' });
     await expect(sheet).toBeVisible();
     await expect(sheet.getByPlaceholder('Search templates')).toBeVisible();
   });

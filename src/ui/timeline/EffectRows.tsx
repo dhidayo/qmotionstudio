@@ -6,6 +6,7 @@ import type { SceneSpan } from '@/document/select/timeline';
 import { useEditor } from '@/state/store';
 import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
+import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { effectMenu } from '@/ui/editing/commands';
 import { capturePointer } from './pointerCapture';
 import { MoreButton, TrimHandle, laneTimeAt } from './ClipParts';
@@ -114,6 +115,8 @@ export function EffectClipView({
   const openMenu = useOverlays((o) => o.openMenu);
   const drag = useRef<Drag | null>(null);
   const longPress = useRef(new LongPress());
+  /** Picking a clip stops the preview where it is (D-110). */
+  const holdStill = useHoldStill();
 
   const { clip } = fx;
   const name = effectName(clip.effectId);
@@ -123,6 +126,7 @@ export function EffectClipView({
 
   const openClipMenu = (x: number, y: number, element: Element): void => {
     selectEffect(clip.id);
+    holdStill();
     const at = Math.max(fx.startMs, Math.min(laneTimeAt(x, element, durationMs), fx.endMs - 1));
     openMenu({ x, y, title: label, items: effectMenu(clip.id, onSeek, at) });
   };
@@ -144,6 +148,7 @@ export function EffectClipView({
       moved: false,
     };
     selectEffect(clip.id);
+    holdStill();
     longPress.current.start(event, (x, y) => {
       drag.current = null;
       openClipMenu(x, y, element);

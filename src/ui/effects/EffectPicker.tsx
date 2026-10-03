@@ -99,6 +99,8 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
     }
   };
 
+  // No hover on a phone: the cards on screen play by themselves instead.
+  const touch = typeof matchMedia === 'function' && matchMedia('(hover: none)').matches;
   const title = picker.target.kind === 'element'
     ? `Effects for ${picker.target.label}`
     : picker.target.kind === 'timeline' ? 'Add an effect to the timeline' : 'Add an effect to this scene';
@@ -113,12 +115,13 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
       role="dialog"
       aria-modal="true"
       aria-label="Effects"
-      className="fixed inset-0 z-50 grid place-items-center p-4"
+      /* A sheet from the bottom on a phone (D-109), a window on a computer. */
+      className="fixed inset-0 z-50 grid items-end sm:place-items-center sm:p-4"
       style={{ background: 'rgb(0 0 0 / 0.45)' }}
       onClick={(event) => { if (event.target === event.currentTarget) close(); }}
     >
-      <div className="flex max-h-[88vh] w-[960px] max-w-full flex-col rounded-lg border border-edge bg-panel shadow-lg">
-        <div className="flex flex-wrap items-center gap-3 border-b border-edge px-4 py-3">
+      <div className="flex max-h-[88dvh] w-full flex-col rounded-t-2xl border border-edge bg-panel shadow-lg sm:w-[960px] sm:max-w-full sm:rounded-lg">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-[14px] font-semibold">{title}</h2>
             <p className="text-[11px] text-ink-faint">{hint}</p>
@@ -130,14 +133,14 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder="Search effects"
             aria-label="Search effects"
-            className="w-48 rounded-md border border-edge bg-panel-alt px-2 py-1 text-[12px] focus:border-accent focus:outline-none"
+            className="order-last w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
           />
-          <button type="button" onClick={close} className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt">
+          <button type="button" onClick={close} className="rounded-md border border-edge px-2.5 py-1 text-[12px] hover:bg-panel-alt">
             Cancel
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-1 border-b border-edge px-4 py-2" role="tablist" aria-label="Effect categories">
+        <div className="flex gap-1 overflow-x-auto border-b border-edge px-4 py-2 sm:flex-wrap" role="tablist" aria-label="Effect categories">
           {(['All', ...categories] as const).map((name) => {
             const on = category === name;
             return (
@@ -147,7 +150,7 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
                 role="tab"
                 aria-selected={on}
                 onClick={() => { setCategory(name); }}
-                className="rounded-full border px-2.5 py-0.5 text-[11px]"
+                className="shrink-0 rounded-full border px-2.5 py-1 text-[12px] sm:py-0.5 sm:text-[11px]"
                 style={{
                   borderColor: on ? 'var(--c-accent)' : 'var(--c-edge)',
                   background: on ? 'var(--c-accent-soft)' : 'transparent',
@@ -193,6 +196,7 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
                         palette={palette}
                         media={media}
                         photoId={photoId}
+                        autoplay={touch}
                       />
                     </span>
                     <span className="block truncate px-1.5 pt-1 text-[11px] font-medium">{card.name}</span>

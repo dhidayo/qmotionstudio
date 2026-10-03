@@ -4,25 +4,24 @@ import type { Overlay } from '@/document/types';
 import {
   sceneSpans, timelineSpanMs, totalDurationMs, type SceneSpan,
 } from '@/document/select/timeline';
-import { DEFAULT_OVERLAY_MS, DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } from '@/document/defaults';
 import * as actions from '@/document/actions';
 import { isAnimated, posesOf } from '@/document/select/overlay';
 import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
 import { spanOf } from '@/document/select/motion';
 import { MotionBar } from './MotionBar';
 import { summaryFor } from '@/templates/manifest';
-import { MAX_TRACKS, placeNew } from '@/document/select/tracks';
+import { MAX_TRACKS } from '@/document/select/tracks';
 import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
+import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { overlayMenu, sceneMenu } from '@/ui/editing/commands';
 import { EffectClipView, laneEffects, packEffectRows } from './EffectRows';
 import { MoreButton, TrimHandle } from './ClipParts';
 import { useEditor } from '@/state/store';
 import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
-import { useMediaStore } from '@/ui/media/MediaProvider';
-import { useUpload, AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE } from '@/ui/media/useUpload';
 import { capturePointer } from './pointerCapture';
 import { SceneTools } from './SceneTools';
+import { useAddLayers } from './useAddLayers';
 import { MusicTrack } from './MusicTrack';
 import {
   dragResult, formatSeconds, msToPct, pxToMs, rowCount, snap, tickIntervalMs,
@@ -48,7 +47,14 @@ const SNAP_MS = 100;
 const CLICK_SLOP_PX = 3;
 const MIN_OVERLAY_MS = 300;
 
-export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
+export function Timeline({
+  clock,
+  embedded = false,
+}: {
+  clock: PreviewClock;
+  /** Inside the phone's timeline sheet (D-109): as tall as its rows, no resize edge. */
+  embedded?: boolean;
+}): React.JSX.Element {
   const project = useEditor((s) => s.project);
   const dispatch = useEditor((s) => s.dispatch);
   const endInteraction = useEditor((s) => s.endInteraction);
@@ -63,6 +69,8 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const openMenu = useOverlays((o) => o.openMenu);
   const openPicker = useOverlays((o) => o.openPicker);
   const openScenePicker = useOverlays((o) => o.openScenePicker);
+  /** Picking a clip stops the preview where it is (D-110). */
+  const holdStill = useHoldStill();
   const showToast = useEditor((s) => s.showToast);
 
   /*
@@ -251,6 +259,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
     capturePointer(event.currentTarget, event.pointerId);
     const wasSelected = selectedOverlay === overlay.id;
     selectOverlay(overlay.id);
+    holdStill();
     dragRef.current = {
       mode,
       id: overlay.id,
@@ -338,6 +347,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
   const openOverlayMenu = (overlay: Overlay, x: number, y: number): void => {
     selectOverlay(overlay.id);
+    holdStill();
     openMenu({
       x,
       y,
@@ -348,6 +358,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
   const openSceneMenu = (index: number, x: number, y: number): void => {
     selectSceneClip(index);
+    holdStill();
     const name = project.scenes[index] ? designName(project.scenes[index].templateId) : 'Scene';
     openMenu({ x, y, title: `Scene ${index + 1} · ${name}`, items: sceneMenu(index, seekTo, laneMs(x), openScenePicker) });
   };
@@ -362,93 +373,10 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
   // ── Adding overlays (§1.2) ───────────────────────────────────────────────
 
-  const media = useMediaStore();
   const { tier, limits } = useEntitlements('motionAd');
   const [proNote, setProNote] = useState(false);
-
-  /*
-   * A new element goes on a layer that has room for it (D-103): on the layer
-   * the person clicked, if they have chosen one — at the playhead, or straight
-   * after the clip it would have landed on — and otherwise on the highest
-   * layer free at the playhead. A new layer only when none is.
-   *
-   * Only an explicit choice of layer counts. Following whatever clip happens
-   * to be selected sent every new caption to the end of the last one, away
-   * from the playhead it was meant for.
-   */
-  const placeOverlay = useCallback(
-    (content: Overlay['content']): void => {
-      const spot = placeNew(project.overlays, {
-        atMs: timeMs,
-        lengthMs: DEFAULT_OVERLAY_MS,
-        durationMs,
-        preferTrack: targetTrack,
-      });
-
-      const overlay = actions.makeOverlay(content, spot);
-      dispatch(actions.addOverlay(overlay));
-      selectOverlay(overlay.id);
-    },
-    [timeMs, durationMs, project.overlays, dispatch, selectOverlay, targetTrack],
-  );
-
-  const addOverlay = (kind: 'photo' | 'text'): void => {
-    if (kind === 'text') {
-      placeOverlay({ kind: 'text', text: 'New caption', style: DEFAULT_OVERLAY_TEXT_STYLE });
-      return;
-    }
-
-    // A photo overlay needs something to show. Whatever the user has uploaded
-    // comes first; the sample set is the fallback so the button is never a
-    // no-op on a fresh project.
-    const firstMedia = media.ids('image')[0] ?? STARTER_PHOTO_IDS[0] ?? '';
-    placeOverlay({ kind: 'photo', mediaId: firstMedia });
-  };
-
-  /**
-   * Custom media picks its file first (§9).
-   *
-   * The button used to mint an overlay pointing at `media.ids()[0]`, which on
-   * any ordinary project is a *photograph* — so a Pro user got a video overlay
-   * that could never draw a frame. A clip is not something the editor can
-   * invent a default for, so the picker opens and the overlay is created once
-   * a file has actually decoded.
-   */
-  const videoInput = useRef<HTMLInputElement>(null);
-  const onVideoAdded = useCallback(
-    (mediaIds: string[]) => {
-      const first = mediaIds[0];
-      if (first !== undefined) placeOverlay({ kind: 'customMedia', mediaId: first });
-    },
-    [placeOverlay],
-  );
-  const { state: videoUpload, addFiles: addVideoFiles } = useUpload(media, onVideoAdded, {
-    artboardLongestEdge: 1920,
-    video: true,
-  });
-
-  /**
-   * Music (§10). One track per project, so adding replaces rather than
-   * appends — the timeline has one music row and two clips fighting over it
-   * would be a model the UI cannot show.
-   */
-  const audioInput = useRef<HTMLInputElement>(null);
-  const selectAudio = useEditor((s) => s.selectAudio);
-  const onAudioAdded = useCallback(
-    (mediaIds: string[]) => {
-      const first = mediaIds[0];
-      if (first === undefined) return;
-      const sourceMs = media.durationMsOf(first) ?? 0;
-      const clip = actions.makeAudioClip(first, { startMs: 0, durationMs: sourceMs });
-      dispatch(actions.addAudio(clip));
-      selectAudio(clip.id);
-    },
-    [media, dispatch, selectAudio],
-  );
-  const { state: audioUpload, addFiles: addAudioFiles } = useUpload(media, onAudioAdded, {
-    artboardLongestEdge: 1920,
-    audio: true,
-  });
+  // Shared with the phone's Add panel (D-109).
+  const layers = useAddLayers();
 
   const rows = rowCount(project.overlays);
   const tick = tickIntervalMs(durationMs, laneWidth);
@@ -466,7 +394,8 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
        * double-clicking it goes back to fitting the rows.
        */
       style={
-        heldHeight !== null ? { height: heldHeight }
+        embedded ? undefined
+        : heldHeight !== null ? { height: heldHeight }
         : manualHeight === null ? { minHeight: grownTo, maxHeight: '50vh' }
         : { height: manualHeight }
       }
@@ -477,10 +406,10 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
        * move everything under the pointer half way through the gesture.
        */
       onPointerDownCapture={() => {
-        if (manualHeight === null) setHeldHeight(panelRef.current?.getBoundingClientRect().height ?? null);
+        if (manualHeight === null && !embedded) setHeldHeight(panelRef.current?.getBoundingClientRect().height ?? null);
       }}
     >
-      <div
+      {!embedded && <div
         role="separator"
         aria-orientation="horizontal"
         aria-label="Resize panel"
@@ -502,7 +431,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
         }}
         onDoubleClick={() => { setManualHeight(null); rememberHeight(null); setGrownTo(MIN_PANEL_PX); }}
         className="absolute inset-x-0 -top-1 z-20 h-2 cursor-ns-resize hover:bg-[color-mix(in_srgb,var(--c-accent)_30%,transparent)]"
-      />
+      />}
       {/* Transport and the "Add …" buttons. Scrolls sideways rather than
           pushing the page wider on a phone. */}
       <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge px-3 py-1.5">
@@ -525,8 +454,8 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
         </span>
 
         <div className="ml-2 flex items-center gap-1" role="group" aria-label="Add overlay">
-          <AddButton onClick={() => { addOverlay('photo'); }} title="Add a photo overlay">+ Photo</AddButton>
-          <AddButton onClick={() => { addOverlay('text'); }} title="Add a text overlay">+ Text</AddButton>
+          <AddButton onClick={layers.addPhoto} title="Add a photo overlay">+ Photo</AddButton>
+          <AddButton onClick={layers.addText} title="Add a text overlay">+ Text</AddButton>
           <AddButton
             onClick={() => { openPicker({ target: { kind: 'timeline' } }); }}
             title="Add an effect at the playhead — snow, lightning, shake, a light leak…"
@@ -542,14 +471,14 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           <AddButton
             onClick={() => {
               if (!limits.customMedia) { setProNote(true); return; }
-              videoInput.current?.click();
+              layers.pickVideo();
             }}
-            disabled={videoUpload.busy}
+            disabled={layers.videoBusy}
             title={limits.customMedia
               ? 'Add a video overlay'
               : 'Custom media is a Pro feature — click to find out how to enable it'}
           >
-            {videoUpload.busy ? 'Reading…' : '+ Media'}
+            {layers.videoBusy ? 'Reading…' : '+ Media'}
             {!limits.customMedia && (
               <span
                 className="ml-1 rounded-sm px-1 text-[8px] font-bold uppercase"
@@ -559,36 +488,15 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
               </span>
             )}
           </AddButton>
-          <input
-            ref={videoInput}
-            type="file"
-            accept={VIDEO_ACCEPT_ATTRIBUTE}
-            hidden
-            aria-label="Add a video overlay"
-            onChange={(e) => {
-              void addVideoFiles([...(e.target.files ?? [])]);
-              e.target.value = '';
-            }}
-          />
 
           <AddButton
-            onClick={() => { audioInput.current?.click(); }}
-            disabled={audioUpload.busy}
+            onClick={layers.pickMusic}
+            disabled={layers.musicBusy}
             title="Add a music track"
           >
-            {audioUpload.busy ? 'Decoding…' : '+ Music'}
+            {layers.musicBusy ? 'Decoding…' : '+ Music'}
           </AddButton>
-          <input
-            ref={audioInput}
-            type="file"
-            accept={AUDIO_ACCEPT_ATTRIBUTE}
-            hidden
-            aria-label="Add a music track"
-            onChange={(e) => {
-              void addAudioFiles([...(e.target.files ?? [])]);
-              e.target.value = '';
-            }}
-          />
+          {layers.inputs}
         </div>
 
         {proNote && !limits.customMedia && (
@@ -609,9 +517,9 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           </span>
         )}
 
-        {(videoUpload.error ?? audioUpload.error) !== null && (
+        {layers.error !== null && (
           <span className="max-w-64 truncate text-[10px]" style={{ color: 'var(--c-danger)' }}>
-            {videoUpload.error ?? audioUpload.error}
+            {layers.error}
           </span>
         )}
 
@@ -700,6 +608,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                     // thing Delete would remove (D-104).
                     if (active) seekTo(laneMs(e.clientX));
                     selectSceneClip(span.index);
+                    holdStill();
                   }}
                   onContextMenu={(e) => { e.preventDefault(); openSceneMenu(span.index, e.clientX, e.clientY); }}
                   onPointerDown={(e) => {

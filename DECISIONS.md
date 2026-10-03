@@ -2580,3 +2580,62 @@ speed (`sceneLengthMs`), everywhere a scene is placed: spans, transitions, the
 free-tier trim, effect windows. Effects that ran to the scene's end, and the
 logo, stretch to the new end. The Lifestyle scrubber reads its length from the
 document: sampled from the clock, it stayed stale while paused.
+
+## D-109 — a phone gets its own layout
+
+"I am very disappointed with the view on mobile … separate design and UI/UX must
+be utilized on mobile." The desktop layout squeezed to 390px scrolled its top bar
+sideways (hiding Export), showed five aspect buttons in a row, hid everything
+behind "Templates" and "Edit", and gave Corporate Ads a timeline taller than the
+picture. Below 760px the editor is now laid out the way phone video editors are
+(CapCut was the model asked for):
+
+- **One-row top bar:** the project (its menu holds rename, Lifestyle/Corporate,
+  copies, new, switch, theme), one frame-shape button that opens the five
+  shapes, and Export. Nothing off the edge.
+- **The picture as large as possible**, a transport line under it (time, play,
+  undo, redo), then a bottom toolbar of labelled icons — Designs, (Add), Photos,
+  Text, Effects, Style — that becomes the selected thing's own tools (Replace,
+  Crop/Style, Effects, Motion, Copy, Delete, Done), as CapCut's does.
+- **"Choose a design" and "Add your photos"** while the picture is still the
+  samples. A new photo takes a sample's place, in order, so the design keeps
+  its framing.
+- **Every panel is a bottom sheet** over the picture — the same panel components
+  as the desktop inspector — that closes by ✕, a tap above it, or a swipe down.
+  The effect and scene pickers are sheets on a phone and windows on a computer.
+- **Designs move by themselves** on screens without hover: the cards on screen
+  play their loops, and a tap opens a large preview with "Use this design"
+  before anything changes. Effect cards play while visible for the same reason.
+- **Corporate Ads' timeline is folded** to a strip: the scenes to scale with
+  their designs as thumbnails, the playhead, layer and effect counts. "Timeline"
+  opens the whole thing in a sheet. A one-time note says detailed timing is
+  easier on a larger screen — it is a recommendation, not a wall.
+- **Replace photo offers the person's own photos and a large upload button**,
+  never the samples, in a smaller window on a computer and a sheet on a phone.
+- **Light is the default theme**; dark was lifted a step so its surfaces are
+  distinguishable and its small print clears 4.5:1.
+
+Tablet keeps the desktop structure with its sheets, but the two buttons now say
+what they do: "Choose a design" and "Photos, text and style".
+
+## D-110 — fingers select, then move; two fingers move the view
+
+"To move an object, I would select the object first … click outside an active
+object, hold and move should not be interpreted to object movement." On touch:
+
+- A **tap** selects. A finger only **drags what is already selected**; a drag
+  that starts on anything else moves nothing.
+- A tap **anywhere else puts the selection down** — on another element too, so
+  picking the next thing is a second tap, never an accident. Pressing the empty
+  stage round the picture deselects on every device.
+- **Tap a selected element again for its menu** (a double-tap edits it instead).
+  With a mouse, clicking the selected element opens the menu after the
+  double-click window, so a double-click still edits.
+- **Pinch zooms and pans the view**, never the element; a drag on the empty
+  picture pans while zoomed, a double-tap on it or "Fit" puts it back. Points
+  are read against the box as drawn, so selection stays exact while zoomed.
+- **Picking an element stops the preview** where it is — on the canvas or the
+  timeline, by click, tap or menu, on every device — because you chose this
+  element on this frame to edit it. Only where a person picks: adding music
+  selects the new clip, and that must not stop a preview someone is listening
+  to (§10).

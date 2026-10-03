@@ -1,21 +1,24 @@
 import { TopBar } from '@/ui/shell/TopBar';
 import { AppShell } from '@/ui/shell/AppShell';
 import { DurationUpsell } from '@/ui/shell/DurationUpsell';
+import { useLayout } from '@/ui/shell/useLayout';
 
 export default function App(): React.JSX.Element {
+  // A phone has its own top bar and its own one-line notice (D-109).
+  const phone = useLayout() === 'phone';
   return (
     <div className="flex h-full flex-col">
-      <TopBar />
+      {!phone && <TopBar />}
       <DurationUpsell />
       <AppShell />
       {/* A test release is open to anyone with the link, so it says what it is. */}
-      <footer
+      {!phone && <footer
         data-disclaimer
         className="shrink-0 border-t border-edge bg-panel px-3 py-1 text-center text-[10px] text-ink-faint"
       >
         Q Motion Studio is in development. Features may change and work may be lost — use at your own risk, and
         export anything you want to keep. Your photos stay on your device; nothing is uploaded.
-      </footer>
+      </footer>}
     </div>
   );
 }

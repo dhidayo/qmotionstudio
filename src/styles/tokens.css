@@ -19,7 +19,8 @@
   --c-edge-strong: #d2d2d9;
   --c-ink: #17171b;
   --c-ink-muted: #6b6b76;
-  --c-ink-faint: #9a9aa6;
+  /* Readable as small print on white (about 3.6:1), not just present. */
+  --c-ink-faint: #85858f;
 
   /* Accent */
   --c-accent: #4f46e5;
@@ -61,25 +62,31 @@
 }
 
 :root[data-theme='dark'] {
-  --c-bg: #0d0d10;
-  --c-panel: #151519;
-  --c-panel-alt: #1b1b20;
-  --c-edge: #26262d;
-  --c-edge-strong: #35353e;
-  --c-ink: #f2f2f4;
-  --c-ink-muted: #9b9ba6;
-  --c-ink-faint: #6a6a75;
+  /*
+   * Lifted a step from near-black (D-109): panels that were #151519 on a
+   * #0d0d10 page read as one dark mass, and the faint text was below 3:1.
+   * Each surface is now a visible step from the next, and small print clears
+   * 4.5:1 on the panels.
+   */
+  --c-bg: #111115;
+  --c-panel: #1a1a20;
+  --c-panel-alt: #222229;
+  --c-edge: #2f2f38;
+  --c-edge-strong: #41414c;
+  --c-ink: #f4f4f6;
+  --c-ink-muted: #b4b4be;
+  --c-ink-faint: #8c8c98;
 
-  --c-accent: #6d64f0;
-  --c-accent-hover: #7d75f5;
+  --c-accent: #7d76f6;
+  --c-accent-hover: #8f89f8;
   --c-accent-ink: #ffffff;
-  --c-accent-soft: #211f38;
+  --c-accent-soft: #2a2850;
 
   --c-pro: #fbbf24;
-  --c-pro-soft: #362a10;
+  --c-pro-soft: #3a2d10;
   --c-danger: #f87171;
 
-  --c-stage: #070709;
+  --c-stage: #0a0a0d;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-md: 0 2px 8px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.3);

@@ -14,7 +14,9 @@ import { NO_SLOT_TRANSFORM, type Overlay, type Project, type SlotKey, type SlotT
 import { useEditor } from '@/state/store';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { capturePointer } from '@/ui/timeline/pointerCapture';
-import { useOverlays } from '@/ui/shell/overlays';
+import { NO_ZOOM, useOverlays, type ViewZoom } from '@/ui/shell/overlays';
+import { useHoldStill } from '@/ui/shell/ClockProvider';
+import { useLayout } from '@/ui/shell/useLayout';
 import { LongPress } from '@/ui/shell/ContextMenu';
 import { deleteSelection, logoMenu, overlayMenu, slotMenu } from '@/ui/editing/commands';
 import { InlineTextEditor, SelectionToolbar, screenBounds, type ToolbarAction } from './CanvasEditing';
@@ -131,6 +133,30 @@ type Point = { readonly x: number; readonly y: number };
 /** A line shown while a drag is snapped to something. */
 type Guide = { readonly axis: 'x' | 'y'; readonly at: number };
 
+/** A press on the canvas, until it lifts (D-110). */
+type Press = {
+  readonly touch: boolean;
+  readonly from: Point;
+  readonly target: Target | null;
+  /** Whether what was pressed was already the selection — only that moves under a finger. */
+  readonly wasSelected: boolean;
+  moved: boolean;
+};
+
+/** Two fingers on the canvas, as they were when the second one landed. */
+type Pinch = {
+  readonly distance: number;
+  readonly mid: Point;
+  readonly zoom: ViewZoom;
+  /** Where the stage's corner would be with no zoom, in client pixels. */
+  readonly origin: Point;
+};
+
+/** How far a finger may wander and still have tapped. */
+const TAP_SLOP_PX = 8;
+const DOUBLE_TAP_MS = 300;
+const MAX_ZOOM = 5;
+
 export function CanvasSelection({
   project,
   drawn,
@@ -168,6 +194,28 @@ export function CanvasSelection({
   const setInspectorTab = useEditor((s) => s.setInspectorTab);
   /** True while a press on the canvas is held, so the toolbar keeps out of the way of a drag. */
   const [pressing, setPressing] = useState(false);
+  const layout = useLayout();
+  /** Picking something stops the preview where it is (point 5): you are about to edit this frame. */
+  const holdStill = useHoldStill();
+  const viewZoom = useOverlays((o) => o.viewZoom);
+  const setViewZoom = useOverlays((o) => o.setViewZoom);
+  /*
+   * Touch (D-110): a finger selects with a tap, moves only what is already
+   * selected, and puts it down with a tap anywhere else; two fingers zoom and
+   * pan the view, never the element. These hold the gesture in progress.
+   */
+  const press = useRef<Press | null>(null);
+  const fingers = useRef(new Map<number, Point>());
+  const pinch = useRef<Pinch | null>(null);
+  const pan = useRef<{ from: Point; zoom: ViewZoom } | null>(null);
+  const lastTap = useRef<{ key: string; at: number } | null>(null);
+  /** "Tap it again for its menu" waits a moment, in case the second tap is a double-tap. */
+  const menuTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cancelMenu = (): void => {
+    if (menuTimer.current !== null) clearTimeout(menuTimer.current);
+    menuTimer.current = null;
+  };
+  useEffect(() => () => { if (menuTimer.current !== null) clearTimeout(menuTimer.current); }, []);
 
   /*
    * The selection box takes keyboard focus when something is clicked on the
@@ -379,9 +427,24 @@ export function CanvasSelection({
 
   if (scale <= 0) return null;
 
-  const toDesign = (event: React.PointerEvent<HTMLElement>): Point => {
+  /*
+   * Measured against the box as drawn, not the layout width: a pinch scales
+   * the whole stage (D-110), and a point read at the unzoomed scale would land
+   * somewhere else entirely.
+   */
+  const toDesign = (event: { clientX: number; clientY: number; currentTarget: Element }): Point => {
     const rect = event.currentTarget.getBoundingClientRect();
-    return { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale };
+    const k = rect.width > 0 ? rect.width / design.w : scale;
+    return { x: (event.clientX - rect.left) / k, y: (event.clientY - rect.top) / k };
+  };
+
+  const height = (width * design.h) / design.w;
+  /** Keeps a zoomed picture at least partly on screen. */
+  const clampZoom = (zoom: ViewZoom): ViewZoom => {
+    if (zoom.scale <= 1.02) return NO_ZOOM;
+    const clampAxis = (value: number, size: number): number =>
+      Math.min(size / 3, Math.max((1 - zoom.scale) * size - size / 3, value));
+    return { scale: zoom.scale, x: clampAxis(zoom.x, width), y: clampAxis(zoom.y, height) };
   };
 
   const pick = (point: Point): Target | null => {
@@ -466,6 +529,7 @@ export function CanvasSelection({
   /** What can be done to the element under the pointer, as a menu at the pointer. */
   const openTargetMenu = (target: Target, x: number, y: number): void => {
     select(target);
+    holdStill();
     if (target.kind === 'logo') {
       openMenu({ x, y, title: 'Logo', items: logoMenu() });
       return;
@@ -478,8 +542,7 @@ export function CanvasSelection({
   };
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const target = pick({ x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale });
+    const target = pick(toDesign(event));
     if (!target) return;
     event.preventDefault();
     openTargetMenu(target, event.clientX, event.clientY);
@@ -487,6 +550,29 @@ export function CanvasSelection({
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0) return;
+    cancelMenu();
+    const touch = event.pointerType !== 'mouse';
+    if (touch) fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    // A second finger turns whatever was starting into a pinch of the view.
+    if (touch && fingers.current.size >= 2) {
+      longPress.current.cancel();
+      if (dragRef.current) { dragRef.current = null; setGuides([]); endInteraction(); }
+      press.current = null;
+      pan.current = null;
+      const [a, b] = [...fingers.current.values()];
+      if (!a || !b) return;
+      const rect = event.currentTarget.getBoundingClientRect();
+      capturePointer(event.currentTarget, event.pointerId);
+      pinch.current = {
+        distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+        mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+        zoom: viewZoom,
+        origin: { x: rect.left - viewZoom.x, y: rect.top - viewZoom.y },
+      };
+      return;
+    }
+
     setPressing(true);
     const point = toDesign(event);
     const under = pick(point);
@@ -503,6 +589,7 @@ export function CanvasSelection({
     if (handle && selected) {
       focusOnRelease.current = true;
       capturePointer(event.currentTarget, event.pointerId);
+      holdStill();
       dragRef.current =
         handle === 'rotate'
           ? {
@@ -515,17 +602,116 @@ export function CanvasSelection({
       return;
     }
 
-    const target = pick(point);
-    focusOnRelease.current = target !== null;
-    select(target);
-    if (!target) return;
-
     capturePointer(event.currentTarget, event.pointerId);
-    dragRef.current = { mode: 'move', target, grabLocal: toLocal(target.box, point) };
+    const wasSelected = under !== null && selected !== null && under.key === selected.key;
+    press.current = { touch, from: { x: event.clientX, y: event.clientY }, target: under, wasSelected, moved: false };
+
+    /*
+     * A finger only ever moves what is already selected (point 9). Pressing
+     * anything else does nothing until the finger lifts — then it is a tap,
+     * and a tap selects or puts down. Dragging from there pans a zoomed view.
+     */
+    if (touch) {
+      if (under && wasSelected) {
+        holdStill();
+        dragRef.current = { mode: 'move', target: under, grabLocal: toLocal(under.box, point) };
+      } else if (viewZoom.scale > 1) {
+        pan.current = { from: { x: event.clientX, y: event.clientY }, zoom: viewZoom };
+      }
+      return;
+    }
+
+    focusOnRelease.current = under !== null;
+    select(under);
+    if (!under) return;
+    holdStill();
+    dragRef.current = { mode: 'move', target: under, grabLocal: toLocal(under.box, point) };
+  };
+
+  /** A press that ended where it began. */
+  const onTap = (tap: Press, x: number, y: number, now: number): void => {
+    const again = (key: string): boolean =>
+      lastTap.current !== null && lastTap.current.key === key && now - lastTap.current.at < DOUBLE_TAP_MS;
+
+    if (!tap.touch) {
+      // Clicking what is already selected brings up its menu (point 6); a
+      // double-click cancels that and edits instead.
+      if (tap.target && tap.wasSelected) {
+        const target = tap.target;
+        menuTimer.current = setTimeout(() => { menuTimer.current = null; openTargetMenu(target, x, y); }, DOUBLE_TAP_MS);
+      }
+      return;
+    }
+
+    if (tap.target && tap.wasSelected) {
+      if (again(tap.target.key)) {
+        lastTap.current = null;
+        primaryEdit(tap.target);
+        return;
+      }
+      lastTap.current = { key: tap.target.key, at: now };
+      const target = tap.target;
+      menuTimer.current = setTimeout(() => { menuTimer.current = null; openTargetMenu(target, x, y); }, DOUBLE_TAP_MS);
+      return;
+    }
+    // Something is selected and this tap is elsewhere: put it down first.
+    if (selected) {
+      lastTap.current = null;
+      select(null);
+      return;
+    }
+    if (tap.target) {
+      select(tap.target);
+      holdStill();
+      lastTap.current = { key: tap.target.key, at: now };
+      return;
+    }
+    // A double-tap on the empty picture fits it back to the screen.
+    if (again('')) {
+      lastTap.current = null;
+      setViewZoom(NO_ZOOM);
+      return;
+    }
+    lastTap.current = { key: '', at: now };
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
     longPress.current.move(event);
+    if (fingers.current.has(event.pointerId)) fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    const zooming = pinch.current;
+    if (zooming) {
+      const [a, b] = [...fingers.current.values()];
+      if (!a || !b) return;
+      const next = Math.min(MAX_ZOOM, Math.max(1, zooming.zoom.scale * (Math.hypot(a.x - b.x, a.y - b.y) / zooming.distance)));
+      // The point of the picture that was between the fingers stays between them.
+      const held = {
+        x: (zooming.mid.x - zooming.origin.x - zooming.zoom.x) / zooming.zoom.scale,
+        y: (zooming.mid.y - zooming.origin.y - zooming.zoom.y) / zooming.zoom.scale,
+      };
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      setViewZoom(clampZoom({ scale: next, x: mid.x - zooming.origin.x - next * held.x, y: mid.y - zooming.origin.y - next * held.y }));
+      return;
+    }
+
+    const current = press.current;
+    if (current && !current.moved && Math.hypot(event.clientX - current.from.x, event.clientY - current.from.y) > TAP_SLOP_PX) {
+      current.moved = true;
+    }
+    const panning = pan.current;
+    if (panning) {
+      if (current?.moved === true) {
+        setViewZoom(clampZoom({
+          ...panning.zoom,
+          x: panning.zoom.x + event.clientX - panning.from.x,
+          y: panning.zoom.y + event.clientY - panning.from.y,
+        }));
+      }
+      return;
+    }
+    // A finger's wobble during a tap is not a move.
+    if (current?.touch === true && !current.moved) return;
+
     const point = toDesign(event);
     const drag = dragRef.current;
 
@@ -587,16 +773,29 @@ export function CanvasSelection({
     );
   };
 
-  const onPointerUp = (): void => {
+  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>, cancelled: boolean): void => {
+    fingers.current.delete(event.pointerId);
+    if (pinch.current) {
+      // The pinch ends when the last finger lifts; a finger left behind is not a tap.
+      if (fingers.current.size === 0) pinch.current = null;
+      press.current = null;
+      setPressing(false);
+      return;
+    }
+    pan.current = null;
+    const tap = press.current;
+    press.current = null;
     setPressing(false);
     if (focusOnRelease.current) {
       focusOnRelease.current = false;
       boxRef.current?.focus({ preventScroll: true });
     }
-    if (!dragRef.current) return;
-    dragRef.current = null;
-    setGuides([]);
-    endInteraction();
+    if (dragRef.current) {
+      dragRef.current = null;
+      setGuides([]);
+      endInteraction();
+    }
+    if (tap && !tap.moved && !cancelled && !longPress.current.fired) onTap(tap, event.clientX, event.clientY, event.timeStamp);
   };
 
   /** What a double-click on a thing means: type into it, or choose a new picture for it. */
@@ -612,8 +811,9 @@ export function CanvasSelection({
   };
 
   const onDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const target = pick({ x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale });
+    // A touch double-tap is handled as taps (D-110); this is the mouse's.
+    cancelMenu();
+    const target = pick(toDesign(event));
     if (!target) return;
     event.preventDefault();
     select(target);
@@ -705,8 +905,8 @@ export function CanvasSelection({
       data-canvas-selection
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={() => { longPress.current.cancel(); onPointerUp(); }}
-      onPointerCancel={() => { longPress.current.cancel(); onPointerUp(); }}
+      onPointerUp={(event) => { longPress.current.cancel(); onPointerUp(event, false); }}
+      onPointerCancel={(event) => { longPress.current.cancel(); onPointerUp(event, true); }}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
       onPointerLeave={() => { setHovered(null); setCursor('default'); }}
@@ -811,7 +1011,8 @@ export function CanvasSelection({
         />
       )}
 
-      {selected && !pressing && !editing && (
+      {/* A phone's toolbar becomes the selection's tools instead (D-109). */}
+      {selected && !pressing && !editing && layout !== 'phone' && (
         <SelectionToolbar
           bounds={screenBounds(selected.box, scale)}
           frameWidth={design.w * scale}

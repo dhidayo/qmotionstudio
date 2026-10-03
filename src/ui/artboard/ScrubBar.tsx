@@ -18,7 +18,18 @@ import { useOverlays } from '@/ui/shell/overlays';
  */
 const READOUT_HZ = 12;
 
-export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element {
+export function ScrubBar({
+  clock,
+  variant = 'full',
+}: {
+  clock: PreviewClock;
+  /**
+   * `phone` is the slider alone (D-109): the phone's transport line already
+   * has play and the time, and its toolbar has Effects.
+   */
+  variant?: 'full' | 'phone';
+}): React.JSX.Element {
+  const phone = variant === 'phone';
   const setPlayhead = useEditor((s) => s.setPlayhead);
   /*
    * The length comes from the document, not from sampling the clock: paused,
@@ -49,14 +60,14 @@ export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element 
   return (
     <div className="shrink-0 border-t border-edge bg-panel">
       <div className="flex items-center gap-3 px-3 py-2">
-        <button
+        {!phone && <button
           type="button"
           onClick={toggle}
           aria-label={playing ? 'Pause' : 'Play'}
           className="w-16 rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
         >
           {playing ? 'Pause' : 'Play'}
-        </button>
+        </button>}
 
         {/*
           * The slider is Showcase's timeline, so the motion bar belongs on it.
@@ -81,15 +92,16 @@ export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element 
               setPlayhead(next);
             }}
             aria-label="Scrub"
-            className="h-1 w-full accent-[var(--c-accent)]"
+            // A phone's thumb needs something taller than a hairline to land on.
+            className={`${phone ? 'h-7' : 'h-1'} w-full accent-[var(--c-accent)]`}
           />
           <ShowcaseMotion durationMs={durationMs} onSeek={(at) => { clock.pause(); clock.seek(at); setTimeMs(at); setPlayhead(at); }} />
         </div>
 
-        <span className="tabular w-20 shrink-0 text-right text-[11px] text-ink-muted sm:w-24">
+        {!phone && <span className="tabular w-20 shrink-0 text-right text-[11px] text-ink-muted sm:w-24">
           {format(Math.min(timeMs, durationMs))} / {format(durationMs)}
-        </span>
-        <button
+        </span>}
+        {!phone && <button
           type="button"
           onClick={() => { openPicker({ target: { kind: 'scene' } }); }}
           title="Add an effect — snow, sparkles, light, a shake, a film look…"
@@ -97,9 +109,9 @@ export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element 
           className="shrink-0 rounded-md border border-edge px-2 py-1 text-[11px] text-ink-muted hover:bg-panel-alt"
         >
           + <span className="hidden sm:inline">Effect</span><span className="sm:hidden">FX</span>
-        </button>
+        </button>}
       </div>
-      <EffectStrip durationMs={durationMs} onSeek={seek} />
+      <EffectStrip durationMs={durationMs} onSeek={seek} phone={phone} />
     </div>
   );
 }
@@ -112,7 +124,15 @@ export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element 
  * resize, right-click or hold for the menu — and overlapping effects stack on
  * rows of their own so each can be picked up.
  */
-function EffectStrip({ durationMs, onSeek }: { durationMs: number; onSeek: (ms: number) => void }): React.JSX.Element | null {
+function EffectStrip({
+  durationMs,
+  onSeek,
+  phone,
+}: {
+  durationMs: number;
+  onSeek: (ms: number) => void;
+  phone: boolean;
+}): React.JSX.Element | null {
   const project = useEditor((s) => s.project);
   const rows = useMemo(
     () => packEffectRows(laneEffects(project, sceneSpans(project.scenes), durationMs)),
@@ -122,15 +142,15 @@ function EffectStrip({ durationMs, onSeek }: { durationMs: number; onSeek: (ms: 
 
   return (
     <div className="flex gap-3 px-3 pb-2" aria-label="Effects in this scene">
-      <span className="w-16 shrink-0 pt-1.5 text-[10px] uppercase tracking-wide text-ink-faint">Effects</span>
+      {!phone && <span className="w-16 shrink-0 pt-1.5 text-[10px] uppercase tracking-wide text-ink-faint">Effects</span>}
       {/* One layer for every row, so a clip that changes row moves rather than being rebuilt mid-drag. */}
       <div className="relative min-w-0 flex-1" style={{ height: rows.length * EFFECT_ROW_PX }} data-lane="true">
         {rows.flatMap((row, r) => row.map((fx) => (
           <EffectClipView key={fx.clip.id} fx={fx} row={r} durationMs={durationMs} onSeek={onSeek} showScene={false} />
         )))}
       </div>
-      <span className="w-20 shrink-0 sm:w-24" />
-      <span className="w-[42px] shrink-0 sm:w-[58px]" />
+      {!phone && <span className="w-20 shrink-0 sm:w-24" />}
+      {!phone && <span className="w-[42px] shrink-0 sm:w-[58px]" />}
     </div>
   );
 }

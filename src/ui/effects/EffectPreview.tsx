@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FxInstance, Layer, Palette, Size } from '@/core/types';
 import type { ElementEffectDef, FrameEffectDef } from '@/core/effects/types';
 import { applyCamera, drawFrameEffects, frameCamera } from '@/core/effects/run';
@@ -61,14 +61,29 @@ export function EffectPreview({
   palette,
   media,
   photoId,
+  autoplay = false,
 }: {
   effect: PreviewEffect;
   active: boolean;
+  /**
+   * Plays whenever it is on screen (D-109). A phone has no hover, so a card
+   * that only moved when pointed at never moved at all.
+   */
+  autoplay?: boolean;
   palette: Palette;
   media: MediaResolver;
   photoId: string | null;
 }): React.JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!autoplay || !canvas || typeof IntersectionObserver !== 'function') return;
+    const observer = new IntersectionObserver(([entry]) => { setVisible(entry?.isIntersecting === true); }, { threshold: 0.6 });
+    observer.observe(canvas);
+    return () => { observer.disconnect(); };
+  }, [autoplay]);
+  const playing = active || (autoplay && visible);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -121,7 +136,7 @@ export function EffectPreview({
       }
     };
 
-    if (!active) {
+    if (!playing) {
       draw(t.stillMs);
       return;
     }
@@ -134,7 +149,7 @@ export function EffectPreview({
     };
     frame = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(frame); };
-  }, [effect, active, palette, media, photoId]);
+  }, [effect, playing, palette, media, photoId]);
 
   return <canvas ref={ref} aria-hidden className="block h-full w-full" style={{ width: '100%', aspectRatio: `${SIZE.w} / ${SIZE.h}` }} />;
 }

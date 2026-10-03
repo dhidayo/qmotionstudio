@@ -49,6 +49,23 @@ function difference(a: number[], b: number[]): number {
   return total / a.length;
 }
 
+/** A photo of the person's own, made on the spot: bold stripes nothing in the samples looks like. */
+async function stripesPng(page: Page): Promise<Buffer> {
+  const base64 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 320;
+    const cx = canvas.getContext('2d');
+    if (!cx) throw new Error('no context');
+    for (let i = 0; i < 8; i++) {
+      cx.fillStyle = i % 2 === 0 ? '#ff2d55' : '#ffe600';
+      cx.fillRect(i * 40, 0, 40, 320);
+    }
+    return canvas.toDataURL('image/png').split(',')[1] ?? '';
+  });
+  return Buffer.from(base64, 'base64');
+}
+
 const HEADLINE = { x: 0.5, y: 0.08 };
 const PHOTO = { x: 0.5, y: 0.5 };
 
@@ -122,11 +139,14 @@ test.describe('photos on the canvas', () => {
     await page.mouse.dblclick(at.x, at.y);
     const dialog = page.getByRole('dialog', { name: 'Replace photo' });
     await expect(dialog).toBeVisible();
-    await dialog.locator('[data-photo-choice="sample:ember"]').click();
+    // The person's own photos only: the samples are not offered as replacements.
+    await expect(dialog.locator('[data-photo-choice^="sample:"]')).toHaveCount(0);
+    await dialog.getByLabel('Upload a photo').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: await stripesPng(page) });
 
     await expect(dialog).toHaveCount(0);
     await expect(toast(page)).toContainText('Photo replaced');
-    expect(difference(before, await fingerprint(page))).toBeGreaterThan(1);
+    // The new picture is drawn on the next frame after it lands.
+    await expect.poll(async () => difference(before, await fingerprint(page))).toBeGreaterThan(1);
   });
 
   test('the toolbar beside a selected photo: replace, effects, motion, delete, more', async ({ page }) => {

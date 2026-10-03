@@ -28,3 +28,16 @@ export function ClockProvider({
 export function usePreviewClock(): PreviewClock | null {
   return useContext(ClockContext);
 }
+
+/**
+ * Stops the preview where it is, for the moment someone picks an element to
+ * edit (D-110) — on the canvas or the timeline, by click, tap or menu.
+ *
+ * Called where a person picks, never on a selection change as such: adding
+ * music selects the new clip, and that must not stop a preview the person is
+ * listening to (§10, the transport belongs to the user).
+ */
+export function useHoldStill(): () => void {
+  const clock = useContext(ClockContext);
+  return () => { if (clock?.playing === true) clock.pause(); };
+}

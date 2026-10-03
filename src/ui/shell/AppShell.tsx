@@ -31,6 +31,7 @@ import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { ExportDialog } from '@/ui/export/ExportDialog';
+import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
 
 export function AppShell(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -345,6 +346,8 @@ export function AppShell(): React.JSX.Element {
   return (
     <MediaProvider store={media}>
       <ClockProvider clock={clock}>
+      {/* A phone gets a layout of its own, not this one squeezed (D-109). */}
+      {layout === 'phone' ? <PhoneLayout project={project} clock={clock} rig={rig} media={media} /> : <>
       <div className="flex h-full min-h-0 flex-1">
         {/*
           * §13. Below tablet width the two side columns stop being columns:
@@ -363,7 +366,7 @@ export function AppShell(): React.JSX.Element {
                 aria-expanded={sheet === 'library'}
                 className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
               >
-                Templates
+                Choose a design
               </button>
               <button
                 type="button"
@@ -371,7 +374,7 @@ export function AppShell(): React.JSX.Element {
                 aria-expanded={sheet === 'inspector'}
                 className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
               >
-                Edit
+                Photos, text and style
               </button>
             </div>
           )}
@@ -390,7 +393,7 @@ export function AppShell(): React.JSX.Element {
         <>
           <Sheet
             open={sheet === 'library'}
-            title="Templates"
+            title="Choose a design"
             side="left"
             onClose={() => { setSheet(null); }}
           >
@@ -398,7 +401,7 @@ export function AppShell(): React.JSX.Element {
           </Sheet>
           <Sheet
             open={sheet === 'inspector'}
-            title="Edit"
+            title="Photos, text and style"
             side="right"
             onClose={() => { setSheet(null); }}
           >
@@ -406,6 +409,7 @@ export function AppShell(): React.JSX.Element {
           </Sheet>
         </>
       )}
+      </>}
       {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
       <Toast />
       <ContextMenu />

@@ -204,9 +204,10 @@ function readStoredTheme(): Theme {
     const stored = localStorage.getItem(THEME_KEY);
     if (stored === 'light' || stored === 'dark') return stored;
   } catch {
-    // Private mode or blocked storage — fall through to the media query.
+    // Private mode or blocked storage — fall through to the default.
   }
-  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  // Light by default, whatever the device prefers; dark is a choice (D-109).
+  return 'light';
 }
 
 function applyTheme(theme: Theme): void {

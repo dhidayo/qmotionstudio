@@ -48,7 +48,25 @@ export type PhotoTarget =
   | { readonly kind: 'overlay'; readonly id: string }
   | { readonly kind: 'logo' };
 
+/**
+ * The phone layout's panels (D-109) — one open at a time, each a bottom sheet.
+ * `element` edits whatever is selected; `timeline` is Corporate Ads' full
+ * timeline, folded away the rest of the time.
+ */
+export type PhonePanel =
+  | 'designs' | 'photos' | 'text' | 'motion' | 'effects' | 'style' | 'add'
+  | 'project' | 'aspect' | 'element' | 'timeline';
+
+/** Zoom and pan of the preview on a phone, from a pinch. 1 is fitted to the screen. */
+export type ViewZoom = { readonly scale: number; readonly x: number; readonly y: number };
+
+export const NO_ZOOM: ViewZoom = { scale: 1, x: 0, y: 0 };
+
 type OverlayState = {
+  phonePanel: PhonePanel | null;
+  openPhonePanel: (panel: PhonePanel | null) => void;
+  viewZoom: ViewZoom;
+  setViewZoom: (zoom: ViewZoom) => void;
   /** The canvas element whose text is being typed into, by its selection key (D-107). */
   textEdit: string | null;
   openTextEdit: (key: string | null) => void;
@@ -72,6 +90,10 @@ type OverlayState = {
 export const useOverlays = create<OverlayState>((set) => ({
   menu: null,
   picker: null,
+  phonePanel: null,
+  openPhonePanel: (phonePanel) => { set({ phonePanel, menu: null }); },
+  viewZoom: NO_ZOOM,
+  setViewZoom: (viewZoom) => { set({ viewZoom }); },
   textEdit: null,
   openTextEdit: (textEdit) => { set({ textEdit, menu: null }); },
   photoPicker: null,
