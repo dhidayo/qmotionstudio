@@ -224,8 +224,9 @@ test.describe('the logo (§8.3)', () => {
   test('can be dragged, which is what its own panel promises', async ({ page }) => {
     await openAd(page);
 
-    await page.getByRole('tab', { name: 'Logo' }).click();
-    await page.locator('input[type="file"]').last().setInputFiles({
+    // The logo lives in Look now (D-105).
+    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByLabel('Add a logo').setInputFiles({
       name: 'logo.png', mimeType: 'image/png', buffer: PNG,
     });
 

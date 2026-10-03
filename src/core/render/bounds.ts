@@ -8,6 +8,7 @@ import { NO_SLOT_TRANSFORM, type SlotKey, type SlotTransform } from '@/document/
 import { poseAt } from '@/document/select/overlay';
 import type { DrawnScene } from './rig';
 import { overlayLayer } from './overlays';
+import { lockupSpec, logoGeometry } from './logo';
 import { nudgeAt, slotKey, slotOf } from './slots';
 
 /**
@@ -141,34 +142,33 @@ export function overlayBox(
 }
 
 /**
- * The box round §8.3's logo.
+ * The box round §8.3's logo — and its lockup, which moves with it (D-101).
  *
- * `logo.x`/`logo.y` are normalised against the *safe* box, not the frame —
- * that is what `placementOf` in the template chrome does with them, and the
- * two have to agree or the selection box lands somewhere the logo is not.
+ * Computed by the same `logoGeometry` the renderer draws with, so the box is
+ * wherever the logo is by construction rather than by two pieces of arithmetic
+ * agreeing. `anchorOffset` runs from the logo image's centre — which is what
+ * `logo.x`/`logo.y` place — to the centre of the box, so a drag of the box can
+ * be written back as a position.
  */
-export function logoBox(inputs: SceneInputs, aspect: Aspect): PlacedBox | null {
+export function logoBox(
+  inputs: SceneInputs,
+  aspect: Aspect,
+  measure: TextMeasureContext,
+  /** The logo image's width over its height, once it has decoded. */
+  imageAspect = 1,
+): PlacedBox | null {
   const { logo } = inputs;
   if (logo.mediaId === null) return null;
 
   const design = projectDesign(aspect);
-  const safe = safeBox(design);
-  const size = Math.min(design.w, design.h) * (logo.sizePct / 100);
-  const half = size / 2;
-
-  const [cx, cy] = ((): [number, number] => {
-    switch (logo.placement) {
-      case 'topLeft': return [safe.x + half, safe.y + half];
-      case 'topRight': return [safe.x + safe.w - half, safe.y + half];
-      case 'bottomLeft': return [safe.x + half, safe.y + safe.h - half];
-      case 'bottomRight': return [safe.x + safe.w - half, safe.y + safe.h - half];
-      case 'center': return [safe.x + safe.w / 2, safe.y + safe.h / 2];
-      case 'free': return [safe.x + safe.w * logo.x, safe.y + safe.h * logo.y];
-    }
-  })();
-
-  // The logo image is centre-anchored, so its position is its centre.
-  return { cx, cy, w: size, h: size, rotation: 0, anchorOffset: { x: 0, y: 0 } };
+  const geometry = logoGeometry(logo, design, safeBox(design), imageAspect, (text, fontSizePx) => {
+    const run = layoutText(measure, lockupSpec(text, fontSizePx));
+    return { w: run.width, h: run.height };
+  });
+  const { unit, image } = geometry;
+  const cx = unit.x + unit.w / 2;
+  const cy = unit.y + unit.h / 2;
+  return { cx, cy, w: unit.w, h: unit.h, rotation: 0, anchorOffset: { x: cx - image.cx, y: cy - image.cy } };
 }
 
 /** The inverse of `logoBox`: a point on the frame back to normalised safe-box coords. */

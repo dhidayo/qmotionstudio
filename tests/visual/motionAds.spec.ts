@@ -137,7 +137,7 @@ test.describe('scene sequencing', () => {
     await page.waitForSelector('canvas');
     await expect(page.getByLabel('Timeline')).toBeHidden();
 
-    await page.getByRole('button', { name: 'Motion Ads' }).click();
+    await page.getByRole('button', { name: 'Corporate Ads' }).click();
     await expect(page.getByLabel('Timeline')).toBeVisible();
     // The music row is real since M6; it invites a track rather than promising one.
     await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
@@ -285,7 +285,7 @@ test.describe('overlays (§3C)', () => {
     await scrubTo(page, 8_000, QUICK_PITCH_MS);
     const outsideWith = await fingerprint(page);
 
-    await page.getByRole('button', { name: 'Remove overlay' }).click();
+    await page.getByRole('button', { name: /^Delete layer/ }).click();
     await page.waitForTimeout(400);
     const outsideWithout = await fingerprint(page);
 
@@ -332,7 +332,7 @@ test.describe('overlays (§3C)', () => {
   test('removing an overlay returns the inspector to the scene', async ({ page }) => {
     await openAd(page, 'quick-pitch', 1_000);
     await page.getByRole('button', { name: '+ Text' }).click();
-    await page.getByRole('button', { name: 'Remove overlay' }).click();
+    await page.getByRole('button', { name: /^Delete layer/ }).click();
 
     await expect(page.getByLabel('Overlay inspector')).toBeHidden();
     await expect(page.getByText('5 scenes · 0 overlays')).toBeVisible();
@@ -389,7 +389,7 @@ test.describe('the sequence is editable', () => {
     await expect(page.getByRole('button', { name: 'Parallax Depth', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Launch Story/ })).toBeHidden();
 
-    await page.getByRole('button', { name: 'Motion Ads' }).click();
+    await page.getByRole('button', { name: 'Corporate Ads' }).click();
     await expect(page.getByRole('button', { name: /^Launch Story/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Parallax Depth', exact: true })).toBeHidden();
   });

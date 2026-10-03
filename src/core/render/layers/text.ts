@@ -278,3 +278,20 @@ function swapState(
   }
   return { showAlt: true, alpha: progress(localMs, reveal.atMs + half, reveal.atMs + reveal.durationMs) };
 }
+
+/**
+ * The block a text layer paints into, measured exactly as `drawText` measures
+ * it — for effects that have to fit round the words (D-100).
+ */
+export function textBlock(dc: DrawContext, props: TextProps): { w: number; h: number } {
+  const run = dc.measurer.measure({
+    text: props.text,
+    font: fontString(props.fontId, props.fontSizePx, props.weight),
+    fontSizePx: props.fontSizePx,
+    letterSpacingPx: (props.letterSpacingPct / 100) * props.fontSizePx,
+    lineHeight: props.lineHeight,
+    align: props.align,
+    maxWidthPx: props.maxWidthPx,
+  });
+  return { w: props.maxWidthPx ?? run.width, h: run.height };
+}

@@ -3,7 +3,7 @@ import type { SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
 import type { SceneTemplate } from '../schema';
 import { FULL_LOOK } from '../_shared/look';
-import { backgroundLayer, logoLayers } from '../_shared/chrome';
+import { backgroundLayer } from '../_shared/chrome';
 
 /**
  * Blank.
@@ -25,7 +25,7 @@ import { backgroundLayer, logoLayers } from '../_shared/chrome';
  * starting a project.
  */
 function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
-  return [backgroundLayer(inputs, ctx), ...logoLayers(inputs, ctx)];
+  return [backgroundLayer(inputs, ctx)];
 }
 
 const template: SceneTemplate = {

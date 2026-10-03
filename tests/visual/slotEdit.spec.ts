@@ -311,7 +311,7 @@ test.describe('motion on a template element', () => {
     await openScene(page);
     await selectFrontPhoto(page);
 
-    await expect(page.getByText('Motion', { exact: true })).toBeVisible();
+    await expect(page.getByText('Motion path', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add motion' })).toBeVisible();
   });
 

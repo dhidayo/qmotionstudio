@@ -18,7 +18,7 @@ import {
   sealCoalescing, undo, undoLabel, type HistoryState,
 } from './undo';
 
-export type InspectorTab = 'photos' | 'text' | 'logo' | 'look';
+export type InspectorTab = 'photos' | 'text' | 'motion' | 'look';
 export type Theme = 'light' | 'dark';
 
 /**
@@ -74,6 +74,20 @@ type EditorState = {
    * it must not be saved.
    */
   selectedSlot: SlotKey | null;
+  /** The timeline effect the inspector is editing (D-100), or null. */
+  selectedEffect: string | null;
+  /**
+   * Whether the scene itself was the last thing picked on the timeline — so
+   * Delete means "this scene" rather than whatever was selected before
+   * (D-104). Every other selection clears it.
+   */
+  sceneClipSelected: boolean;
+  /**
+   * The layer (L1, L2, …) the person chose on the timeline — by clicking its
+   * name or an empty stretch of it — where new elements go (D-103). Null lets
+   * the timeline choose.
+   */
+  targetTrack: number | null;
 
   playheadMs: number;
   isPlaying: boolean;
@@ -111,6 +125,10 @@ type EditorState = {
   selectAudio: (id: string | null) => void;
   selectLogo: (selected: boolean) => void;
   selectSlot: (key: SlotKey | null, tab?: InspectorTab, photoIndex?: number) => void;
+  selectEffect: (id: string | null) => void;
+  /** A scene clicked on the timeline: selects it, as the thing Delete would remove. */
+  selectSceneClip: (index: number) => void;
+  setTargetTrack: (track: number | null) => void;
 
   /**
    * Replaces the whole document (§13's project list).
@@ -272,6 +290,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   selectedAudio: null,
   selectedLogo: false,
   selectedSlot: null,
+  selectedEffect: null,
+  sceneClipSelected: false,
+  targetTrack: null,
   playheadMs: 0,
   isPlaying: true,
   inspectorTab: 'photos',
@@ -290,26 +311,54 @@ export const useEditor = create<EditorState>((set, get) => ({
     set((state) => {
       const clamped = Math.max(0, Math.min(index, state.project.scenes.length - 1));
       return clamped === state.selectedScene && state.selectedOverlay === null && state.selectedAudio === null
-        ? {}
+        && state.selectedEffect === null
+        ? { sceneClipSelected: false }
         : {
             selectedScene: clamped,
             selectedOverlay: null,
             selectedAudio: null,
             selectedLogo: false,
             selectedSlot: null,
+            selectedEffect: null,
+            sceneClipSelected: false,
             selectedPhoto: 0,
-            template: null,
+            ...(clamped === state.selectedScene ? {} : { template: null }),
           };
     });
   },
 
+  selectSceneClip: (index) => {
+    get().selectScene(index);
+    set({ sceneClipSelected: true });
+  },
+
   selectOverlay: (selectedOverlay) => {
-    set({ selectedOverlay, selectedAudio: null, selectedLogo: false, selectedSlot: null });
+    set({
+      selectedOverlay,
+      selectedAudio: null,
+      selectedLogo: false,
+      selectedSlot: null,
+      selectedEffect: null,
+      sceneClipSelected: false,
+    });
   },
 
   selectAudio: (selectedAudio) => {
-    set({ selectedAudio, selectedOverlay: null, selectedLogo: false, selectedSlot: null });
+    set({ selectedAudio, selectedOverlay: null, selectedLogo: false, selectedSlot: null, selectedEffect: null, sceneClipSelected: false });
   },
+
+  selectEffect: (selectedEffect) => {
+    set({
+      selectedEffect,
+      selectedOverlay: null,
+      selectedAudio: null,
+      selectedLogo: false,
+      selectedSlot: null,
+      sceneClipSelected: false,
+    });
+  },
+
+  setTargetTrack: (targetTrack) => { set({ targetTrack }); },
 
   selectLogo: (selectedLogo) => {
     // Picking something up on the canvas opens its own controls. Selecting an
@@ -322,9 +371,12 @@ export const useEditor = create<EditorState>((set, get) => ({
             selectedOverlay: null,
             selectedAudio: null,
             selectedSlot: null,
-            inspectorTab: 'logo' as const,
+            selectedEffect: null,
+            sceneClipSelected: false,
+            // The logo's settings live in Look now (D-105).
+            inspectorTab: 'look' as const,
           }
-        : { selectedLogo, selectedOverlay: null, selectedAudio: null },
+        : { selectedLogo, selectedOverlay: null, selectedAudio: null, selectedEffect: null, sceneClipSelected: false },
     );
   },
 
@@ -342,6 +394,9 @@ export const useEditor = create<EditorState>((set, get) => ({
       selectedAudio: null,
       selectedLogo: false,
       selectedSlot: null,
+      selectedEffect: null,
+      sceneClipSelected: false,
+      targetTrack: null,
       selectedPhoto: 0,
       template: null,
       playheadMs: 0,
@@ -354,6 +409,8 @@ export const useEditor = create<EditorState>((set, get) => ({
       selectedOverlay: null,
       selectedAudio: null,
       selectedLogo: false,
+      selectedEffect: null,
+      sceneClipSelected: false,
       ...(tab === undefined ? {} : { inspectorTab: tab }),
       ...(photoIndex === undefined ? {} : { selectedPhoto: photoIndex }),
     });
@@ -461,7 +518,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setMode: (mode) => {
     get().dispatch(actions.setMode(mode));
-    set({ selectedOverlay: null, selectedScene: 0, template: null });
+    set({ selectedOverlay: null, selectedEffect: null, sceneClipSelected: false, selectedScene: 0, template: null });
   },
 
   setPlayhead: (ms) => { set({ playheadMs: Math.max(0, ms) }); },

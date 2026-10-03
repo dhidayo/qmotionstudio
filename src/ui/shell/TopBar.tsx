@@ -3,6 +3,7 @@ import { useEditor } from '@/state/store';
 import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import type { SaveState } from '@/ui/persist/saveState';
 import { ProjectTitle } from '@/ui/projects/ProjectTitle';
+import { MODE_LABEL } from './modeLabels';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -18,11 +19,10 @@ export function TopBar(): React.JSX.Element {
       style={{ height: 'var(--h-topbar)' }}
     >
       <div className="flex shrink-0 items-center gap-2 pr-1">
-        <span className="grid size-6 place-items-center rounded-md bg-accent text-[11px] font-bold text-accent-ink">
-          M
-        </span>
+        {/* The owner's Q, cut from their own artwork by `npm run brand`. */}
+        <img src="/brand-q.png" alt="" aria-hidden width={24} height={24} className="size-6 rounded-md" />
         <span className="hidden text-[13px] font-semibold tracking-tight lg:inline">
-          Motion Studio
+          Q Motion Studio
         </span>
       </div>
 
@@ -196,7 +196,7 @@ function ModeSwitch(): React.JSX.Element {
   const choose = (next: 'showcase' | 'motionAd'): void => {
     setMode(next);
     if (next === 'showcase' && (sceneCount > 1 || layerCount > 0)) {
-      showToast('Showcase keeps the selected scene. Press ⌘Z to bring the rest of the ad back.');
+      showToast('Lifestyle keeps the selected scene. Press ⌘Z to bring the rest of the ad back.');
     }
   };
 
@@ -224,7 +224,7 @@ function ModeSwitch(): React.JSX.Element {
                 : { color: 'var(--c-ink-faint)' }
             }
           >
-            {m === 'showcase' ? 'Showcase' : 'Motion Ads'}
+            {MODE_LABEL[m]}
           </button>
         );
       })}

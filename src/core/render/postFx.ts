@@ -114,7 +114,7 @@ export function drawWatermark(ctx: Ctx2D, design: Size): void {
   ctx.textAlign = 'right';
   ctx.textBaseline = 'alphabetic';
 
-  const text = 'Made with Motion Studio';
+  const text = 'Made with Q Motion Studio';
   const x = design.w - pad;
   const y = design.h - pad;
 

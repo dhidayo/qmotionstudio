@@ -2387,3 +2387,134 @@ before the save is a promise, not a confirmation. One hook,
 The menu is positioned against the window: the top bar scrolls sideways on
 narrow screens, and a scrolling box clips anything hanging out of it, so the
 first version opened and was cut off in the same instant.
+
+## D-100 — an effects library, at three levels
+
+"I had to output a video from this product then take to CapCut to add effects
+to it." Asked for at three levels — the whole scene, one element as it enters
+or leaves, and a chosen moment on the timeline — so there are three homes,
+one library, and one renderer path:
+
+- **Scene effects** (`SceneInputs.effects`) run in the scene's real time, so
+  they move with the scene and snow falls at the same speed whatever its
+  speed setting. In Lifestyle this is the whole video, with "Part of it" and
+  the playhead for a moment.
+- **Element effects** (`elementEffects` by slot key or `logo`, and
+  `Overlay.effects`) are timed by *phase* — enter, during, exit — not by
+  clock, so an exit stays on the element's exit when a scene is lengthened.
+  For a template's own element the phase is measured from when it is
+  actually visible (its opacity track), not from its layer window: a photo
+  in a sequence is seen for a second of a ten-second layer.
+- **Timeline effects** (`Project.effects`, Corporate Ads) cover everything,
+  scenes and layers, on an FX lane, and stay put when scenes move.
+
+Thirty-eight frame effects (atmosphere, light, camera, stylize) and forty
+element effects (entrance, exit, emphasis, light). All procedural and pure:
+every particle is computed from its index, the effect's seed (a hash of its
+id, so deleting one effect does not reshuffle another's snow) and the time.
+Nothing is simulated frame to frame, so the playhead can land anywhere and
+the export is the preview. No `ctx.filter` — Safari's canvas lacks it — so
+colour looks are blend-mode fills and pixel looks read the frame back through
+grow-only scratch surfaces.
+
+Camera moves wrap a scene's layers before they draw (so a shake is the
+template re-rendered, not a resampled copy), plus just enough zoom to keep the
+frame's edges covered. A timeline camera move has to move what is already
+drawn, so it copies the frame once — only while one is active.
+
+Element effects hang off a new optional `fx` on any layer and are applied in
+`drawLayer`: motion folds into the resolved props; "onto" effects (a shine) are
+drawn isolated and `source-atop` so they never spill off a logo's transparent
+corners; glows are the element's own silhouette, tinted and blurred behind it.
+None of it is in `build()` or the build key — templates never know effects
+exist, and a slider drag never rebuilds anything.
+
+0% intensity means none, fade included — tested for every effect. The
+library's cards are live previews drawn by the same renderer on the scene's
+own photo, still until hovered.
+
+## D-101 — the logo is drawn by the renderer, with its lockup attached
+
+Reported: dragging the logo in Free moved its outline and not the logo. Cause:
+every template built the logo into its layers, and the build key held the
+logo's placement *mode* but not its position, so the first drag (switching to
+Free) rebuilt once and every later one did nothing. Adding the position to the
+key would have re-run whole templates on every pointer move. Instead the
+renderer draws the logo after the scene's layers, memoised on its own
+settings; templates no longer call a logo builder at all.
+
+The lockup is laid out against the logo *as it appears*: a wide wordmark drawn
+"contain" into a square box used to leave the text a third of a box below the
+visible mark. It sits a fixed gap from the visible edge — below (default),
+above, right or left — at a chosen size and colour, inside one group with the
+logo, so they move, fade and take effects together. Pinned to a corner, the
+whole unit is pinned, so a lockup never hangs off the frame. In Free, `x`/`y`
+still place the logo image's centre, so saved projects open unchanged. The
+selection box is the unit, computed by the same `logoGeometry` the renderer
+uses; the lockup is measured with one shared text spec.
+
+Logo opacity was also baked into the build and did not update live; it does
+now, as a side effect of the same change.
+
+## D-102 — Motion properties, for every template
+
+"I would like to have the properties right in the panel where I can modify
+the behaviour of the animation." Templates are pure `build()`s with no
+parameters, and giving thirty of them hand-made knobs would not reach designs
+not yet written. So the tuning is generic and applied after the build, like
+the slot nudges:
+
+- **Strength** scales every movement away from its resting value — the value a
+  track holds longest, counting before its first keyframe and after its last,
+  which is right for things that arrive, rest and leave, only arrive, or only
+  leave. 0% holds still; 200% doubles. Opacity is presence, not movement, and
+  is left alone.
+- **Feel** gives every move one easing character; a spring is never applied to
+  opacity, which it would push past its bounds.
+
+Scene-wide, and per element over it; a tuned container carries its tuning to
+its pieces. Speed moved here from Look.
+
+## D-103 — layers fill up before new ones open
+
+Every new element used to get a layer of its own. Now it takes the *highest*
+existing layer with room at the playhead (highest, so it lands in front of what
+it shares the moment with — the alternative is a photo that appears to add
+nothing), and a new layer only when none has room. Clicking a layer's name or
+an empty stretch of it chooses that layer: new elements go there, at the
+playhead or straight after the clip they would have hit.
+
+Only an explicit choice counts. The first version also followed the selected
+clip, which sent every new caption to the end of the last one instead of to the
+playhead — the tests caught it.
+
+Clips drag between layers. On release, one dropped on top of another goes back
+to its own layer, or the nearest above with room, and a notice says so; emptied
+layers close up. One undo step for the whole gesture.
+
+## D-104 — delete, and a menu for everything on the timeline
+
+Delete or Backspace removes what is selected — a layer, an effect, the music, a
+scene picked on the timeline, the logo — with a notice that says how to undo.
+Never while typing, never under a dialog; a template's own element explains
+why it cannot be deleted rather than doing nothing.
+
+Right-click, a long press (touch), or "⋯" on a selected clip opens the same
+menu of what can be done to that thing: effects, entrance, exit, duplicate,
+arrange, layers, change design, delete. One module (`ui/editing/commands`)
+backs the key and every menu, on the timeline and on the canvas.
+
+Lifting the finger after a long press makes the browser click whatever is now
+under it — the menu, which had just opened there — and the first item ran by
+itself. Pointer clicks in the first moments after a touch-opened menu are
+ignored; mouse and keyboard use is untouched.
+
+## D-105 — names: Q Motion Studio, Lifestyle, Corporate Ads; Logo into Look
+
+The product is Q Motion Studio, its mark the owner's own Q, cut from their
+artwork by `npm run brand` into the favicon, app icons and top-bar mark. The
+modes are Lifestyle (was Showcase) and Corporate Ads (was Motion Ads); the
+document keeps its ids, so saved projects need no migration, and the labels
+live in one place. The Logo tab became a section of Look — "I do not see a
+reason why they are apart" — in both modes, with "Use on every scene" for
+ads; its tab went to Motion.

@@ -1,4 +1,4 @@
-import { colorFill, roleFill, type Keyframe, type Layer, type Rect, type Size } from '@/core/types';
+import { roleFill, type Keyframe, type Layer, type Rect, type Size } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import type { SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
@@ -6,11 +6,11 @@ import type { BuildContext } from '../buildContext';
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
 /**
- * Background and logo layers, shared by every template.
+ * Background layers, shared by every template.
  *
- * §8.4's background treatment and §8.3's logo are user controls, so they have
- * to behave the same everywhere. A template that rolled its own would mean
- * "Blurred photo" doing something different in each one.
+ * §8.4's background treatment is a user control, so it has to behave the same
+ * everywhere. A template that rolled its own would mean "Blurred photo" doing
+ * something different in each one.
  */
 
 /**
@@ -129,87 +129,11 @@ function gradientBackground(base: BaseLayer, design: Size): Layer {
   };
 }
 
-/**
- * §8.3's logo, as the topmost layer of a scene.
- *
- * Returns nothing when there is no logo, so templates can spread the result
- * without branching.
+/*
+ * §8.3's logo used to be built here, as the topmost layer of every template.
+ * The renderer draws it now (src/core/render/logo.ts, D-101), so it can move
+ * with a drag without rebuilding the template underneath it.
  */
-export function logoLayers(inputs: SceneInputs, ctx: BuildContext): Layer[] {
-  const { logo } = inputs;
-  if (logo.mediaId === null) return [];
-
-  const { design, safe, durationMs } = ctx;
-  const unit = Math.min(design.w, design.h);
-  const size = unit * (logo.sizePct / 100);
-
-  const [x, y] = placementOf(logo.placement, safe, size, logo.x, logo.y);
-
-  const layers: Layer[] = [
-    {
-      id: ctx.id('logo'),
-      type: 'image',
-      startMs: 0,
-      endMs: durationMs,
-      tracks: {
-        x: [kf(0, x)],
-        y: [kf(0, y)],
-        opacity: [kf(0, 0), kf(700, logo.opacity)],
-      },
-      props: { mediaId: logo.mediaId, w: size, h: size, fit: 'contain' },
-    },
-  ];
-
-  if (logo.lockup && logo.lockupText.trim().length > 0) {
-    const fontSizePx = size * 0.3;
-    layers.push({
-      id: ctx.id('lockup'),
-      type: 'text',
-      startMs: 0,
-      endMs: durationMs,
-      anchorX: 0.5,
-      anchorY: 0,
-      tracks: {
-        x: [kf(0, x)],
-        y: [kf(0, y + size * 0.56)],
-        opacity: [kf(0, 0), kf(900, logo.opacity)],
-      },
-      props: {
-        text: logo.lockupText,
-        fontId: 'body',
-        fontSizePx,
-        weight: 600,
-        letterSpacingPct: 8,
-        lineHeight: 1.2,
-        align: 'center',
-        fill: roleFill('ink'),
-        maxWidthPx: null,
-        reveal: { kind: 'none' },
-        shadow: { blur: fontSizePx * 0.6, offsetX: 0, offsetY: 0, paint: colorFill('rgba(0,0,0,0.5)') },
-      },
-    });
-  }
-
-  return layers;
-}
-
-function placementOf(
-  placement: SceneInputs['logo']['placement'],
-  safe: BuildContext['safe'],
-  size: number,
-  freeX: number,
-  freeY: number,
-): [number, number] {
-  const half = size / 2;
-  switch (placement) {
-    case 'topLeft': return [safe.x + half, safe.y + half];
-    case 'topRight': return [safe.x + safe.w - half, safe.y + half];
-    case 'bottomLeft': return [safe.x + half, safe.y + safe.h - half];
-    case 'bottomRight': return [safe.x + safe.w - half, safe.y + safe.h - half];
-    case 'center': return [safe.x + safe.w / 2, safe.y + safe.h / 2];
-    case 'free': return [safe.x + safe.w * freeX, safe.y + safe.h * freeY];
-  }
-}
 
 /** Convenience: the ctx.font string a text layer's props imply. */
 export function fontFor(fontId: string, sizePx: number, weight: number): string {

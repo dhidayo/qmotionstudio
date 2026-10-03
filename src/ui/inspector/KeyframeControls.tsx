@@ -44,7 +44,7 @@ export function KeyframeControls({
   const span = spanOf(times);
 
   return (
-    <Section title="Motion">
+    <Section title="Motion path">
       {!animated && (
         <>
           <EmptyNote>{explain}</EmptyNote>

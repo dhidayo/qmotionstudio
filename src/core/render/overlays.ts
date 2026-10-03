@@ -5,6 +5,7 @@ import {
 import type { AnimPreset, Overlay } from '@/document/types';
 import { easeOf, poseTrack } from '@/document/select/overlay';
 import { sampleTrack } from '@/core/anim/interpolate';
+import { timeElementEffects } from './tuning';
 
 /**
  * Overlays → layers (§3C, §6.4 step 4).
@@ -97,12 +98,17 @@ export function overlayLayer(overlay: Overlay, ctx: OverlayBuildContext): Layer 
     opacity: opacityTrack(pathOpacity, overlay.enterAnim, overlay.exitAnim, shape),
   };
 
+  // Element effects (D-100) run across the overlay's whole life; an entrance
+  // at its start, an exit at its end.
+  const fx = timeElementEffects(overlay.effects, { start: 0, end: durationMs });
+  const withFx = fx.length > 0 ? { fx } : {};
+
   // wipeIn is the one preset that is not a transform: the content has to stay
   // still while the window over it opens, which is what MaskProps.clipFrom and
   // §6.1's clipProgress are for.
   const wipes = overlay.enterAnim === 'wipeIn' || overlay.exitAnim === 'wipeIn';
   if (!wipes) {
-    return { ...content, tracks: { ...content.tracks, ...tracks } };
+    return { ...content, tracks: { ...content.tracks, ...tracks }, ...withFx };
   }
 
   const box = contentBox(content, unit);
@@ -121,6 +127,7 @@ export function overlayLayer(overlay: Overlay, ctx: OverlayBuildContext): Layer 
       h: box.h,
       clipFrom: 'left',
     },
+    ...withFx,
     children: [content],
   };
 }
@@ -406,6 +413,7 @@ export function overlayKey(overlay: Overlay, design: Size): string {
     // the overlay would simply not move.
     overlay.poses ?? null,
     overlay.easing ?? null,
+    overlay.effects ?? null,
     content.kind,
     content.kind === 'text' ? [content.text, content.style] : content.mediaId,
   ]);

@@ -108,6 +108,53 @@ test.describe('offline export', () => {
     expect(info.size).toBeGreaterThan(200_000);
   });
 
+  test('effects are in the export, exactly as in the preview (D-100)', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(1200);
+
+    // Black and white over the whole scene, added the way a person would.
+    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByRole('button', { name: '+ Add effect' }).last().click();
+    const library = page.getByRole('dialog', { name: 'Effects' });
+    await library.getByRole('tab', { name: 'Stylize' }).click();
+    await library.locator('[data-effect="black-white"]').click();
+
+    await runExport(page, 'mp4');
+    await waitForExport(page);
+
+    // A frame from the file itself: a black-and-white picture has no colour.
+    const colourfulness = await page.evaluate(async () => {
+      const { blob } = (globalThis as unknown as { __exported: { blob: Blob } }).__exported;
+      const url = URL.createObjectURL(blob);
+      const video = document.createElement('video');
+      video.src = url;
+      video.muted = true;
+      await new Promise<void>((resolve, reject) => {
+        video.onloadeddata = () => { resolve(); };
+        video.onerror = () => { reject(new Error('the exported file would not decode')); };
+      });
+      video.currentTime = 4;
+      await new Promise<void>((resolve) => { video.onseeked = () => { resolve(); }; });
+      const canvas = document.createElement('canvas');
+      canvas.width = 108;
+      canvas.height = 192;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no 2d');
+      ctx.drawImage(video, 0, 0, 108, 192);
+      const data = ctx.getImageData(0, 0, 108, 192).data;
+      URL.revokeObjectURL(url);
+      let spread = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i] ?? 0, g = data[i + 1] ?? 0, b = data[i + 2] ?? 0;
+        spread += Math.max(r, g, b) - Math.min(r, g, b);
+      }
+      return spread / (data.length / 4);
+    });
+    // Video compression leaves a trace of chroma; a colour photograph is far above this.
+    expect(colourfulness).toBeLessThan(6);
+  });
+
   test('WebM exports a valid EBML container', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('canvas');

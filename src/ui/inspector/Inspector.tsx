@@ -1,15 +1,20 @@
 import { useEditor, type InspectorTab } from '@/state/store';
 import { PhotosTab } from './tabs/PhotosTab';
 import { TextTab } from './tabs/TextTab';
-import { LogoTab } from './tabs/LogoTab';
+import { MotionTab } from './tabs/MotionTab';
 import { LookTab } from './tabs/LookTab';
 import { OverlayPanel } from './OverlayPanel';
 import { AudioPanel } from './AudioPanel';
+import { TimelineEffectPanel } from '@/ui/effects/EffectEditors';
 
+/*
+ * Logo became part of Look, and its place went to Motion — the template's
+ * motion properties and the effects library (D-105).
+ */
 const TABS: readonly { id: InspectorTab; label: string }[] = [
   { id: 'photos', label: 'Photos' },
   { id: 'text', label: 'Text' },
-  { id: 'logo', label: 'Logo' },
+  { id: 'motion', label: 'Motion' },
   { id: 'look', label: 'Look' },
 ];
 
@@ -30,6 +35,19 @@ export function Inspector(): React.JSX.Element {
    */
   const editingOverlay = useEditor((s) => s.selectedOverlay !== null);
   const editingAudio = useEditor((s) => s.selectedAudio !== null);
+  const editingEffect = useEditor((s) => s.selectedEffect !== null);
+
+  if (editingEffect) {
+    return (
+      <aside
+        className="flex shrink-0 flex-col overflow-y-auto border-l border-edge bg-panel p-3"
+        style={{ width: 'var(--w-inspector)' }}
+        aria-label="Effect inspector"
+      >
+        <TimelineEffectPanel />
+      </aside>
+    );
+  }
 
   if (editingAudio) {
     return (
@@ -85,7 +103,7 @@ export function Inspector(): React.JSX.Element {
       <div className="flex-1 overflow-y-auto p-3" role="tabpanel">
         {tab === 'photos' && <PhotosTab template={template} />}
         {tab === 'text' && <TextTab template={template} />}
-        {tab === 'logo' && <LogoTab template={template} />}
+        {tab === 'motion' && <MotionTab template={template} />}
         {tab === 'look' && <LookTab template={template} />}
       </div>
     </aside>

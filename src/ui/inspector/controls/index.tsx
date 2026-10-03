@@ -51,7 +51,8 @@ export function Slider({
 }): React.JSX.Element {
   const endInteraction = useEditor((s) => s.endInteraction);
   return (
-    <Row label={label} hint={`${Math.round(value)}${suffix ?? ''}`}>
+    // Fractional steps show their fraction: a 0.8s length must not read "1s".
+    <Row label={label} hint={`${step < 1 ? value.toFixed(1) : Math.round(value)}${suffix ?? ''}`}>
       <input
         type="range"
         min={min}

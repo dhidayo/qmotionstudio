@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { createBuildContext } from '@/templates/buildContext';
-import { logoLayers } from '@/templates/_shared/chrome';
 import { resolveProps, createProps } from '@/core/anim/interpolate';
-import type { TextMeasureContext } from '@/core/text/layout';
+import { layoutText, type TextMeasureContext } from '@/core/text/layout';
+import { lockupSpec, logoGeometry, logoLayer } from './logo';
+import { contentFloor } from '@/templates/_shared/chrome';
 import { colorFill, type Aspect, type Layer, type Palette } from '@/core/types';
 import type { LogoPlacement, Overlay, SceneInputs, TextStyle } from '@/document/types';
 import type { DrawnScene } from './rig';
@@ -173,58 +173,116 @@ describe('the logo box', () => {
     'topLeft', 'topRight', 'bottomLeft', 'bottomRight', 'center', 'free',
   ];
 
+  const lockupMeasure = (text: string, fontSizePx: number): { w: number; h: number } => {
+    const run = layoutText(measure, lockupSpec(text, fontSizePx));
+    return { w: run.width, h: run.height };
+  };
+
   /**
-   * Agreement with the renderer, for every placement and aspect.
+   * Agreement with the renderer, for every placement and aspect, with and
+   * without a lockup.
    *
-   * `logoBox` necessarily repeats the arithmetic in the template chrome's
-   * `placementOf`, because one produces a layer and the other produces a
-   * rectangle. Repeating it is only safe if something notices when the two
-   * drift, so this measures the actual built layer rather than trusting the
-   * copy.
+   * The renderer draws the logo as a group at the image's centre (D-101), and
+   * the box is the whole unit. So the box's centre, less its anchor offset, has
+   * to be exactly where the group is drawn — or a drag would jump the logo.
    */
   it.each(ASPECTS)('matches where the renderer puts the logo at %s', (aspect) => {
     const design = projectDesign(aspect);
 
     for (const placement of PLACEMENTS) {
-      const scene = inputs({ placement, x: 0.3, y: 0.8, sizePct: 14 });
-      const ctx = createBuildContext({
-        design,
-        safe: safeBox(design),
-        palette,
-        durationMs: 3_000,
-        measureContext: measure,
-      });
+      for (const lockup of [false, true]) {
+        const scene = inputs({ placement, x: 0.3, y: 0.8, sizePct: 14, lockup, lockupText: 'Quantera' });
+        const geometry = logoGeometry(scene.logo, design, safeBox(design), 1, lockupMeasure);
+        const layer = logoLayer(scene.logo, geometry, 3_000, []);
+        expect(layer, `${placement} should build a layer`).not.toBeNull();
+        if (!layer) continue;
 
-      const [layer] = logoLayers(scene, ctx);
-      expect(layer, `${placement} should build a layer`).toBeDefined();
-      if (!layer) continue;
+        const drawn = resolveProps(layer.tracks, 0, createProps());
+        const box = logoBox(scene, aspect, measure);
+        expect(box).not.toBeNull();
+        if (!box) continue;
 
-      const drawn = resolveProps(layer.tracks, 0, createProps());
-      const box = logoBox(scene, aspect);
-
-      expect(box?.cx, `${placement} x at ${aspect}`).toBeCloseTo(drawn.x, 6);
-      expect(box?.cy, `${placement} y at ${aspect}`).toBeCloseTo(drawn.y, 6);
-      if (layer.type === 'image') {
-        expect(box?.w, `${placement} size at ${aspect}`).toBeCloseTo(layer.props.w, 6);
+        expect(box.cx - box.anchorOffset.x, `${placement} x at ${aspect}`).toBeCloseTo(drawn.x, 6);
+        expect(box.cy - box.anchorOffset.y, `${placement} y at ${aspect}`).toBeCloseTo(drawn.y, 6);
+        expect(box.w).toBeCloseTo(geometry.unit.w, 6);
+        expect(box.h).toBeCloseTo(geometry.unit.h, 6);
       }
     }
   });
 
   it('has no box at all when there is no logo', () => {
-    expect(logoBox(inputs({ mediaId: null }), '1:1')).toBeNull();
+    expect(logoBox(inputs({ mediaId: null }), '1:1', measure)).toBeNull();
   });
 
   it('inverts its own free placement, so a drag lands where it was dropped', () => {
     for (const aspect of ASPECTS) {
-      const scene = inputs({ placement: 'free', x: 0.22, y: 0.64 });
-      const box = logoBox(scene, aspect);
-      expect(box).not.toBeNull();
-      if (!box) continue;
+      for (const lockup of [false, true]) {
+        const scene = inputs({ placement: 'free', x: 0.22, y: 0.64, lockup, lockupText: 'Quantera' });
+        const box = logoBox(scene, aspect, measure);
+        expect(box).not.toBeNull();
+        if (!box) continue;
 
-      const free = logoFreeFrom({ x: box.cx, y: box.cy }, aspect);
-      expect(free.x).toBeCloseTo(0.22, 6);
-      expect(free.y).toBeCloseTo(0.64, 6);
+        const free = logoFreeFrom({ x: box.cx - box.anchorOffset.x, y: box.cy - box.anchorOffset.y }, aspect);
+        expect(free.x).toBeCloseTo(0.22, 6);
+        expect(free.y).toBeCloseTo(0.64, 6);
+      }
     }
+  });
+});
+
+describe('the lockup (D-101)', () => {
+  const design = projectDesign('1:1');
+  const lockupMeasure = (text: string, fontSizePx: number): { w: number; h: number } => {
+    const run = layoutText(measure, lockupSpec(text, fontSizePx));
+    return { w: run.width, h: run.height };
+  };
+
+  it('sits centred just below the logo as it actually appears, not below a square box', () => {
+    // A wordmark three times as wide as it is tall: drawn "contain" into the
+    // old square box it left the text hanging far below the visible mark.
+    const scene = inputs({ placement: 'center', sizePct: 30, lockup: true, lockupText: 'Studio' });
+    const g = logoGeometry(scene.logo, design, safeBox(design), 3, lockupMeasure);
+    expect(g.lockup).not.toBeNull();
+    if (!g.lockup) return;
+    const imageBottom = g.image.cy + g.image.h / 2;
+    expect(g.image.h).toBeCloseTo(g.image.w / 3, 6);
+    expect(g.lockup.y - imageBottom).toBeCloseTo(g.lockup.fontSizePx * 0.45, 6);
+    expect(g.lockup.x + g.lockup.w / 2).toBeCloseTo(g.image.cx, 6);
+  });
+
+  it('can sit above, to the right or to the left', () => {
+    const at = (lockupPosition: 'above' | 'right' | 'left') => {
+      const scene = inputs({ placement: 'center', lockup: true, lockupText: 'Studio', lockupPosition });
+      return logoGeometry(scene.logo, design, safeBox(design), 1, lockupMeasure);
+    };
+    const above = at('above');
+    const right = at('right');
+    const left = at('left');
+    expect((above.lockup?.y ?? 0) + (above.lockup?.h ?? 0)).toBeLessThan(above.image.cy - above.image.h / 2);
+    expect(right.lockup?.x ?? 0).toBeGreaterThan(right.image.cx + right.image.w / 2);
+    expect((left.lockup?.x ?? 0) + (left.lockup?.w ?? 0)).toBeLessThan(left.image.cx - left.image.w / 2);
+  });
+
+  it('keeps the whole unit inside the frame, and clear of the watermark, when pinned to a corner', () => {
+    const safe = safeBox(design);
+    const scene = inputs({ placement: 'bottomLeft', sizePct: 20, lockup: true, lockupText: 'A long lockup line' });
+    const g = logoGeometry(scene.logo, design, safe, 1, lockupMeasure);
+    expect(g.unit.x).toBeCloseTo(safe.x, 6);
+    expect(g.unit.y + g.unit.h).toBeCloseTo(contentFloor(design, safe), 6);
+    expect(g.unit.y + g.unit.h).toBeLessThan(safe.y + safe.h);
+  });
+
+  it('moves with the logo, because it is part of the same layer', () => {
+    const a = inputs({ placement: 'free', x: 0.2, y: 0.3, lockup: true, lockupText: 'Studio' });
+    const b = inputs({ placement: 'free', x: 0.7, y: 0.6, lockup: true, lockupText: 'Studio' });
+    const ga = logoGeometry(a.logo, design, safeBox(design), 1, lockupMeasure);
+    const gb = logoGeometry(b.logo, design, safeBox(design), 1, lockupMeasure);
+    expect((gb.lockup?.x ?? 0) - (ga.lockup?.x ?? 0)).toBeCloseTo(gb.image.cx - ga.image.cx, 6);
+    expect((gb.lockup?.y ?? 0) - (ga.lockup?.y ?? 0)).toBeCloseTo(gb.image.cy - ga.image.cy, 6);
+
+    const layer = logoLayer(a.logo, ga, 3_000, []);
+    expect(layer?.type).toBe('group');
+    if (layer?.type === 'group') expect(layer.children.map((c) => c.type)).toEqual(['image', 'text']);
   });
 });
 

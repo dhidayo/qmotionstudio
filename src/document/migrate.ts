@@ -55,7 +55,7 @@ export function migrate(raw: unknown): MigrationResult {
     // open a document written by a newer build and quietly drop what it added.
     return {
       ok: false,
-      reason: 'That project was saved by a newer version of Motion Studio.',
+      reason: 'That project was saved by a newer version of Q Motion Studio.',
     };
   }
 

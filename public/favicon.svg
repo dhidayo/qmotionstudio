@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Motion Studio">
-  <rect width="64" height="64" rx="14" fill="#4f46e5"/>
-  <!-- Three strokes fanning out: the mark the top bar already uses, as motion. -->
-  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="6">
-    <path d="M18 44V26"/>
-    <path d="M32 44V20"/>
-    <path d="M46 44V30"/>
-  </g>
-</svg>

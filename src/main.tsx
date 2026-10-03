@@ -31,7 +31,7 @@ loadFonts(document.fonts)
   .catch((error: unknown) => {
     // §16: never swallow an error. A failed font load means every frame after
     // it would be silently wrong, so it is worth stopping for.
-    console.error('Motion Studio: fonts failed to load.', error);
+    console.error('Q Motion Studio: fonts failed to load.', error);
     host.innerHTML =
       '<div style="display:grid;place-items:center;height:100%;font:14px ui-sans-serif,system-ui,sans-serif;color:#6b6b76;text-align:center;padding:24px">' +
       '<div><strong style="display:block;margin-bottom:6px;color:#17171b">Fonts failed to load</strong>' +

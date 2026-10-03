@@ -231,7 +231,15 @@ export type TextProps = {
  * are the photo and have to follow it when someone has dragged it. The pieces
  * themselves are then untagged, or the nudge would be applied twice (D-090).
  */
-export type GroupProps = { readonly slot?: SlotRef };
+export type GroupProps = {
+  readonly slot?: SlotRef;
+  /**
+   * The extent an element effect works in, in the group's own coordinates
+   * (D-100). A group has no box of its own; without this, an effect on it uses
+   * its first child's — which for the logo would leave the lockup out.
+   */
+  readonly box?: Rect;
+};
 
 export type MaskProps = {
   readonly shape: 'rect' | 'ellipse';
@@ -260,6 +268,32 @@ export type VideoProps = {
   readonly cornerRadius?: number;
 };
 
+/** One knob on an effect: a number, a colour, or a named choice. */
+export type FxParamValue = number | string | boolean;
+
+/**
+ * One effect, placed in time (D-100).
+ *
+ * The same shape serves an effect over the whole frame (snow, a camera shake, a
+ * film look) and an effect on one element (a spin in, a shine across a logo):
+ * what it is, when it runs, how strongly, and its own settings. `seed` makes
+ * every random-looking thing about it — where the flakes fall, when the
+ * lightning strikes — the same on every frame of every render, so an export is
+ * the preview, pixel for pixel.
+ *
+ * Times are the owner's: a layer's local clock for an element effect, a
+ * scene's or the project's for a frame effect.
+ */
+export type FxInstance = {
+  readonly effectId: string;
+  readonly startMs: number;
+  readonly endMs: number;
+  /** 0–1. How much of the effect; 0 is none. */
+  readonly intensity: number;
+  readonly params: Readonly<Record<string, FxParamValue>>;
+  readonly seed: number;
+};
+
 type LayerBase = {
   readonly id: string;
   /** Milliseconds relative to the layer's scene (or its overlay). */
@@ -270,6 +304,14 @@ type LayerBase = {
   readonly anchorX?: number;
   readonly anchorY?: number;
   readonly blendMode?: GlobalCompositeOperation;
+  /**
+   * Element effects on this layer, in its own local time (D-100).
+   *
+   * Added after the template has built — by the editor for a template's own
+   * element, by the overlay builder for a layer, by the logo builder for the
+   * logo — so no template ever has to know effects exist.
+   */
+  readonly fx?: readonly FxInstance[];
 };
 
 export type ShapeLayer = LayerBase & { readonly type: 'shape'; readonly props: ShapeProps };

@@ -4,7 +4,7 @@ import type { BuildContext } from '../buildContext';
 import type { SceneTemplate } from '../schema';
 import { FULL_BLEED_LOOK } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
-import { logoLayers } from '../_shared/chrome';
+
 import { POP_SLOTS, kf, popType } from '../_shared/pop';
 
 const SLOTS = {
@@ -106,7 +106,6 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   layers.push(scrim(band / 2, band, 90), scrim(design.h - band / 2, band, 270));
 
   layers.push(...type.layers);
-  layers.push(...logoLayers(inputs, ctx));
   return layers;
 }
 

@@ -12,7 +12,14 @@ import { drawGrain, drawVignette, drawWatermark } from './postFx';
 import { drawPlaceholderFrame } from './placeholder';
 import { overlayKey, overlayLayer } from './overlays';
 import { applySlotTransforms, hasSlotTransforms, slotTransformKey } from './slots';
+import { applySceneExtras, hasSceneExtras, sceneExtrasKey, timeElementEffects } from './tuning';
+import { lockupSpec, logoGeometry, logoLayer } from './logo';
+import { safeBox } from './bounds';
 import { transitionFn } from './transitions';
+import {
+  applyCamera, applyCameraToFrame, drawFrameEffects, frameCamera, fxOf,
+} from '@/core/effects/run';
+import { LOGO_KEY } from '@/document/types';
 import type { DrawContext } from './drawContext';
 import type { DrawnScene, RenderRig } from './rig';
 
@@ -106,6 +113,20 @@ export function renderFrame(
   ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
   drawOverlays(dc, project.overlays, globalTimeMs, rig, vp);
 
+  /*
+   *  4b. Timeline effects (D-100): over scenes and layers alike, in project
+   *  time. A camera move here has to move what is already drawn, so it works
+   *  on a copy of the frame; a scene's own camera moves its layers instead.
+   */
+  const timelineFx = fxOf(project.effects);
+  if (timelineFx.length > 0) {
+    const camera = frameCamera(timelineFx, globalTimeMs, vp.design, palette);
+    if (camera) applyCameraToFrame(ctx, camera, vp.design, px, vp.scale);
+    ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+    drawFrameEffects(ctx, timelineFx, globalTimeMs, vp.design, palette, px, vp.scale);
+    ctx.setTransform(vp.scale, 0, 0, vp.scale, 0, 0);
+  }
+
   //  5. Frame post-effects. Grain and vignette belong to the scene's look, so
   //     they are applied per scene inside drawScene — a crossfade between two
   //     looks has to blend them, not apply the incoming one to both. The
@@ -171,6 +192,19 @@ function drawScene(
   const rawLocalMs = globalTimeMs - span.startMs;
   const localTimeMs = rawLocalMs * look.speed;
 
+  /*
+   * The scene's own effects (D-100), in real time from the scene's start — so
+   * snow falls at the same speed whatever the template's speed is set to.
+   * A camera move goes round the scene's layers and its logo, and nothing
+   * else: grain stays still on the glass while the picture shakes behind it.
+   */
+  const sceneFx = fxOf(scene.inputs.effects);
+  const camera = sceneFx.length > 0 ? frameCamera(sceneFx, rawLocalMs, vp.design, palette) : null;
+  if (camera) {
+    target.save();
+    applyCamera(target, camera, vp.design);
+  }
+
   if (scene.templateId === '__placeholder__') {
     drawPlaceholderFrame(target, vp, palette, localTimeMs);
     if (primary) rig.drawn = null;
@@ -178,6 +212,12 @@ function drawScene(
     const built = memoisedLayers(rig, vp, scene, palette);
     if (built) drawLayers(dc, built.placed, localTimeMs);
     if (primary) rig.drawn = recordDrawn(rig.drawn, scene.id, built?.base ?? null, vp.design);
+    if (template?.kind !== 'scene' || template.supportsLogo) drawLogo(dc, rig, scene, vp, rawLocalMs);
+  }
+
+  if (camera) target.restore();
+  if (sceneFx.length > 0) {
+    drawFrameEffects(target, sceneFx, rawLocalMs, vp.design, palette, px, vp.scale);
   }
 
   drawGrain(target, vp.design, look.grain, rawLocalMs);
@@ -314,15 +354,52 @@ function placed(
   design: Size,
 ): readonly Layer[] {
   const { slotTransforms } = scene.inputs;
-  if (!hasSlotTransforms(slotTransforms)) return layers;
+  const nudged = hasSlotTransforms(slotTransforms);
+  const extras = hasSceneExtras(scene.inputs);
+  if (!nudged && !extras) return layers;
 
-  const key = `${baseKey}|${slotTransformKey(slotTransforms)}`;
+  const key = `${baseKey}|${slotTransformKey(slotTransforms)}|${sceneExtrasKey(scene.inputs)}`;
   const hit = rig.placedCache.get(scene.id);
   if (hit && hit.key === key) return hit.layers;
 
-  const next = applySlotTransforms(layers, slotTransforms, design);
+  // Nudges first, so an element's effects travel with it wherever it was put.
+  const moved = nudged ? applySlotTransforms(layers, slotTransforms, design) : layers;
+  const next = extras ? applySceneExtras(moved, scene.inputs) : moved;
   rig.placedCache.set(scene.id, { key, layers: next });
   return next;
+}
+
+/**
+ * §8.3's logo, built here rather than by the template (D-101), memoised on its
+ * own settings so a drag repaints it on the next frame without rebuilding the
+ * scene. Drawn at the scene's real time, so its fade and effects are not
+ * stretched by the speed setting.
+ */
+function drawLogo(dc: DrawContext, rig: RenderRig, scene: Scene, vp: Viewport, timeMs: number): void {
+  const { logo } = scene.inputs;
+  if (logo.mediaId === null) return;
+
+  const bitmap = rig.media.getBitmap(logo.mediaId);
+  const imageAspect = bitmap && bitmap.height > 0 ? bitmap.width / bitmap.height : 1;
+  const effects = scene.inputs.elementEffects?.[LOGO_KEY];
+  const key = JSON.stringify([
+    logo, Math.round(vp.design.w), Math.round(vp.design.h), Math.round(imageAspect * 1000), scene.durationMs, effects ?? null,
+  ]);
+  const cacheId = `logo:${scene.id}`;
+  const hit = rig.placedCache.get(cacheId);
+  let layer = hit && hit.key === key ? hit.layers[0] ?? null : undefined;
+
+  if (layer === undefined) {
+    const geometry = logoGeometry(logo, vp.design, safeBox(vp.design), imageAspect, (text, fontSizePx) => {
+      const run = dc.measurer.measure(lockupSpec(text, fontSizePx));
+      return { w: run.width, h: run.height };
+    });
+    const fx = timeElementEffects(effects, { start: 0, end: scene.durationMs });
+    layer = logoLayer(logo, geometry, scene.durationMs, fx);
+    rig.placedCache.set(cacheId, { key, layers: layer ? [layer] : [] });
+  }
+
+  if (layer) drawLayer(dc, layer, timeMs);
 }
 
 /**

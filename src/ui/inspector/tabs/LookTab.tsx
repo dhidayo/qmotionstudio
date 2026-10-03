@@ -1,10 +1,12 @@
+import { useEffect } from 'react';
 import * as actions from '@/document/actions';
 import { PALETTE_ROLES, type PaletteRole } from '@/core/types';
 import type { BackgroundTreatment } from '@/document/types';
 import { useEditor } from '@/state/store';
 import type { SceneTemplate } from '@/templates/schema';
-import { ColorField, EmptyNote, Row, Section, Segmented, Slider } from '../controls';
+import { ColorField, EmptyNote, Section, Segmented, Slider } from '../controls';
 import { SceneLayoutReset } from '../SlotPlacement';
+import { LogoSection } from '../LogoSection';
 
 const ROLE_LABELS: Record<PaletteRole, string> = {
   bg: 'Background',
@@ -26,6 +28,13 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
   const dispatch = useEditor((s) => s.dispatch);
   const look = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.look);
   const durationMs = useEditor((s) => s.project.scenes[s.selectedScene]?.durationMs ?? 10_000);
+  const selectedLogo = useEditor((s) => s.selectedLogo);
+
+  // Picking the logo on the canvas opens Look; this brings its controls into view.
+  useEffect(() => {
+    if (!selectedLogo) return;
+    document.querySelector('[data-logo-section]')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [selectedLogo]);
 
   if (!look) return <EmptyNote>No scene.</EmptyNote>;
 
@@ -88,6 +97,8 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
         )}
       </Section>
 
+      <LogoSection template={template} />
+
       <Section title="Texture">
         {template?.look.supportsGrain === false ? (
           <EmptyNote>This template does not use grain.</EmptyNote>
@@ -123,18 +134,6 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
       </Section>
 
       <Section title="Timing">
-        <Row label="Speed" hint={`${look.speed.toFixed(2)}×`}>
-          <input
-            type="range"
-            min={25}
-            max={300}
-            value={Math.round(look.speed * 100)}
-            aria-label="Speed"
-            onChange={(e) => { dispatch(actions.setSpeed(Number(e.target.value) / 100)); }}
-            onPointerUp={() => { useEditor.getState().endInteraction(); }}
-            className="h-1 w-full accent-[var(--c-accent)]"
-          />
-        </Row>
         <Slider
           label="Duration"
           value={Math.round(durationMs / 100) / 10}

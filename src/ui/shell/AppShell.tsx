@@ -8,6 +8,7 @@ import { PerfOverlay } from '@/dev/PerfOverlay';
 import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { pendingAdTemplateId, useEditor } from '@/state/store';
+import * as documentActions from '@/document/actions';
 import { timelineSpanMs } from '@/document/select/timeline';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { watermarked } from '@/entitlements';
@@ -25,6 +26,8 @@ import { useAudioPlayback } from '@/ui/audio/useAudioPlayback';
 import { useAutosave } from '@/ui/persist/useAutosave';
 import { useRestore } from '@/ui/persist/useRestore';
 import { Toast } from './Toast';
+import { ContextMenu } from './ContextMenu';
+import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { ExportDialog } from '@/ui/export/ExportDialog';
 
 export function AppShell(): React.JSX.Element {
@@ -278,6 +281,13 @@ export function AppShell(): React.JSX.Element {
     if (!import.meta.env.DEV) return;
     (globalThis as unknown as { __motionStudio?: unknown }).__motionStudio = {
       stats: rig.stats,
+      /*
+       * The document's own action pipeline, for tests that set up a state the
+       * UI would take many clicks to reach — twenty effects on one scene, say.
+       * Development builds only, like the rest of this handle.
+       */
+      editor: useEditor,
+      actions: documentActions,
       textCacheSize: () => rig.textCache.size,
       /*
        * §10 budgets under one frame of drift across a sixty-second preview,
@@ -287,6 +297,8 @@ export function AppShell(): React.JSX.Element {
        */
       clock: {
         timeMs: () => clock.timeMs,
+        /** Stops and jumps, for tests that need a particular frame. */
+        seek: (ms: number) => { clock.pause(); clock.seek(ms); },
         playing: () => clock.playing,
         audioMastered: () => clock.audioMastered,
       },
@@ -394,6 +406,8 @@ export function AppShell(): React.JSX.Element {
       )}
       {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
       <Toast />
+      <ContextMenu />
+      <EffectPicker />
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </ClockProvider>
     </MediaProvider>

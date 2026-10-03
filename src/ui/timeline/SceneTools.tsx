@@ -1,10 +1,10 @@
-import { useState } from 'react';
 import type { TransitionKind } from '@/document/types';
 import * as actions from '@/document/actions';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import { useEditor } from '@/state/store';
 import { formatSeconds } from './timelineGeometry';
 import { ScenePicker } from './ScenePicker';
+import { useOverlays } from '@/ui/shell/overlays';
 
 /**
  * Timing controls for the selected scene.
@@ -34,7 +34,9 @@ export function SceneTools(): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
   const endInteraction = useEditor((s) => s.endInteraction);
   const selectScene = useEditor((s) => s.selectScene);
-  const [picking, setPicking] = useState<'add' | 'replace' | null>(null);
+  // In the overlay store, so the timeline's right-click menu can open it too.
+  const picking = useOverlays((o) => o.scenePicker);
+  const setPicking = useOverlays((o) => o.openScenePicker);
 
   const scene = project.scenes[index];
   if (!scene) return null;

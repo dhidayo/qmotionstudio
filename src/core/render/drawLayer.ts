@@ -1,11 +1,14 @@
 import type { Layer } from '@/core/types';
-import { createProps, resolveProps, type MutableProps } from '@/core/anim/interpolate';
+import { createProps, resolveProps, sampleTrack, type MutableProps } from '@/core/anim/interpolate';
 import { ellipsePath, roundedRectPath } from '@/core/math/geometry';
+import { activeElementFx, applyElementMotion, type ActiveElementFx } from '@/core/effects/run';
+import type { ElementBox } from '@/core/effects/types';
 import { withBlur } from './blur';
+import { withIsolation, type Glow } from './isolate';
 import { drawShape } from './layers/shape';
 import { drawGradient } from './layers/gradient';
 import { drawImage } from './layers/image';
-import { drawText } from './layers/text';
+import { drawText, textBlock } from './layers/text';
 import { drawVideo } from './layers/video';
 import { atDepth, type DrawContext } from './drawContext';
 
@@ -44,6 +47,17 @@ export function drawLayer(dc: DrawContext, layer: Layer, sceneTimeMs: number): v
   const localMs = sceneTimeMs - layer.startMs;
   const props = resolveProps(layer.tracks, localMs, scratch(dc.depth));
 
+  /*
+   * Element effects (D-100) add to the layer's own motion before anything is
+   * drawn, so a spin-in turns the layer exactly as a rotation keyframe would —
+   * and an exit that fades it to nothing skips the paint like any other
+   * invisible layer.
+   */
+  const fx = layer.fx && layer.fx.length > 0
+    ? activeElementFx(layer.fx, localMs, sizeFor(dc, layer, localMs), dc.palette)
+    : null;
+  if (fx) applyElementMotion(fx, props);
+
   // Fully transparent layers still cost a transform and a paint, and on a
   // staggered eight-photo template most layers are transparent most of the time.
   if (props.opacity <= 0.001) return;
@@ -67,6 +81,12 @@ export function drawLayer(dc: DrawContext, layer: Layer, sceneTimeMs: number): v
   const paint = (): void => {
     paintLayer(dc, layer, originX, originY, localMs, props);
   };
+
+  if (fx) {
+    drawWithEffects(dc, layer, fx, originX, originY, localMs, props, box);
+    ctx.restore();
+    return;
+  }
 
   if (props.blur > 0.001) {
     withBlur(ctx, props.blur, { x: originX, y: originY, w: box.w, h: box.h }, dc.depth, (target) => {
@@ -162,6 +182,114 @@ function boxOf(layer: Layer): { w: number; h: number } {
       return { w: layer.props.maxWidthPx ?? 0, h: 0 };
     default:
       return { w: layer.props.w, h: layer.props.h };
+  }
+}
+
+/**
+ * The box an element effect works in, in the layer's own coordinates.
+ *
+ * Text has no box until it is measured, and a group has none of its own — so
+ * for a group, the first child that has one stands in for it. That is the
+ * photograph inside a framed card, which is what an effect on "this photo"
+ * means.
+ */
+function elementBox(dc: DrawContext, layer: Layer, originX: number, originY: number, localMs: number): ElementBox {
+  switch (layer.type) {
+    case 'text': {
+      const block = textBlock(dc, layer.props);
+      return { x: originX, y: originY, w: block.w, h: block.h, radius: 0 };
+    }
+    case 'group': {
+      const hint = layer.props.box;
+      if (hint) return { x: hint.x, y: hint.y, w: hint.w, h: hint.h, radius: 0 };
+      for (const child of layer.children) {
+        if (child.type === 'group' || child.type === 'text') continue;
+        const t = localMs - child.startMs;
+        const cx = sampleTrack(child.tracks.x ?? [], t) ?? 0;
+        const cy = sampleTrack(child.tracks.y ?? [], t) ?? 0;
+        const w = child.props.w;
+        const h = child.props.h;
+        return {
+          x: cx - w * (child.anchorX ?? 0.5),
+          y: cy - h * (child.anchorY ?? 0.5),
+          w,
+          h,
+          radius: 'cornerRadius' in child.props ? child.props.cornerRadius ?? 0 : 0,
+        };
+      }
+      return { x: -50, y: -50, w: 100, h: 100, radius: 0 };
+    }
+    default:
+      return {
+        x: originX,
+        y: originY,
+        w: layer.props.w,
+        h: layer.props.h,
+        radius: 'cornerRadius' in layer.props ? layer.props.cornerRadius ?? 0 : 0,
+      };
+  }
+}
+
+function sizeFor(dc: DrawContext, layer: Layer, localMs: number): { w: number; h: number } {
+  const box = elementBox(dc, layer, 0, 0, localMs);
+  return { w: box.w, h: box.h };
+}
+
+/** A layer with effects that paint: behind it, onto it (clipped to its shape), in front of it. */
+function drawWithEffects(
+  dc: DrawContext,
+  layer: Layer,
+  fx: readonly ActiveElementFx[],
+  originX: number,
+  originY: number,
+  localMs: number,
+  props: MutableProps,
+  box: { w: number; h: number },
+): void {
+  const { ctx } = dc;
+  const ebox = elementBox(dc, layer, originX, originY, localMs);
+
+  for (const { def, sample } of fx) {
+    if (!def.under) continue;
+    ctx.save();
+    def.under(ctx, sample, ebox);
+    ctx.restore();
+  }
+
+  const glows: Glow[] = [];
+  for (const { def, sample } of fx) {
+    const glow = def.glow?.(sample);
+    if (glow) glows.push(glow);
+  }
+  const onto = fx.filter(({ def }) => def.onto !== undefined);
+
+  const paintInto = (target: DrawContext['ctx']): void => {
+    const into = { ...dc, ctx: target };
+    if (props.blur > 0.001) {
+      withBlur(target, props.blur, { x: originX, y: originY, w: box.w, h: box.h }, dc.depth, (blurred) => {
+        paintLayer({ ...dc, ctx: blurred }, layer, originX, originY, localMs, props);
+      });
+    } else {
+      paintLayer(into, layer, originX, originY, localMs, props);
+    }
+  };
+
+  if (glows.length > 0 || onto.length > 0) {
+    withIsolation(ctx, ebox, dc.depth, paintInto, {
+      glows,
+      ...(onto.length > 0
+        ? { onto: (target) => { for (const { def, sample } of onto) def.onto?.(target, sample, ebox); } }
+        : {}),
+    });
+  } else {
+    paintInto(ctx);
+  }
+
+  for (const { def, sample } of fx) {
+    if (!def.over) continue;
+    ctx.save();
+    def.over(ctx, sample, ebox);
+    ctx.restore();
   }
 }
 

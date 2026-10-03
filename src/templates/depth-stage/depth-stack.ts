@@ -6,7 +6,7 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { backgroundLayer, logoLayers } from '../_shared/chrome';
+import { backgroundLayer } from '../_shared/chrome';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -168,8 +168,6 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     tracks: { x: [kf(0, design.w / 2)], y: [kf(0, headTop)] },
     props: headline,
   });
-
-  layers.push(...logoLayers(inputs, ctx));
 
   return layers;
 }

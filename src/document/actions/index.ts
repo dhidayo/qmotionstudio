@@ -4,11 +4,19 @@ import { NO_SLOT_TRANSFORM } from '../types';
 import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
 import { nudgeAt, nudgePoses } from '@/core/render/slots';
 import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../select/motion';
+import { MAX_TRACKS, compactTracks, overlapsOn, placeNew, settleTrack, usedTracks } from '../select/tracks';
+import { LOGO_KEY } from '../types';
 import type {
   AnimPreset,
   AudioClip,
   BackgroundTreatment,
+  EffectClip,
+  EffectParams,
+  ElementEffect,
+  ElementPhase,
+  LockupPosition,
   LogoPlacement,
+  MotionTuning,
   Overlay,
   OverlayContent,
   OverlayEasing,
@@ -951,7 +959,7 @@ export function duplicateProject(project: Project): Project {
 
 export function setMode(mode: ProjectMode): Action {
   return {
-    label: mode === 'motionAd' ? 'Switch to Motion Ads' : 'Switch to Showcase',
+    label: mode === 'motionAd' ? 'Switch to Corporate Ads' : 'Switch to Lifestyle',
     apply: (project, scope) => {
       if (project.mode === mode) return project;
 
@@ -966,7 +974,7 @@ export function setMode(mode: ProjectMode): Action {
       const kept = project.scenes[scope.sceneIndex] ?? project.scenes[0];
       if (!kept) return project;
 
-      const { sourceAdTemplateId: _dropped, ...rest } = project;
+      const { sourceAdTemplateId: _dropped, effects: _timelineFx, ...rest } = project;
       return {
         ...rest,
         mode,
@@ -994,12 +1002,14 @@ export function addOverlay(overlay: Overlay): Action {
 
 export function removeOverlay(id: string): Action {
   return {
-    label: 'Remove overlay',
+    label: 'Delete layer',
     apply: (project) => {
       const overlays = project.overlays.filter((o) => o.id !== id);
+      // An emptied layer closes up, so deleting the last thing on L2 does not
+      // leave a blank row between L1 and L3 (D-103).
       return overlays.length === project.overlays.length
         ? project
-        : { ...project, overlays, updatedAt: Date.now() };
+        : { ...project, overlays: compactTracks(overlays), updatedAt: Date.now() };
     },
   };
 }
@@ -1038,13 +1048,16 @@ export function arrangeOverlay(id: string, to: 'front' | 'back'): Action {
       if (!overlay) return project;
 
       const others = project.overlays.filter((o) => o.id !== id);
-      const track =
+      const wanted =
         to === 'front'
           ? Math.min(MAX_OVERLAY_TRACK, Math.max(0, ...others.map((o) => o.track)))
           : 0;
-      const moved = { ...overlay, track };
-
-      return { ...project, overlays: to === 'front' ? [...others, moved] : [moved, ...others] };
+      const ordered = to === 'front' ? [...others, { ...overlay, track: wanted }] : [{ ...overlay, track: wanted }, ...others];
+      // Never on top of a neighbour in the same row: if the front (or back)
+      // layer is busy at this moment, it gets the nearest one that is not.
+      const settled = settleTrack(ordered, id, wanted, overlay.track);
+      const placed = ordered.map((o) => (o.id === id ? { ...o, track: settled } : o));
+      return { ...project, overlays: compactTracks(placed), updatedAt: Date.now() };
     },
   };
 }
@@ -1073,7 +1086,91 @@ export function setOverlayTransform(id: string, patch: PropValues): Action {
 }
 
 /** Matches the timeline's row cap; nothing is ever pushed past it. */
-const MAX_OVERLAY_TRACK = 7;
+const MAX_OVERLAY_TRACK = MAX_TRACKS - 1;
+
+// ── Layers on the timeline (D-103) ─────────────────────────────────────────
+
+/**
+ * A clip dragged on the timeline: along it, and between layers.
+ *
+ * Shares its coalesce key with `setOverlayTime` and `settleOverlay`, so a
+ * whole drag — however many rows it crosses, and wherever it finally settles —
+ * is one undo step.
+ */
+export function moveOverlayClip(id: string, startMs: number, endMs: number, track: number): Action {
+  return {
+    label: 'Move layer',
+    coalesceKey: `overlayTime:${id}`,
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        const start = Math.max(0, Math.round(startMs));
+        const end = Math.max(start + 200, Math.round(endMs));
+        const row = Math.max(0, Math.min(MAX_OVERLAY_TRACK, Math.round(track)));
+        return overlay.startMs === start && overlay.endMs === end && overlay.track === row
+          ? overlay
+          : { ...overlay, startMs: start, endMs: end, track: row };
+      }),
+  };
+}
+
+/** The end of a drag: off anything it landed on, and with empty layers closed up. */
+export function settleOverlay(id: string, originalTrack: number): Action {
+  return {
+    label: 'Move layer',
+    coalesceKey: `overlayTime:${id}`,
+    apply: (project) => {
+      const overlay = project.overlays.find((o) => o.id === id);
+      if (!overlay) return project;
+      const track = settleTrack(project.overlays, id, overlay.track, originalTrack);
+      const moved = track === overlay.track
+        ? project.overlays
+        : project.overlays.map((o) => (o.id === id ? { ...o, track } : o));
+      const overlays = compactTracks(moved);
+      return overlays === project.overlays ? project : { ...project, overlays, updatedAt: Date.now() };
+    },
+  };
+}
+
+/** Up or down one layer, around anything in the way. */
+export function moveOverlayLayer(id: string, delta: 1 | -1): Action {
+  return {
+    label: delta > 0 ? 'Move up a layer' : 'Move down a layer',
+    apply: (project) => {
+      const overlay = project.overlays.find((o) => o.id === id);
+      if (!overlay) return project;
+      // The next layer that way with room, skipping any that are busy at this
+      // moment — up may open a new layer at the top; down stops at L1.
+      const ceiling = Math.min(MAX_OVERLAY_TRACK, usedTracks(project.overlays));
+      let track = overlay.track + delta;
+      while (track >= 0 && track <= ceiling && overlapsOn(project.overlays, track, overlay.startMs, overlay.endMs, id)) {
+        track += delta;
+      }
+      if (track < 0 || track > ceiling) return project;
+      const moved = project.overlays.map((o) => (o.id === id ? { ...o, track } : o));
+      return { ...project, overlays: compactTracks(moved), updatedAt: Date.now() };
+    },
+  };
+}
+
+/** A copy straight after the original, on its layer if there is room there. */
+export function duplicateOverlay(id: string, durationMs: number): Action {
+  return {
+    label: 'Duplicate layer',
+    apply: (project) => {
+      const source = project.overlays.find((o) => o.id === id);
+      if (!source) return project;
+      const length = source.endMs - source.startMs;
+      const spot = placeNew(project.overlays, {
+        atMs: source.endMs,
+        lengthMs: length,
+        durationMs: Math.max(durationMs, source.endMs + length),
+        preferTrack: source.track,
+      });
+      const copy: Overlay = { ...source, id: newId('ovl'), track: spot.track, startMs: spot.startMs, endMs: spot.endMs };
+      return { ...project, overlays: [...project.overlays, copy], updatedAt: Date.now() };
+    },
+  };
+}
 
 /** How close two keyframes have to be to count as the same moment. */
 export const POSE_TOLERANCE_MS = 60;
@@ -1724,5 +1821,374 @@ export function setAudioFades(id: string, fades: { fadeInMs?: number; fadeOutMs?
           ? clip
           : { ...clip, fadeInMs, fadeOutMs };
       }),
+  };
+}
+
+// ── Effects (D-100) ─────────────────────────────────────────────────────────
+
+/** What can change about a placed effect once it exists. */
+export type EffectPatch = {
+  readonly startMs?: number;
+  readonly endMs?: number;
+  readonly intensity?: number;
+  /** Merged into the effect's settings, key by key. */
+  readonly params?: EffectParams;
+};
+
+export function makeEffectClip(
+  effectId: string,
+  window: { startMs: number; endMs: number },
+  intensity: number,
+  params: EffectParams = {},
+): EffectClip {
+  const startMs = Math.max(0, Math.round(window.startMs));
+  return {
+    id: newId('fx'),
+    effectId,
+    startMs,
+    endMs: Math.max(startMs + MIN_EFFECT_MS, Math.round(window.endMs)),
+    intensity: clamp(intensity, 0, 1),
+    params,
+  };
+}
+
+export function makeElementEffect(
+  effectId: string,
+  phase: ElementPhase,
+  durationMs: number,
+  intensity: number,
+  params: EffectParams = {},
+): ElementEffect {
+  return {
+    id: newId('efx'),
+    effectId,
+    phase,
+    durationMs: Math.max(50, Math.round(durationMs)),
+    intensity: clamp(intensity, 0, 1),
+    params,
+  };
+}
+
+const MIN_EFFECT_MS = 100;
+
+function patchClip(clip: EffectClip, patch: EffectPatch): EffectClip {
+  const startMs = Math.max(0, Math.round(patch.startMs ?? clip.startMs));
+  const endMs = Math.max(startMs + MIN_EFFECT_MS, Math.round(patch.endMs ?? clip.endMs));
+  return {
+    ...clip,
+    startMs,
+    endMs,
+    intensity: clamp(patch.intensity ?? clip.intensity, 0, 1),
+    params: patch.params ? { ...clip.params, ...patch.params } : clip.params,
+  };
+}
+
+function editClips(
+  list: readonly EffectClip[] | undefined,
+  id: string,
+  edit: (clip: EffectClip) => EffectClip | null,
+): readonly EffectClip[] | undefined {
+  if (!list) return list;
+  let changed = false;
+  const next: EffectClip[] = [];
+  for (const clip of list) {
+    if (clip.id !== id) { next.push(clip); continue; }
+    const edited = edit(clip);
+    changed = true;
+    if (edited) next.push(edited);
+  }
+  return changed ? next : list;
+}
+
+// Scene effects: over the whole of one scene, in its own time.
+
+export function addSceneEffect(clip: EffectClip): Action {
+  return {
+    label: 'Add effect',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({ ...inputs, effects: [...(inputs.effects ?? []), clip] })),
+  };
+}
+
+export function updateSceneEffect(id: string, patch: EffectPatch): Action {
+  return {
+    label: 'Change effect',
+    coalesceKey: `sceneFx:${id}:${Object.keys(patch).sort().join(',')}`,
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const effects = editClips(inputs.effects, id, (clip) => patchClip(clip, patch));
+        return effects === inputs.effects ? inputs : { ...inputs, ...(effects ? { effects } : {}) };
+      }),
+  };
+}
+
+export function removeSceneEffect(id: string): Action {
+  return {
+    label: 'Remove effect',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const effects = editClips(inputs.effects, id, () => null);
+        return effects === inputs.effects ? inputs : { ...inputs, ...(effects ? { effects } : {}) };
+      }),
+  };
+}
+
+/**
+ * The selected scene's effects on every scene of the ad.
+ *
+ * An effect that covered the whole of its scene covers the whole of each
+ * scene it is copied to; one placed at a moment keeps its offset, trimmed to
+ * fit. Each copy gets its own id — and so its own snowflakes.
+ */
+export function copySceneEffectsToAll(): Action {
+  return {
+    label: 'Use effects on every scene',
+    apply: (project, scope) => {
+      const source = project.scenes[scope.sceneIndex];
+      const effects = source?.inputs.effects ?? [];
+      if (!source || effects.length === 0) return project;
+      const scenes = project.scenes.map((scene, i) => {
+        if (i === scope.sceneIndex) return scene;
+        const copies = effects.map((clip) => {
+          const whole = clip.startMs <= 0 && clip.endMs >= source.durationMs;
+          const startMs = whole ? 0 : Math.min(clip.startMs, Math.max(0, scene.durationMs - MIN_EFFECT_MS));
+          const endMs = whole ? scene.durationMs : Math.min(clip.endMs, scene.durationMs);
+          return { ...clip, id: newId('fx'), startMs, endMs: Math.max(startMs + MIN_EFFECT_MS, endMs) };
+        });
+        return { ...scene, inputs: { ...scene.inputs, effects: copies } };
+      });
+      return { ...project, scenes, updatedAt: Date.now() };
+    },
+  };
+}
+
+// Timeline effects: over everything, at a moment in the project (Corporate Ads).
+
+export function addTimelineEffect(clip: EffectClip): Action {
+  return {
+    label: 'Add effect',
+    apply: (project) => ({ ...project, effects: [...(project.effects ?? []), clip], updatedAt: Date.now() }),
+  };
+}
+
+export function updateTimelineEffect(id: string, patch: EffectPatch): Action {
+  return {
+    label: 'Change effect',
+    coalesceKey: `timelineFx:${id}:${Object.keys(patch).sort().join(',')}`,
+    apply: (project) => {
+      const effects = editClips(project.effects, id, (clip) => patchClip(clip, patch));
+      return effects === project.effects || !effects ? project : { ...project, effects, updatedAt: Date.now() };
+    },
+  };
+}
+
+/** A whole drag of an effect clip, as one undo step. */
+export function moveTimelineEffect(id: string, startMs: number, endMs: number): Action {
+  return { ...updateTimelineEffect(id, { startMs, endMs }), label: 'Move effect', coalesceKey: `timelineFxDrag:${id}` };
+}
+
+export function removeTimelineEffect(id: string): Action {
+  return {
+    label: 'Delete effect',
+    apply: (project) => {
+      const effects = editClips(project.effects, id, () => null);
+      return effects === project.effects || !effects ? project : { ...project, effects, updatedAt: Date.now() };
+    },
+  };
+}
+
+export function duplicateTimelineEffect(id: string): Action {
+  return {
+    label: 'Duplicate effect',
+    apply: (project) => {
+      const source = project.effects?.find((clip) => clip.id === id);
+      if (!source) return project;
+      const length = source.endMs - source.startMs;
+      const copy: EffectClip = { ...source, id: newId('fx'), startMs: source.endMs, endMs: source.endMs + length };
+      return { ...project, effects: [...(project.effects ?? []), copy], updatedAt: Date.now() };
+    },
+  };
+}
+
+// Element effects: on one element of a scene, or on an overlay.
+
+/** Which element an effect is on. */
+export type ElementTarget =
+  | { readonly kind: 'slot'; readonly key: SlotKey }
+  | { readonly kind: 'logo' }
+  | { readonly kind: 'overlay'; readonly id: string };
+
+export function targetKey(target: ElementTarget): string {
+  return target.kind === 'slot' ? target.key : target.kind === 'logo' ? LOGO_KEY : `overlay:${target.id}`;
+}
+
+function editElementEffects(
+  project: Project,
+  scope: ActionScope,
+  target: ElementTarget,
+  edit: (list: readonly ElementEffect[]) => readonly ElementEffect[],
+): Project {
+  if (target.kind === 'overlay') {
+    return editOverlay(project, target.id, (overlay) => {
+      const current = overlay.effects ?? [];
+      const next = edit(current);
+      return next === current ? overlay : { ...overlay, effects: next };
+    });
+  }
+  const key = target.kind === 'logo' ? LOGO_KEY : target.key;
+  return editInputs(project, scope, (inputs) => {
+    const current = inputs.elementEffects?.[key] ?? [];
+    const next = edit(current);
+    if (next === current) return inputs;
+    const { [key]: _old, ...others } = inputs.elementEffects ?? {};
+    return { ...inputs, elementEffects: next.length > 0 ? { ...others, [key]: next } : others };
+  });
+}
+
+export function addElementEffect(target: ElementTarget, effect: ElementEffect): Action {
+  return {
+    label: 'Add effect',
+    apply: (project, scope) => editElementEffects(project, scope, target, (list) => [...list, effect]),
+  };
+}
+
+export function updateElementEffect(
+  target: ElementTarget,
+  id: string,
+  patch: { readonly phase?: ElementPhase; readonly durationMs?: number; readonly intensity?: number; readonly params?: EffectParams },
+): Action {
+  return {
+    label: 'Change effect',
+    coalesceKey: `elementFx:${id}:${Object.keys(patch).sort().join(',')}`,
+    apply: (project, scope) =>
+      editElementEffects(project, scope, target, (list) => {
+        const index = list.findIndex((effect) => effect.id === id);
+        const effect = list[index];
+        if (!effect) return list;
+        const next = [...list];
+        next[index] = {
+          ...effect,
+          phase: patch.phase ?? effect.phase,
+          durationMs: Math.max(50, Math.round(patch.durationMs ?? effect.durationMs)),
+          intensity: clamp(patch.intensity ?? effect.intensity, 0, 1),
+          params: patch.params ? { ...effect.params, ...patch.params } : effect.params,
+        };
+        return next;
+      }),
+  };
+}
+
+export function removeElementEffect(target: ElementTarget, id: string): Action {
+  return {
+    label: 'Remove effect',
+    apply: (project, scope) =>
+      editElementEffects(project, scope, target, (list) => {
+        const next = list.filter((effect) => effect.id !== id);
+        return next.length === list.length ? list : next;
+      }),
+  };
+}
+
+// ── Motion properties (D-102) ───────────────────────────────────────────────
+
+function tuned(current: MotionTuning | undefined, patch: Partial<MotionTuning>): MotionTuning {
+  return {
+    strength: clamp(patch.strength ?? current?.strength ?? 1, 0, 2.5),
+    feel: patch.feel ?? current?.feel ?? 'template',
+  };
+}
+
+/** How the whole scene's animation plays: further or calmer, and with what feel. */
+export function setSceneMotion(patch: Partial<MotionTuning> | null): Action {
+  return {
+    label: patch === null ? 'Reset motion' : 'Change motion',
+    ...(patch === null ? {} : { coalesceKey: `sceneMotion:${Object.keys(patch).sort().join(',')}` }),
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        if (patch === null) {
+          if (!inputs.motion) return inputs;
+          const { motion: _reset, ...rest } = inputs;
+          return rest;
+        }
+        return { ...inputs, motion: tuned(inputs.motion, patch) };
+      }),
+  };
+}
+
+/** …and one element's, over the scene's. `null` hands it back to the scene. */
+export function setSlotMotion(key: SlotKey, patch: Partial<MotionTuning> | null): Action {
+  return {
+    label: patch === null ? 'Reset element motion' : 'Change element motion',
+    ...(patch === null ? {} : { coalesceKey: `slotMotion:${key}:${Object.keys(patch).sort().join(',')}` }),
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const { [key]: current, ...others } = inputs.slotMotion ?? {};
+        if (patch === null) {
+          if (!current) return inputs;
+          return { ...inputs, slotMotion: others };
+        }
+        return { ...inputs, slotMotion: { ...others, [key]: tuned(current ?? inputs.motion, patch) } };
+      }),
+  };
+}
+
+// ── The lockup (D-101) ─────────────────────────────────────────────────────
+
+export function setLockupPosition(lockupPosition: LockupPosition): Action {
+  return {
+    label: 'Move lockup',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({ ...inputs, logo: { ...inputs.logo, lockupPosition } })),
+  };
+}
+
+export function setLockupSize(lockupSizePct: number): Action {
+  return {
+    label: 'Resize lockup',
+    coalesceKey: 'lockupSize',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({
+        ...inputs,
+        logo: { ...inputs.logo, lockupSizePct: clamp(Math.round(lockupSizePct), 10, 80) },
+      })),
+  };
+}
+
+export function setLockupColor(lockupColor: string): Action {
+  return {
+    label: 'Change lockup colour',
+    coalesceKey: 'lockupColor',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({ ...inputs, logo: { ...inputs.logo, lockupColor } })),
+  };
+}
+
+/**
+ * The selected scene's logo — settings and effects — on every scene.
+ *
+ * A brand mark is one decision for a whole ad, and an ad of eight scenes
+ * should not need it made eight times.
+ */
+export function applyLogoToAllScenes(): Action {
+  return {
+    label: 'Use logo on every scene',
+    apply: (project, scope) => {
+      const source = project.scenes[scope.sceneIndex];
+      if (!source) return project;
+      const effects = source.inputs.elementEffects?.[LOGO_KEY];
+      const scenes = project.scenes.map((scene, i) => {
+        if (i === scope.sceneIndex) return scene;
+        const { [LOGO_KEY]: _old, ...others } = scene.inputs.elementEffects ?? {};
+        return {
+          ...scene,
+          inputs: {
+            ...scene.inputs,
+            logo: source.inputs.logo,
+            elementEffects: effects ? { ...others, [LOGO_KEY]: effects.map((e) => ({ ...e, id: newId('efx') })) } : others,
+          },
+        };
+      });
+      return { ...project, scenes, updatedAt: Date.now() };
+    },
   };
 }

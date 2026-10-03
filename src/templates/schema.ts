@@ -170,11 +170,7 @@ export function structureKey(
     durationMs,
     photos,
     texts,
-    inputs.logo.mediaId,
-    inputs.logo.placement,
-    inputs.logo.sizePct,
-    inputs.logo.lockup,
-    inputs.logo.lockupText,
+    // The logo is not here: the renderer draws it, outside the build (D-101).
     inputs.look.background,
     inputs.look.cornerRadius,
   ]);

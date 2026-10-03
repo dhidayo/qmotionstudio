@@ -6,6 +6,9 @@ import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { capturePointer } from './pointerCapture';
+import { useOverlays } from '@/ui/shell/overlays';
+import { LongPress } from '@/ui/shell/ContextMenu';
+import { audioMenu } from '@/ui/editing/commands';
 import { dragResult, msToPct, pxToMs, snap, type ClipDrag } from './timelineGeometry';
 
 /**
@@ -122,6 +125,13 @@ function MusicClip({
   const selectAudio = useEditor((s) => s.selectAudio);
 
   const dragRef = useRef<MusicDrag | null>(null);
+  const openMenu = useOverlays((o) => o.openMenu);
+  const longPress = useRef(new LongPress());
+
+  const openClipMenu = (x: number, y: number, element: HTMLElement): void => {
+    selectAudio(clip.id);
+    openMenu({ x, y, title: 'Music', items: audioMenu(clip.id, onSeek, laneMs(x, element)) });
+  };
 
   const laneMs = useCallback(
     (clientX: number, element: HTMLElement): number => {
@@ -141,7 +151,13 @@ function MusicClip({
   const active = selectedAudio === clip.id;
 
   const begin = (event: React.PointerEvent<HTMLElement>, mode: MusicDragMode): void => {
+    if (event.button === 2) return; // The menu, not a drag.
     event.stopPropagation();
+    const element = event.currentTarget;
+    longPress.current.start(event, (x, y) => {
+      dragRef.current = null;
+      openClipMenu(x, y, element);
+    });
     capturePointer(event.currentTarget, event.pointerId);
     const wasSelected = selectedAudio === clip.id;
     selectAudio(clip.id);
@@ -160,6 +176,7 @@ function MusicClip({
   };
 
   const move = (event: React.PointerEvent<HTMLElement>): void => {
+    longPress.current.move(event);
     const drag = dragRef.current;
     if (!drag || event.buttons === 0) return;
     if (Math.abs(event.clientX - drag.downX) > CLICK_SLOP_PX) drag.moved = true;
@@ -215,6 +232,7 @@ function MusicClip({
   };
 
   const end = (event: React.PointerEvent<HTMLElement>): void => {
+    longPress.current.cancel();
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
@@ -251,7 +269,8 @@ function MusicClip({
         onPointerUp={end}
         onPointerCancel={end}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectAudio(clip.id); }}
-        className="absolute inset-y-1 cursor-grab select-none overflow-hidden rounded-sm border"
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openClipMenu(e.clientX, e.clientY, e.currentTarget); }}
+        className="absolute inset-y-1 cursor-grab touch-none select-none overflow-hidden rounded-sm border"
         style={{
           left: `${left}%`,
           width: `${width}%`,

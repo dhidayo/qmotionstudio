@@ -12,7 +12,11 @@ import { isAnimated, poseIndexAt, posesOf } from '@/document/select/overlay';
 import type { Aspect, Size } from '@/core/types';
 import { NO_SLOT_TRANSFORM, type Overlay, type Project, type SlotKey, type SlotTransform } from '@/document/types';
 import { useEditor } from '@/state/store';
+import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { capturePointer } from '@/ui/timeline/pointerCapture';
+import { useOverlays } from '@/ui/shell/overlays';
+import { LongPress } from '@/ui/shell/ContextMenu';
+import { logoMenu, overlayMenu, slotMenu } from '@/ui/editing/commands';
 
 /**
  * Direct manipulation on the artboard — drag to move, handles to resize and
@@ -144,6 +148,9 @@ export function CanvasSelection({
   const playheadMs = useEditor((s) => s.playheadMs);
 
   const dragRef = useRef<Drag | null>(null);
+  const openMenu = useOverlays((o) => o.openMenu);
+  /** A finger held on an element opens its menu, as a right-click does (D-104). */
+  const longPress = useRef(new LongPress());
 
   /*
    * The selection box takes keyboard focus when something is clicked on the
@@ -174,6 +181,13 @@ export function CanvasSelection({
   const [cursor, setCursor] = useState<string>('default');
 
   const measure = useMeasureContext();
+  const media = useMediaStore();
+  // The logo's box depends on its picture's proportions, which are only known
+  // once it has decoded — so a decode re-renders this, and the box follows.
+  useMediaRevision();
+  const logoId = project.scenes[selectedScene]?.inputs.logo.mediaId ?? null;
+  const logoBitmap = logoId === null ? null : media.getBitmap(logoId);
+  const logoAspect = logoBitmap && logoBitmap.height > 0 ? logoBitmap.width / logoBitmap.height : 1;
   const { aspect } = project;
   const design = projectDesign(aspect);
   const scale = width > 0 ? width / design.w : 0;
@@ -238,16 +252,17 @@ export function CanvasSelection({
     }
 
     // The logo is drawn as the topmost layer of a scene, so it wins a tie.
+    // Its box takes in the lockup, which moves with it (D-101).
     const scene = project.scenes[selectedScene] ?? project.scenes[0];
     if (scene) {
-      const box = logoBox(scene.inputs, aspect);
+      const box = logoBox(scene.inputs, aspect, measure, logoAspect);
       if (box) {
         list.push({ kind: 'logo', key: 'logo', sizePct: scene.inputs.logo.sizePct, box, label: 'Logo' });
       }
     }
 
     return list;
-  }, [project.overlays, project.scenes, aspect, playheadMs, selectedScene, measure, drawn]);
+  }, [project.overlays, project.scenes, aspect, playheadMs, selectedScene, measure, drawn, logoAspect]);
 
   const selected =
     targets.find((t) =>
@@ -373,9 +388,38 @@ export function CanvasSelection({
     return null;
   };
 
+  /** What can be done to the element under the pointer, as a menu at the pointer. */
+  const openTargetMenu = (target: Target, x: number, y: number): void => {
+    select(target);
+    if (target.kind === 'logo') {
+      openMenu({ x, y, title: 'Logo', items: logoMenu() });
+      return;
+    }
+    if (target.kind === 'slot') {
+      openMenu({ x, y, title: target.label, items: slotMenu(target.key, target.label.toLowerCase()) });
+      return;
+    }
+    openMenu({ x, y, title: target.label, items: overlayMenu(target.overlay, null, 0) });
+  };
+
+  const onContextMenu = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = pick({ x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale });
+    if (!target) return;
+    event.preventDefault();
+    openTargetMenu(target, event.clientX, event.clientY);
+  };
+
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0) return;
     const point = toDesign(event);
+    const under = pick(point);
+    if (under) {
+      longPress.current.start(event, (x, y) => {
+        dragRef.current = null;
+        openTargetMenu(under, x, y);
+      });
+    }
 
     // Handles win over content, so a handle overhanging another object still
     // resizes the thing it belongs to.
@@ -405,6 +449,7 @@ export function CanvasSelection({
   };
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>): void => {
+    longPress.current.move(event);
     const point = toDesign(event);
     const drag = dragRef.current;
 
@@ -514,8 +559,9 @@ export function CanvasSelection({
       data-canvas-selection
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerUp={() => { longPress.current.cancel(); onPointerUp(); }}
+      onPointerCancel={() => { longPress.current.cancel(); onPointerUp(); }}
+      onContextMenu={onContextMenu}
       onPointerLeave={() => { setHovered(null); setCursor('default'); }}
       className="absolute inset-0 touch-none"
       style={{ cursor }}
@@ -715,7 +761,9 @@ function snapCentre(
 
 function moveAction(target: Target, centre: Point, design: Size, aspect: Aspect): actions.Action {
   if (target.kind === 'logo') {
-    const free = logoFreeFrom(centre, aspect);
+    // The box is the logo *and* its lockup; the position is the logo's own
+    // centre, an offset away from the box's.
+    const free = logoFreeFrom(shiftBy(centre, negate(target.box.anchorOffset), 0), aspect);
     return actions.setLogoPosition(free.x, free.y);
   }
 
@@ -811,7 +859,9 @@ function resizeAction(
 
   if (target.kind === 'logo') {
     const pct = clamp(target.sizePct * fx, MIN_LOGO_PCT, MAX_LOGO_PCT);
-    const free = logoFreeFrom(newCentre, aspect);
+    // Everything in the unit scales together, the offset to the logo's centre included.
+    const offset = { x: -target.box.anchorOffset.x * fx, y: -target.box.anchorOffset.y * fx };
+    const free = logoFreeFrom(shiftBy(newCentre, offset, 0), aspect);
     return actions.setLogoBox(Math.round(pct * 10) / 10, free.x, free.y);
   }
 

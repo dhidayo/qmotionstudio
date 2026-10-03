@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
-import type { Overlay } from '@/document/types';
+import type { EffectClip, Overlay } from '@/document/types';
 import {
   sceneSpans, timelineSpanMs, totalDurationMs, type SceneSpan,
 } from '@/document/select/timeline';
@@ -11,6 +11,11 @@ import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
 import { spanOf } from '@/document/select/motion';
 import { MotionBar } from './MotionBar';
 import { summaryFor } from '@/templates/manifest';
+import { MAX_TRACKS, placeNew } from '@/document/select/tracks';
+import { effectName, frameEffect } from '@/core/effects/catalog';
+import { useOverlays } from '@/ui/shell/overlays';
+import { LongPress } from '@/ui/shell/ContextMenu';
+import { effectMenu, overlayMenu, sceneMenu } from '@/ui/editing/commands';
 import { useEditor } from '@/state/store';
 import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
@@ -47,9 +52,18 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const dispatch = useEditor((s) => s.dispatch);
   const endInteraction = useEditor((s) => s.endInteraction);
   const selectedScene = useEditor((s) => s.selectedScene);
-  const selectScene = useEditor((s) => s.selectScene);
   const selectedOverlay = useEditor((s) => s.selectedOverlay);
   const selectOverlay = useEditor((s) => s.selectOverlay);
+  const selectSceneClip = useEditor((s) => s.selectSceneClip);
+  const sceneClipSelected = useEditor((s) => s.sceneClipSelected);
+  const selectedEffect = useEditor((s) => s.selectedEffect);
+  const selectEffect = useEditor((s) => s.selectEffect);
+  const targetTrack = useEditor((s) => s.targetTrack);
+  const setTargetTrack = useEditor((s) => s.setTargetTrack);
+  const openMenu = useOverlays((o) => o.openMenu);
+  const openPicker = useOverlays((o) => o.openPicker);
+  const openScenePicker = useOverlays((o) => o.openScenePicker);
+  const showToast = useEditor((s) => s.showToast);
 
   /*
    * Two different lengths, and conflating them was the bug that made a long
@@ -91,7 +105,20 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
       * known when it ends. So the press records where it started and whether
       * the clip was already selected, and the release decides (D-087).
       */
-  const dragRef = useRef<(ClipDrag & { downX: number; moved: boolean; wasSelected: boolean }) | null>(null);
+  const dragRef = useRef<(ClipDrag & {
+    downX: number;
+    downY: number;
+    moved: boolean;
+    wasSelected: boolean;
+    /** The layer it started on, to go back to if it is dropped on top of something (D-103). */
+    originalTrack: number;
+    track: number;
+  }) | null>(null);
+  /** The overlay rows, for working out which layer a drag is over. */
+  const rowsRef = useRef<HTMLDivElement>(null);
+  /** A finger held on a clip opens its menu (D-104). */
+  const longPress = useRef(new LongPress());
+  const sceneLongPress = useRef(new LongPress());
 
   /**
    * The lane's pixel width, measured rather than read from the ref during
@@ -154,6 +181,10 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
     if (event.target !== event.currentTarget && !(event.target as HTMLElement).dataset['lane']) {
       return;
     }
+    // Clicking a layer's empty space chooses that layer for the next element
+    // added (D-103) — as well as moving the playhead, like any other click.
+    const row = (event.target as HTMLElement).dataset['trackRow'];
+    if (row !== undefined) setTargetTrack(Number(row));
     capturePointer(event.currentTarget, event.pointerId);
     scrubTo(event.clientX);
   };
@@ -183,6 +214,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
     overlay: Overlay,
     mode: ClipDrag['mode'],
   ): void => {
+    if (event.button === 2) return; // A right-click opens the menu; it is not a drag.
     event.stopPropagation();
     capturePointer(event.currentTarget, event.pointerId);
     const wasSelected = selectedOverlay === overlay.id;
@@ -194,29 +226,53 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
       endMs: overlay.endMs,
       pointerMs: laneMs(event.clientX),
       downX: event.clientX,
+      downY: event.clientY,
       moved: false,
       wasSelected,
+      originalTrack: overlay.track,
+      track: overlay.track,
     };
+    longPress.current.start(event, (x, y) => {
+      dragRef.current = null;
+      openOverlayMenu(overlay, x, y);
+    });
+  };
+
+  /** The layer under the pointer, counting the empty one at the bottom as a new layer. */
+  const rowAt = (clientY: number, fallback: number): number => {
+    const rows = rowsRef.current;
+    if (!rows) return fallback;
+    const box = rows.getBoundingClientRect();
+    const count = rowCount(project.overlays);
+    const row = Math.floor((clientY - box.top) / ROW_PX);
+    return Math.max(0, Math.min(row, count - 1, MAX_TRACKS - 1));
   };
 
   const onClipMove = (event: React.PointerEvent<HTMLElement>): void => {
+    longPress.current.move(event);
     const drag = dragRef.current;
     if (!drag || event.buttons === 0) return;
     // A few pixels of jitter between press and release is a click, not a drag.
-    if (Math.abs(event.clientX - drag.downX) > CLICK_SLOP_PX) drag.moved = true;
+    if (Math.abs(event.clientX - drag.downX) > CLICK_SLOP_PX || Math.abs(event.clientY - drag.downY) > ROW_PX / 2) {
+      drag.moved = true;
+    }
 
     const next = dragResult(drag, laneMs(event.clientX), { durationMs, minLengthMs: MIN_OVERLAY_MS });
     // ⌥ suspends snapping, which is the convention everywhere else and the only
     // way to place a clip on an exact frame.
     const free = event.altKey;
-    dispatch(actions.setOverlayTime(
+    // Only a move changes layer; trimming an end never should.
+    drag.track = drag.mode === 'move' ? rowAt(event.clientY, drag.track) : drag.track;
+    dispatch(actions.moveOverlayClip(
       drag.id,
       snap(next.startMs, SNAP_MS, free),
       snap(next.endMs, SNAP_MS, free),
+      drag.track,
     ));
   };
 
   const endClipDrag = (): void => {
+    longPress.current.cancel();
     const drag = dragRef.current;
     if (!drag) return;
     dragRef.current = null;
@@ -234,9 +290,83 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
       seekTo(laneMs(drag.downX));
       return;
     }
+    if (drag.moved) {
+      // Off anything it landed on, and with any emptied layer closed up — as
+      // part of the same undo step as the drag itself.
+      const before = useEditor.getState().project.overlays.find((o) => o.id === drag.id)?.track;
+      dispatch(actions.settleOverlay(drag.id, drag.originalTrack));
+      const after = useEditor.getState().project.overlays.find((o) => o.id === drag.id)?.track;
+      if (before !== undefined && after !== undefined && after !== before) {
+        showToast(`No room on L${before + 1} there, so it went on L${after + 1}.`);
+      }
+    }
     // One undo step for the whole drag, not one per pointermove.
     endInteraction();
   };
+
+  const openOverlayMenu = (overlay: Overlay, x: number, y: number): void => {
+    selectOverlay(overlay.id);
+    openMenu({
+      x,
+      y,
+      title: labelFor(overlay),
+      items: overlayMenu(overlay, seekTo, Math.max(overlay.startMs, Math.min(laneMs(x), overlay.endMs - 1))),
+    });
+  };
+
+  const openSceneMenu = (index: number, x: number, y: number): void => {
+    selectSceneClip(index);
+    const name = project.scenes[index] ? designName(project.scenes[index].templateId) : 'Scene';
+    openMenu({ x, y, title: `Scene ${index + 1} · ${name}`, items: sceneMenu(index, seekTo, laneMs(x), openScenePicker) });
+  };
+
+  // ── Timeline effects (D-100) ─────────────────────────────────────────────
+
+  const fxDrag = useRef<(ClipDrag & { downX: number; moved: boolean; wasSelected: boolean }) | null>(null);
+
+  const beginFxDrag = (event: React.PointerEvent<HTMLElement>, clip: EffectClip, mode: ClipDrag['mode']): void => {
+    if (event.button === 2) return;
+    event.stopPropagation();
+    capturePointer(event.currentTarget, event.pointerId);
+    const wasSelected = selectedEffect === clip.id;
+    selectEffect(clip.id);
+    fxDrag.current = {
+      mode, id: clip.id, startMs: clip.startMs, endMs: clip.endMs,
+      pointerMs: laneMs(event.clientX), downX: event.clientX, moved: false, wasSelected,
+    };
+    longPress.current.start(event, (x, y) => {
+      fxDrag.current = null;
+      openFxMenu(clip, x, y);
+    });
+  };
+
+  const onFxMove = (event: React.PointerEvent<HTMLElement>): void => {
+    longPress.current.move(event);
+    const drag = fxDrag.current;
+    if (!drag || event.buttons === 0) return;
+    if (Math.abs(event.clientX - drag.downX) > CLICK_SLOP_PX) drag.moved = true;
+    const next = dragResult(drag, laneMs(event.clientX), { durationMs, minLengthMs: MIN_OVERLAY_MS });
+    dispatch(actions.moveTimelineEffect(drag.id, snap(next.startMs, SNAP_MS, event.altKey), snap(next.endMs, SNAP_MS, event.altKey)));
+  };
+
+  const endFxDrag = (): void => {
+    longPress.current.cancel();
+    const drag = fxDrag.current;
+    if (!drag) return;
+    fxDrag.current = null;
+    if (drag.mode === 'move' && !drag.moved && drag.wasSelected) {
+      seekTo(laneMs(drag.downX));
+      return;
+    }
+    endInteraction();
+  };
+
+  const openFxMenu = (clip: EffectClip, x: number, y: number): void => {
+    selectEffect(clip.id);
+    openMenu({ x, y, title: effectName(clip.effectId), items: effectMenu(clip.id, seekTo, laneMs(x)) });
+  };
+
+  const fxRows = useMemo(() => packEffects(project.effects ?? []), [project.effects]);
 
   // ── Adding overlays (§1.2) ───────────────────────────────────────────────
 
@@ -244,17 +374,30 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const { tier, limits } = useEntitlements('motionAd');
   const [proNote, setProNote] = useState(false);
 
+  /*
+   * A new element goes on a layer that has room for it (D-103): on the layer
+   * the person clicked, if they have chosen one — at the playhead, or straight
+   * after the clip it would have landed on — and otherwise on the highest
+   * layer free at the playhead. A new layer only when none is.
+   *
+   * Only an explicit choice of layer counts. Following whatever clip happens
+   * to be selected sent every new caption to the end of the last one, away
+   * from the playhead it was meant for.
+   */
   const placeOverlay = useCallback(
     (content: Overlay['content']): void => {
-      const startMs = Math.min(Math.round(timeMs), Math.max(0, durationMs - DEFAULT_OVERLAY_MS));
-      const endMs = Math.min(startMs + DEFAULT_OVERLAY_MS, durationMs);
-      const track = rowCount(project.overlays) - 1;
+      const spot = placeNew(project.overlays, {
+        atMs: timeMs,
+        lengthMs: DEFAULT_OVERLAY_MS,
+        durationMs,
+        preferTrack: targetTrack,
+      });
 
-      const overlay = actions.makeOverlay(content, { startMs, endMs, track });
+      const overlay = actions.makeOverlay(content, spot);
       dispatch(actions.addOverlay(overlay));
       selectOverlay(overlay.id);
     },
-    [timeMs, durationMs, project.overlays, dispatch, selectOverlay],
+    [timeMs, durationMs, project.overlays, dispatch, selectOverlay, targetTrack],
   );
 
   const addOverlay = (kind: 'photo' | 'text'): void => {
@@ -326,8 +469,9 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
       style={{ height: 'var(--h-timeline)' }}
       aria-label="Timeline"
     >
-      {/* Transport and the three "Add …" buttons. */}
-      <div className="flex shrink-0 items-center gap-2 border-b border-edge px-3 py-1.5">
+      {/* Transport and the "Add …" buttons. Scrolls sideways rather than
+          pushing the page wider on a phone. */}
+      <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge px-3 py-1.5">
         <button
           type="button"
           onClick={() => { if (clock.playing) clock.pause(); else clock.play(); setPlaying(clock.playing); }}
@@ -349,6 +493,12 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
         <div className="ml-2 flex items-center gap-1" role="group" aria-label="Add overlay">
           <AddButton onClick={() => { addOverlay('photo'); }} title="Add a photo overlay">+ Photo</AddButton>
           <AddButton onClick={() => { addOverlay('text'); }} title="Add a text overlay">+ Text</AddButton>
+          <AddButton
+            onClick={() => { openPicker({ target: { kind: 'timeline' } }); }}
+            title="Add an effect at the playhead — snow, lightning, shake, a light leak…"
+          >
+            + Effect
+          </AddButton>
           {/*
             * §12 keeps custom media behind Pro, and it stays behind Pro — but a
             * disabled button that does nothing when clicked is a dead end, not
@@ -431,7 +581,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           </span>
         )}
 
-        <span className="ml-auto text-[10px] text-ink-faint">
+        <span className="ml-auto hidden shrink-0 text-[10px] text-ink-faint sm:inline">
           {project.scenes.length} scenes · {project.overlays.length} overlays
           {overhang && ` · music runs ${formatSeconds(durationMs - videoMs)} past the end`}
         </span>
@@ -448,7 +598,18 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
           <Gutter>Time</Gutter>
           <Gutter tall>Scenes</Gutter>
           <Gutter>Motion</Gutter>
-          {Array.from({ length: rows }, (_, i) => <Gutter key={i}>{`L${i + 1}`}</Gutter>)}
+          {fxRows.rows.map((_, i) => (
+            <Gutter key={`fx-${i}`} title="Effects on the timeline — over every scene and layer">{i === 0 ? 'FX' : ''}</Gutter>
+          ))}
+          {Array.from({ length: rows }, (_, i) => (
+            <TrackGutter
+              key={i}
+              track={i}
+              target={targetTrack === i}
+              empty={i >= rows - 1 && !project.overlays.some((o) => o.track === i)}
+              onChoose={() => { setTargetTrack(targetTrack === i ? null : i); }}
+            />
+          ))}
           <Gutter>Music</Gutter>
         </div>
 
@@ -512,17 +673,27 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
               overlap is visible as two clips that touch rather than a gap. */}
           <div className="relative h-9 border-b border-edge" data-lane>
             {spans.map((span) => {
-              const active = span.index === selectedScene && selectedOverlay === null;
+              const active = span.index === selectedScene && selectedOverlay === null && selectedEffect === null;
               return (
                 <button
                   key={span.scene.id}
                   type="button"
+                  data-scene-clip={span.index}
                   onClick={(e) => {
+                    if (sceneLongPress.current.fired) return;
                     // Already selected? Then this click is about the moment,
-                    // not the choice (D-087).
+                    // not the choice (D-087). Either way the scene is now the
+                    // thing Delete would remove (D-104).
                     if (active) seekTo(laneMs(e.clientX));
-                    else selectScene(span.index);
+                    selectSceneClip(span.index);
                   }}
+                  onContextMenu={(e) => { e.preventDefault(); openSceneMenu(span.index, e.clientX, e.clientY); }}
+                  onPointerDown={(e) => {
+                    sceneLongPress.current.start(e, (x, y) => { openSceneMenu(span.index, x, y); });
+                  }}
+                  onPointerMove={(e) => { sceneLongPress.current.move(e); }}
+                  onPointerUp={() => { sceneLongPress.current.cancel(); }}
+                  onPointerCancel={() => { sceneLongPress.current.cancel(); }}
                   aria-pressed={active}
                   title={`${designName(span.scene.templateId)} · ${formatSeconds(span.scene.durationMs)}`}
                   className="absolute inset-y-1 overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
@@ -533,7 +704,9 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                     background: active ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
                     color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
                     fontWeight: active ? 600 : 400,
+                    boxShadow: active && sceneClipSelected ? '0 0 0 1px var(--c-accent)' : 'none',
                     transitionDuration: 'var(--t-fast)',
+                    WebkitTouchCallout: 'none',
                   }}
                 >
                   <span className="block truncate leading-[26px]">
@@ -567,45 +740,128 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
             <MotionLane spans={spans} durationMs={durationMs} onSeek={seekTo} />
           </div>
 
-          {/* Overlay tracks, L1 first (§6.4 draws them in this order). */}
-          {Array.from({ length: rows }, (_, row) => (
-            /* `data-lane` marks the row as a time axis: the motion bar
-               converts pointer positions against it, and a press on the bare
-               row scrubs like any other empty part of the timeline. */
-            <div key={row} className="relative h-7 border-b border-edge" data-lane>
-              {project.overlays
-                .filter((o) => o.track === row)
-                .map((overlay) => {
-                  const active = overlay.id === selectedOverlay;
-                  return (
-                    <div
-                      key={overlay.id}
-                      role="button"
-                      tabIndex={0}
-                      aria-pressed={active}
-                      title={labelFor(overlay)}
-                      onPointerDown={(e) => { beginClipDrag(e, overlay, 'move'); }}
-                      onPointerMove={onClipMove}
-                      onPointerUp={endClipDrag}
-                      onPointerCancel={endClipDrag}
-                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectOverlay(overlay.id); }}
-                      className="absolute inset-y-1 cursor-grab select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
-                      style={{
-                        left: `${msToPct(overlay.startMs, durationMs)}%`,
-                        width: `${Math.max(1.2, msToPct(overlay.endMs, durationMs) - msToPct(overlay.startMs, durationMs))}%`,
-                        borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
-                        background: active ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
-                        color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
-                      }}
-                    >
-                      <TrimHandle side="start" onDown={(e) => { beginClipDrag(e, overlay, 'trimStart'); }} onMove={onClipMove} onUp={endClipDrag} />
-                      <span className="pointer-events-none block truncate px-2">{labelFor(overlay)}</span>
-                      <TrimHandle side="end" onDown={(e) => { beginClipDrag(e, overlay, 'trimEnd'); }} onMove={onClipMove} onUp={endClipDrag} />
-                    </div>
-                  );
-                })}
+          {/*
+            * Timeline effects (D-100): weather, light, camera moves and looks
+            * placed at a moment, over everything. Effects may overlap — snow
+            * under a lightning strike is the point — so overlapping ones stack
+            * onto extra rows rather than hiding each other.
+            */}
+          {fxRows.rows.map((row, r) => (
+            <div key={`fx-${r}`} className="relative h-7 border-b border-edge" data-lane data-fx-row={r}>
+              {r === 0 && row.length === 0 && (
+                <span className="pointer-events-none absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
+                  Effects at a moment — snow, lightning, a shake. Use “+ Effect” above.
+                </span>
+              )}
+              {row.map((clip) => {
+                const active = clip.id === selectedEffect;
+                const def = frameEffect(clip.effectId);
+                return (
+                  <div
+                    key={clip.id}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={active}
+                    aria-label={`Effect: ${effectName(clip.effectId)}`}
+                    data-fx-clip={clip.effectId}
+                    title={`${effectName(clip.effectId)} · ${formatSeconds(clip.endMs - clip.startMs)}${def ? ` — ${def.blurb}` : ''}`}
+                    onPointerDown={(e) => { beginFxDrag(e, clip, 'move'); }}
+                    onPointerMove={onFxMove}
+                    onPointerUp={endFxDrag}
+                    onPointerCancel={endFxDrag}
+                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openFxMenu(clip, e.clientX, e.clientY); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') selectEffect(clip.id);
+                      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                        e.preventDefault();
+                        const box = e.currentTarget.getBoundingClientRect();
+                        openFxMenu(clip, box.left, box.bottom);
+                      }
+                    }}
+                    className="absolute inset-y-1 cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
+                    style={{
+                      left: `${msToPct(clip.startMs, durationMs)}%`,
+                      width: `${Math.max(1.2, msToPct(clip.endMs, durationMs) - msToPct(clip.startMs, durationMs))}%`,
+                      borderColor: active ? 'var(--c-pro)' : 'color-mix(in srgb, var(--c-pro) 45%, var(--c-edge-strong))',
+                      background: active ? 'var(--c-pro-soft)' : 'color-mix(in srgb, var(--c-pro-soft) 55%, var(--c-panel-alt))',
+                      color: active ? 'var(--c-pro)' : 'var(--c-ink-muted)',
+                      WebkitTouchCallout: 'none',
+                    }}
+                  >
+                    <TrimHandle side="start" onDown={(e) => { beginFxDrag(e, clip, 'trimStart'); }} onMove={onFxMove} onUp={endFxDrag} />
+                    <span className="pointer-events-none block truncate px-2">✦ {effectName(clip.effectId)}</span>
+                    {active && (
+                      <MoreButton label={`More for ${effectName(clip.effectId)}`} onOpen={(x, y) => { openFxMenu(clip, x, y); }} />
+                    )}
+                    <TrimHandle side="end" onDown={(e) => { beginFxDrag(e, clip, 'trimEnd'); }} onMove={onFxMove} onUp={endFxDrag} />
+                  </div>
+                );
+              })}
             </div>
           ))}
+
+          {/* Overlay layers, L1 first (§6.4 draws them in this order: L1 at the back). */}
+          <div ref={rowsRef}>
+            {Array.from({ length: rows }, (_, row) => (
+              /* `data-lane` marks the row as a time axis: the motion bar
+                 converts pointer positions against it, and a press on the bare
+                 row scrubs like any other empty part of the timeline. Pressing
+                 it also makes it the layer new elements go on (D-103). */
+              <div
+                key={row}
+                className="relative h-7 border-b border-edge"
+                data-lane
+                data-track-row={row}
+                style={targetTrack === row ? { background: 'color-mix(in srgb, var(--c-accent) 6%, transparent)' } : undefined}
+              >
+                {project.overlays
+                  .filter((o) => o.track === row)
+                  .map((overlay) => {
+                    const active = overlay.id === selectedOverlay;
+                    return (
+                      <div
+                        key={overlay.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={active}
+                        aria-label={`${labelFor(overlay)}, layer ${overlay.track + 1}`}
+                        title={`${labelFor(overlay)} · L${overlay.track + 1} · drag across to move, up or down to change layer, right-click for more`}
+                        data-overlay-clip={overlay.id}
+                        onPointerDown={(e) => { beginClipDrag(e, overlay, 'move'); }}
+                        onPointerMove={onClipMove}
+                        onPointerUp={endClipDrag}
+                        onPointerCancel={endClipDrag}
+                        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openOverlayMenu(overlay, e.clientX, e.clientY); }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') selectOverlay(overlay.id);
+                          if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                            e.preventDefault();
+                            const box = e.currentTarget.getBoundingClientRect();
+                            openOverlayMenu(overlay, box.left, box.bottom);
+                          }
+                        }}
+                        className="absolute inset-y-1 cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
+                        style={{
+                          left: `${msToPct(overlay.startMs, durationMs)}%`,
+                          width: `${Math.max(1.2, msToPct(overlay.endMs, durationMs) - msToPct(overlay.startMs, durationMs))}%`,
+                          borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
+                          background: active ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
+                          color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
+                          WebkitTouchCallout: 'none',
+                        }}
+                      >
+                        <TrimHandle side="start" onDown={(e) => { beginClipDrag(e, overlay, 'trimStart'); }} onMove={onClipMove} onUp={endClipDrag} />
+                        <span className="pointer-events-none block truncate px-2">{labelFor(overlay)}</span>
+                        {active && (
+                          <MoreButton label={`More for ${labelFor(overlay)}`} onOpen={(x, y) => { openOverlayMenu(overlay, x, y); }} />
+                        )}
+                        <TrimHandle side="end" onDown={(e) => { beginClipDrag(e, overlay, 'trimEnd'); }} onMove={onClipMove} onUp={endClipDrag} />
+                      </div>
+                    );
+                  })}
+              </div>
+            ))}
+          </div>
 
           {/* §1.2's dedicated music track, §10's waveform. */}
           <MusicTrack
@@ -648,14 +904,98 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   );
 }
 
+/** The height of one layer row, which a drag between layers is measured in. */
+const ROW_PX = 28;
+
+/**
+ * Effects packed into as few rows as will hold them without overlapping:
+ * each goes on the first row whose last clip has ended by the time it starts.
+ * There is always at least one row, so there is somewhere to see "+ Effect".
+ */
+function packEffects(effects: readonly EffectClip[]): { rows: readonly (readonly EffectClip[])[] } {
+  const rows: EffectClip[][] = [];
+  for (const clip of [...effects].sort((a, b) => a.startMs - b.startMs)) {
+    const row = rows.find((r) => (r[r.length - 1]?.endMs ?? 0) <= clip.startMs);
+    if (row) row.push(clip);
+    else rows.push([clip]);
+  }
+  return { rows: rows.length > 0 ? rows : [[]] };
+}
+
+/**
+ * A layer's label, which is also how to choose it: new elements go on the
+ * chosen layer (D-103). Saying so in the tooltip is what makes it findable.
+ */
+function TrackGutter({
+  track,
+  target,
+  empty,
+  onChoose,
+}: {
+  track: number;
+  target: boolean;
+  empty: boolean;
+  onChoose: () => void;
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onChoose}
+      aria-pressed={target}
+      data-track-label={track}
+      title={
+        empty
+          ? 'An empty layer: drag a clip here to put it in front of everything else.'
+          : `Layer ${track + 1}${track === 0 ? ' — at the back' : ''}. Click to add new elements here.`
+      }
+      className="block w-full truncate border-b border-edge px-2 text-left text-[10px] uppercase tracking-wide"
+      style={{
+        height: 28,
+        lineHeight: '28px',
+        color: target ? 'var(--c-accent)' : 'var(--c-ink-faint)',
+        background: target ? 'var(--c-accent-soft)' : 'transparent',
+        fontWeight: target ? 600 : 400,
+      }}
+    >
+      {`L${track + 1}`}
+      {target && <span className="ml-1 normal-case tracking-normal">· adding here</span>}
+    </button>
+  );
+}
+
+/**
+ * "⋯" on a selected clip: the menu, for anyone who does not right-click — a
+ * trackpad without a secondary click set up, a keyboard, a first-time user.
+ */
+function MoreButton({ label, onOpen }: { label: string; onOpen: (x: number, y: number) => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title="More options"
+      onPointerDown={(e) => { e.stopPropagation(); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        const box = e.currentTarget.getBoundingClientRect();
+        onOpen(box.left, box.bottom + 2);
+      }}
+      className="absolute inset-y-0 right-2 my-auto grid h-4 w-5 place-items-center rounded-sm text-[11px] font-bold leading-none hover:bg-panel"
+      style={{ color: 'currentColor' }}
+    >
+      ⋯
+    </button>
+  );
+}
+
 function labelFor(overlay: Overlay): string {
   if (overlay.content.kind === 'text') return overlay.content.text || 'Text';
   return overlay.content.kind === 'photo' ? 'Photo' : 'Media';
 }
 
-function Gutter({ children, tall }: { children: React.ReactNode; tall?: boolean }): React.JSX.Element {
+function Gutter({ children, tall, title }: { children: React.ReactNode; tall?: boolean; title?: string }): React.JSX.Element {
   return (
     <div
+      title={title}
       className="truncate border-b border-edge px-2 text-[10px] uppercase tracking-wide text-ink-faint"
       style={{ height: tall === true ? 36 : 28, lineHeight: tall === true ? '36px' : '28px' }}
     >

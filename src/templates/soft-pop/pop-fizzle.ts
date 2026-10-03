@@ -4,7 +4,7 @@ import type { BuildContext } from '../buildContext';
 import type { SceneTemplate } from '../schema';
 import { FULL_LOOK } from '../_shared/look';
 import { fillSlots } from '../_shared/photo';
-import { backgroundLayer, logoLayers } from '../_shared/chrome';
+import { backgroundLayer } from '../_shared/chrome';
 import {
   POP_SLOTS, cardLayers, jitter, kf, popCard, popGroup, popIn, popTurns, popType, type PopCard, type PopTurn,
 } from '../_shared/pop';
@@ -73,7 +73,6 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   }
 
   layers.push(...type.layers);
-  layers.push(...logoLayers(inputs, ctx));
   return layers;
 }
 

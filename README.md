@@ -1,7 +1,21 @@
-# Motion Studio
+# Q Motion Studio
 
 A browser-based photo-to-motion video editor. Everything renders on your device;
 nothing is uploaded to a server.
+
+Two ways to work:
+
+- **Lifestyle** — one looping scene from a designed template: reels, posts,
+  moments. (Called Showcase in the spec and in saved documents.)
+- **Corporate Ads** — several scenes with transitions, layers, a logo, music
+  and timeline effects. (Motion Ads in the spec.)
+
+Both have the **Motion** panel — how strongly and with what feel a template's
+animation plays, per scene and per element — and the **effects library**:
+38 whole-picture effects (snow, sparkles, light leaks, lightning, camera
+shake, film looks…) and 40 element effects (entrances, exits, emphasis,
+shine and glow), all drawn by the same renderer as the export. See
+DECISIONS.md D-100 – D-105.
 
 - **[BUILD-SPEC.md](BUILD-SPEC.md)** — the contract for the build.
 - **[DECISIONS.md](DECISIONS.md)** — every architectural choice, its reason, and
@@ -27,8 +41,11 @@ Then open http://localhost:5173.
 | `npm test` | Vitest unit tests |
 | `npm run e2e` | Playwright visual regression |
 | `npm run lint:templates` | Validate templates and check manifest agreement |
+| `npm run e2e:prod` | The same suite against the production build (`npm run build` first) |
 | `npm run thumbs` | Regenerate template posters and preview loops (needs `npm run dev`) |
 | `npm run samples` | Regenerate the bundled sample photos |
+| `npm run brand` | Cut the favicon, app icons and top-bar mark from `brand/q-source-dark.webp` |
+| `npm run measure:load` | Cold load on Fast 3G against §14's 2.5s budget (needs `npm run preview`) |
 
 ## Layout
 
@@ -40,6 +57,7 @@ ESLint enforces it.
 ```
 src/
   core/         render engine — pure, worker-safe
+  core/effects/ the effects library: frame and element effects, all pure
   document/     the Project model and derived selectors
   templates/    template schema, registry, build context
   media/        image/video/audio decode and the media store
@@ -62,36 +80,31 @@ user types something that needs it. See DECISIONS.md D-026.
 
 ## Milestone status
 
-- **M0 — done.** Scaffold, design tokens, editor shell, artboard with correct
-  aspect scaling at all five aspects.
-- **M1 — done.** Render core: seven layer types, keyframe interpolation,
-  easings, a baked spring solver, repeaters, blur, text layout and measurement
-  cache, and a hand-written scene running at 60fps.
-- **M2 — done.** Template schema and registry, six templates across three
-  categories, the structural/cosmetic input split, and the lint and thumbnail
-  pipelines.
-- **M3 — done.** Showcase mode: library with categories, search, free/pro filter
-  and favourites; all four inspector tabs on an undoable action pipeline; photo
-  upload by drop, paste or picker, including HEIC.
-- **M4 — done.** Export: offline render in a worker via Mediabunny, MP4 and
-  WebM, real-time MediaRecorder fallback, progress and cancel. A 10s 1080p MP4
-  encodes in ~3s and matches the preview to 1.81/255 per channel.
-- M5 — Motion Ads: scene sequencing, transitions, timeline, overlays.
+M0 – M8 are done: render core, templates, Lifestyle (Showcase), export,
+Corporate Ads (Motion Ads) with sequencing, transitions, layers and music,
+persistence, entitlements and the PWA. Since then: direct manipulation on the
+canvas, motion paths, Soft Pop, the scene picker and project management, and
+the effects library, Motion properties and timeline editing (D-100 – D-105).
 
 ## Templates
 
-Six, across three categories:
+Thirty-two, plus Blank:
 
 | Category | Templates |
 |---|---|
-| Depth Stage | Parallax Depth, Card Stack |
-| Angle Stage | Fan Out, Tilt Sweep *(Pro)* |
-| Kinetic Type | Statement, Phrase Swap *(Pro)* |
+| Story Ads (multi-scene) | Launch Story, Product Drop, Proof Reel, Quick Pitch, Social Post, Soft Showcase |
+| Soft Pop | Float Away, Scatter, Blowout, Fizzle, Flip Out, Dream Fade |
+| Depth Stage | Parallax Depth, Card Stack, Depth Tunnel, Spotlight, Pull Focus |
+| Angle Stage | Fan Out, Tilt Sweep, Cascade, Flip Cards, Pinwheel |
+| Kinetic Type | Statement, Phrase Swap, Big Number, List Drop, Pull Quote |
+| Split Frame | Split Pair, Contact Sheet, Side Band, Panels, Picture in Picture |
 
 A template is a pure generator: `build(inputs, ctx) => Layer[]`, called once per
 structural change and memoised, never per frame. Adding one is a single file
 under `src/templates/<category-slug>/<id>.ts` plus a manifest entry —
-`npm run lint:templates` checks the two agree.
+`npm run lint:templates` checks the two agree. Templates never draw the logo
+(the renderer does, D-101) and never know about effects or Motion properties,
+which are applied after the build.
 
 ## Debugging
 

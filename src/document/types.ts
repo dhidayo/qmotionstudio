@@ -82,6 +82,9 @@ export type StyleOverrides = {
 export type LogoPlacement =
   | 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight' | 'center' | 'free';
 
+/** Where the lockup's text sits against the logo (D-101). */
+export type LockupPosition = 'below' | 'above' | 'right' | 'left';
+
 /**
  * §5 types the logo as `MediaRef | null`, but §8.3 gives the inspector size,
  * placement, opacity and a lockup option — none of which fit in a bare ref.
@@ -99,6 +102,16 @@ export type LogoSettings = {
   /** Pairs the logo with a text mark (§8.3). */
   readonly lockup: boolean;
   readonly lockupText: string;
+  /**
+   * The lockup's layout (D-101). Optional so that every project saved before
+   * they existed opens unchanged: text centred below the logo, at about a
+   * quarter of its size, in the scene's ink colour.
+   */
+  readonly lockupPosition?: LockupPosition;
+  /** Text size as a percentage of the logo's size. */
+  readonly lockupSizePct?: number;
+  /** A hex colour; empty or absent means the scene's ink. */
+  readonly lockupColor?: string;
 };
 
 /**
@@ -166,6 +179,65 @@ export const NO_SLOT_TRANSFORM: SlotTransform = {
  */
 export type SlotKey = string;
 
+// ── Effects and motion (D-100, D-102) ─────────────────────────────────────
+
+export type EffectParams = Readonly<Record<string, number | string | boolean>>;
+
+/**
+ * A frame effect placed in time: snow over a scene, lightning at a moment.
+ *
+ * `effectId` names an entry in the effect library (src/core/effects); the
+ * library's ids are permanent. Times belong to the owner — a scene's own
+ * clock for a scene effect, the project's for a timeline effect.
+ */
+export type EffectClip = {
+  readonly id: string;
+  readonly effectId: string;
+  readonly startMs: number;
+  readonly endMs: number;
+  /** 0–1. */
+  readonly intensity: number;
+  readonly params: EffectParams;
+};
+
+/** When an element effect runs: as it arrives, as it leaves, or throughout. */
+export type ElementPhase = 'enter' | 'exit' | 'during';
+
+/**
+ * An effect on one element — a template photo, a caption, an overlay, the
+ * logo. Timed by phase rather than by clock, so it follows the element: an
+ * exit effect stays on the element's exit when the scene is made longer.
+ */
+export type ElementEffect = {
+  readonly id: string;
+  readonly effectId: string;
+  readonly phase: ElementPhase;
+  /** How long the effect lasts, for 'enter' and 'exit'. 'during' runs throughout. */
+  readonly durationMs: number;
+  readonly intensity: number;
+  readonly params: EffectParams;
+};
+
+/**
+ * How a template's own animation is played (D-102).
+ *
+ *   strength  how far things move, zoom and turn: 1 is the design as made,
+ *             0 is still, 2 is twice as much.
+ *   feel      the easing of every move: the template's own, or one character
+ *             applied throughout.
+ */
+export type MotionFeel = 'template' | 'smooth' | 'gentle' | 'snappy' | 'bouncy' | 'linear';
+
+export type MotionTuning = {
+  readonly strength: number;
+  readonly feel: MotionFeel;
+};
+
+export const NO_TUNING: MotionTuning = { strength: 1, feel: 'template' };
+
+/** The key element effects use for the logo, alongside the slot keys. */
+export const LOGO_KEY = 'logo';
+
 export type SceneInputs = {
   readonly photos: readonly PhotoInput[];
   readonly texts: Readonly<Record<string, string>>;
@@ -174,6 +246,18 @@ export type SceneInputs = {
   readonly styleOverrides: StyleOverrides;
   /** Per-slot nudges, keyed by `slotKey()`. Absent means untouched. */
   readonly slotTransforms: Readonly<Record<SlotKey, SlotTransform>>;
+  /**
+   * Effects over the whole scene, in the scene's own time (D-100). All of the
+   * effect fields are optional: a project that never uses them is saved, and
+   * opens, exactly as before.
+   */
+  readonly effects?: readonly EffectClip[];
+  /** Effects on the scene's elements, by slot key or `LOGO_KEY`. */
+  readonly elementEffects?: Readonly<Record<string, readonly ElementEffect[]>>;
+  /** How the template's animation plays, for the whole scene (D-102). */
+  readonly motion?: MotionTuning;
+  /** …and for one element, overriding the scene's. */
+  readonly slotMotion?: Readonly<Record<SlotKey, MotionTuning>>;
 };
 
 export type Scene = {
@@ -229,6 +313,8 @@ export type Overlay = {
   readonly easing?: OverlayEasing;
   readonly enterAnim: AnimPreset;
   readonly exitAnim: AnimPreset;
+  /** Element effects on this overlay, on top of its entrance and exit (D-100). */
+  readonly effects?: readonly ElementEffect[];
 };
 
 export type AudioClip = {
@@ -263,6 +349,12 @@ export type Project = {
   readonly overlays: readonly Overlay[];
   /** motionAd only, one track for now. */
   readonly audio: readonly AudioClip[];
+  /**
+   * Effects on the timeline itself, in project time (D-100) — Corporate Ads
+   * only. They cover everything, scenes and layers alike, and stay where they
+   * were put when scenes move.
+   */
+  readonly effects?: readonly EffectClip[];
   readonly brand: Brand;
   /**
    * D-013. Set when the project was expanded from a multi-scene ad template.

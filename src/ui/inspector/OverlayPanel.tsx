@@ -4,6 +4,7 @@ import { ANIM_PRESETS } from '@/core/render/overlays';
 import { useEditor, useSelectedOverlay } from '@/state/store';
 import { isAnimated, poseAt } from '@/document/select/overlay';
 import { Keyframes } from './Keyframes';
+import { ElementEffectsEditor } from '@/ui/effects/EffectEditors';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from './controls';
 
@@ -174,6 +175,14 @@ export function OverlayPanel(): React.JSX.Element {
         />
       </Section>
 
+      <Section title="Effects">
+        <ElementEffectsEditor
+          target={{ kind: 'overlay', id }}
+          label={overlay.kind === 'text' ? 'this caption' : 'this layer'}
+          effects={overlay.effects ?? []}
+        />
+      </Section>
+
       <Section title="Arrange">
         <div className="flex gap-1.5">
           <Button onClick={() => { dispatch(actions.arrangeOverlay(id, 'front')); }}>
@@ -183,16 +192,18 @@ export function OverlayPanel(): React.JSX.Element {
             Send to back
           </Button>
         </div>
-        <div className="mt-2.5">
-          <Segmented
-            value={overlay.track}
-            options={[0, 1, 2, 3].map((t) => ({ value: t, label: `L${t + 1}` }))}
-            onChange={(track) => { dispatch(actions.setOverlayTrack(id, track)); }}
-            label="Lane"
-          />
-        </div>
+        <Row label="Layer" hint={`L${overlay.track + 1}`}>
+          <div className="flex gap-1.5">
+            <Button onClick={() => { dispatch(actions.moveOverlayLayer(id, -1)); }} disabled={overlay.track === 0}>
+              Down a layer
+            </Button>
+            <Button onClick={() => { dispatch(actions.moveOverlayLayer(id, 1)); }}>
+              Up a layer
+            </Button>
+          </div>
+        </Row>
         <EmptyNote>
-          Higher lanes draw in front (§6.4). Within one lane, the buttons above decide.
+          Higher layers draw in front. You can also drag the clip up or down on the timeline.
         </EmptyNote>
       </Section>
 
@@ -202,7 +213,7 @@ export function OverlayPanel(): React.JSX.Element {
             variant="danger"
             onClick={() => { dispatch(actions.removeOverlay(id)); selectOverlay(null); }}
           >
-            Remove overlay
+            Delete layer (⌫)
           </Button>
         </div>
       </Section>

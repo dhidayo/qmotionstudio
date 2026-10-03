@@ -113,14 +113,18 @@ describe('structureKey — what MUST invalidate the build', () => {
     expect(structureKey('other', inputs(), '9:16', DESIGN, 10_000)).not.toBe(base);
   });
 
-  it('reacts to a logo appearing, moving or resizing', () => {
-    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, mediaId: 'logo1' } }))).not.toBe(base);
-    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, placement: 'topLeft' } }))).not.toBe(base);
-    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, sizePct: 24 } }))).not.toBe(base);
-    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, lockup: true } }))).not.toBe(base);
-  });
-
-  it('ignores logo opacity — it resolves at draw time', () => {
+  /*
+   * The logo is drawn by the renderer, not by the template (D-101), so nothing
+   * about it may rebuild the scene. It used to: the key carried the logo's
+   * placement *mode* but not its position, so a drag in "Free" moved the
+   * selection box and left the logo behind — and putting the position in the
+   * key would have re-run the template on every pointer move instead.
+   */
+  it('ignores the logo entirely — the renderer draws it (D-101)', () => {
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, mediaId: 'logo1' } }))).toBe(base);
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, placement: 'free', x: 0.1, y: 0.9 } }))).toBe(base);
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, sizePct: 24 } }))).toBe(base);
+    expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, lockup: true } }))).toBe(base);
     expect(keyOf(inputs({ logo: { ...DEFAULT_LOGO, opacity: 0.5 } }))).toBe(base);
   });
 

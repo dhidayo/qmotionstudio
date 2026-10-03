@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import { useEditor } from '@/state/store';
+import { deleteSelection } from '@/ui/editing/commands';
 
 /**
  * §13's keyboard map.
@@ -10,6 +11,8 @@ import { useEditor } from '@/state/store';
  *   ← →          step one frame
  *   ⌘E           export
  *   ⌘S           no-op with a "saves automatically" note
+ *   ⌫ / Delete   delete what is selected — a layer, an effect, the music, a
+ *                scene picked on the timeline (D-104); undoable like the rest
  *
  * Every binding is suppressed while a text field has focus. Arrow keys in
  * particular would otherwise scrub the timeline while someone is editing a
@@ -61,6 +64,13 @@ export function useKeyboard(clock: PreviewClock, options: { onExport: () => void
       }
 
       if (typing) return;
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !meta) {
+        // A dialog in front owns its own keys.
+        if (document.querySelector('[role="dialog"], [data-context-menu]')) return;
+        if (deleteSelection()) event.preventDefault();
+        return;
+      }
 
       if (event.code === 'Space') {
         event.preventDefault();
