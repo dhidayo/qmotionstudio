@@ -28,7 +28,7 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
   if (template.textSlots.length === 0) {
     return (
       <Section>
-        <EmptyNote>This template has no text.</EmptyNote>
+        <EmptyNote>This design has no text of its own. Add words as a layer with <strong>+ Text</strong> under the preview.</EmptyNote>
       </Section>
     );
   }

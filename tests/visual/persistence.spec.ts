@@ -156,11 +156,11 @@ test.describe('undo has a floor', () => {
 });
 
 test.describe('the project list (§13)', () => {
-  const dialog = (page: Page) => page.getByRole('dialog', { name: 'Projects' });
+  const dialog = (page: Page) => page.getByRole('dialog', { name: 'Switch project' });
   const rows = (page: Page) => page.locator('[data-project]');
 
   async function openList(page: Page): Promise<void> {
-    await page.getByRole('button', { name: 'Projects', exact: true }).click();
+    await page.getByRole('button', { name: 'Switch project', exact: true }).click();
     await expect(dialog(page)).toBeVisible();
   }
 
@@ -205,25 +205,28 @@ test.describe('the project list (§13)', () => {
     await expect(rows(page)).toHaveCount(2);
   });
 
-  test('duplicates and deletes', async ({ page }) => {
+  test('copies, and deletes only when asked twice', async ({ page }) => {
     await openEditor(page);
     await settled(page);
     await openList(page);
 
     await page.getByLabel('Project name').fill('Original');
-    await page.getByRole('button', { name: /^Duplicate/ }).first().click();
-    await expect(dialog(page)).toHaveCount(0);
-
-    await settled(page);
-    await openList(page);
+    // A copy is saved alongside; you stay in the original (D-099). "Save as"
+    // in the project menu is the one that opens the copy.
+    await page.getByRole('button', { name: 'Make a copy of Original', exact: true }).click();
     await expect(rows(page)).toHaveCount(2);
-    await expect(page.getByLabel('Project name')).toHaveValue('Original copy');
+    await expect(page.getByLabel('Project name')).toHaveValue('Original');
 
-    // Deleting the one that is not open leaves the editor where it is.
-    // Exact: "Delete Original" is also a prefix of "Delete Original copy",
-    // and a substring match here deletes the project under the cursor.
-    await page.getByRole('button', { name: 'Delete Original', exact: true }).click();
+    // Delete asks first: one click on Delete is not a deletion.
+    await page.getByRole('button', { name: 'Delete Original copy', exact: true }).click();
+    await expect(rows(page)).toHaveCount(2);
+    await page.getByRole('button', { name: 'Keep' }).click();
+    await expect(rows(page)).toHaveCount(2);
+
+    // Exact names: "Delete Original" is a prefix of "Delete Original copy".
+    await page.getByRole('button', { name: 'Delete Original copy', exact: true }).click();
+    await page.getByRole('button', { name: 'Yes, delete Original copy', exact: true }).click();
     await expect(rows(page)).toHaveCount(1);
-    await expect(page.getByLabel('Project name')).toHaveValue('Original copy');
+    await expect(page.getByLabel('Project name')).toHaveValue('Original');
   });
 });

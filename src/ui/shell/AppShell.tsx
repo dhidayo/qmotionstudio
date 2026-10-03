@@ -320,12 +320,12 @@ export function AppShell(): React.JSX.Element {
   /** Which panel is open as a sheet, below desktop width. Never both. */
   const [sheet, setSheet] = useState<'library' | 'inspector' | null>(null);
 
-  const [toast, setToast] = useState<string | null>(null);
   const exporting = useEditor((s) => s.exporting);
   const setExporting = useEditor((s) => s.setExporting);
 
   const onExport = useCallback(() => { setExporting(true); }, [setExporting]);
-  const onSaveNote = useCallback(() => { setToast('Saves automatically.'); }, []);
+  const showToast = useEditor((s) => s.showToast);
+  const onSaveNote = useCallback(() => { showToast('Your work saves automatically.'); }, [showToast]);
   useKeyboard(clock, { onExport, onSaveNote });
 
   return (
@@ -393,7 +393,7 @@ export function AppShell(): React.JSX.Element {
         </>
       )}
       {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
-      <Toast message={toast} onDone={() => { setToast(null); }} />
+      <Toast />
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </ClockProvider>
     </MediaProvider>

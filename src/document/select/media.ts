@@ -76,3 +76,27 @@ export function referencedMedia(project: Project): ReadonlySet<string> {
 
   return ids;
 }
+
+/**
+ * The photographs the person has brought to this project, in the order they
+ * first appear, without repeats.
+ *
+ * Sample photos are not theirs and are left out, as are the empty stand-ins a
+ * template draws when it has more slots than photos. An empty result means
+ * "nothing of their own yet", which callers read as "use the samples".
+ *
+ * This is what continuity rests on: a new scene, or a whole ad template applied
+ * over the top of their work, starts from *their* pictures rather than ours.
+ */
+export function userPhotoIds(project: Project): readonly string[] {
+  const seen = new Set<string>();
+  for (const scene of project.scenes) {
+    for (const photo of scene.inputs.photos) {
+      const id = photo.mediaId;
+      if (id.startsWith('sample:') || id.startsWith('__empty_')) continue;
+      seen.add(id);
+    }
+  }
+  return [...seen];
+}
+

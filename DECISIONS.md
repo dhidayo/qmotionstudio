@@ -2321,3 +2321,69 @@ The first version of the test passed while the bug was plain to see, twice:
 `?frozen` parks the transport, and on a drifting template stepping the playhead
 moves the photo by itself. It now uses a still template without `?frozen`, and
 fails against either fix reverted.
+
+## D-097 — "+ Scene" asks what kind of scene
+
+"When I click + Scene… one is basically forced on me." It was: the button
+copied the selected scene's design. And in Motion Ads the library lists *ad*
+templates — picking one replaces the whole ad — so there was no way at all to
+put a Soft Pop beat after a Kinetic Type one, or to restyle one beat without
+rebuilding it.
+
+"+ Scene" and a new "Change design" open one picker: every scene design,
+grouped as the library groups them, searchable, Pro badged (the gate stays at
+export), with **Blank** first. Changing a scene's design keeps its photos, its
+text where the new design's slots match, and its length within what the new
+design allows — restyling a beat should not cost its content or its timing.
+
+**Blank** is a real template — background and logo, no slots — so the Look tab,
+transitions and export all work on it unchanged. It is unlisted
+(`listed: false`): a blank card among thirty designed ones reads as a broken
+thumbnail, so it is offered where starting from nothing is the question —
+"+ Scene" and "New blank canvas". A blank canvas opens in Motion Ads, because
+building from scratch uses the timeline's layers and their motion.
+
+Scene clips on the timeline now show design names — "Float Away", not
+"pop-float". An internal id reads as a bug.
+
+## D-098 — your work carries on
+
+"Ensure continuity in user work." Three places started over on the samples:
+
+- **A new scene** now takes its photos from the project's own pool, beginning
+  with ones the scene before it did not show, plus that scene's logo and look.
+  Text starts fresh: slots differ between designs, and a headline in the wrong
+  slot is worse than none. Speed resets, being a choice about one beat.
+- **Applying an ad template** deals out the person's photos and puts their logo
+  on every beat. `expandAdTemplate` could always take photos; the store never
+  passed any. The ad's palette still applies — it is part of the design chosen.
+- **Switching to Showcase** keeps one scene and sets the rest aside (§5). That
+  was only in a tooltip; now a notice says so as it happens, with ⌘Z as the
+  way back.
+
+`userPhotoIds` is the single definition of "the person's own photos": not
+samples, not empty stand-ins, once each, in order.
+
+## D-099 — the project is named at the top
+
+The name lived only inside the project list, which you had to open to learn
+what you were working on. Now the top bar shows it: click to rename (Enter or
+click away saves, Escape cancels), a menu beside it, and "Switch project" — the
+list, renamed for what it is used for.
+
+- **Save as** names a copy and opens it; the original is untouched.
+- **Make a copy** saves "Name copy" alongside and leaves you where you are. The
+  list's old Duplicate opened the copy, which is Save as's job; both buttons
+  now mean the same thing wherever they are.
+- **New project** and **New blank canvas** are in the menu and the list.
+- **Delete asks first.** It sat one click from the copy button, it is permanent,
+  and undo does not reach across projects.
+
+Every one of these writes to disk before confirming, and the notice ("“Autumn
+launch” saved.") appears only after the write has finished — a "saved" shown
+before the save is a promise, not a confirmation. One hook,
+`useProjectActions`, backs the menu and the list so they cannot drift again.
+
+The menu is positioned against the window: the top bar scrolls sideways on
+narrow screens, and a scrolling box clips anything hanging out of it, so the
+first version opened and was cut off in the same instant.

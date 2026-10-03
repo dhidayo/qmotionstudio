@@ -2,6 +2,7 @@ import { ASPECTS, type Aspect } from '@/core/types';
 import { useEditor } from '@/state/store';
 import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import type { SaveState } from '@/ui/persist/saveState';
+import { ProjectTitle } from '@/ui/projects/ProjectTitle';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -10,7 +11,6 @@ export function TopBar(): React.JSX.Element {
   const setTheme = useEditor((s) => s.setTheme);
   const { tier } = useEntitlements(project.mode);
   const save = useEditor((s) => s.saveState);
-  const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
 
   return (
     <header
@@ -41,13 +41,8 @@ export function TopBar(): React.JSX.Element {
 
       <UndoRedo />
 
-      <button
-        type="button"
-        onClick={() => { setProjectsOpen(true); }}
-        className="rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
-      >
-        Projects
-      </button>
+      {/* The open project's name, its menu, and "Switch project" (D-099). */}
+      <ProjectTitle />
 
       <div className="ml-auto flex items-center gap-2">
         {/*
@@ -188,7 +183,22 @@ function HistoryButton({
 function ModeSwitch(): React.JSX.Element {
   const mode = useEditor((s) => s.project.mode);
   const sceneCount = useEditor((s) => s.project.scenes.length);
+  const layerCount = useEditor((s) => s.project.overlays.length + s.project.audio.length);
   const setMode = useEditor((s) => s.setMode);
+  const showToast = useEditor((s) => s.showToast);
+
+  /*
+   * Showcase holds one scene and no layers or music (§5), so going back to it
+   * from an ad keeps the selected scene and sets the rest aside. It was only
+   * ever said in a tooltip; now it is said at the moment it happens, with the
+   * way back (D-098).
+   */
+  const choose = (next: 'showcase' | 'motionAd'): void => {
+    setMode(next);
+    if (next === 'showcase' && (sceneCount > 1 || layerCount > 0)) {
+      showToast('Showcase keeps the selected scene. Press ⌘Z to bring the rest of the ad back.');
+    }
+  };
 
   return (
     <div className="flex rounded-md border border-edge p-0.5" role="group" aria-label="Mode">
@@ -201,7 +211,7 @@ function ModeSwitch(): React.JSX.Element {
             type="button"
             aria-current={active}
             aria-pressed={active}
-            onClick={() => { if (!active) setMode(m); }}
+            onClick={() => { if (!active) choose(m); }}
             title={
               lossy
                 ? `Keeps the selected scene and drops the other ${sceneCount - 1}. Undoable.`

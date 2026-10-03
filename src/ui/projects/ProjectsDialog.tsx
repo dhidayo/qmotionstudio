@@ -3,13 +3,13 @@ import { createProject } from '@/document/defaults';
 import { migrate } from '@/document/migrate';
 import { referencedMedia } from '@/document/select/media';
 import * as actions from '@/document/actions';
-import { SCHEMA_VERSION, type Project } from '@/document/types';
 import {
-  deleteProject, listProjects, writeLastOpened, writeProject, type StoredProject,
+  deleteProject, listProjects, writeLastOpened, type StoredProject,
 } from '@/persist/db';
 import { restoreMedia } from '@/persist/media';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
+import { useProjectActions } from './useProjectActions';
 
 /**
  * §13's project list: "on load, with rename, duplicate and delete".
@@ -30,9 +30,14 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
   const dispatch = useEditor((s) => s.dispatch);
   const media = useMediaStore();
 
+  const showToast = useEditor((s) => s.showToast);
+  const { flush, makeCopy, startNew } = useProjectActions();
+
   const [entries, setEntries] = useState<readonly StoredProject[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** The row asking "delete this?" — deleting is permanent, so it asks first. */
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -49,19 +54,6 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
     void (async () => { await refresh(); })();
   }, [refresh]);
 
-  /**
-   * Writes the open project before leaving it.
-   *
-   * Autosave is debounced, so anything done in the last fraction of a second
-   * — renaming it in this very dialog, most obviously — has not reached disk
-   * yet. Switching away would then save the *new* project over that intent and
-   * the edit would be gone. Leaving a document is exactly the moment to flush
-   * it.
-   */
-  const flushCurrent = async (): Promise<void> => {
-    await writeProject({ schemaVersion: SCHEMA_VERSION, project: current });
-  };
-
   /** Opens a stored project, media first so it does not appear half-drawn. */
   const open = async (stored: StoredProject): Promise<void> => {
     if (stored.project.id === current.id) {
@@ -70,7 +62,8 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
     }
     setBusy(stored.project.id);
     try {
-      await flushCurrent();
+      // Leaving a document is the moment to write it (useProjectActions).
+      await flush();
       const result = migrate({ ...stored.project, schemaVersion: stored.schemaVersion });
       if (!result.ok) {
         setError(result.reason);
@@ -79,6 +72,7 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
       await restoreMedia(media, referencedMedia(result.project));
       await writeLastOpened(result.project.id);
       openProject(result.project);
+      showToast(`Opened “${result.project.name}”.`);
       onClose();
     } catch (caught) {
       console.error('Could not open that project.', caught);
@@ -88,12 +82,19 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
     }
   };
 
-  const start = async (project: Project): Promise<void> => {
-    await flushCurrent();
-    await writeProject({ schemaVersion: SCHEMA_VERSION, project });
-    await writeLastOpened(project.id);
-    openProject(project);
-    onClose();
+  /**
+   * A copy saved alongside the original; you stay where you are and the copy
+   * appears in the list. "Save as" in the project menu is the one that opens it.
+   */
+  const copy = async (stored: StoredProject, isCurrent: boolean): Promise<void> => {
+    setBusy(stored.project.id);
+    try {
+      // The open project is copied as it is on screen, not as last autosaved.
+      await makeCopy(isCurrent ? current : stored.project);
+      await refresh();
+    } finally {
+      setBusy(null);
+    }
   };
 
   const remove = async (stored: StoredProject): Promise<void> => {
@@ -109,6 +110,8 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
        * a sweep rather than in a button someone pressed by mistake.
        */
       if (stored.project.id === current.id) openProject(createProject());
+      showToast(`Deleted “${stored.project.name}”.`);
+      setConfirming(null);
       await refresh();
     } catch (caught) {
       console.error('Could not delete that project.', caught);
@@ -122,20 +125,27 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Projects"
+      aria-label="Switch project"
       className="fixed inset-0 z-50 grid place-items-center p-6"
       style={{ background: 'rgb(0 0 0 / 0.45)' }}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <div className="w-[520px] max-w-full rounded-lg border border-edge bg-panel p-4 shadow-lg">
-        <div className="mb-3 flex items-center gap-2">
-          <h2 className="text-[13px] font-semibold">Projects</h2>
+      <div className="w-[560px] max-w-full rounded-lg border border-edge bg-panel p-4 shadow-lg">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h2 className="text-[13px] font-semibold">Your projects</h2>
           <button
             type="button"
-            onClick={() => { void start(createProject()); }}
+            onClick={() => { void startNew('template').then(onClose); }}
             className="ml-auto rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink hover:bg-accent-hover"
           >
             New project
+          </button>
+          <button
+            type="button"
+            onClick={() => { void startNew('blank').then(onClose); }}
+            className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
+          >
+            New blank canvas
           </button>
           <button
             type="button"
@@ -164,6 +174,11 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
         <ul className="max-h-80 overflow-y-auto">
           {entries?.map((stored) => {
             const isCurrent = stored.project.id === current.id;
+            // The open project's name as it is now, not as last written: the
+            // list is read from disk, and a rename typed a moment ago is not
+            // there yet — the buttons would otherwise name a project that the
+            // field beside them no longer shows.
+            const name = isCurrent ? current.name : stored.project.name;
             return (
               <li
                 key={stored.project.id}
@@ -197,34 +212,63 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
                   </p>
                 </div>
 
+                {!isCurrent && (
+                  <button
+                    type="button"
+                    onClick={() => { void open(stored); }}
+                    disabled={busy !== null}
+                    aria-label={`Open ${name}`}
+                    className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
+                  >
+                    Open
+                  </button>
+                )}
                 <button
                   type="button"
-                  aria-label={`Duplicate ${stored.project.name}`}
-                  /*
-                   * Duplicates what is on screen, not what is on disk.
-                   *
-                   * For the open project those differ by whatever has happened
-                   * since the last autosave — a rename typed a moment ago, most
-                   * obviously — and copying the stale one silently discards it.
-                   */
-                  onClick={() => {
-                    void start(actions.duplicateProject(isCurrent ? current : stored.project));
-                  }}
+                  aria-label={`Make a copy of ${name}`}
+                  onClick={() => { void copy(stored, isCurrent); }}
                   disabled={busy !== null}
                   className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
                 >
-                  Duplicate
+                  Make a copy
                 </button>
-                <button
-                  type="button"
-                  aria-label={`Delete ${stored.project.name}`}
-                  onClick={() => { void remove(stored); }}
-                  disabled={busy !== null}
-                  className="rounded-md border px-2 py-1 text-[11px]"
-                  style={{ borderColor: 'var(--c-edge)', color: 'var(--c-danger)' }}
-                >
-                  Delete
-                </button>
+                {confirming === stored.project.id ? (
+                  <span className="flex items-center gap-1" role="group" aria-label={`Confirm deleting ${name}`}>
+                    <button
+                      type="button"
+                      aria-label={`Yes, delete ${name}`}
+                      onClick={() => { void remove(stored); }}
+                      disabled={busy !== null}
+                      className="rounded-md px-2 py-1 text-[11px] font-semibold"
+                      style={{ background: 'var(--c-danger)', color: 'var(--c-panel)' }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setConfirming(null); }}
+                      className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
+                    >
+                      Keep
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    aria-label={`Delete ${name}`}
+                    /*
+                     * Asks first. Deleting is permanent — there is no bin and
+                     * undo does not reach across projects — and it sat one
+                     * click from "Make a copy" with no second chance.
+                     */
+                    onClick={() => { setConfirming(stored.project.id); }}
+                    disabled={busy !== null}
+                    className="rounded-md border px-2 py-1 text-[11px]"
+                    style={{ borderColor: 'var(--c-edge)', color: 'var(--c-danger)' }}
+                  >
+                    Delete
+                  </button>
+                )}
               </li>
             );
           })}

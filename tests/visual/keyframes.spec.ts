@@ -250,7 +250,7 @@ test.describe('clicking the timeline moves the playhead', () => {
 
     // Scene 2, because scene 1 is selected the moment the project opens — and
     // a click on something already selected is the *second* kind of click.
-    const clip = page.getByRole('button', { name: /2\. angle-fan/ });
+    const clip = page.getByRole('button', { name: /2\. Fan Out/ });
     await expect(clip).toHaveAttribute('aria-pressed', 'false');
 
     const box = await clip.boundingBox();

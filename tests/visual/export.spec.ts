@@ -25,7 +25,7 @@ test.use({ viewport: { width: 1500, height: 940 } });
  * default even though each finishes in about 15s alone. The work is real, so
  * the budget is raised rather than the parallelism reduced.
  */
-const EXPORT_TIMEOUT_MS = 150_000;
+const EXPORT_TIMEOUT_MS = 240_000;
 
 /** Stops the download reaching the filesystem and captures the blob instead. */
 async function captureDownloads(page: Page): Promise<void> {
@@ -49,7 +49,15 @@ async function runExport(page: Page, format: 'mp4' | 'webm'): Promise<void> {
   await page.getByRole('button', { name: /^Export( again)?$/ }).last().click();
 }
 
-async function waitForExport(page: Page, timeout = 90_000): Promise<void> {
+/*
+ * Three minutes, and the reason is the dev server rather than the encoder. The
+ * first export of a run makes Vite compile the export worker on demand, so that
+ * test carries a cold compile on top of a full 1080p encode, on a machine busy
+ * with the rest of the suite — it has timed out at ninety seconds while taking
+ * under twenty alone. Against the production build (`npm run e2e:prod`) the
+ * worker is prebuilt and the same test finishes in about thirty.
+ */
+async function waitForExport(page: Page, timeout = 180_000): Promise<void> {
   await page.waitForFunction(
     () => (globalThis as unknown as { __exported?: unknown }).__exported !== undefined,
     undefined,

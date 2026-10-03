@@ -1,4 +1,4 @@
-import type { Scene } from '@/document/types';
+import type { LogoSettings, Scene } from '@/document/types';
 import {
   DEFAULT_LOOK,
   emptySceneInputs,
@@ -25,6 +25,12 @@ import type { AdTemplate } from './schema';
 export type ExpandOptions = {
   /** Photos to deal out across the beats. Defaults to the sample set. */
   readonly photoIds?: readonly string[];
+  /**
+   * The person's logo, put on every beat (D-098). The ad's own palette still
+   * applies — it is part of the design being chosen — but a logo is theirs,
+   * and losing it on every template change meant re-adding it every time.
+   */
+  readonly logo?: LogoSettings;
 };
 
 export async function expandAdTemplate(
@@ -82,6 +88,7 @@ export async function expandAdTemplate(
         photos,
         texts: { ...ref.texts },
         look: { ...DEFAULT_LOOK, palette },
+        ...(options.logo ? { logo: options.logo } : {}),
       },
     };
     return scene;

@@ -9,6 +9,7 @@ import { totalDurationMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
 import { loadTemplate } from '@/templates/registry';
 import { expandAdTemplate } from '@/templates/ad';
+import { userPhotoIds } from '@/document/select/media';
 import { summaryFor } from '@/templates/manifest';
 import { renderParams } from '@/dev/renderParams';
 import * as actions from '@/document/actions';
@@ -95,6 +96,15 @@ type EditorState = {
    * photographs when it opens a project.
    */
   projectsOpen: boolean;
+  /**
+   * A short confirmation — "Saved", "Scene added" — that fades on its own.
+   *
+   * In the store because the things that raise one are all over the editor
+   * (the top bar, the scene picker, the project list) and the one place that
+   * draws it is the shell. `id` changes every time, so the same message twice
+   * in a row still shows twice.
+   */
+  toast: { readonly id: number; readonly message: string } | null;
 
   selectScene: (index: number) => void;
   selectOverlay: (id: string | null) => void;
@@ -115,6 +125,8 @@ type EditorState = {
   setExporting: (exporting: boolean) => void;
   setSaveState: (state: SaveState) => void;
   setProjectsOpen: (open: boolean) => void;
+  showToast: (message: string) => void;
+  clearToast: () => void;
   dispatch: (action: actions.Action) => void;
   /** Ends a coalescing run — call on pointer-up after a drag. */
   endInteraction: () => void;
@@ -265,6 +277,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   inspectorTab: 'photos',
   saveState: 'idle',
   projectsOpen: false,
+  toast: null,
   theme: readStoredTheme(),
   selectedPhoto: 0,
   favourites: readFavourites(),
@@ -354,6 +367,10 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setProjectsOpen: (projectsOpen) => { set({ projectsOpen }); },
 
+  showToast: (message) => { set({ toast: { id: Date.now() + Math.random(), message } }); },
+
+  clearToast: () => { set({ toast: null }); },
+
   /**
    * The one way the document changes.
    *
@@ -413,7 +430,17 @@ export const useEditor = create<EditorState>((set, get) => ({
     void loadTemplate(templateId)
       .then(async (template) => {
         if (template.kind === 'ad') {
-          const scenes = await expandAdTemplate(template);
+          /*
+           * Continuity (D-098): the ad is filled with the person's own photos
+           * and logo when they have any, rather than starting over on the
+           * samples. Undo still restores the scenes it replaces.
+           */
+          const current = get().project;
+          const logo = current.scenes.find((scene) => scene.inputs.logo.mediaId !== null)?.inputs.logo;
+          const scenes = await expandAdTemplate(template, {
+            photoIds: userPhotoIds(current),
+            ...(logo ? { logo } : {}),
+          });
           get().dispatch(actions.applyAdTemplate(scenes, template.id));
           set({ selectedScene: 0 });
           if (options?.asBaseline === true) get().sealHistory();

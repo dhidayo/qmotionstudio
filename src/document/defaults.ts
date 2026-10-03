@@ -102,6 +102,64 @@ export function createScene(
 }
 
 /**
+ * A new scene that carries on from the work already in the project (D-098).
+ *
+ * "Ensure continuity in user work": a scene added to an ad used to arrive with
+ * the sample photos and default look, so every new beat meant re-adding the
+ * person's own pictures and logo by hand. Now it starts from theirs —
+ *
+ *   photos   dealt from the project's own pool, beginning after the ones the
+ *            scene it follows already shows, so two neighbouring beats do not
+ *            open on the same picture. Samples only when there are none.
+ *   logo     the one the scene it follows carries.
+ *   look     that scene's palette, background and finish, so the new beat
+ *            matches without being restyled. Speed resets: it is a timing
+ *            choice about one beat, not a style.
+ *
+ * Text starts fresh from the new template's own placeholders, because text
+ * slots differ from template to template and a headline carried into the
+ * wrong slot is worse than none.
+ */
+export function createSceneFrom(
+  templateId: string,
+  options: {
+    readonly durationMs: number;
+    readonly photoCount: number;
+    readonly from?: Scene | undefined;
+    readonly photoIds?: readonly string[];
+  },
+): Scene {
+  const pool = options.photoIds ?? [];
+  const count = Math.max(0, options.photoCount);
+  const already = new Set(options.from?.inputs.photos.map((p) => p.mediaId) ?? []);
+  const fresh = pool.filter((id) => !already.has(id));
+  const ordered = fresh.length > 0 ? [...fresh, ...pool.filter((id) => already.has(id))] : pool;
+
+  const photos: PhotoInput[] = ordered.length === 0
+    ? starterPhotos(count)
+    : Array.from({ length: count }, (_, i) => ({
+        mediaId: ordered[i % ordered.length] ?? '',
+        frame: '3:4' as const,
+        sizeMode: 'template' as const,
+        sizePct: 100,
+        cropMode: 'template' as const,
+      }));
+
+  const from = options.from;
+  return {
+    id: id('scn'),
+    templateId,
+    durationMs: options.durationMs,
+    transitionIn: null,
+    inputs: {
+      ...emptySceneInputs(),
+      photos,
+      ...(from ? { logo: from.inputs.logo, look: { ...from.inputs.look, speed: 1 } } : {}),
+    },
+  };
+}
+
+/**
  * Two built-in scenes that are not templates: '__demo__' is the M1 render-core
  * fixture and '__placeholder__' is the M0 aspect test card. They are reachable
  * via ?scene= and exist so the renderer's own regressions stay visible
@@ -133,6 +191,7 @@ export const DEFAULT_TEMPLATE_ID = 'depth-parallax';
 export function createProject(options?: {
   name?: string;
   aspect?: Aspect;
+  mode?: Project['mode'];
   templateId?: string;
   /** Sized to the template's own slot range by the caller that knows it. */
   photoCount?: number;
@@ -142,7 +201,7 @@ export function createProject(options?: {
     schemaVersion: SCHEMA_VERSION,
     id: id('prj'),
     name: options?.name ?? 'Untitled project',
-    mode: 'showcase',
+    mode: options?.mode ?? 'showcase',
     aspect: options?.aspect ?? '9:16',
     scenes: [createScene(options?.templateId ?? DEFAULT_TEMPLATE_ID, DEFAULT_SCENE_MS, options?.photoCount)],
     overlays: [],

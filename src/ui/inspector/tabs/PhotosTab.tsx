@@ -38,6 +38,24 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
     });
   };
 
+  /*
+   * A design with no photo slots — Blank — has nothing for this panel to fill.
+   * Saying "the template draws placeholders" and "0 of 0" there was wrong
+   * twice over; the photos on a blank canvas are layers on the timeline, so
+   * that is where this sends people (D-097).
+   */
+  if (template !== null && template.photoSlots.max === 0) {
+    return (
+      <Section title="Photos">
+        <EmptyNote>
+          This scene is a blank canvas, so its photos are layers you place yourself. Use
+          {' '}<strong>+ Photo</strong> under the preview to add one — then drag, resize and give it motion
+          like anything else on the timeline.
+        </EmptyNote>
+      </Section>
+    );
+  }
+
   return (
     <div>
       <Section>
@@ -229,6 +247,7 @@ function PhotoThumb({
         onClick={onSelect}
         aria-pressed={active}
         aria-label={`Photo ${index + 1}`}
+        data-media-id={mediaId}
         className="block w-full overflow-hidden rounded-md border"
         style={{ borderColor: active ? 'var(--c-accent)' : 'var(--c-edge)' }}
       >

@@ -47,13 +47,30 @@ export type TemplateSummary = {
    * and a poster showing a card halfway out of frame sells nothing.
    */
   readonly posterAtMs?: number;
+  /**
+   * False for templates offered only where they make sense rather than in the
+   * library grid — Blank, which is reached from "+ Scene" and "New blank
+   * canvas". Omitted means listed.
+   */
+  readonly listed?: boolean;
 };
 
 export const CATEGORIES: readonly string[] = [
-  'Story Ads', 'Soft Pop', 'Depth Stage', 'Angle Stage', 'Kinetic Type', 'Split Frame',
+  'Story Ads', 'Soft Pop', 'Depth Stage', 'Angle Stage', 'Kinetic Type', 'Split Frame', 'Basics',
 ];
 
 export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
+  {
+    id: 'blank',
+    name: 'Blank',
+    category: 'Basics',
+    kind: 'scene',
+    tier: 'free',
+    supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
+    photoSlots: { min: 0, max: 0 },
+    blurb: 'A background and nothing else, to build on from scratch.',
+    listed: false,
+  },
   {
     id: 'launch-story',
     name: 'Launch Story',
@@ -485,7 +502,21 @@ export function templatesInCategory(category: string): readonly TemplateSummary[
 
 /** What the library shows for a given editor mode (§1.1 vs §1.2). */
 export function templatesForMode(mode: 'showcase' | 'motionAd'): readonly TemplateSummary[] {
-  return TEMPLATE_MANIFEST.filter((t) => (mode === 'motionAd' ? t.kind === 'ad' : t.kind === 'scene'));
+  return TEMPLATE_MANIFEST.filter(
+    (t) => t.listed !== false && (mode === 'motionAd' ? t.kind === 'ad' : t.kind === 'scene'),
+  );
+}
+
+/**
+ * Every template that can be a scene, listed or not — what "+ Scene" offers.
+ *
+ * In Motion Ads the library shows ad templates, because picking one there
+ * replaces the whole ad. That left no way at all to choose what kind of scene
+ * to add, or to change one beat's design: "+ Scene" could only copy the scene
+ * already selected. This is the list that fixes it.
+ */
+export function sceneTemplates(): readonly TemplateSummary[] {
+  return TEMPLATE_MANIFEST.filter((t) => t.kind === 'scene');
 }
 
 export function posterUrl(id: string): string {

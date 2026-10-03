@@ -3,6 +3,8 @@ import { sceneSpans } from '@/document/select/timeline';
 import { adDurationMs, expandAdTemplate } from './ad';
 import { loadTemplate } from './registry';
 import type { AdTemplate } from './schema';
+import { TEMPLATE_MANIFEST } from './manifest';
+import { DEFAULT_LOGO } from '@/document/defaults';
 
 /**
  * Ad templates expand into ordinary scenes (D-013).
@@ -13,7 +15,12 @@ import type { AdTemplate } from './schema';
  * from two completely different directions.
  */
 
-const AD_IDS = ['launch-story', 'product-drop', 'quick-pitch'] as const;
+/*
+ * Every ad in the manifest, not a hand-kept list. A fixed list of the first
+ * three meant Social Post, Proof Reel and Soft Showcase were never checked
+ * here at all when they were added.
+ */
+const AD_IDS = TEMPLATE_MANIFEST.filter((t) => t.kind === 'ad').map((t) => t.id);
 
 async function ad(id: string): Promise<AdTemplate> {
   const template = await loadTemplate(id);
@@ -100,3 +107,21 @@ describe('photo distribution', () => {
     expect(scenes.every((s) => s.inputs.photos.every((p) => p.mediaId === 'only'))).toBe(true);
   });
 });
+
+describe('applying an ad over existing work (D-098)', () => {
+  it('deals out the person’s photos instead of the samples', async () => {
+    const template = await ad('quick-pitch');
+    const scenes = await expandAdTemplate(template, { photoIds: ['m:one', 'm:two'] });
+    const used = scenes.flatMap((scene) => scene.inputs.photos.map((p) => p.mediaId));
+    expect(used.length).toBeGreaterThan(0);
+    expect(used.every((id) => id === 'm:one' || id === 'm:two')).toBe(true);
+  });
+
+  it('puts the person’s logo on every beat', async () => {
+    const template = await ad('soft-showcase');
+    const logo = { ...DEFAULT_LOGO, mediaId: 'logo:brand' };
+    const scenes = await expandAdTemplate(template, { logo });
+    expect(scenes.every((scene) => scene.inputs.logo.mediaId === 'logo:brand')).toBe(true);
+  });
+});
+

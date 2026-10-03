@@ -1,34 +1,46 @@
 import { useEffect } from 'react';
+import { useEditor } from '@/state/store';
 
 /**
- * Minimal transient notice — §13's "saves automatically" is the first user.
+ * The editor's one transient notice: "Saved", "Scene added", and so on.
  *
- * The fade is a CSS animation keyed on the message rather than React state:
- * re-keying restarts the animation, so a second toast of the same text still
- * plays, and there is no state to synchronise with an effect.
+ * Reads from the store so anything can raise one — the top bar, the scene
+ * picker, the project list — and clears itself after a few seconds. Keyed on
+ * the toast's id rather than its text, so the same confirmation twice in a row
+ * still plays twice; a toast that silently did not reappear would read as the
+ * second action having failed.
+ *
+ * `role="status"` so a screen reader announces it without interrupting.
  */
-export function Toast({ message, onDone }: { message: string | null; onDone: () => void }): React.JSX.Element | null {
-  useEffect(() => {
-    if (message === null) return;
-    const clear = setTimeout(onDone, 2500);
-    return () => { clearTimeout(clear); };
-  }, [message, onDone]);
+const SHOWN_MS = 3_000;
 
-  if (message === null) return null;
+export function Toast(): React.JSX.Element | null {
+  const toast = useEditor((s) => s.toast);
+  const clear = useEditor((s) => s.clearToast);
+
+  useEffect(() => {
+    if (toast === null) return;
+    const timer = setTimeout(clear, SHOWN_MS);
+    return () => { clearTimeout(timer); };
+  }, [toast, clear]);
+
+  if (toast === null) return null;
 
   return (
     <div
-      key={message}
+      key={toast.id}
       role="status"
-      className="toast pointer-events-none fixed bottom-16 left-1/2 z-50 -translate-x-1/2 rounded-md px-3 py-1.5 text-[12px]"
+      data-toast
+      className="toast pointer-events-none fixed bottom-16 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-md px-3 py-2 text-[12px]"
       style={{
         background: 'var(--c-panel)',
         border: '1px solid var(--c-edge)',
-        color: 'var(--c-ink-muted)',
+        color: 'var(--c-ink)',
         boxShadow: 'var(--shadow-lg)',
       }}
     >
-      {message}
+      <span aria-hidden className="size-1.5 rounded-full" style={{ background: 'var(--c-accent)' }} />
+      {toast.message}
     </div>
   );
 }

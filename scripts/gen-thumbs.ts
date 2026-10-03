@@ -129,9 +129,12 @@ type Result = { id: string; posterKB: number; loopKB: number; aspectsChecked: nu
  */
 function selected(): readonly TemplateSummary[] {
   const filters = process.argv.slice(2).map((arg) => arg.toLowerCase());
-  if (filters.length === 0) return TEMPLATE_MANIFEST;
+  // Unlisted templates never appear on a library card, so they have no
+  // thumbnail to make — Blank's would be an empty frame (D-097).
+  const listed = TEMPLATE_MANIFEST.filter((t) => t.listed !== false);
+  if (filters.length === 0) return listed;
 
-  const matched = TEMPLATE_MANIFEST.filter((t) =>
+  const matched = listed.filter((t) =>
     filters.some((f) => t.id.toLowerCase().includes(f) || t.category.toLowerCase().includes(f)),
   );
   if (matched.length === 0) {

@@ -360,7 +360,9 @@ test.describe('the sequence is editable', () => {
       Number(await page.getByLabel('Scrub').getAttribute('aria-valuemax'));
 
     const before = await total();
-    await page.getByRole('button', { name: 'Add a scene after this one' }).click();
+    // "+ Scene" asks which design (D-097); any one adds a beat.
+    await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+    await page.getByRole('dialog', { name: 'Add a scene' }).getByRole('button', { name: /^Statement/ }).click();
     await page.waitForTimeout(300);
     expect(await total()).toBeGreaterThan(before);
 

@@ -7,6 +7,7 @@ import type { Aspect, Layer, Palette } from '@/core/types';
 import type { PhotoInput, SceneInputs } from '@/document/types';
 import { createBuildContext } from './buildContext';
 import { loadAllTemplates } from './registry';
+import { TEMPLATE_MANIFEST } from './manifest';
 import { isSceneTemplate, type SceneTemplate } from './schema';
 
 /**
@@ -80,7 +81,12 @@ describe('the library', () => {
 
   it('leaves no category thin', () => {
     const counts = new Map<string, number>();
-    for (const t of templates) counts.set(t.category, (counts.get(t.category) ?? 0) + 1);
+    // Only what the library shows: Basics holds Blank, which is offered from
+    // "+ Scene" and "New blank canvas" rather than as a card (D-097).
+    const listed = new Set(TEMPLATE_MANIFEST.filter((t) => t.listed !== false).map((t) => t.id));
+    for (const t of templates) {
+      if (listed.has(t.id)) counts.set(t.category, (counts.get(t.category) ?? 0) + 1);
+    }
     // Categories are the top-level navigation; a tab with two things in it
     // teaches the user that the tabs are not worth opening (D-086).
     expect(Math.min(...counts.values())).toBeGreaterThanOrEqual(5);

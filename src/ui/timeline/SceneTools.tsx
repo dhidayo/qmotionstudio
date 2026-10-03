@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import type { TransitionKind } from '@/document/types';
-import { createScene } from '@/document/defaults';
 import * as actions from '@/document/actions';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import { useEditor } from '@/state/store';
 import { formatSeconds } from './timelineGeometry';
+import { ScenePicker } from './ScenePicker';
 
 /**
  * Timing controls for the selected scene.
@@ -33,6 +34,7 @@ export function SceneTools(): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
   const endInteraction = useEditor((s) => s.endInteraction);
   const selectScene = useEditor((s) => s.selectScene);
+  const [picking, setPicking] = useState<'add' | 'replace' | null>(null);
 
   const scene = project.scenes[index];
   if (!scene) return null;
@@ -41,14 +43,6 @@ export function SceneTools(): React.JSX.Element | null {
   const bounds = {
     min: template?.minDurationMs ?? 1_000,
     max: template?.maxDurationMs ?? 60_000,
-  };
-
-  const addScene = (): void => {
-    // A new beat copies the selected one's template, which is nearly always
-    // what "add a scene here" means — a different template is one click away
-    // in the library, and an empty scene would render nothing.
-    dispatch(actions.addScene(createScene(scene.templateId, scene.durationMs), index + 1));
-    selectScene(index + 1);
   };
 
   return (
@@ -142,7 +136,13 @@ export function SceneTools(): React.JSX.Element | null {
       )}
 
       <div className="ml-auto flex items-center gap-1">
-        <ToolButton onClick={addScene} label="Add a scene after this one">+ Scene</ToolButton>
+        {/*
+          * Both open the scene picker (D-097). "+ Scene" used to copy the
+          * selected scene with no choice offered, and nothing changed a beat's
+          * design at all in Motion Ads.
+          */}
+        <ToolButton onClick={() => { setPicking('add'); }} label="Add a scene after this one — choose its design">+ Scene</ToolButton>
+        <ToolButton onClick={() => { setPicking('replace'); }} label="Change this scene's design">Change design</ToolButton>
         <ToolButton
           onClick={() => { dispatch(actions.duplicateScene(index)); selectScene(index + 1); }}
           label="Duplicate this scene"
@@ -172,6 +172,8 @@ export function SceneTools(): React.JSX.Element | null {
           Remove
         </ToolButton>
       </div>
+
+      {picking !== null && <ScenePicker mode={picking} onClose={() => { setPicking(null); }} />}
     </div>
   );
 }

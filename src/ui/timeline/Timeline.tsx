@@ -10,6 +10,7 @@ import { isAnimated, posesOf } from '@/document/select/overlay';
 import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
 import { spanOf } from '@/document/select/motion';
 import { MotionBar } from './MotionBar';
+import { summaryFor } from '@/templates/manifest';
 import { useEditor } from '@/state/store';
 import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
@@ -523,7 +524,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                     else selectScene(span.index);
                   }}
                   aria-pressed={active}
-                  title={`${span.scene.templateId} · ${formatSeconds(span.scene.durationMs)}`}
+                  title={`${designName(span.scene.templateId)} · ${formatSeconds(span.scene.durationMs)}`}
                   className="absolute inset-y-1 overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
                   style={{
                     left: `${msToPct(span.startMs, durationMs)}%`,
@@ -536,7 +537,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                   }}
                 >
                   <span className="block truncate leading-[26px]">
-                    {span.index + 1}. {span.scene.templateId}
+                    {span.index + 1}. {designName(span.scene.templateId)}
                   </span>
                   {span.transitionIn && span.transitionIn.kind !== 'cut' && (
                     <span
@@ -896,3 +897,12 @@ function OverlayMotion({
     />
   );
 }
+
+/**
+ * A scene's design by the name people chose it by — "Float Away", not
+ * "pop-float". The id is an internal key and reads as a bug in a timeline.
+ */
+function designName(templateId: string): string {
+  return summaryFor(templateId)?.name ?? templateId;
+}
+
