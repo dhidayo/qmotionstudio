@@ -4,6 +4,7 @@ import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import type { SaveState } from '@/ui/persist/saveState';
 import { ProjectTitle } from '@/ui/projects/ProjectTitle';
 import { MODE_LABEL } from './modeLabels';
+import { useOverlays } from './overlays';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -97,6 +98,15 @@ export function TopBar(): React.JSX.Element {
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
         >
           {theme === 'dark' ? 'Light' : 'Dark'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { useOverlays.getState().setShortcutsOpen(true); }}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+          className="grid size-7 place-items-center rounded-md border border-edge text-[12px] font-semibold text-ink-muted hover:bg-panel-alt"
+        >
+          ?
         </button>
         <ExportButton />
       </div>

@@ -4,6 +4,7 @@ import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import { useEditor } from '@/state/store';
 import { formatSeconds } from './timelineGeometry';
 import { ScenePicker } from './ScenePicker';
+import { sceneLengthMs } from '@/document/select/timeline';
 import { useOverlays } from '@/ui/shell/overlays';
 
 /**
@@ -71,6 +72,12 @@ export function SceneTools(): React.JSX.Element | null {
           className="h-1 w-24 accent-[var(--c-accent)]"
         />
         <span className="tabular w-9 text-ink-faint">{formatSeconds(scene.durationMs)}</span>
+        {scene.inputs.look.speed !== 1 && (
+          // Speed changes how long it lasts on the timeline, so say so here.
+          <span className="tabular text-ink-faint">
+            plays in {formatSeconds(sceneLengthMs(scene))} at {scene.inputs.look.speed.toFixed(2)}×
+          </span>
+        )}
       </label>
 
       {index > 0 && (

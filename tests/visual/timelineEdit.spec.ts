@@ -36,7 +36,7 @@ async function layers(page: Page): Promise<number[]> {
   return page.evaluate(() => {
     const counts = new Map<number, number>();
     for (const clip of document.querySelectorAll('[data-overlay-clip]')) {
-      const row = Number(clip.closest('[data-track-row]')?.getAttribute('data-track-row'));
+      const row = Number(clip.getAttribute('data-track'));
       counts.set(row, (counts.get(row) ?? 0) + 1);
     }
     const rows = Math.max(-1, ...counts.keys()) + 1;
@@ -219,7 +219,7 @@ test.describe('layers (D-103)', () => {
     await addText(page);
     // One on L1, one on L2. Drag the L1 clip later *and* down a row, to a
     // stretch of L2 that is free.
-    const first = page.locator('[data-track-row="0"] [data-overlay-clip]');
+    const first = page.locator('[data-overlay-clip][data-track="0"]');
     const box = await first.boundingBox();
     if (!box) throw new Error('no clip');
     const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -241,7 +241,7 @@ test.describe('layers (D-103)', () => {
     await scrubTo(page, 0.15);
     await addText(page);
     // The clip on L2, dragged straight up onto L1, where the other one already is.
-    const second = page.locator('[data-track-row="1"] [data-overlay-clip]');
+    const second = page.locator('[data-overlay-clip][data-track="1"]');
     const box = await second.boundingBox();
     if (!box) throw new Error('no clip');
     const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -253,5 +253,116 @@ test.describe('layers (D-103)', () => {
 
     await expect(toast(page)).toContainText('No room on L1');
     expect(await layers(page)).toEqual([1, 1]);
+  });
+});
+
+test.describe('the timeline lines up and grows (D-106)', () => {
+  test('every row’s label sits exactly beside its lane', async ({ page }) => {
+    await openAd(page);
+    const rows = await page.evaluate(() =>
+      [...document.querySelectorAll('[aria-label="Timeline"] [data-lane="true"]')]
+        .filter((lane) => lane.parentElement?.firstElementChild !== lane)
+        .map((lane) => {
+          const label = lane.parentElement?.firstElementChild?.getBoundingClientRect();
+          const own = lane.getBoundingClientRect();
+          return { dTop: Math.abs((label?.top ?? -99) - own.top), dHeight: Math.abs((label?.height ?? -99) - own.height) };
+        }),
+    );
+    expect(rows.length).toBeGreaterThan(4);
+    for (const row of rows) {
+      expect(row.dTop).toBeLessThan(1);
+      expect(row.dHeight).toBeLessThan(1);
+    }
+  });
+
+  test('grows with its rows, so the music row stays in view', async ({ page }) => {
+    await openAd(page);
+    for (const id of ['lightning', 'shake', 'flash']) {
+      await page.getByTitle(/^Add an effect at the playhead/).click();
+      await page.getByRole('dialog', { name: 'Effects' }).locator(`[data-effect="${id}"]`).click();
+    }
+    const panel = await page.locator('[aria-label="Timeline"]').boundingBox();
+    const music = await page.locator('[aria-label="Timeline"] [data-lane="true"]').last().boundingBox();
+    if (!panel || !music) throw new Error('no timeline');
+    expect(music.y + music.height).toBeLessThanOrEqual(panel.y + panel.height + 1);
+  });
+});
+
+test.describe('effects on the timeline (D-106)', () => {
+  test('a scene’s own effect shows on the FX lane, with its menu', async ({ page }) => {
+    await openAd(page);
+    await page.getByRole('button', { name: /^2\. / }).click();
+    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByRole('button', { name: '+ Add effect' }).last().click();
+    await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="snow"]').click();
+
+    const clip = page.locator('[data-fx-scope="scene-1"][data-fx-clip="snow"]');
+    await expect(clip).toBeVisible();
+    await expect(clip).toContainText('scene 2');
+
+    await clip.click({ button: 'right' });
+    await menu(page).getByRole('menuitem', { name: /^Move to the timeline/ }).click();
+    await expect(page.locator('[data-fx-scope="timeline"][data-fx-clip="snow"]')).toBeVisible();
+  });
+
+  test('overlapping effects stack onto rows of their own, each one selectable', async ({ page }) => {
+    await openAd(page);
+    for (const id of ['lightning', 'shake']) {
+      await page.getByTitle(/^Add an effect at the playhead/).click();
+      await page.getByRole('dialog', { name: 'Effects' }).locator(`[data-effect="${id}"]`).click();
+    }
+    const rowOf = (id: string) => page.locator(`[data-fx-clip="${id}"]`).getAttribute('data-fx-row');
+    expect(await rowOf('lightning')).not.toBe(await rowOf('shake'));
+
+    await page.locator('[data-fx-clip="lightning"]').click();
+    await expect(page.getByLabel('Effect inspector')).toContainText('Lightning');
+    await page.locator('[data-fx-clip="shake"]').click();
+    await expect(page.getByLabel('Effect inspector')).toContainText('Shake');
+  });
+
+  test('dragging an effect’s dotted end makes it longer', async ({ page }) => {
+    await openAd(page);
+    await page.getByTitle(/^Add an effect at the playhead/).click();
+    await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="flash"]').click();
+    const clip = page.locator('[data-fx-clip="flash"]');
+    const before = await clip.boundingBox();
+    const end = await clip.locator('[data-trim="end"]').boundingBox();
+    if (!before || !end) throw new Error('no clip');
+    await page.mouse.move(end.x + end.width / 2, end.y + end.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(end.x + 60, end.y + end.height / 2, { steps: 4 });
+    await page.mouse.move(end.x + 120, end.y + end.height / 2, { steps: 4 });
+    await page.mouse.up();
+    const after = await clip.boundingBox();
+    expect((after?.width ?? 0) - before.width).toBeGreaterThan(80);
+  });
+});
+
+test.describe('Lifestyle (D-106)', () => {
+  test('its effects can be moved, trimmed and right-clicked under the scrubber', async ({ page }) => {
+    await page.goto('/?template=pop-float&aspect=1:1&frozen=3000');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+    await page.getByRole('button', { name: 'Add an effect' }).click();
+    await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="flash"]').click();
+
+    const clip = page.locator('[data-fx-clip="flash"]');
+    await expect(clip).toBeVisible();
+    await expect(clip.locator('[data-trim="start"]')).toBeAttached();
+    await expect(clip.locator('[data-trim="end"]')).toBeAttached();
+    await clip.click({ button: 'right' });
+    await expect(menu(page).getByRole('menuitem', { name: /^Delete effect/ })).toBeVisible();
+  });
+
+  test('speed changes how long the scene lasts, so the design fills it', async ({ page }) => {
+    await page.goto('/?template=pop-float&aspect=1:1&frozen=1000');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+    const scrub = page.locator('input[aria-label="Scrub"]');
+    const before = Number(await scrub.getAttribute('max'));
+    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByLabel('Speed').fill('200');
+    await page.waitForTimeout(300);
+    expect(Number(await scrub.getAttribute('max'))).toBe(Math.round(before / 2));
   });
 });

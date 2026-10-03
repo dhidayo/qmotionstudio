@@ -3,9 +3,10 @@ import * as actions from '@/document/actions';
 import { elementEffect, frameEffect } from '@/core/effects/catalog';
 import type { ElementPhase, ParamSpec } from '@/core/effects/types';
 import type { EffectClip, EffectParams, ElementEffect } from '@/document/types';
-import { sceneSpans } from '@/document/select/timeline';
+import { sceneLengthMs, sceneSpans } from '@/document/select/timeline';
 import { useEditor } from '@/state/store';
 import { useOverlays } from '@/ui/shell/overlays';
+import { findEffect } from '@/ui/editing/commands';
 import { Button, ColorField, EmptyNote, Row, Segmented, Slider } from '@/ui/inspector/controls';
 
 /**
@@ -163,7 +164,11 @@ function EffectCard({
 export function SceneEffectsEditor(): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const effects = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.effects);
-  const sceneMs = useEditor((s) => s.project.scenes[s.selectedScene]?.durationMs ?? 0);
+  // The scene's real length on the timeline — its design length at its speed.
+  const sceneMs = useEditor((s) => {
+    const scene = s.project.scenes[s.selectedScene];
+    return scene ? sceneLengthMs(scene) : 0;
+  });
   const sceneCount = useEditor((s) => s.project.scenes.length);
   const openPicker = useOverlays((s) => s.openPicker);
   const showToast = useEditor((s) => s.showToast);
@@ -242,16 +247,32 @@ function SceneEffectRow({ clip, sceneMs }: { clip: EffectClip; sceneMs: number }
 
 // ── Timeline effects ────────────────────────────────────────────────────────
 
+/**
+ * The panel for an effect picked on the timeline — a timeline effect, or one
+ * of a scene's own (D-106).
+ */
 export function TimelineEffectPanel(): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const id = useEditor((s) => s.selectedEffect);
-  const clip = useEditor((s) => s.project.effects?.find((c) => c.id === s.selectedEffect));
+  const project = useEditor((s) => s.project);
   const selectEffect = useEditor((s) => s.selectEffect);
   const playheadMs = useEditor((s) => s.playheadMs);
 
-  if (!clip || id === null) return <EmptyNote>That effect is no longer on the timeline.</EmptyNote>;
+  const found = id === null ? null : findEffect(project, id);
+  if (!found || id === null) return <EmptyNote>That effect is no longer there.</EmptyNote>;
+  const { clip, sceneIndex } = found;
   const def = frameEffect(clip.effectId);
-  const update = (patch: actions.EffectPatch): void => { dispatch(actions.updateTimelineEffect(clip.id, patch)); };
+  const span = sceneIndex === null ? null : sceneSpans(project.scenes)[sceneIndex] ?? null;
+  const sceneMs = span ? span.endMs - span.startMs : 0;
+  const origin = span?.startMs ?? 0;
+  const endMs = span && clip.endMs >= Math.min(span.scene.durationMs, sceneMs) - 1 ? sceneMs : clip.endMs;
+  const update = (patch: actions.EffectPatch): void => {
+    dispatch(sceneIndex === null ? actions.updateTimelineEffect(clip.id, patch) : actions.updateSceneEffect(clip.id, patch));
+  };
+  const local = Math.max(0, playheadMs - origin);
+  const where = sceneIndex === null
+    ? 'On the timeline · over every scene and layer'
+    : `In scene ${sceneIndex + 1} · moves with the scene`;
 
   return (
     <div>
@@ -259,7 +280,7 @@ export function TimelineEffectPanel(): React.JSX.Element {
         <div>
           <h2 className="text-[13px] font-semibold">{def?.name ?? clip.effectId}</h2>
           <p className="text-[11px] text-ink-faint">
-            Timeline effect · {seconds(clip.startMs)} – {seconds(clip.endMs)} · over every scene and layer
+            {where} · {seconds(origin + clip.startMs)} – {seconds(origin + endMs)}
           </p>
         </div>
         <button type="button" onClick={() => { selectEffect(null); }} className="text-[11px] text-ink-faint hover:text-ink">
@@ -269,17 +290,32 @@ export function TimelineEffectPanel(): React.JSX.Element {
       {def && <p className="mb-3 text-[11px] text-ink-muted">{def.blurb}</p>}
       <Slider label="Intensity" value={Math.round(clip.intensity * 100)} min={0} max={100} suffix="%"
         onChange={(pct) => { update({ intensity: pct / 100 }); }} />
-      <Slider label="Length" value={Math.round((clip.endMs - clip.startMs) / 100) / 10} min={0.2} max={60} step={0.1} suffix="s"
+      <Slider label="Length" value={Math.round((endMs - clip.startMs) / 100) / 10} min={0.2}
+        max={Math.max(0.3, sceneIndex === null ? 60 : (sceneMs - clip.startMs) / 1000)} step={0.1} suffix="s"
         onChange={(s) => { update({ endMs: clip.startMs + s * 1000 }); }} />
       <div className="mb-3 flex gap-1">
-        <Button onClick={() => { update({ startMs: playheadMs, endMs: playheadMs + (clip.endMs - clip.startMs) }); }}>
+        <Button onClick={() => {
+          const length = endMs - clip.startMs;
+          const start = sceneIndex === null ? playheadMs : Math.min(local, Math.max(0, sceneMs - length));
+          update({ startMs: start, endMs: start + length });
+        }}>
           Move to playhead
         </Button>
+        {sceneIndex !== null && (
+          <Button onClick={() => { update({ startMs: 0, endMs: sceneMs }); }}>Whole scene</Button>
+        )}
       </div>
       {def && <ParamsEditor specs={def.params} values={clip.params} onChange={(params) => { update({ params }); }} />}
       <div className="mt-3 flex gap-1">
-        <Button onClick={() => { dispatch(actions.duplicateTimelineEffect(clip.id)); }}>Duplicate</Button>
-        <Button variant="danger" onClick={() => { dispatch(actions.removeTimelineEffect(clip.id)); selectEffect(null); }}>
+        <Button onClick={() => {
+          dispatch(sceneIndex === null ? actions.duplicateTimelineEffect(clip.id) : actions.duplicateSceneEffect(clip.id));
+        }}>
+          Duplicate
+        </Button>
+        <Button variant="danger" onClick={() => {
+          dispatch(sceneIndex === null ? actions.removeTimelineEffect(clip.id) : actions.removeSceneEffect(clip.id));
+          selectEffect(null);
+        }}>
           Delete
         </Button>
       </div>

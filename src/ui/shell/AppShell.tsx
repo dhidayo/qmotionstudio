@@ -28,6 +28,8 @@ import { useRestore } from '@/ui/persist/useRestore';
 import { Toast } from './Toast';
 import { ContextMenu } from './ContextMenu';
 import { EffectPicker } from '@/ui/effects/EffectPicker';
+import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
+import { ShortcutsDialog } from './ShortcutsDialog';
 import { ExportDialog } from '@/ui/export/ExportDialog';
 
 export function AppShell(): React.JSX.Element {
@@ -408,6 +410,8 @@ export function AppShell(): React.JSX.Element {
       <Toast />
       <ContextMenu />
       <EffectPicker />
+      <PhotoPickerDialog />
+      <ShortcutsDialog />
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </ClockProvider>
     </MediaProvider>

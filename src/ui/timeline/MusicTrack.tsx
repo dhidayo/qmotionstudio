@@ -71,7 +71,7 @@ export function MusicTrack({
 }): React.JSX.Element {
   if (clips.length === 0) {
     return (
-      <div className="relative h-7 border-b border-edge" data-lane>
+      <div className="relative h-full" data-lane>
         {/*
           * `pointer-events-none`, so the row underneath gets the press.
           *
@@ -89,7 +89,7 @@ export function MusicTrack({
   }
 
   return (
-    <div className="relative h-7 border-b border-edge" data-lane>
+    <div className="relative h-full" data-lane>
       {clips.map((clip) => (
         <MusicClip
           key={clip.id}

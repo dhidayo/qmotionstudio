@@ -11,7 +11,8 @@ import reactHooks from 'eslint-plugin-react-hooks';
 const WORKER_SAFE = ['src/core/**/*.ts', 'src/document/**/*.ts', 'src/templates/**/*.ts', 'src/media/**/*.ts'];
 
 export default defineConfig(
-  { ignores: ['dist', 'coverage', 'playwright-report', 'test-results', 'public'] },
+  // .claude holds the app's own worktrees — other checkouts, linted in their own place.
+  { ignores: ['dist', 'coverage', 'playwright-report', 'test-results', 'public', '.claude'] },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   {

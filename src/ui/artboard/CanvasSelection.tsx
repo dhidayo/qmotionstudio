@@ -8,7 +8,7 @@ import type { TextMeasureContext } from '@/core/text/layout';
 import * as actions from '@/document/actions';
 import { activeOverlaysAt, sceneSpans } from '@/document/select/timeline';
 import { hasNudgePoses } from '@/core/render/slots';
-import { isAnimated, poseIndexAt, posesOf } from '@/document/select/overlay';
+import { isAnimated, poseAt, poseIndexAt, posesOf } from '@/document/select/overlay';
 import type { Aspect, Size } from '@/core/types';
 import { NO_SLOT_TRANSFORM, type Overlay, type Project, type SlotKey, type SlotTransform } from '@/document/types';
 import { useEditor } from '@/state/store';
@@ -16,7 +16,14 @@ import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { capturePointer } from '@/ui/timeline/pointerCapture';
 import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
-import { logoMenu, overlayMenu, slotMenu } from '@/ui/editing/commands';
+import { deleteSelection, logoMenu, overlayMenu, slotMenu } from '@/ui/editing/commands';
+import { InlineTextEditor, SelectionToolbar, screenBounds, type ToolbarAction } from './CanvasEditing';
+import { DESIGN_SHORT_EDGE } from '@/core/render/bounds';
+import { TEXT_BASE } from '@/core/render/overlays';
+import { slotKey as keyOfSlot } from '@/core/render/slots';
+import { fontString } from '@/fonts/registry';
+import { totalDurationMs } from '@/document/select/timeline';
+import type { Layer, TextProps } from '@/core/types';
 
 /**
  * Direct manipulation on the artboard — drag to move, handles to resize and
@@ -151,6 +158,16 @@ export function CanvasSelection({
   const openMenu = useOverlays((o) => o.openMenu);
   /** A finger held on an element opens its menu, as a right-click does (D-104). */
   const longPress = useRef(new LongPress());
+  /** On-canvas editing (D-107). */
+  const textEdit = useOverlays((o) => o.textEdit);
+  const openTextEdit = useOverlays((o) => o.openTextEdit);
+  const openPhotoPicker = useOverlays((o) => o.openPhotoPicker);
+  const openPicker = useOverlays((o) => o.openPicker);
+  const template = useEditor((s) => s.template);
+  const selectSlotTab = useEditor((s) => s.selectSlot);
+  const setInspectorTab = useEditor((s) => s.setInspectorTab);
+  /** True while a press on the canvas is held, so the toolbar keeps out of the way of a drag. */
+  const [pressing, setPressing] = useState(false);
 
   /*
    * The selection box takes keyboard focus when something is clicked on the
@@ -270,6 +287,64 @@ export function CanvasSelection({
       : t.kind === 'slot' ? t.key === selectedSlot
       : t.key === selectedOverlay,
     ) ?? null;
+
+  /*
+   * The thing being typed into, if any (D-107), with what the editor needs:
+   * its words, the face and size they are set in on screen, and where typing
+   * goes in the document.
+   */
+  const infoFor = (target: Target): EditInfo | null => {
+    if (target.kind === 'overlay' && target.overlay.content.kind === 'text') {
+      const { style } = target.overlay.content;
+      const pose = poseAt(target.overlay, playheadMs - target.overlay.startMs);
+      const sizePx = Math.min(design.w, design.h) * TEXT_BASE * (style.sizePct / 100) * (pose.scaleX ?? 1) * scale;
+      const id = target.key;
+      return {
+        text: target.overlay.content.text,
+        font: fontString(style.fontId, Math.max(10, sizePx), style.weight),
+        align: style.align,
+        maxLength: 200,
+        write: (text) => { dispatch(actions.setOverlayText(id, text)); },
+      };
+    }
+    if (target.kind === 'slot' && target.key.startsWith('text:')) {
+      const slotId = target.key.slice('text:'.length);
+      const scene = project.scenes[target.sceneIndex];
+      const def = template?.textSlots.find((slot) => slot.id === slotId);
+      const props = drawn ? findSlotText(drawn.layers, target.key) : null;
+      const toProject = drawn ? DESIGN_SHORT_EDGE / Math.max(1, Math.min(drawn.design.w, drawn.design.h)) : 1;
+      const sizePx = (props?.fontSizePx ?? 48) * toProject * scale;
+      return {
+        text: scene?.inputs.texts[slotId] ?? def?.placeholder ?? '',
+        font: fontString(props?.fontId ?? 'headline', Math.max(10, sizePx), props?.weight ?? 700),
+        align: props?.align ?? 'center',
+        maxLength: def?.maxChars,
+        write: (text) => { dispatch(actions.setText(slotId, text)); },
+      };
+    }
+    return null;
+  };
+
+  /*
+   * The thing being typed into (D-107), held as it was when typing began: its
+   * place on the frame and the words it had. Clearing the text takes its box
+   * off the frame — the editor must not vanish with it — and Escape has to put
+   * back what was there before, not what has been typed since.
+   */
+  const [editing, setEditing] = useState<{ key: string; box: OrientedBox; info: EditInfo } | null>(null);
+  const editable = textEdit !== null && editing?.key !== textEdit
+    ? targets.find((t) => t.key === textEdit && isTextTarget(t)) ?? null
+    : null;
+  if (textEdit === null && editing !== null) setEditing(null);
+  if (editable && textEdit !== null) {
+    const info = infoFor(editable);
+    if (info) setEditing({ key: textEdit, box: editable.box, info });
+  }
+  // Asked to edit something that is not text on the frame now: let the request go.
+  const unreachable = textEdit !== null && editing?.key !== textEdit && editable === null;
+  useEffect(() => {
+    if (unreachable) openTextEdit(null);
+  }, [unreachable, openTextEdit]);
 
   /*
    * Escape clears the selection from anywhere.
@@ -412,6 +487,7 @@ export function CanvasSelection({
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0) return;
+    setPressing(true);
     const point = toDesign(event);
     const under = pick(point);
     if (under) {
@@ -512,6 +588,7 @@ export function CanvasSelection({
   };
 
   const onPointerUp = (): void => {
+    setPressing(false);
     if (focusOnRelease.current) {
       focusOnRelease.current = false;
       boxRef.current?.focus({ preventScroll: true });
@@ -522,11 +599,80 @@ export function CanvasSelection({
     endInteraction();
   };
 
+  /** What a double-click on a thing means: type into it, or choose a new picture for it. */
+  const primaryEdit = (target: Target): void => {
+    if (isTextTarget(target)) {
+      openTextEdit(target.key);
+      return;
+    }
+    const photo = target.kind === 'slot' ? /^photo:(\d+)$/.exec(target.key) : null;
+    if (photo?.[1] !== undefined) openPhotoPicker({ kind: 'slot', index: Number(photo[1]) });
+    else if (target.kind === 'overlay' && target.overlay.content.kind === 'photo') openPhotoPicker({ kind: 'overlay', id: target.key });
+    else if (target.kind === 'logo') openPhotoPicker({ kind: 'logo' });
+  };
+
+  const onDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const target = pick({ x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale });
+    if (!target) return;
+    event.preventDefault();
+    select(target);
+    primaryEdit(target);
+  };
+
+  /** The selected thing's own toolbar (D-107). */
+  const toolbarActions = (target: Target): ToolbarAction[] => {
+    const more: ToolbarAction = { label: 'More', icon: '⋯', onSelect: ({ x, y }) => { openTargetMenu(target, x, y); } };
+    const remove: ToolbarAction = { label: target.kind === 'slot' && target.key.startsWith('text:') ? 'Remove' : 'Delete', icon: '✕', danger: true, onSelect: () => { deleteSelection(); } };
+    if (target.kind === 'logo') {
+      return [
+        { label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'logo' }); } },
+        { label: 'Effects', icon: '✦', onSelect: () => { openPicker({ target: { kind: 'element', target: { kind: 'logo' }, label: 'the logo' } }); } },
+        { label: 'Settings', icon: '⚙', onSelect: () => { setInspectorTab('look'); } },
+        remove,
+        more,
+      ];
+    }
+    if (target.kind === 'overlay') {
+      const name = target.overlay.kind === 'text' ? 'this caption' : 'this layer';
+      const edit: ToolbarAction[] = target.overlay.content.kind === 'text'
+        ? [{ label: 'Edit text', icon: '✎', onSelect: () => { openTextEdit(target.key); } }]
+        : target.overlay.content.kind === 'photo'
+          ? [{ label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'overlay', id: target.key }); } }]
+          : [];
+      return [
+        ...edit,
+        { label: 'Effects', icon: '✦', onSelect: () => { openPicker({ target: { kind: 'element', target: { kind: 'overlay', id: target.key }, label: name } }); } },
+        { label: 'Duplicate', icon: '⧉', onSelect: () => { dispatch(actions.duplicateOverlay(target.key, totalDurationMs(project))); } },
+        remove,
+        more,
+      ];
+    }
+    const label = target.label.toLowerCase();
+    const isText = target.key.startsWith('text:');
+    const photo = /^photo:(\d+)$/.exec(target.key);
+    return [
+      ...(isText ? [{ label: 'Edit text', icon: '✎', onSelect: () => { openTextEdit(target.key); } }] : []),
+      ...(photo?.[1] !== undefined ? [{ label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'slot', index: Number(photo[1]) }); } }] : []),
+      { label: 'Effects', icon: '✦', onSelect: () => { openPicker({ target: { kind: 'element', target: { kind: 'slot', key: target.key }, label } }); } },
+      { label: 'Motion', icon: '◐', onSelect: () => { selectSlotTab(target.key, 'motion'); } },
+      remove,
+      more,
+    ];
+  };
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLElement>): void => {
     if (!selected) return;
 
     if (event.key === 'Escape') {
       select(null);
+      return;
+    }
+
+    // Enter does what a double-click does: type into text, replace a picture.
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      primaryEdit(selected);
       return;
     }
 
@@ -562,6 +708,7 @@ export function CanvasSelection({
       onPointerUp={() => { longPress.current.cancel(); onPointerUp(); }}
       onPointerCancel={() => { longPress.current.cancel(); onPointerUp(); }}
       onContextMenu={onContextMenu}
+      onDoubleClick={onDoubleClick}
       onPointerLeave={() => { setHovered(null); setCursor('default'); }}
       className="absolute inset-0 touch-none"
       style={{ cursor }}
@@ -644,8 +791,60 @@ export function CanvasSelection({
           )}
         </div>
       )}
+
+      {editing && (
+        <InlineTextEditor
+          key={editing.key}
+          box={editing.box}
+          scale={scale}
+          font={editing.info.font}
+          align={editing.info.align}
+          initial={editing.info.text}
+          maxLength={editing.info.maxLength}
+          onChange={editing.info.write}
+          onDone={(keep) => {
+            if (!keep) editing.info.write(editing.info.text);
+            endInteraction();
+            openTextEdit(null);
+            boxRef.current?.focus({ preventScroll: true });
+          }}
+        />
+      )}
+
+      {selected && !pressing && !editing && (
+        <SelectionToolbar
+          bounds={screenBounds(selected.box, scale)}
+          frameWidth={design.w * scale}
+          actions={toolbarActions(selected)}
+        />
+      )}
     </div>
   );
+}
+
+type EditInfo = {
+  readonly text: string;
+  readonly font: string;
+  readonly align: 'left' | 'center' | 'right';
+  readonly maxLength: number | undefined;
+  readonly write: (text: string) => void;
+};
+
+/** Whether a target is words someone can type into. */
+function isTextTarget(target: Target): boolean {
+  return target.kind === 'slot' ? target.key.startsWith('text:') : target.kind === 'overlay' && target.overlay.content.kind === 'text';
+}
+
+/** A template's text layer for a slot, wherever it is nested. */
+function findSlotText(layers: readonly Layer[], key: string): TextProps | null {
+  for (const layer of layers) {
+    if (layer.type === 'text' && layer.props.slot && keyOfSlot(layer.props.slot) === key) return layer.props;
+    if (layer.type === 'group' || layer.type === 'mask') {
+      const hit = findSlotText(layer.children, key);
+      if (hit) return hit;
+    }
+  }
+  return null;
 }
 
 /**

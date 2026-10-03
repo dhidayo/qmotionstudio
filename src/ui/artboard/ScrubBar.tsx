@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
 import { spanOf } from '@/document/select/motion';
 import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
 import { MotionBar } from '@/ui/timeline/MotionBar';
-import { effectName } from '@/core/effects/catalog';
+import { sceneSpans, timelineSpanMs } from '@/document/select/timeline';
+import { EFFECT_ROW_PX, EffectClipView, laneEffects, packEffectRows } from '@/ui/timeline/EffectRows';
 import { useOverlays } from '@/ui/shell/overlays';
 
 /**
@@ -19,6 +20,12 @@ const READOUT_HZ = 12;
 
 export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element {
   const setPlayhead = useEditor((s) => s.setPlayhead);
+  /*
+   * The length comes from the document, not from sampling the clock: paused,
+   * nothing re-renders this, so a length read off the clock stayed stale after
+   * a change of speed or design until something else happened to move.
+   */
+  const durationMs = useEditor((s) => timelineSpanMs(s.project));
   const [timeMs, setTimeMs] = useState(0);
   const [playing, setPlaying] = useState(clock.playing);
 
@@ -64,7 +71,7 @@ export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element 
           <input
             type="range"
             min={0}
-            max={Math.max(1, clock.durationMs)}
+            max={Math.max(1, durationMs)}
             step={1}
             value={Math.round(timeMs)}
             onChange={(e) => {
@@ -76,11 +83,11 @@ export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element 
             aria-label="Scrub"
             className="h-1 w-full accent-[var(--c-accent)]"
           />
-          <ShowcaseMotion clock={clock} onSeek={(at) => { clock.pause(); clock.seek(at); setTimeMs(at); setPlayhead(at); }} />
+          <ShowcaseMotion durationMs={durationMs} onSeek={(at) => { clock.pause(); clock.seek(at); setTimeMs(at); setPlayhead(at); }} />
         </div>
 
         <span className="tabular w-20 shrink-0 text-right text-[11px] text-ink-muted sm:w-24">
-          {format(timeMs)} / {format(clock.durationMs)}
+          {format(Math.min(timeMs, durationMs))} / {format(durationMs)}
         </span>
         <button
           type="button"
@@ -92,49 +99,35 @@ export function ScrubBar({ clock }: { clock: PreviewClock }): React.JSX.Element 
           + <span className="hidden sm:inline">Effect</span><span className="sm:hidden">FX</span>
         </button>
       </div>
-      <EffectStrip durationMs={clock.durationMs} onSeek={seek} />
+      <EffectStrip durationMs={durationMs} onSeek={seek} />
     </div>
   );
 }
 
 /**
- * Where this scene's effects sit in time, under the slider (D-100).
+ * Where this scene's effects sit in time, under the slider (D-100, D-106).
  *
- * Lifestyle has no track timeline (§1.1), so without this an effect placed at
- * a moment — a flash on the beat, a burst of confetti — could only be found by
- * reading the panel. Clicking one takes the playhead there and opens Motion,
- * where it is edited.
+ * Lifestyle has no track timeline (§1.1), so this is its effects lane: the
+ * same clips as Corporate Ads' FX rows — drag to move, drag the dotted ends to
+ * resize, right-click or hold for the menu — and overlapping effects stack on
+ * rows of their own so each can be picked up.
  */
 function EffectStrip({ durationMs, onSeek }: { durationMs: number; onSeek: (ms: number) => void }): React.JSX.Element | null {
-  const effects = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.effects);
-  const setTab = useEditor((s) => s.setInspectorTab);
-  if (!effects || effects.length === 0 || durationMs <= 0) return null;
-  const pct = (ms: number): number => Math.max(0, Math.min(100, (ms / durationMs) * 100));
+  const project = useEditor((s) => s.project);
+  const rows = useMemo(
+    () => packEffectRows(laneEffects(project, sceneSpans(project.scenes), durationMs)),
+    [project, durationMs],
+  );
+  if (rows.length === 0 || durationMs <= 0) return null;
 
   return (
-    <div className="flex items-center gap-3 px-3 pb-2">
-      <span className="w-16 text-[10px] uppercase tracking-wide text-ink-faint">Effects</span>
-      <div className="relative h-5 flex-1" aria-label="Effects in this scene">
-        {effects.map((clip, i) => (
-          <button
-            key={clip.id}
-            type="button"
-            data-scene-fx={clip.effectId}
-            onClick={() => { onSeek(clip.startMs); setTab('motion'); }}
-            title={`${effectName(clip.effectId)} · ${format(clip.startMs)} – ${format(Math.min(clip.endMs, durationMs))}`}
-            className="absolute truncate rounded-sm border px-1 text-left text-[9px] leading-[14px]"
-            style={{
-              left: `${pct(clip.startMs)}%`,
-              width: `${Math.max(2, pct(clip.endMs) - pct(clip.startMs))}%`,
-              top: (i % 2) * 6,
-              borderColor: 'color-mix(in srgb, var(--c-pro) 45%, var(--c-edge-strong))',
-              background: 'color-mix(in srgb, var(--c-pro-soft) 70%, var(--c-panel-alt))',
-              color: 'var(--c-ink-muted)',
-            }}
-          >
-            ✦ {effectName(clip.effectId)}
-          </button>
-        ))}
+    <div className="flex gap-3 px-3 pb-2" aria-label="Effects in this scene">
+      <span className="w-16 shrink-0 pt-1.5 text-[10px] uppercase tracking-wide text-ink-faint">Effects</span>
+      {/* One layer for every row, so a clip that changes row moves rather than being rebuilt mid-drag. */}
+      <div className="relative min-w-0 flex-1" style={{ height: rows.length * EFFECT_ROW_PX }} data-lane="true">
+        {rows.flatMap((row, r) => row.map((fx) => (
+          <EffectClipView key={fx.clip.id} fx={fx} row={r} durationMs={durationMs} onSeek={onSeek} showScene={false} />
+        )))}
       </div>
       <span className="w-20 shrink-0 sm:w-24" />
       <span className="w-[42px] shrink-0 sm:w-[58px]" />
@@ -158,10 +151,10 @@ function format(ms: number): string {
  * needs a scene span to position against.
  */
 function ShowcaseMotion({
-  clock,
+  durationMs,
   onSeek,
 }: {
-  clock: PreviewClock;
+  durationMs: number;
   onSeek: (projectMs: number) => void;
 }): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
@@ -189,7 +182,7 @@ function ShowcaseMotion({
       poseTimes={times}
       originMs={0}
       scale={scale}
-      laneMs={Math.max(1, clock.durationMs)}
+      laneMs={Math.max(1, durationMs)}
       onChange={(change) => {
         dispatch(actions.reshapeSlotMotion(selectedSlot, scene.durationMs, change));
       }}

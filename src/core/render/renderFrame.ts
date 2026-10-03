@@ -1,4 +1,4 @@
-import type { Ctx2D, Layer, Palette, Size } from '@/core/types';
+import type { Ctx2D, FxInstance, Layer, Palette, Size } from '@/core/types';
 import type { Overlay, Project, Scene } from '@/document/types';
 import { makeViewport, type Viewport } from '@/core/math/aspect';
 import { activeOverlaysAt, activeScenesAt, sceneSpans, type SceneSpan } from '@/document/select/timeline';
@@ -198,7 +198,8 @@ function drawScene(
    * A camera move goes round the scene's layers and its logo, and nothing
    * else: grain stays still on the glass while the picture shakes behind it.
    */
-  const sceneFx = fxOf(scene.inputs.effects);
+  const lengthMs = span.endMs - span.startMs;
+  const sceneFx = wholeSceneFx(fxOf(scene.inputs.effects), scene.durationMs, lengthMs);
   const camera = sceneFx.length > 0 ? frameCamera(sceneFx, rawLocalMs, vp.design, palette) : null;
   if (camera) {
     target.save();
@@ -212,7 +213,7 @@ function drawScene(
     const built = memoisedLayers(rig, vp, scene, palette);
     if (built) drawLayers(dc, built.placed, localTimeMs);
     if (primary) rig.drawn = recordDrawn(rig.drawn, scene.id, built?.base ?? null, vp.design);
-    if (template?.kind !== 'scene' || template.supportsLogo) drawLogo(dc, rig, scene, vp, rawLocalMs);
+    if (template?.kind !== 'scene' || template.supportsLogo) drawLogo(dc, rig, scene, vp, rawLocalMs, lengthMs);
   }
 
   if (camera) target.restore();
@@ -369,13 +370,34 @@ function placed(
   return next;
 }
 
+const stretched = new WeakMap<readonly FxInstance[], { lengthMs: number; list: readonly FxInstance[] }>();
+
+/**
+ * Scene effects that run to the end of the scene keep running to its end.
+ *
+ * A scene effect is timed in the scene's real time, and "the whole scene" is
+ * stored as running to its length at the time — so changing the scene's speed
+ * (which changes its real length) would leave a mood effect stopping short of
+ * the end, or a camera push finishing early. Anything that reached the end
+ * still does.
+ */
+function wholeSceneFx(list: readonly FxInstance[], designMs: number, lengthMs: number): readonly FxInstance[] {
+  if (list.length === 0) return list;
+  const hit = stretched.get(list);
+  if (hit && hit.lengthMs === lengthMs) return hit.list;
+  const reach = Math.min(designMs, lengthMs) - 1;
+  const next = list.map((fx) => (fx.endMs >= reach && fx.endMs !== lengthMs ? { ...fx, endMs: lengthMs } : fx));
+  stretched.set(list, { lengthMs, list: next });
+  return next;
+}
+
 /**
  * §8.3's logo, built here rather than by the template (D-101), memoised on its
  * own settings so a drag repaints it on the next frame without rebuilding the
  * scene. Drawn at the scene's real time, so its fade and effects are not
  * stretched by the speed setting.
  */
-function drawLogo(dc: DrawContext, rig: RenderRig, scene: Scene, vp: Viewport, timeMs: number): void {
+function drawLogo(dc: DrawContext, rig: RenderRig, scene: Scene, vp: Viewport, timeMs: number, lengthMs: number): void {
   const { logo } = scene.inputs;
   if (logo.mediaId === null) return;
 
@@ -383,7 +405,7 @@ function drawLogo(dc: DrawContext, rig: RenderRig, scene: Scene, vp: Viewport, t
   const imageAspect = bitmap && bitmap.height > 0 ? bitmap.width / bitmap.height : 1;
   const effects = scene.inputs.elementEffects?.[LOGO_KEY];
   const key = JSON.stringify([
-    logo, Math.round(vp.design.w), Math.round(vp.design.h), Math.round(imageAspect * 1000), scene.durationMs, effects ?? null,
+    logo, Math.round(vp.design.w), Math.round(vp.design.h), Math.round(imageAspect * 1000), lengthMs, effects ?? null,
   ]);
   const cacheId = `logo:${scene.id}`;
   const hit = rig.placedCache.get(cacheId);
@@ -394,8 +416,9 @@ function drawLogo(dc: DrawContext, rig: RenderRig, scene: Scene, vp: Viewport, t
       const run = dc.measurer.measure(lockupSpec(text, fontSizePx));
       return { w: run.width, h: run.height };
     });
-    const fx = timeElementEffects(effects, { start: 0, end: scene.durationMs });
-    layer = logoLayer(logo, geometry, scene.durationMs, fx);
+    // The scene's real length on the timeline, so its logo lasts as long as it does.
+    const fx = timeElementEffects(effects, { start: 0, end: lengthMs });
+    layer = logoLayer(logo, geometry, lengthMs, fx);
     rig.placedCache.set(cacheId, { key, layers: layer ? [layer] : [] });
   }
 

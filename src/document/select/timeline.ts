@@ -21,6 +21,20 @@ export type SceneSpan = {
   readonly transitionEndMs: number;
 };
 
+/**
+ * How long a scene lasts on the timeline: its length, played at its speed.
+ *
+ * `durationMs` is the design's own length — what the template is built for —
+ * and §8.4's speed plays it faster or slower. The timeline used to give a scene
+ * its `durationMs` whatever the speed, so a design at 2× finished half way and
+ * left the rest of its scene blank: "the timeline is longer than required".
+ * At 0.5× it was cut off half way instead.
+ */
+export function sceneLengthMs(scene: Scene): number {
+  const speed = Math.max(0.25, Math.min(3, scene.inputs.look.speed || 1));
+  return Math.max(1, Math.round(scene.durationMs / speed));
+}
+
 export function sceneSpans(scenes: readonly Scene[]): readonly SceneSpan[] {
   const spans: SceneSpan[] = [];
   let cursor = 0;
@@ -35,7 +49,7 @@ export function sceneSpans(scenes: readonly Scene[]): readonly SceneSpan[] {
     const overlap = clampOverlap(transition, scene, scenes[i - 1]);
 
     const startMs = Math.max(0, cursor - overlap);
-    const endMs = startMs + scene.durationMs;
+    const endMs = startMs + sceneLengthMs(scene);
 
     spans.push({
       scene,
@@ -59,7 +73,7 @@ export function sceneSpans(scenes: readonly Scene[]): readonly SceneSpan[] {
  */
 function clampOverlap(transition: Transition | null, scene: Scene, previous: Scene | undefined): number {
   if (!transition || transition.kind === 'cut' || !previous) return 0;
-  const limit = Math.min(scene.durationMs, previous.durationMs) / 2;
+  const limit = Math.min(sceneLengthMs(scene), sceneLengthMs(previous)) / 2;
   return Math.max(0, Math.min(transition.durationMs, limit));
 }
 

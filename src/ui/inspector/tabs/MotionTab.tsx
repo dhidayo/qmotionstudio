@@ -1,6 +1,7 @@
 import * as actions from '@/document/actions';
 import { LOGO_KEY, NO_TUNING, type MotionFeel, type MotionTuning } from '@/document/types';
 import { useEditor } from '@/state/store';
+import { sceneLengthMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
 import { ElementEffectsEditor, SceneEffectsEditor } from '@/ui/effects/EffectEditors';
 import { Button, EmptyNote, Row, Section, Segmented, Slider } from '../controls';
@@ -150,12 +151,16 @@ function SceneMotion(): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const look = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.look);
   const motion = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.motion);
+  const playsMs = useEditor((s) => {
+    const scene = s.project.scenes[s.selectedScene];
+    return scene ? sceneLengthMs(scene) : 0;
+  });
   const endInteraction = useEditor((s) => s.endInteraction);
 
   return (
     <Section title="Whole scene — motion">
       {look && (
-        <Row label="Speed" hint={`${look.speed.toFixed(2)}×`}>
+        <Row label="Speed" hint={`${look.speed.toFixed(2)}× · plays in ${(playsMs / 1000).toFixed(1)}s`}>
           <input
             type="range"
             min={25}

@@ -5,6 +5,7 @@ import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
 import { nudgeAt, nudgePoses } from '@/core/render/slots';
 import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../select/motion';
 import { MAX_TRACKS, compactTracks, overlapsOn, placeNew, settleTrack, usedTracks } from '../select/tracks';
+import { sceneLengthMs, sceneSpans } from '../select/timeline';
 import { LOGO_KEY } from '../types';
 import type {
   AnimPreset,
@@ -170,6 +171,36 @@ export function removePhoto(index: number): Action {
       editPhotos(project, scope, (photos) =>
         index < 0 || index >= photos.length ? photos : photos.filter((_, i) => i !== index),
       ),
+  };
+}
+
+/**
+ * Puts a different photograph in one slot, from the canvas (D-107).
+ *
+ * A template with more slots than photos reuses the photos it has (§8.1), so
+ * slot 4 of a two-photo scene is showing photo 2 again. Replacing it there has
+ * to change slot 4 only — so the list grows, the same way the template already
+ * reuses, until the slot has an entry of its own. The rest of the photo's
+ * settings (frame, size) stay; its crop belonged to the old picture and goes.
+ */
+export function replacePhoto(index: number, mediaId: string): Action {
+  return {
+    label: 'Replace photo',
+    apply: (project, scope) =>
+      editPhotos(project, scope, (photos) => {
+        if (index < 0) return photos;
+        const grown = [...photos];
+        while (grown.length <= index) {
+          const source = photos[grown.length % Math.max(1, photos.length)];
+          grown.push(source ?? { mediaId, frame: '3:4', sizeMode: 'template', sizePct: 100, cropMode: 'template' });
+        }
+        const current = grown[index];
+        if (!current) return photos;
+        if (current.mediaId === mediaId && grown.length === photos.length) return photos;
+        const { cropRect: _crop, ...rest } = current;
+        grown[index] = { ...rest, mediaId };
+        return grown;
+      }),
   };
 }
 
@@ -869,7 +900,7 @@ export function trimToLimit(maxDurationMs: number): Action {
 
       for (const scene of project.scenes) {
         // D-004: a transition overlaps its neighbours, so it does not add time.
-        const next = elapsed + scene.durationMs - (scene.transitionIn?.durationMs ?? 0);
+        const next = elapsed + sceneLengthMs(scene) - (scene.transitionIn?.durationMs ?? 0);
         if (kept.length > 0 && next > maxDurationMs) break;
         kept.push(scene);
         elapsed = next;
@@ -1910,26 +1941,105 @@ export function addSceneEffect(clip: EffectClip): Action {
   };
 }
 
+/**
+ * A scene effect, wherever it is.
+ *
+ * Effect ids are unique across the project, so an edit finds its effect by id
+ * rather than by the selected scene — the FX lane shows every scene's effects
+ * at once, and dragging one in scene 3 must not need scene 3 selected first.
+ */
+function editSceneEffectById(project: Project, id: string, edit: (clip: EffectClip) => EffectClip | null): Project {
+  const index = project.scenes.findIndex((scene) => scene.inputs.effects?.some((clip) => clip.id === id) === true);
+  if (index < 0) return project;
+  return editSceneAt(project, index, (scene) => {
+    const effects = editClips(scene.inputs.effects, id, edit);
+    return effects === scene.inputs.effects || !effects ? scene : { ...scene, inputs: { ...scene.inputs, effects } };
+  });
+}
+
 export function updateSceneEffect(id: string, patch: EffectPatch): Action {
   return {
     label: 'Change effect',
     coalesceKey: `sceneFx:${id}:${Object.keys(patch).sort().join(',')}`,
-    apply: (project, scope) =>
-      editInputs(project, scope, (inputs) => {
-        const effects = editClips(inputs.effects, id, (clip) => patchClip(clip, patch));
-        return effects === inputs.effects ? inputs : { ...inputs, ...(effects ? { effects } : {}) };
-      }),
+    apply: (project) => editSceneEffectById(project, id, (clip) => patchClip(clip, patch)),
   };
+}
+
+/** A whole drag of a scene effect on the lane, as one undo step. Times are the scene's. */
+export function moveSceneEffect(id: string, startMs: number, endMs: number): Action {
+  return { ...updateSceneEffect(id, { startMs, endMs }), label: 'Move effect', coalesceKey: `sceneFxDrag:${id}` };
 }
 
 export function removeSceneEffect(id: string): Action {
   return {
     label: 'Remove effect',
-    apply: (project, scope) =>
-      editInputs(project, scope, (inputs) => {
-        const effects = editClips(inputs.effects, id, () => null);
-        return effects === inputs.effects ? inputs : { ...inputs, ...(effects ? { effects } : {}) };
-      }),
+    apply: (project) => editSceneEffectById(project, id, () => null),
+  };
+}
+
+export function duplicateSceneEffect(id: string): Action {
+  return {
+    label: 'Duplicate effect',
+    apply: (project) => {
+      const index = project.scenes.findIndex((scene) => scene.inputs.effects?.some((clip) => clip.id === id) === true);
+      const scene = project.scenes[index];
+      const source = scene?.inputs.effects?.find((clip) => clip.id === id);
+      if (!scene || !source) return project;
+      const length = sceneLengthMs(scene);
+      const span = source.endMs - source.startMs;
+      // Straight after it, if there is room in the scene; otherwise on top of it.
+      const startMs = source.endMs + span <= length ? source.endMs : source.startMs;
+      const copy: EffectClip = { ...source, id: newId('fx'), startMs, endMs: startMs + span };
+      return editSceneAt(project, index, (s) => ({ ...s, inputs: { ...s.inputs, effects: [...(s.inputs.effects ?? []), copy] } }));
+    },
+  };
+}
+
+/**
+ * A scene's effect, taken off the scene and put on the timeline at the same
+ * moment — so it can run across the cut into the next scene.
+ */
+export function sceneEffectToTimeline(id: string): Action {
+  return {
+    label: 'Move effect to the timeline',
+    apply: (project) => {
+      const spans = sceneSpans(project.scenes);
+      const span = spans.find((sp) => sp.scene.inputs.effects?.some((clip) => clip.id === id) === true);
+      const clip = span?.scene.inputs.effects?.find((c) => c.id === id);
+      if (!span || !clip) return project;
+      const length = span.endMs - span.startMs;
+      const moved: EffectClip = {
+        ...clip,
+        startMs: span.startMs + clip.startMs,
+        endMs: span.startMs + Math.min(clip.endMs, length),
+      };
+      const without = editSceneEffectById(project, id, () => null);
+      return { ...without, effects: [...(without.effects ?? []), moved], updatedAt: Date.now() };
+    },
+  };
+}
+
+/** A timeline effect, attached to the scene it starts in, so it moves with that scene. */
+export function timelineEffectToScene(id: string): Action {
+  return {
+    label: 'Attach effect to its scene',
+    apply: (project) => {
+      const clip = project.effects?.find((c) => c.id === id);
+      if (!clip) return project;
+      const spans = sceneSpans(project.scenes);
+      const span = [...spans].reverse().find((sp) => clip.startMs >= sp.startMs) ?? spans[0];
+      if (!span) return project;
+      const length = span.endMs - span.startMs;
+      const startMs = Math.max(0, Math.min(clip.startMs - span.startMs, length - MIN_EFFECT_MS));
+      const endMs = Math.max(startMs + MIN_EFFECT_MS, Math.min(clip.endMs - span.startMs, length));
+      const attached: EffectClip = { ...clip, startMs, endMs };
+      const effects = (project.effects ?? []).filter((c) => c.id !== id);
+      const withScene = editSceneAt({ ...project, effects }, span.index, (scene) => ({
+        ...scene,
+        inputs: { ...scene.inputs, effects: [...(scene.inputs.effects ?? []), attached] },
+      }));
+      return { ...withScene, updatedAt: Date.now() };
+    },
   };
 }
 
@@ -1949,10 +2059,11 @@ export function copySceneEffectsToAll(): Action {
       if (!source || effects.length === 0) return project;
       const scenes = project.scenes.map((scene, i) => {
         if (i === scope.sceneIndex) return scene;
+        const length = sceneLengthMs(scene);
         const copies = effects.map((clip) => {
-          const whole = clip.startMs <= 0 && clip.endMs >= source.durationMs;
-          const startMs = whole ? 0 : Math.min(clip.startMs, Math.max(0, scene.durationMs - MIN_EFFECT_MS));
-          const endMs = whole ? scene.durationMs : Math.min(clip.endMs, scene.durationMs);
+          const whole = clip.startMs <= 0 && clip.endMs >= sceneLengthMs(source);
+          const startMs = whole ? 0 : Math.min(clip.startMs, Math.max(0, length - MIN_EFFECT_MS));
+          const endMs = whole ? length : Math.min(clip.endMs, length);
           return { ...clip, id: newId('fx'), startMs, endMs: Math.max(startMs + MIN_EFFECT_MS, endMs) };
         });
         return { ...scene, inputs: { ...scene.inputs, effects: copies } };

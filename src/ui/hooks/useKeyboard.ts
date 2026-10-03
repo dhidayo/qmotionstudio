@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import { useEditor } from '@/state/store';
-import { deleteSelection } from '@/ui/editing/commands';
+import { arrangeSelection, deleteSelection, duplicateSelection } from '@/ui/editing/commands';
+import { useOverlays } from '@/ui/shell/overlays';
 
 /**
  * §13's keyboard map.
@@ -13,6 +14,9 @@ import { deleteSelection } from '@/ui/editing/commands';
  *   ⌘S           no-op with a "saves automatically" note
  *   ⌫ / Delete   delete what is selected — a layer, an effect, the music, a
  *                scene picked on the timeline (D-104); undoable like the rest
+ *   ⌘D           duplicate what is selected (D-107)
+ *   ] / [        bring to front / send to back
+ *   ?            the list of shortcuts
  *
  * Every binding is suppressed while a text field has focus. Arrow keys in
  * particular would otherwise scrub the timeline while someone is editing a
@@ -64,10 +68,29 @@ export function useKeyboard(clock: PreviewClock, options: { onExport: () => void
       }
 
       if (typing) return;
+      // A dialog or menu in front owns its own keys.
+      const covered = document.querySelector('[role="dialog"], [data-context-menu]') !== null;
+
+      if (meta && event.key.toLowerCase() === 'd') {
+        // Never the browser's "bookmark this page".
+        event.preventDefault();
+        if (!covered) duplicateSelection();
+        return;
+      }
+
+      if (!meta && !covered && (event.key === ']' || event.key === '[')) {
+        if (arrangeSelection(event.key === ']' ? 'front' : 'back')) event.preventDefault();
+        return;
+      }
+
+      if (event.key === '?' && !covered) {
+        event.preventDefault();
+        useOverlays.getState().setShortcutsOpen(true);
+        return;
+      }
 
       if ((event.key === 'Delete' || event.key === 'Backspace') && !meta) {
-        // A dialog in front owns its own keys.
-        if (document.querySelector('[role="dialog"], [data-context-menu]')) return;
+        if (covered) return;
         if (deleteSelection()) event.preventDefault();
         return;
       }

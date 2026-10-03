@@ -22,7 +22,8 @@ export function addFrameEffect(target: Extract<PickerTarget, { kind: 'scene' | '
   if (target.kind === 'scene') {
     const span = sceneSpans(project.scenes)[selectedScene];
     if (!span) return 'There is no scene to add it to.';
-    const sceneMs = span.scene.durationMs;
+    // Real time: the scene's length on the timeline, at its speed.
+    const sceneMs = span.endMs - span.startMs;
     const local = Math.max(0, Math.min(playheadMs - span.startMs, sceneMs));
     const window = def.defaultMs === null
       ? { startMs: 0, endMs: sceneMs }

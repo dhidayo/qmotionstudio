@@ -61,17 +61,17 @@ function tint(ctx: Ctx2D, s: FrameSample, hex: string, amount: number, mode: Glo
 export function rgbSplit(ctx: Ctx2D, io: FrameIO, dxPx: number, dyPx: number): void {
   if (Math.abs(dxPx) < 0.5 && Math.abs(dyPx) < 0.5) return;
   const { px } = io;
-  const copy = io.scratch(0);
-  copy.ctx.drawImage(io.source, 0, 0, px.w, px.h, 0, 0, px.w, px.h);
 
+  // Each channel straight from the frame — no intermediate copy, which was a
+  // whole extra frame of drawing on every one of these effects.
   const channel = (index: number, hex: string): OffscreenCanvas => {
     const out = io.scratch(index);
-    out.ctx.drawImage(copy.canvas, 0, 0, px.w, px.h, 0, 0, px.w, px.h);
+    out.ctx.drawImage(io.source, 0, 0, px.w, px.h, 0, 0, px.w, px.h);
     out.ctx.globalCompositeOperation = 'multiply';
     out.ctx.fillStyle = hex;
     out.ctx.fillRect(0, 0, px.w, px.h);
     out.ctx.globalCompositeOperation = 'destination-in';
-    out.ctx.drawImage(copy.canvas, 0, 0, px.w, px.h, 0, 0, px.w, px.h);
+    out.ctx.drawImage(io.source, 0, 0, px.w, px.h, 0, 0, px.w, px.h);
     out.ctx.globalCompositeOperation = 'source-over';
     return out.canvas;
   };
@@ -268,14 +268,17 @@ const vhs: FrameEffectDef = {
     const { px } = io;
     const bandH = px.h * 0.05;
     const y = ((s.t * 0.00018) % 1.4 - 0.2) * px.h;
-    const copy = io.scratch(0);
-    copy.ctx.drawImage(io.source, 0, 0, px.w, px.h, 0, 0, px.w, px.h);
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     const jitter = (rand(s.seed, Math.floor(s.t / 50), 1) - 0.5) * px.w * 0.03 * a;
     const top = Math.max(0, Math.floor(y));
     const hgt = Math.max(1, Math.min(px.h - top, Math.floor(bandH)));
-    if (hgt > 1 && top < px.h) ctx.drawImage(copy.canvas, 0, top, px.w, hgt, jitter, top, px.w, hgt);
+    if (hgt > 1 && top < px.h) {
+      // Only the band is copied — the rest of the frame is not touched.
+      const band = io.scratch(0);
+      band.ctx.drawImage(io.source, 0, top, px.w, hgt, 0, 0, px.w, hgt);
+      ctx.drawImage(band.canvas, 0, 0, px.w, hgt, jitter, top, px.w, hgt);
+    }
     ctx.fillStyle = `rgba(255,255,255,${(0.08 * a).toFixed(3)})`;
     ctx.fillRect(0, top, px.w, hgt);
     ctx.restore();

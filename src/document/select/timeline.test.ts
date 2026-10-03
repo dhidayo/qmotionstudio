@@ -1,11 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import type { Overlay, Project, Scene, Transition } from '@/document/types';
-import { activeOverlaysAt, activeScenesAt, sceneSpans, totalDurationMs } from './timeline';
+import { activeOverlaysAt, activeScenesAt, sceneLengthMs, sceneSpans, totalDurationMs } from './timeline';
 
-const scene = (id: string, durationMs: number, transitionIn: Transition | null = null): Scene =>
-  ({ id, templateId: 't', durationMs, transitionIn, inputs: null as never });
+const scene = (id: string, durationMs: number, transitionIn: Transition | null = null, speed = 1): Scene =>
+  ({ id, templateId: 't', durationMs, transitionIn, inputs: { look: { speed } } as never });
 
 const fade = (durationMs: number): Transition => ({ kind: 'crossFade', durationMs });
+
+describe('a scene’s length on the timeline', () => {
+  /*
+   * Reported as "the timeline is longer than required for templates used":
+   * at 2× a ten-second design was over in five, and its scene went on for
+   * five more seconds of nothing.
+   */
+  it('is its design length played at its speed', () => {
+    expect(sceneLengthMs(scene('a', 10_000, null, 2))).toBe(5_000);
+    expect(sceneLengthMs(scene('a', 10_000, null, 0.5))).toBe(20_000);
+    const spans = sceneSpans([scene('a', 10_000, null, 2), scene('b', 4_000)]);
+    expect(spans.map((s) => [s.startMs, s.endMs])).toEqual([[0, 5_000], [5_000, 9_000]]);
+  });
+});
 
 describe('sceneSpans — D-004 overlapping transitions', () => {
   it('lays scenes end to end when there are no transitions', () => {

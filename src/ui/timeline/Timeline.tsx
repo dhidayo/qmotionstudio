@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
-import type { EffectClip, Overlay } from '@/document/types';
+import type { Overlay } from '@/document/types';
 import {
   sceneSpans, timelineSpanMs, totalDurationMs, type SceneSpan,
 } from '@/document/select/timeline';
@@ -12,10 +12,11 @@ import { spanOf } from '@/document/select/motion';
 import { MotionBar } from './MotionBar';
 import { summaryFor } from '@/templates/manifest';
 import { MAX_TRACKS, placeNew } from '@/document/select/tracks';
-import { effectName, frameEffect } from '@/core/effects/catalog';
 import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
-import { effectMenu, overlayMenu, sceneMenu } from '@/ui/editing/commands';
+import { overlayMenu, sceneMenu } from '@/ui/editing/commands';
+import { EffectClipView, laneEffects, packEffectRows } from './EffectRows';
+import { MoreButton, TrimHandle } from './ClipParts';
 import { useEditor } from '@/state/store';
 import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import { useMediaStore } from '@/ui/media/MediaProvider';
@@ -57,7 +58,6 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   const selectSceneClip = useEditor((s) => s.selectSceneClip);
   const sceneClipSelected = useEditor((s) => s.sceneClipSelected);
   const selectedEffect = useEditor((s) => s.selectedEffect);
-  const selectEffect = useEditor((s) => s.selectEffect);
   const targetTrack = useEditor((s) => s.targetTrack);
   const setTargetTrack = useEditor((s) => s.setTargetTrack);
   const openMenu = useOverlays((o) => o.openMenu);
@@ -100,6 +100,38 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
   }, [clock]);
 
   const laneRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  /** A height the person dragged the timeline to, or null to fit its rows. */
+  const [manualHeight, setManualHeight] = useState<number | null>(readHeight);
+  const resizeFrom = useRef<{ y: number; height: number } | null>(null);
+  const [heldHeight, setHeldHeight] = useState<number | null>(null);
+  /*
+   * The tallest the panel has had to be. It grows to fit new rows but does not
+   * shrink by itself when one goes: the canvas above it resizes with it, and a
+   * picture that jumps every time a layer is deleted is worse than some spare
+   * room in the timeline. Double-clicking the top edge fits it again.
+   */
+  const [grownTo, setGrownTo] = useState(MIN_PANEL_PX);
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const height = entry?.borderBoxSize[0]?.blockSize ?? panel.getBoundingClientRect().height;
+      setGrownTo((current) => (height > current + 0.5 ? Math.round(height) : current));
+    });
+    observer.observe(panel);
+    return () => { observer.disconnect(); };
+  }, []);
+  useEffect(() => {
+    if (heldHeight === null) return;
+    const release = (): void => { setHeldHeight(null); };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, [heldHeight]);
   /**
       * A press on a clip is a drag *or* a click, and which one it was is only
       * known when it ends. So the press records where it started and whether
@@ -320,53 +352,13 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
     openMenu({ x, y, title: `Scene ${index + 1} · ${name}`, items: sceneMenu(index, seekTo, laneMs(x), openScenePicker) });
   };
 
-  // ── Timeline effects (D-100) ─────────────────────────────────────────────
+  // ── Effects (D-100, D-106) ───────────────────────────────────────────────
 
-  const fxDrag = useRef<(ClipDrag & { downX: number; moved: boolean; wasSelected: boolean }) | null>(null);
-
-  const beginFxDrag = (event: React.PointerEvent<HTMLElement>, clip: EffectClip, mode: ClipDrag['mode']): void => {
-    if (event.button === 2) return;
-    event.stopPropagation();
-    capturePointer(event.currentTarget, event.pointerId);
-    const wasSelected = selectedEffect === clip.id;
-    selectEffect(clip.id);
-    fxDrag.current = {
-      mode, id: clip.id, startMs: clip.startMs, endMs: clip.endMs,
-      pointerMs: laneMs(event.clientX), downX: event.clientX, moved: false, wasSelected,
-    };
-    longPress.current.start(event, (x, y) => {
-      fxDrag.current = null;
-      openFxMenu(clip, x, y);
-    });
-  };
-
-  const onFxMove = (event: React.PointerEvent<HTMLElement>): void => {
-    longPress.current.move(event);
-    const drag = fxDrag.current;
-    if (!drag || event.buttons === 0) return;
-    if (Math.abs(event.clientX - drag.downX) > CLICK_SLOP_PX) drag.moved = true;
-    const next = dragResult(drag, laneMs(event.clientX), { durationMs, minLengthMs: MIN_OVERLAY_MS });
-    dispatch(actions.moveTimelineEffect(drag.id, snap(next.startMs, SNAP_MS, event.altKey), snap(next.endMs, SNAP_MS, event.altKey)));
-  };
-
-  const endFxDrag = (): void => {
-    longPress.current.cancel();
-    const drag = fxDrag.current;
-    if (!drag) return;
-    fxDrag.current = null;
-    if (drag.mode === 'move' && !drag.moved && drag.wasSelected) {
-      seekTo(laneMs(drag.downX));
-      return;
-    }
-    endInteraction();
-  };
-
-  const openFxMenu = (clip: EffectClip, x: number, y: number): void => {
-    selectEffect(clip.id);
-    openMenu({ x, y, title: effectName(clip.effectId), items: effectMenu(clip.id, seekTo, laneMs(x)) });
-  };
-
-  const fxRows = useMemo(() => packEffects(project.effects ?? []), [project.effects]);
+  const fxRows = useMemo(() => {
+    const rows = packEffectRows(laneEffects(project, spans, durationMs));
+    // Always one row, so there is somewhere to see "+ Effect".
+    return rows.length > 0 ? rows : [[]];
+  }, [project, spans, durationMs]);
 
   // ── Adding overlays (§1.2) ───────────────────────────────────────────────
 
@@ -465,10 +457,52 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
   return (
     <div
-      className="flex shrink-0 flex-col border-t border-edge bg-panel"
-      style={{ height: 'var(--h-timeline)' }}
+      ref={panelRef}
+      className="relative flex shrink-0 flex-col border-t border-edge bg-panel"
+      /*
+       * As tall as its rows, up to half the window (D-106): a timeline that
+       * gains effect rows or layers grows with them instead of hiding them
+       * below a scrollbar. Dragging the top edge sets a height of your own;
+       * double-clicking it goes back to fitting the rows.
+       */
+      style={
+        heldHeight !== null ? { height: heldHeight }
+        : manualHeight === null ? { minHeight: grownTo, maxHeight: '50vh' }
+        : { height: manualHeight }
+      }
       aria-label="Timeline"
+      /*
+       * Held still while anything is being pressed or dragged in it: moving a
+       * clip into the spare row adds a row, which would grow the panel and
+       * move everything under the pointer half way through the gesture.
+       */
+      onPointerDownCapture={() => {
+        if (manualHeight === null) setHeldHeight(panelRef.current?.getBoundingClientRect().height ?? null);
+      }}
     >
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize panel"
+        title="Drag to resize · double-click to fit the rows"
+        data-timeline-resize
+        onPointerDown={(e) => {
+          capturePointer(e.currentTarget, e.pointerId);
+          resizeFrom.current = { y: e.clientY, height: panelRef.current?.getBoundingClientRect().height ?? 236 };
+        }}
+        onPointerMove={(e) => {
+          const from = resizeFrom.current;
+          if (!from || e.buttons === 0) return;
+          const next = Math.round(Math.max(160, Math.min(window.innerHeight * 0.8, from.height - (e.clientY - from.y))));
+          setManualHeight(next);
+        }}
+        onPointerUp={() => {
+          resizeFrom.current = null;
+          rememberHeight(manualHeight);
+        }}
+        onDoubleClick={() => { setManualHeight(null); rememberHeight(null); setGrownTo(MIN_PANEL_PX); }}
+        className="absolute inset-x-0 -top-1 z-20 h-2 cursor-ns-resize hover:bg-[color-mix(in_srgb,var(--c-accent)_30%,transparent)]"
+      />
       {/* Transport and the "Add …" buttons. Scrolls sideways rather than
           pushing the page wider on a phone. */}
       <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge px-3 py-1.5">
@@ -589,89 +623,69 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
 
       <SceneTools />
 
-      {/* Tracks. The label gutter is fixed so every row's time axis lines up. */}
-      <div className="flex min-h-0 flex-1 overflow-y-auto">
-        {/* Wide enough for the labels to be words. At w-14 they read
-            "SCEN…" and "MOTI…", which is a gutter that has stopped being a
-            gutter and become a puzzle. */}
-        <div className="w-20 shrink-0 border-r border-edge">
-          <Gutter>Time</Gutter>
-          <Gutter tall>Scenes</Gutter>
-          <Gutter>Motion</Gutter>
-          {fxRows.rows.map((_, i) => (
-            <Gutter key={`fx-${i}`} title="Effects on the timeline — over every scene and layer">{i === 0 ? 'FX' : ''}</Gutter>
-          ))}
-          {Array.from({ length: rows }, (_, i) => (
-            <TrackGutter
-              key={i}
-              track={i}
-              target={targetTrack === i}
-              empty={i >= rows - 1 && !project.overlays.some((o) => o.track === i)}
-              onChoose={() => { setTargetTrack(targetTrack === i ? null : i); }}
-            />
-          ))}
-          <Gutter>Music</Gutter>
-        </div>
-
+      {/*
+        * Tracks: one row per lane, its label and its content side by side.
+        *
+        * The labels used to be a separate column of fixed-height boxes beside
+        * a column of lanes, and the two had drifted — the ruler was 20px and
+        * its label 28px, so every row below sat 8px off its name. In one row
+        * they cannot disagree, and a lane that grows takes its label with it.
+        */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div
-          ref={laneRef}
-          className="relative min-w-0 flex-1"
+          className="relative"
           /*
            * Clicking anywhere on the timeline moves the playhead.
            *
-           * It used to be the thin ruler strip alone, which is a five-pixel
-           * target you have to know about — and everywhere else, a click did
-           * nothing at all. Every editor people have used moves the playhead
-           * when you click the timeline, and looking for a way to do the
-           * obvious thing is exactly the sort of friction that makes a tool
-           * feel like it is hiding something.
-           *
-           * Clips stop the event themselves (`beginClipDrag` calls
-           * stopPropagation), so dragging a scene or a music clip still does
-           * what it did; this only catches the empty space around them.
+           * Clips stop the event themselves, so dragging a scene, a layer or
+           * the music still does what it did; this only catches the empty
+           * space of a lane. Labels are not lanes and do not scrub.
            */
           onPointerDown={onLaneDown}
           onPointerMove={onLaneMove}
         >
           {/* Ruler, which is also the scrub surface. */}
-          <div
-            className="relative h-5 cursor-ew-resize border-b border-edge"
-            onPointerDown={onRulerDown}
-            onPointerMove={onRulerMove}
-            role="slider"
-            tabIndex={0}
-            aria-label="Scrub"
-            aria-valuemin={0}
-            /*
-             * The lane's length, because the playhead now reaches all of it.
-             *
-             * It used to report the video's, which was honest at the time —
-             * the transport was clamped to the video and promising more would
-             * have been a lie. Now the transport spans the lane so that
-             * overhanging music can actually be auditioned, and this follows.
-             */
-            aria-valuemax={Math.round(durationMs)}
-            aria-valuenow={Math.round(timeMs)}
-            onKeyDown={(e) => {
-              if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-              clock.seek(clock.timeMs + (e.key === 'ArrowRight' ? 100 : -100));
-              setTimeMs(clock.timeMs);
-            }}
-          >
-            {ticks.map((t) => (
-              <span
-                key={t}
-                className="tabular absolute top-0 border-l border-edge pl-1 text-[9px] leading-5 text-ink-faint"
-                style={{ left: `${msToPct(t, durationMs)}%` }}
-              >
-                {formatSeconds(t)}
-              </span>
-            ))}
-          </div>
+          <Row label="Time" height={20} lane={false}>
+            <div
+              ref={laneRef}
+              className="relative h-full cursor-ew-resize"
+              onPointerDown={onRulerDown}
+              onPointerMove={onRulerMove}
+              role="slider"
+              tabIndex={0}
+              aria-label="Scrub"
+              aria-valuemin={0}
+              /*
+               * The lane's length, because the playhead now reaches all of it.
+               *
+               * It used to report the video's, which was honest at the time —
+               * the transport was clamped to the video and promising more would
+               * have been a lie. Now the transport spans the lane so that
+               * overhanging music can actually be auditioned, and this follows.
+               */
+              aria-valuemax={Math.round(durationMs)}
+              aria-valuenow={Math.round(timeMs)}
+              onKeyDown={(e) => {
+                if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+                clock.seek(clock.timeMs + (e.key === 'ArrowRight' ? 100 : -100));
+                setTimeMs(clock.timeMs);
+              }}
+            >
+              {ticks.map((t) => (
+                <span
+                  key={t}
+                  className="tabular absolute top-0 border-l border-edge pl-1 text-[9px] leading-5 text-ink-faint"
+                  style={{ left: `${msToPct(t, durationMs)}%` }}
+                >
+                  {formatSeconds(t)}
+                </span>
+              ))}
+            </div>
+          </Row>
 
           {/* Scene track. Clip widths come from the spans, so a transition
               overlap is visible as two clips that touch rather than a gap. */}
-          <div className="relative h-9 border-b border-edge" data-lane>
+          <Row label="Scenes" height={36}>
             {spans.map((span) => {
               const active = span.index === selectedScene && selectedOverlay === null && selectedEffect === null;
               return (
@@ -695,7 +709,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                   onPointerUp={() => { sceneLongPress.current.cancel(); }}
                   onPointerCancel={() => { sceneLongPress.current.cancel(); }}
                   aria-pressed={active}
-                  title={`${designName(span.scene.templateId)} · ${formatSeconds(span.scene.durationMs)}`}
+                  title={`${designName(span.scene.templateId)} · ${formatSeconds(span.endMs - span.startMs)}`}
                   className="absolute inset-y-1 overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
                   style={{
                     left: `${msToPct(span.startMs, durationMs)}%`,
@@ -716,7 +730,7 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                     <span
                       className="pointer-events-none absolute inset-y-0 left-0 border-l-2 border-dashed"
                       style={{
-                        width: `${((span.transitionEndMs - span.transitionStartMs) / Math.max(1, span.scene.durationMs)) * 100}%`,
+                        width: `${((span.transitionEndMs - span.transitionStartMs) / Math.max(1, span.endMs - span.startMs)) * 100}%`,
                         borderColor: 'var(--c-accent)',
                         background: 'color-mix(in srgb, var(--c-accent) 12%, transparent)',
                       }}
@@ -725,98 +739,75 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                 </button>
               );
             })}
-          </div>
+          </Row>
 
           {/*
-            * The selected element's motion, on a lane of its own.
-            *
-            * It used to be drawn inside the clip, which was wrong twice over: a
-            * bar positioned in lane percentages inside a four-second clip came
-            * out a few pixels long in the wrong place, and there was no room
-            * for an end you could actually grab. A motion is a span of time, so
-            * it belongs on the same time axis as everything else.
+            * The selected element's motion, on a lane of its own: a motion is
+            * a span of time, so it belongs on the same time axis as everything.
             */}
-          <div className="relative h-7 border-b border-edge" data-lane>
+          <Row label="Motion" height={28}>
             <MotionLane spans={spans} durationMs={durationMs} onSeek={seekTo} />
+          </Row>
+
+          {/*
+            * Effects (D-100, D-106): the timeline's own and every scene's, so
+            * none of them is hidden inside a scene. Overlapping ones stack onto
+            * rows of their own, so each can be picked up and trimmed.
+            */}
+          <div className="relative">
+            {fxRows.map((row, r) => (
+              <Row
+                key={`fx-${r}`}
+                label={r === 0 ? 'FX' : ''}
+                title="Effects — on the timeline (solid) and on scenes (dashed)"
+                height={ROW_PX}
+                laneProps={{ 'data-fx-lane': r }}
+              >
+                {r === 0 && row.length === 0 && (
+                  <span className="pointer-events-none absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
+                    Effects at a moment — snow, lightning, a shake. Use “+ Effect” above.
+                  </span>
+                )}
+              </Row>
+            ))}
+            <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LABEL_PX }} data-lane="true">
+              {fxRows.flatMap((row, r) => row.map((fx) => (
+                <EffectClipView key={fx.clip.id} fx={fx} row={r} durationMs={durationMs} onSeek={seekTo} showScene />
+              )))}
+            </div>
           </div>
 
           {/*
-            * Timeline effects (D-100): weather, light, camera moves and looks
-            * placed at a moment, over everything. Effects may overlap — snow
-            * under a lightning strike is the point — so overlapping ones stack
-            * onto extra rows rather than hiding each other.
+            * Overlay layers, L1 first (§6.4 draws them in this order: L1 at the
+            * back). The rows are lanes to click; the clips sit in one layer over
+            * them and move between rows by position — never by being rebuilt
+            * inside another row, which lost hold of the pointer mid-drag.
             */}
-          {fxRows.rows.map((row, r) => (
-            <div key={`fx-${r}`} className="relative h-7 border-b border-edge" data-lane data-fx-row={r}>
-              {r === 0 && row.length === 0 && (
-                <span className="pointer-events-none absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
-                  Effects at a moment — snow, lightning, a shake. Use “+ Effect” above.
-                </span>
-              )}
-              {row.map((clip) => {
-                const active = clip.id === selectedEffect;
-                const def = frameEffect(clip.effectId);
-                return (
-                  <div
-                    key={clip.id}
-                    role="button"
-                    tabIndex={0}
-                    aria-pressed={active}
-                    aria-label={`Effect: ${effectName(clip.effectId)}`}
-                    data-fx-clip={clip.effectId}
-                    title={`${effectName(clip.effectId)} · ${formatSeconds(clip.endMs - clip.startMs)}${def ? ` — ${def.blurb}` : ''}`}
-                    onPointerDown={(e) => { beginFxDrag(e, clip, 'move'); }}
-                    onPointerMove={onFxMove}
-                    onPointerUp={endFxDrag}
-                    onPointerCancel={endFxDrag}
-                    onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openFxMenu(clip, e.clientX, e.clientY); }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') selectEffect(clip.id);
-                      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
-                        e.preventDefault();
-                        const box = e.currentTarget.getBoundingClientRect();
-                        openFxMenu(clip, box.left, box.bottom);
-                      }
-                    }}
-                    className="absolute inset-y-1 cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
-                    style={{
-                      left: `${msToPct(clip.startMs, durationMs)}%`,
-                      width: `${Math.max(1.2, msToPct(clip.endMs, durationMs) - msToPct(clip.startMs, durationMs))}%`,
-                      borderColor: active ? 'var(--c-pro)' : 'color-mix(in srgb, var(--c-pro) 45%, var(--c-edge-strong))',
-                      background: active ? 'var(--c-pro-soft)' : 'color-mix(in srgb, var(--c-pro-soft) 55%, var(--c-panel-alt))',
-                      color: active ? 'var(--c-pro)' : 'var(--c-ink-muted)',
-                      WebkitTouchCallout: 'none',
-                    }}
-                  >
-                    <TrimHandle side="start" onDown={(e) => { beginFxDrag(e, clip, 'trimStart'); }} onMove={onFxMove} onUp={endFxDrag} />
-                    <span className="pointer-events-none block truncate px-2">✦ {effectName(clip.effectId)}</span>
-                    {active && (
-                      <MoreButton label={`More for ${effectName(clip.effectId)}`} onOpen={(x, y) => { openFxMenu(clip, x, y); }} />
-                    )}
-                    <TrimHandle side="end" onDown={(e) => { beginFxDrag(e, clip, 'trimEnd'); }} onMove={onFxMove} onUp={endFxDrag} />
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-
-          {/* Overlay layers, L1 first (§6.4 draws them in this order: L1 at the back). */}
-          <div ref={rowsRef}>
+          <div ref={rowsRef} className="relative">
             {Array.from({ length: rows }, (_, row) => (
-              /* `data-lane` marks the row as a time axis: the motion bar
-                 converts pointer positions against it, and a press on the bare
-                 row scrubs like any other empty part of the timeline. Pressing
-                 it also makes it the layer new elements go on (D-103). */
-              <div
+              /* Pressing a layer's empty stretch also makes it the layer new
+                 elements go on (D-103). */
+              <Row
                 key={row}
-                className="relative h-7 border-b border-edge"
-                data-lane
-                data-track-row={row}
-                style={targetTrack === row ? { background: 'color-mix(in srgb, var(--c-accent) 6%, transparent)' } : undefined}
+                height={ROW_PX}
+                labelNode={
+                  <TrackGutter
+                    track={row}
+                    target={targetTrack === row}
+                    empty={row >= rows - 1 && !project.overlays.some((o) => o.track === row)}
+                    onChoose={() => { setTargetTrack(targetTrack === row ? null : row); }}
+                  />
+                }
+                laneProps={{
+                  'data-track-row': row,
+                  style: targetTrack === row ? { background: 'color-mix(in srgb, var(--c-accent) 6%, transparent)' } : undefined,
+                }}
               >
-                {project.overlays
-                  .filter((o) => o.track === row)
-                  .map((overlay) => {
+                {null}
+              </Row>
+            ))}
+            <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LABEL_PX }} data-lane="true">
+              {project.overlays.map((overlay) => {
                     const active = overlay.id === selectedOverlay;
                     return (
                       <div
@@ -840,8 +831,11 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                             openOverlayMenu(overlay, box.left, box.bottom);
                           }
                         }}
-                        className="absolute inset-y-1 cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
+                        data-track={overlay.track}
+                        className="pointer-events-auto absolute cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
                         style={{
+                          top: overlay.track * ROW_PX + 4,
+                          height: ROW_PX - 9,
                           left: `${msToPct(overlay.startMs, durationMs)}%`,
                           width: `${Math.max(1.2, msToPct(overlay.endMs, durationMs) - msToPct(overlay.startMs, durationMs))}%`,
                           borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
@@ -851,75 +845,125 @@ export function Timeline({ clock }: { clock: PreviewClock }): React.JSX.Element 
                         }}
                       >
                         <TrimHandle side="start" onDown={(e) => { beginClipDrag(e, overlay, 'trimStart'); }} onMove={onClipMove} onUp={endClipDrag} />
-                        <span className="pointer-events-none block truncate px-2">{labelFor(overlay)}</span>
+                        <span className="pointer-events-none block truncate px-3">{labelFor(overlay)}</span>
                         {active && (
                           <MoreButton label={`More for ${labelFor(overlay)}`} onOpen={(x, y) => { openOverlayMenu(overlay, x, y); }} />
                         )}
                         <TrimHandle side="end" onDown={(e) => { beginClipDrag(e, overlay, 'trimEnd'); }} onMove={onClipMove} onUp={endClipDrag} />
                       </div>
                     );
-                  })}
-              </div>
-            ))}
+                })}
+            </div>
           </div>
 
           {/* §1.2's dedicated music track, §10's waveform. */}
-          <MusicTrack
-            clips={project.audio}
-            durationMs={durationMs}
-            videoMs={videoMs}
-            laneWidth={laneWidth}
-            onSeek={seekTo}
-          />
+          <Row label="Music" height={28}>
+            <MusicTrack
+              clips={project.audio}
+              durationMs={durationMs}
+              videoMs={videoMs}
+              laneWidth={laneWidth}
+              onSeek={seekTo}
+            />
+          </Row>
 
-          {/*
-            * Everything past the end of the video, dimmed.
-            *
-            * D-053 cuts the exported mix to the video's length; this is that
-            * rule made visible, so a track that overruns looks deliberate
-            * rather than broken.
-            */}
-          {overhang && (
+          {/* Over the lanes only, never the labels. */}
+          <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LABEL_PX }}>
+            {/*
+              * Everything past the end of the video, dimmed: D-053 cuts the
+              * exported mix to the video's length, and this makes it visible.
+              */}
+            {overhang && (
+              <div
+                className="pointer-events-none absolute inset-y-0"
+                style={{
+                  left: `${msToPct(videoMs, durationMs)}%`,
+                  right: 0,
+                  background: 'color-mix(in srgb, var(--c-stage) 55%, transparent)',
+                  borderLeft: '1px dashed var(--c-edge-strong)',
+                }}
+                aria-hidden
+              />
+            )}
+
+            {/* Playhead, over every row. */}
             <div
-              className="pointer-events-none absolute inset-y-0"
-              style={{
-                left: `${msToPct(videoMs, durationMs)}%`,
-                right: 0,
-                background: 'color-mix(in srgb, var(--c-stage) 55%, transparent)',
-                borderLeft: '1px dashed var(--c-edge-strong)',
-              }}
+              className="pointer-events-none absolute inset-y-0 w-px"
+              style={{ left: `${msToPct(timeMs, durationMs)}%`, background: 'var(--c-accent)' }}
               aria-hidden
             />
-          )}
-
-          {/* Playhead, over every row. */}
-          <div
-            className="pointer-events-none absolute inset-y-0 w-px"
-            style={{ left: `${msToPct(timeMs, durationMs)}%`, background: 'var(--c-accent)' }}
-            aria-hidden
-          />
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
+const HEIGHT_KEY = 'ms.timelineHeight';
+/** The least the timeline panel is ever given, so the transport and a few rows always show. */
+const MIN_PANEL_PX = 200;
+
+/** A per-viewer convenience, like the theme: never document data, never required. */
+function readHeight(): number | null {
+  try {
+    const stored = Number(localStorage.getItem(HEIGHT_KEY));
+    return Number.isFinite(stored) && stored >= 160 ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function rememberHeight(height: number | null): void {
+  try {
+    if (height === null) localStorage.removeItem(HEIGHT_KEY);
+    else localStorage.setItem(HEIGHT_KEY, String(height));
+  } catch {
+    // A remembered height is a convenience; failing to store it changes nothing.
+  }
+}
+
 /** The height of one layer row, which a drag between layers is measured in. */
 const ROW_PX = 28;
 
+/** The label column's width — wide enough for the labels to be words. */
+const LABEL_PX = 80;
+
 /**
- * Effects packed into as few rows as will hold them without overlapping:
- * each goes on the first row whose last clip has ended by the time it starts.
- * There is always at least one row, so there is somewhere to see "+ Effect".
+ * One row of the timeline: its label and its lane, the same height by
+ * construction. The lane is a time axis (`data-lane`) unless told otherwise,
+ * so a press on its empty stretch moves the playhead.
  */
-function packEffects(effects: readonly EffectClip[]): { rows: readonly (readonly EffectClip[])[] } {
-  const rows: EffectClip[][] = [];
-  for (const clip of [...effects].sort((a, b) => a.startMs - b.startMs)) {
-    const row = rows.find((r) => (r[r.length - 1]?.endMs ?? 0) <= clip.startMs);
-    if (row) row.push(clip);
-    else rows.push([clip]);
-  }
-  return { rows: rows.length > 0 ? rows : [[]] };
+function Row({
+  label,
+  labelNode,
+  title,
+  height,
+  lane = true,
+  laneProps,
+  children,
+}: {
+  label?: string;
+  labelNode?: React.ReactNode;
+  title?: string;
+  height: number;
+  lane?: boolean;
+  laneProps?: Record<string, unknown> & { style?: React.CSSProperties | undefined };
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="flex border-b border-edge" style={{ height }}>
+      <div
+        className="flex shrink-0 items-center truncate border-r border-edge text-[10px] uppercase tracking-wide text-ink-faint"
+        style={{ width: LABEL_PX, paddingInline: labelNode === undefined ? 8 : 0 }}
+        title={title}
+      >
+        {labelNode ?? label}
+      </div>
+      <div className="relative min-w-0 flex-1" {...(lane ? { 'data-lane': 'true' } : {})} {...laneProps}>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -948,10 +992,9 @@ function TrackGutter({
           ? 'An empty layer: drag a clip here to put it in front of everything else.'
           : `Layer ${track + 1}${track === 0 ? ' — at the back' : ''}. Click to add new elements here.`
       }
-      className="block w-full truncate border-b border-edge px-2 text-left text-[10px] uppercase tracking-wide"
+      className="block h-full w-full truncate px-2 text-left text-[10px] uppercase tracking-wide"
       style={{
-        height: 28,
-        lineHeight: '28px',
+        lineHeight: `${ROW_PX - 1}px`,
         color: target ? 'var(--c-accent)' : 'var(--c-ink-faint)',
         background: target ? 'var(--c-accent-soft)' : 'transparent',
         fontWeight: target ? 600 : 400,
@@ -963,45 +1006,9 @@ function TrackGutter({
   );
 }
 
-/**
- * "⋯" on a selected clip: the menu, for anyone who does not right-click — a
- * trackpad without a secondary click set up, a keyboard, a first-time user.
- */
-function MoreButton({ label, onOpen }: { label: string; onOpen: (x: number, y: number) => void }): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      title="More options"
-      onPointerDown={(e) => { e.stopPropagation(); }}
-      onClick={(e) => {
-        e.stopPropagation();
-        const box = e.currentTarget.getBoundingClientRect();
-        onOpen(box.left, box.bottom + 2);
-      }}
-      className="absolute inset-y-0 right-2 my-auto grid h-4 w-5 place-items-center rounded-sm text-[11px] font-bold leading-none hover:bg-panel"
-      style={{ color: 'currentColor' }}
-    >
-      ⋯
-    </button>
-  );
-}
-
 function labelFor(overlay: Overlay): string {
   if (overlay.content.kind === 'text') return overlay.content.text || 'Text';
   return overlay.content.kind === 'photo' ? 'Photo' : 'Media';
-}
-
-function Gutter({ children, tall, title }: { children: React.ReactNode; tall?: boolean; title?: string }): React.JSX.Element {
-  return (
-    <div
-      title={title}
-      className="truncate border-b border-edge px-2 text-[10px] uppercase tracking-wide text-ink-faint"
-      style={{ height: tall === true ? 36 : 28, lineHeight: tall === true ? '36px' : '28px' }}
-    >
-      {children}
-    </div>
-  );
 }
 
 function AddButton({
@@ -1025,33 +1032,6 @@ function AddButton({
     >
       {children}
     </button>
-  );
-}
-
-/** The grab strip at each end of a clip. Eight pixels, which is the smallest
- *  target that does not fight the move drag on a narrow clip. */
-function TrimHandle({
-  side,
-  onDown,
-  onMove,
-  onUp,
-}: {
-  side: 'start' | 'end';
-  onDown: (event: React.PointerEvent<HTMLElement>) => void;
-  onMove: (event: React.PointerEvent<HTMLElement>) => void;
-  onUp: () => void;
-}): React.JSX.Element {
-  return (
-    <span
-      role="presentation"
-      aria-label={side === 'start' ? 'Trim start' : 'Trim end'}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-      className="absolute inset-y-0 w-2 cursor-ew-resize"
-      style={{ [side === 'start' ? 'left' : 'right']: 0 }}
-    />
   );
 }
 

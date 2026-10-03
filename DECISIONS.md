@@ -2518,3 +2518,65 @@ document keeps its ids, so saved projects need no migration, and the labels
 live in one place. The Logo tab became a section of Look — "I do not see a
 reason why they are apart" — in both modes, with "Use on every scene" for
 ads; its tab went to Motion.
+
+## D-106 — one effects lane, rows that line up, a timeline that grows
+
+Reported together: scene effects "disappear into the scene"; effects could not
+be resized or right-clicked; overlapping ones were hard to pick; and the row
+labels did not line up with their rows.
+
+- **Every effect is on the lane.** Timeline effects (solid border) and each
+  scene's own effects (dashed, "· scene 2") share the FX rows, at their place
+  on the project clock. A scene effect drags and trims within its scene; its
+  menu can move it to the timeline to cross a cut, and a timeline effect can be
+  attached to its scene to travel with it. Effect actions find their effect by
+  id, so editing scene 3's effect does not need scene 3 selected.
+- **Overlaps stack.** Effects are packed onto as many rows as keep them apart,
+  so each has its own clip to grab. Lifestyle's strip under the scrubber is the
+  same component, with the same rows.
+- **Ends you can see.** Every clip's ends are ten-pixel grips with a dotted
+  bar, always visible; right-click, long press and "⋯" open the clip's menu.
+- **Rows, not columns.** Each row now holds its label and its lane, so they are
+  the same height by construction — the ruler had been 20px beside a 28px
+  label, putting every row below 8px off its name.
+- **Clips live in one layer over their rows** and change row by position.
+  Rendered inside the row, a clip moving between layers was rebuilt mid-drag
+  and lost the pointer; the test for dropping onto a busy layer caught it.
+- **The panel fits its rows**, up to half the window, and its top edge drags to
+  any height (double-click fits again; the height is a per-viewer setting). It
+  holds still while anything in it is pressed: a clip moved into the spare row
+  adds a row, and a panel that grew mid-drag moved everything under the pointer.
+
+## D-107 — editing on the canvas
+
+"It is easier for users to edit on canvas once the item is clicked."
+
+- **Type into text where it is.** Double-click, Enter, or "Edit text" opens an
+  editor over the words, all selected so typing replaces them; the frame updates
+  behind it. Enter keeps, ⇧Enter adds a line, Escape restores what was there.
+  The editor keeps its place and the original words from the moment it opens —
+  clearing the text removes its box from the frame, and the editor must not go
+  with it.
+- **Replace pictures where they are.** Double-click a photo, a photo layer or the
+  logo for a chooser of the person's photos (then the samples) or a new upload.
+  Replacing slot 4 of a two-photo scene grows the photo list the way the design
+  already reuses, so only slot 4 changes.
+- **Delete what makes sense.** Text is cleared (⌘Z or the Text panel brings it
+  back); a photo leaves the scene unless the design is at its minimum, when it
+  says to replace instead.
+- **A toolbar beside the selection** — Edit text or Replace, Effects, Motion,
+  Duplicate, Delete, and "⋯" for the full menu — every action of which is also
+  in the right-click menu.
+- **Shortcuts:** ⌘D duplicate, ] and [ front and back, Enter edit, and "?" (or
+  the button in the top bar) lists them all.
+
+## D-108 — a scene lasts its length at its speed
+
+At 2× a ten-second design was over in five seconds and its scene ran on for five
+more of nothing — "the timeline is longer than required" — and at 0.5× it was
+cut off half way. Changing the design kept the speed, so the mismatch came with
+it. A scene's place on the timeline is now its design length divided by its
+speed (`sceneLengthMs`), everywhere a scene is placed: spans, transitions, the
+free-tier trim, effect windows. Effects that ran to the scene's end, and the
+logo, stretch to the new end. The Lifestyle scrubber reads its length from the
+document: sampled from the clock, it stayed stale while paused.

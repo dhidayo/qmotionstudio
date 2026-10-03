@@ -315,8 +315,12 @@ const flash: FrameEffectDef = {
   },
 };
 
-/** Copies the frame, small, and lays it back over itself: a cheap, convincing bloom. */
-function bloom(ctx: Ctx2D, io: FrameIO, alpha: number, mode: GlobalCompositeOperation): void {
+/**
+ * Copies the frame, small, and lays it back over itself: a cheap, convincing
+ * bloom. Each `passes` entry lays the same small copy down again in its own
+ * blend and strength, so a two-layer glow costs one shrink, not two.
+ */
+function bloom(ctx: Ctx2D, io: FrameIO, passes: readonly { alpha: number; mode: GlobalCompositeOperation }[]): void {
   const { px } = io;
   const small = io.scratch(0);
   const sw = Math.max(2, Math.round(px.w / 8));
@@ -328,11 +332,14 @@ function bloom(ctx: Ctx2D, io: FrameIO, alpha: number, mode: GlobalCompositeOper
   small.ctx.drawImage(mid.canvas, 0, 0, mw, mh, 0, 0, sw, sh);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.globalCompositeOperation = mode;
-  ctx.globalAlpha = alpha;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  ctx.drawImage(small.canvas, 0, 0, sw, sh, 0, 0, px.w, px.h);
+  for (const pass of passes) {
+    if (pass.alpha <= 0.002) continue;
+    ctx.globalCompositeOperation = pass.mode;
+    ctx.globalAlpha = pass.alpha;
+    ctx.drawImage(small.canvas, 0, 0, sw, sh, 0, 0, px.w, px.h);
+  }
   ctx.restore();
 }
 
@@ -351,9 +358,11 @@ const glow: FrameEffectDef = {
     const pulse = pulseRate > 0 ? 0.6 + 0.4 * Math.sin((s.t / 1000) * TAU * (0.3 + pulseRate * 1.5)) : 1;
     const a = s.env * s.intensity * pulse;
     if (a <= 0.002) return;
-    // Twice: once wide and soft, once tighter — the way real bloom falls off.
-    bloom(ctx, io, Math.min(1, a * 0.9), 'screen');
-    bloom(ctx, io, Math.min(1, a * 0.45), 'lighter');
+    // Two layers of the same soft copy, the way real bloom falls off.
+    bloom(ctx, io, [
+      { alpha: Math.min(1, a * 0.9), mode: 'screen' },
+      { alpha: Math.min(1, a * 0.45), mode: 'lighter' },
+    ]);
   },
 };
 
