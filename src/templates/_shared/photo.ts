@@ -102,8 +102,8 @@ export function photoProps(
     w,
     h,
     // Cover throughout: 'contain' would letterbox inside the frame, which is
-    // never what a photo template wants. 'Fill frame' differs from 'Template'
-    // by ignoring any inset the template applies, not by changing the fit.
+    // never what a photo template wants. 'Fill frame' is not handled here: it
+    // replaces the whole layer with a full-canvas one after the build (D-115).
     fit: 'cover',
     ...(crop ? { crop } : {}),
     ...(options.cornerRadius === undefined ? {} : { cornerRadius: options.cornerRadius }),

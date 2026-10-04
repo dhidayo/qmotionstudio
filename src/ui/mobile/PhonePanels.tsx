@@ -16,6 +16,7 @@ import { TimelineEffectPanel } from '@/ui/effects/EffectEditors';
 import { Timeline } from '@/ui/timeline/Timeline';
 import { useAddLayers } from '@/ui/timeline/useAddLayers';
 import { MAX_NAME, useProjectActions } from '@/ui/projects/useProjectActions';
+import { SectionTabs } from '@/ui/inspector/controls';
 import { BottomSheet } from './BottomSheet';
 import { Icon, type IconName } from './Icon';
 
@@ -42,8 +43,11 @@ export function PhonePanels({ clock }: { clock: PreviewClock }): React.JSX.Eleme
 
 function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): React.JSX.Element {
   const close = useOverlays((o) => o.openPhonePanel);
+  const section = useOverlays((o) => o.phoneSection);
   const template = useEditor((s) => s.template);
   const done = (): void => { close(null); };
+  // Long panels show one section at a time on a phone (D-114).
+  const tabs = (body: React.ReactNode): React.JSX.Element => <SectionTabs initial={section}>{body}</SectionTabs>;
 
   switch (panel) {
     case 'designs':
@@ -53,16 +57,16 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
         </BottomSheet>
       );
     case 'photos':
-      return <BottomSheet title="Photos" onClose={done} tall><PhotosTab template={template} /></BottomSheet>;
+      return <BottomSheet title="Photos" onClose={done} tall>{tabs(<PhotosTab template={template} />)}</BottomSheet>;
     case 'text':
-      return <BottomSheet title="Text" onClose={done}><TextTab template={template} /></BottomSheet>;
+      return <BottomSheet title="Text" onClose={done} tall>{tabs(<TextTab template={template} />)}</BottomSheet>;
     case 'effects':
     case 'motion':
-      return <BottomSheet title="Motion and effects" onClose={done} tall><MotionTab template={template} /></BottomSheet>;
+      return <BottomSheet title="Motion and effects" onClose={done} tall>{tabs(<MotionTab template={template} />)}</BottomSheet>;
     case 'style':
-      return <BottomSheet title="Style" onClose={done} tall><LookTab template={template} /></BottomSheet>;
+      return <BottomSheet title="Style" onClose={done} tall>{tabs(<LookTab template={template} />)}</BottomSheet>;
     case 'element':
-      return <ElementPanel onClose={done} />;
+      return <ElementPanel onClose={done} section={section} />;
     case 'add':
       return <AddPanel onClose={done} />;
     case 'aspect':
@@ -79,7 +83,7 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
 }
 
 /** The settings of whatever is selected. */
-function ElementPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
+function ElementPanel({ onClose, section }: { onClose: () => void; section: string | null }): React.JSX.Element {
   const template = useEditor((s) => s.template);
   const overlay = useEditor((s) => s.selectedOverlay);
   const audio = useEditor((s) => s.selectedAudio);
@@ -90,7 +94,7 @@ function ElementPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
     : effect !== null ? <TimelineEffectPanel />
     : slot?.startsWith('photo:') === true ? <PhotosTab template={template} />
     : <TextTab template={template} />;
-  return <BottomSheet title="Settings" onClose={onClose} tall>{body}</BottomSheet>;
+  return <BottomSheet title="Settings" onClose={onClose} tall><SectionTabs initial={section}>{body}</SectionTabs></BottomSheet>;
 }
 
 const SHAPES: Readonly<Record<Aspect, string>> = {
@@ -194,7 +198,7 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   );
 
   return (
-    <BottomSheet title="Project" onClose={onClose} tall>
+    <BottomSheet title="Menu" onClose={onClose} tall>
       <label className="block text-[12px] text-ink-muted" htmlFor="phone-project-name">Name</label>
       <input
         id="phone-project-name"

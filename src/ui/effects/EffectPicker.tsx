@@ -6,6 +6,7 @@ import {
 } from '@/core/effects/types';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
+import { noHover } from '@/ui/library/PlayingPreview';
 import { useOverlays, type PickerState } from '@/ui/shell/overlays';
 import { EffectPreview, type PreviewEffect } from './EffectPreview';
 import { addElementEffect, addFrameEffect } from './addEffect';
@@ -59,7 +60,12 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
   const [hovered, setHovered] = useState<string | null>(null);
   const search = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => { search.current?.focus(); }, []);
+  /*
+   * Typing straight away with a keyboard; on a touch screen the search waits
+   * to be tapped (D-113). Focusing it there raised the on-screen keyboard over
+   * half the list before anything had been asked for.
+   */
+  useEffect(() => { if (!noHover()) search.current?.focus(); }, []);
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') { event.preventDefault(); close(); }
@@ -116,11 +122,11 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
       aria-modal="true"
       aria-label="Effects"
       /* A sheet from the bottom on a phone (D-109), a window on a computer. */
-      className="fixed inset-0 z-50 grid items-end sm:place-items-center sm:p-4"
+      className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center sm:p-4"
       style={{ background: 'rgb(0 0 0 / 0.45)' }}
       onClick={(event) => { if (event.target === event.currentTarget) close(); }}
     >
-      <div className="flex max-h-[88dvh] w-full flex-col rounded-t-2xl border border-edge bg-panel shadow-lg sm:w-[960px] sm:max-w-full sm:rounded-lg">
+      <div className="flex max-h-[90%] w-full flex-col rounded-t-2xl border border-edge bg-panel shadow-lg sm:w-[960px] sm:max-w-full sm:rounded-lg">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-[14px] font-semibold">{title}</h2>

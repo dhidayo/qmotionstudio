@@ -64,7 +64,9 @@ export const NO_ZOOM: ViewZoom = { scale: 1, x: 0, y: 0 };
 
 type OverlayState = {
   phonePanel: PhonePanel | null;
-  openPhonePanel: (panel: PhonePanel | null) => void;
+  /** Which section the panel opens on, by the start of its title (D-114). */
+  phoneSection: string | null;
+  openPhonePanel: (panel: PhonePanel | null, section?: string) => void;
   viewZoom: ViewZoom;
   setViewZoom: (zoom: ViewZoom) => void;
   /** The canvas element whose text is being typed into, by its selection key (D-107). */
@@ -91,7 +93,8 @@ export const useOverlays = create<OverlayState>((set) => ({
   menu: null,
   picker: null,
   phonePanel: null,
-  openPhonePanel: (phonePanel) => { set({ phonePanel, menu: null }); },
+  phoneSection: null,
+  openPhonePanel: (phonePanel, section) => { set({ phonePanel, phoneSection: section ?? null, menu: null }); },
   viewZoom: NO_ZOOM,
   setViewZoom: (viewZoom) => { set({ viewZoom }); },
   textEdit: null,

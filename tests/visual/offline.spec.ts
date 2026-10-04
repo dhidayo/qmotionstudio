@@ -37,6 +37,16 @@ test('opens and works with no network once it has been visited', async ({ page, 
     return registration.active?.state;
   });
 
+  /*
+   * The opening project's photographs were fetched before the worker existed
+   * (it starts once the editor is idle, D-112); they must still be kept, or
+   * the project reopens offline with empty frames.
+   */
+  await expect.poll(() => page.evaluate(async () => {
+    const cache = await caches.open('pictures');
+    return (await cache.keys()).filter((request) => request.url.includes('/samples/')).length;
+  }), { timeout: 20_000 }).toBeGreaterThan(0);
+
   await context.setOffline(true);
   await page.reload();
 

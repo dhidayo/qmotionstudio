@@ -177,14 +177,18 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
             options={[
               { value: 'template', label: 'Template' },
               { value: 'larger', label: 'Larger' },
-              { value: 'fillFrame', label: 'Fill frame' },
+              { value: 'fillFrame', label: 'Fill canvas' },
               { value: 'overflow', label: 'Overflow' },
             ]}
             onChange={(sizeMode) => { dispatch(actions.setPhotoSizeMode(selected ?? 0, sizeMode)); }}
           />
 
           {current.sizeMode === 'template' || current.sizeMode === 'fillFrame' ? (
-            <EmptyNote>Size percentage applies to Larger and Overflow.</EmptyNote>
+            <EmptyNote>
+              {current.sizeMode === 'fillFrame'
+                ? 'The photo fills the whole canvas, behind the rest of the design. Drag its corners on the canvas to adjust.'
+                : 'Size percentage applies to Larger and Overflow.'}
+            </EmptyNote>
           ) : (
             <Slider
               label="Size"

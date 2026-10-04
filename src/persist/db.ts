@@ -85,12 +85,45 @@ export async function listProjects(): Promise<readonly StoredProject[]> {
     .sort((a, b) => b.savedAt - a.savedAt);
 }
 
+/**
+ * What is actually written: the file's bytes and its type, not the Blob.
+ *
+ * WebKit will not store a Blob in IndexedDB in a private window — every write
+ * failed, the document saved anyway, and a reload reopened a project pointing
+ * at photographs that were never kept: "when I refresh the page on mobile, the
+ * pictures disappear" (D-111). Safari has also been unreliable reading Blobs
+ * back in ordinary windows. An ArrayBuffer is plain data that every engine
+ * stores, so the bytes go in and a Blob is rebuilt on the way out.
+ */
+type MediaRecord = {
+  readonly id: string;
+  readonly kind: MediaKind;
+  readonly name: string;
+  readonly type: string;
+  readonly bytes: ArrayBuffer;
+};
+
+/** Written before D-111: the Blob itself. Still read, so nothing saved earlier is lost. */
+type LegacyMediaRecord = StoredMedia;
+
 export async function readMedia(id: string): Promise<StoredMedia | null> {
-  return (await get<StoredMedia>(id, mediaStore)) ?? null;
+  const record = await get<MediaRecord | LegacyMediaRecord>(id, mediaStore);
+  if (!record) return null;
+  if ('bytes' in record) {
+    return { id: record.id, kind: record.kind, name: record.name, blob: new Blob([record.bytes], { type: record.type }) };
+  }
+  return record;
 }
 
 export async function writeMedia(entry: StoredMedia): Promise<void> {
-  await set(entry.id, entry, mediaStore);
+  const record: MediaRecord = {
+    id: entry.id,
+    kind: entry.kind,
+    name: entry.name,
+    type: entry.blob.type,
+    bytes: await entry.blob.arrayBuffer(),
+  };
+  await set(entry.id, record, mediaStore);
 }
 
 export async function mediaIds(): Promise<readonly string[]> {

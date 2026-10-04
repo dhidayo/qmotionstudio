@@ -1,5 +1,6 @@
 import type { Aspect } from '@/core/types';
 import { validateTemplate, type SceneTemplate, type Template, type TemplateIssue } from './schema';
+import { withPhotoFill } from './_shared/fill';
 
 /**
  * Template registry (§7).
@@ -77,8 +78,10 @@ export async function loadTemplate(id: string): Promise<Template> {
     );
   }
 
-  cache.set(id, template);
-  return template;
+  // Every scene design gets "Fill frame" the same way, after its own build (D-115).
+  const ready = template.kind === 'scene' ? withPhotoFill(template) : template;
+  cache.set(id, ready);
+  return ready;
 }
 
 export async function loadSceneTemplate(id: string): Promise<SceneTemplate> {

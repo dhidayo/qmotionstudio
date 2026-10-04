@@ -52,6 +52,9 @@ export default defineConfig({
      */
     VitePWA({
       registerType: 'autoUpdate',
+      // Registered by the app once the editor is up and idle (src/pwa.ts), not
+      // on page load, where its download competed with the first visit (D-112).
+      injectRegister: false,
       includeAssets: ['favicon-32.png', 'favicon-48.png', 'apple-touch-icon.png', 'brand-q.png'],
       manifest: {
         name: 'Q Motion Studio',
@@ -70,11 +73,32 @@ export default defineConfig({
       },
       workbox: {
         /*
-         * The sample photographs and the template thumbnails are part of the
-         * app as far as a first run is concerned, and the WASM decoder is what
-         * makes HEIC work at all — none of it is optional offline.
+         * The code is precached — every template, the WASM decoder that makes
+         * HEIC work at all, the export worker — so the app opens and works
+         * offline once visited.
+         *
+         * The pictures are not (D-112). Precaching every design's poster and
+         * every sample photograph was 2.7MB downloaded on a first visit before
+         * anyone had asked to see them, on whatever connection the phone had.
+         * They are cached the first time they are shown instead, so what has
+         * been seen is there offline and nothing else is fetched for nothing.
          */
-        globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,wasm}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,wasm}'],
+        // Takes over the open page as soon as it is ready, as it did when the
+        // plugin registered it; a late registration must not mean "offline
+        // only from the next visit".
+        clientsClaim: true,
+        skipWaiting: true,
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => /^\/(thumbs|samples)\/[^/]+\.webp$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'pictures',
+              expiration: { maxEntries: 120 },
+            },
+          },
+        ],
         // A 30s 1080p encode is nothing next to the WASM decoder; the default
         // 2MB cap would silently skip it and break HEIC on a second visit.
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,

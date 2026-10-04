@@ -1,5 +1,8 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 
+const DEV_ONLY = 'Reads the dev-only editor handle, which the production build rightly omits.';
+const chromiumOnly = 'Drives fingers through the Chrome DevTools protocol.';
+
 /**
  * The phone layout (D-109) and touch on the canvas (D-110).
  *
@@ -96,7 +99,7 @@ test.describe('the phone layout', () => {
   });
 
   test('"Choose a design": designs play by themselves, and a tap previews before it changes anything', async ({ page }) => {
-    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
+    test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, LIFESTYLE);
     const before = await page.evaluate(() =>
       (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { scenes: { templateId: string }[] } } } } })
@@ -123,7 +126,7 @@ test.describe('the phone layout', () => {
   });
 
   test('the toolbar becomes the selection\'s tools, and Done puts it down', async ({ page }) => {
-    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
+    test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, LIFESTYLE);
     await expect(page.locator('[data-phone-toolbar="main"]')).toBeVisible();
     await tap(page, await at(page, PHOTO.x, PHOTO.y));
@@ -155,7 +158,8 @@ test.describe('the phone layout', () => {
 });
 
 test.describe('fingers on the canvas', () => {
-  test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
+  test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
+  test.skip(({ browserName }) => browserName !== 'chromium', chromiumOnly);
 
   test('a drag on something not selected moves nothing; select first, then it moves', async ({ page }) => {
     await open(page, LIFESTYLE);
@@ -244,5 +248,133 @@ test.describe('Corporate Ads on a phone', () => {
     const tools = page.locator('[data-phone-toolbar="selection"]');
     await expect(tools).toContainText('Scene 3');
     await expect(tools.getByRole('button', { name: 'Design' })).toBeVisible();
+  });
+});
+
+/** A small picture of the person's own, unlike any sample. */
+async function stripes(page: Page): Promise<Buffer> {
+  const base64 = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 320;
+    const cx = canvas.getContext('2d');
+    if (!cx) throw new Error('no context');
+    for (let i = 0; i < 8; i++) {
+      cx.fillStyle = i % 2 === 0 ? '#ff2d55' : '#ffe600';
+      cx.fillRect(i * 40, 0, 40, 320);
+    }
+    return canvas.toDataURL('image/png').split(',')[1] ?? '';
+  });
+  return Buffer.from(base64, 'base64');
+}
+
+const photoIds = (page: Page): Promise<string> => page.evaluate(() =>
+  (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { scenes: { inputs: { photos: { mediaId: string }[] } }[] } } } } })
+    .__motionStudio.editor.getState().project.scenes[0]?.inputs.photos.map((p) => p.mediaId).join(',') ?? '');
+
+test.describe('second round (D-111 to D-115)', () => {
+  test('the menu is the three-line button, first in the bar', async ({ page }) => {
+    await open(page, LIFESTYLE);
+    const menu = page.locator('[data-phone-menu]');
+    await expect(menu).toHaveAccessibleName('Menu');
+    const first = await page.locator('header button').first().getAttribute('data-phone-menu');
+    expect(first, 'the menu button comes before the logo and title').not.toBeNull();
+    await menu.tap();
+    await expect(page.getByRole('dialog', { name: 'Menu' })).toBeVisible();
+  });
+
+  test('a photo added and reloaded straight away is still there', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
+    await page.goto('/');
+    await page.waitForSelector('[data-start-actions]');
+    await page.waitForTimeout(1_500);
+    await page.getByLabel('Add your photos').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: await stripes(page) });
+    await expect.poll(() => photoIds(page)).toMatch(/^upload:/);
+    // Well inside the autosave debounce: the photo is saved as it arrives.
+    await page.waitForTimeout(400);
+    const before = await photoIds(page);
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await expect.poll(() => photoIds(page)).toBe(before);
+    await expect(page.locator('[data-save-state="failed"]')).toHaveCount(0);
+    await expect(page.locator('[data-toast]')).toHaveCount(0);
+  });
+
+  test('settings open on the photo\'s own tab and fit without scrolling', async ({ page }) => {
+    await open(page, LIFESTYLE);
+    await tap(page, await at(page, PHOTO.x, PHOTO.y));
+    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Crop' }).tap();
+    const sheet = page.getByRole('dialog', { name: 'Settings' });
+    await expect(sheet.getByRole('tab', { selected: true })).toHaveText(/^Photo \d/);
+    const overflow = await sheet.evaluate((dialog) => {
+      const body = [...dialog.querySelectorAll('div')].find((el) => getComputedStyle(el).overflowY === 'auto');
+      return body ? body.scrollHeight - body.clientHeight : 0;
+    });
+    expect(overflow, 'no scrolling to reach the controls').toBeLessThanOrEqual(2);
+    const close = await sheet.getByRole('button', { name: 'Close settings' }).boundingBox();
+    expect(close && close.y >= 0 && close.x + close.width <= 390).toBe(true);
+  });
+
+  test('Fill canvas makes the photo fill the whole picture', async ({ page }) => {
+    await open(page, LIFESTYLE);
+    await tap(page, await at(page, PHOTO.x, PHOTO.y));
+    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Crop' }).tap();
+    await page.getByRole('dialog', { name: 'Settings' }).getByRole('button', { name: 'Fill canvas' }).tap();
+    await page.getByRole('button', { name: 'Close settings' }).tap();
+    const canvas = await page.locator('canvas').boundingBox();
+    const box = await page.locator('[data-selection-box]').boundingBox();
+    if (!canvas || !box) throw new Error('nothing selected');
+    // The 6% push-in starts at 1, so at most a few percent over the picture.
+    expect(box.width).toBeGreaterThanOrEqual(canvas.width * 0.99);
+    expect(box.height).toBeGreaterThanOrEqual(canvas.height * 0.99);
+  });
+
+  test('the effect search waits to be tapped, and Cancel is on screen', async ({ page }) => {
+    await open(page, LIFESTYLE);
+    await tap(page, await at(page, PHOTO.x, PHOTO.y));
+    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Effects' }).tap();
+    const picker = page.getByRole('dialog', { name: 'Effects' });
+    await expect(picker).toBeVisible();
+    const search = picker.getByLabel('Search effects');
+    await expect(search).not.toBeFocused();
+    // Sixteen pixels, or iOS zooms the page in when it is tapped.
+    expect(await search.evaluate((el) => getComputedStyle(el).fontSize)).toBe('16px');
+    const cancel = await picker.getByRole('button', { name: 'Cancel' }).boundingBox();
+    expect(cancel && cancel.x + cancel.width <= 390 && cancel.y >= 0).toBe(true);
+    const panel = await picker.locator(':scope > div').first().boundingBox();
+    expect(panel && panel.y >= 0 && panel.height <= 844).toBe(true);
+  });
+
+  test('the strip\'s playhead moves every frame, not in steps', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
+    await open(page, '/?template=quick-pitch&aspect=9:16');
+    const positions = await page.evaluate(async () => {
+      const line = document.querySelector<HTMLElement>('[data-phone-playhead]');
+      if (!line) throw new Error('no playhead');
+      const seen: string[] = [];
+      for (let i = 0; i < 30; i++) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        seen.push(line.style.left);
+      }
+      return seen;
+    });
+    // Twelve updates a second would show about six different places in thirty frames.
+    expect(new Set(positions).size).toBeGreaterThan(20);
+  });
+
+});
+
+test.describe('on a 3x phone screen', () => {
+  test.use({ deviceScaleFactor: 3 });
+
+  test('the preview draws at no more than twice the screen\'s pixels', async ({ page }) => {
+    // Tall, so the canvas is narrow enough that 3x would stay under the 720px ceiling's reach.
+    await open(page, '/?template=pop-float&aspect=9:16&frozen=3000');
+    const { backing, shown } = await page.evaluate(() => {
+      const canvas = document.querySelector('canvas');
+      if (!canvas) throw new Error('no canvas');
+      return { backing: canvas.width, shown: canvas.getBoundingClientRect().width };
+    });
+    expect(backing).toBeLessThanOrEqual(Math.ceil(shown * 2) + 2);
   });
 });

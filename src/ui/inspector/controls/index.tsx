@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useId, useLayoutEffect, useState, type ReactNode } from 'react';
 import { useEditor } from '@/state/store';
 
 /**
@@ -21,7 +21,32 @@ export function Row({ label, children, hint }: { label: string; children: ReactN
   );
 }
 
-export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element {
+/*
+ * Sections as tabs, on a phone (D-114).
+ *
+ * The inspector's panels are written as a column of titled sections, which is
+ * right beside a canvas and wrong in a phone's bottom sheet: a caption's
+ * settings ran to three screens, and the close button scrolled away with
+ * them. Inside `SectionTabs` each titled section registers itself and only the
+ * chosen one draws, under a row of tabs named after them — the same panels,
+ * one screenful at a time. Outside it, nothing changes.
+ */
+type Registry = (title: string) => () => void;
+const SectionRegistry = createContext<Registry | null>(null);
+const ActiveSection = createContext<{ active: string | null; first: string | null } | null>(null);
+
+export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element | null {
+  const register = useContext(SectionRegistry);
+  const tabs = useContext(ActiveSection);
+  // Before paint, so a sheet never flashes every section before its tabs appear.
+  useLayoutEffect(() => {
+    if (register === null || title === undefined) return;
+    return register(title);
+  }, [register, title]);
+  if (tabs !== null && tabs.active !== null) {
+    // An untitled section (a row of buttons, a drop zone) goes with the first tab.
+    if (title === undefined ? tabs.active !== tabs.first : title !== tabs.active) return null;
+  }
   return (
     <section className="mb-4 border-b border-edge pb-4 last:mb-0 last:border-0 last:pb-0">
       {title !== undefined && (
@@ -320,4 +345,61 @@ export function Button({
 
 export function EmptyNote({ children }: { children: ReactNode }): React.JSX.Element {
   return <p className="py-1 text-[11px] leading-relaxed text-ink-faint">{children}</p>;
+}
+
+/**
+ * Shows the sections inside it one at a time, chosen from a row of tabs
+ * (D-114). `initial` picks the first tab to show by the start of its title —
+ * "Photo 2" opens a photo's own settings rather than the list of photos.
+ */
+export function SectionTabs({ initial, children }: { initial?: string | null; children: ReactNode }): React.JSX.Element {
+  const [titles, setTitles] = useState<readonly string[]>([]);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const register = useCallback<Registry>((title) => {
+    setTitles((list) => (list.includes(title) ? list : [...list, title]));
+    return () => { setTitles((list) => list.filter((t) => t !== title)); };
+  }, []);
+
+  const wanted = initial?.toLowerCase() ?? null;
+  const fallback = (wanted === null ? undefined : titles.find((t) => t.toLowerCase().startsWith(wanted))) ?? titles[0] ?? null;
+  const active = chosen !== null && titles.includes(chosen) ? chosen : fallback;
+  const tabbed = titles.length > 1;
+
+  return (
+    <SectionRegistry.Provider value={register}>
+      <ActiveSection.Provider value={tabbed ? { active, first: titles[0] ?? null } : null}>
+        {tabbed && (
+          <div
+            role="tablist"
+            aria-label="Sections"
+            data-section-tabs
+            className="sticky top-0 z-10 -mx-3 mb-3 flex gap-1.5 overflow-x-auto border-b border-edge bg-panel px-3 pb-2"
+          >
+            {titles.map((title) => {
+              const on = title === active;
+              return (
+                <button
+                  key={title}
+                  type="button"
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => { setChosen(title); }}
+                  className="shrink-0 rounded-full border px-3 py-1.5 text-[13px]"
+                  style={{
+                    borderColor: on ? 'var(--c-accent)' : 'var(--c-edge)',
+                    background: on ? 'var(--c-accent-soft)' : 'transparent',
+                    color: on ? 'var(--c-accent)' : 'var(--c-ink-muted)',
+                    fontWeight: on ? 600 : 400,
+                  }}
+                >
+                  {title}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {children}
+      </ActiveSection.Provider>
+    </SectionRegistry.Provider>
+  );
 }

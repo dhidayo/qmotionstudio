@@ -1,4 +1,3 @@
-import { canEncodeVideo } from 'mediabunny';
 import type { Size } from '@/core/types';
 import type { Project } from '@/document/types';
 import { totalDurationMs } from '@/document/select/timeline';
@@ -38,6 +37,8 @@ export type { ExportHandle, ExportProgress, ExportResult, ExportPath } from './t
 export async function probeFormats(size: Size): Promise<FormatAvailability[]> {
   const formats: ExportFormat[] = ['mp4', 'webm'];
 
+  // Loaded when the export window asks, not with the editor (D-112).
+  const { canEncodeVideo } = await import('mediabunny');
   return Promise.all(
     formats.map(async (format): Promise<FormatAvailability> => {
       try {

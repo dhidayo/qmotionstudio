@@ -82,6 +82,19 @@ export function useRestore(media: MediaStore): RestoreState {
 
         openProject(result.project);
         setState({ phase: 'ready', missing });
+        /*
+         * §16: never silently. A photo that could not be reopened leaves an
+         * empty frame, and an empty frame with no explanation reads as the app
+         * having thrown the picture away.
+         */
+        if (missing.length > 0) {
+          console.error(`Could not reopen ${missing.length} saved file(s).`, missing);
+          useEditor.getState().showToast(
+            missing.length === 1
+              ? 'One photo from last time could not be reopened in this browser. Select its frame and choose Replace to add it again.'
+              : `${missing.length} photos from last time could not be reopened in this browser. Select their frames and choose Replace to add them again.`,
+          );
+        }
       } catch (error) {
         if (!stillWanted()) return;
         console.error('Could not read saved work.', error);

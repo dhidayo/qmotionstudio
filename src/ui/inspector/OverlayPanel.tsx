@@ -7,6 +7,7 @@ import { Keyframes } from './Keyframes';
 import { ElementEffectsEditor } from '@/ui/effects/EffectEditors';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from './controls';
+import { useLayout } from '@/ui/shell/useLayout';
 
 /**
  * The overlay editor (§1.2, §3C).
@@ -35,6 +36,7 @@ export function OverlayPanel(): React.JSX.Element {
   const selectOverlay = useEditor((s) => s.selectOverlay);
   // Above the early return below — hooks run in the same order every render.
   const playheadMs = useEditor((s) => s.playheadMs);
+  const phone = useLayout() === 'phone';
 
   if (!overlay) {
     return <EmptyNote>That overlay is gone. Pick another clip on the timeline.</EmptyNote>;
@@ -69,7 +71,8 @@ export function OverlayPanel(): React.JSX.Element {
 
   return (
     <>
-      <div className="mb-3 flex items-center gap-2">
+      {/* A phone's toolbar says what is selected and has its own Done (D-109). */}
+      {!phone && <div className="mb-3 flex items-center gap-2">
         <button
           type="button"
           onClick={() => { selectOverlay(null); }}
@@ -80,7 +83,7 @@ export function OverlayPanel(): React.JSX.Element {
         <span className="truncate text-[12px] font-semibold">
           {overlay.kind === 'text' ? 'Text overlay' : overlay.kind === 'photo' ? 'Photo overlay' : 'Media overlay'}
         </span>
-      </div>
+      </div>}
 
       {overlay.content.kind === 'text' && (
         <Section title="Content">

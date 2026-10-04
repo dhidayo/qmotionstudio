@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { RenderRig } from '@/core/render/rig';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Project } from '@/document/types';
@@ -12,6 +12,7 @@ import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { useOverlays } from '@/ui/shell/overlays';
+import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { Icon } from './Icon';
 import { PhonePanels } from './PhonePanels';
 import { PhoneToolbar } from './PhoneToolbar';
@@ -27,6 +28,15 @@ import { PhoneTopBar } from './PhoneTopBar';
  * labelled icons along the bottom that turns into the selected thing's tools.
  * Every panel is a bottom sheet over the picture, never a column beside it.
  */
+/** Safari's own pinch-to-zoom of the page, which `touch-action` does not stop on older iPhones (D-113). */
+function useNoPageZoom(): void {
+  useEffect(() => {
+    const stop = (event: Event): void => { event.preventDefault(); };
+    document.addEventListener('gesturestart', stop);
+    return () => { document.removeEventListener('gesturestart', stop); };
+  }, []);
+}
+
 export function PhoneLayout({
   project,
   clock,
@@ -38,6 +48,7 @@ export function PhoneLayout({
   rig: RenderRig;
   media: MediaStore;
 }): React.JSX.Element {
+  useNoPageZoom();
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col" data-layout="phone">
       <PhoneTopBar />
@@ -56,37 +67,74 @@ export function PhoneLayout({
       <StartActions />
       <PhoneToolbar />
       <PhonePanels clock={clock} />
+      <SidewaysNote />
     </div>
   );
 }
 
-const READOUT_HZ = 12;
+/**
+ * Turned sideways, the picture gets the height of a strip: said once, kindly,
+ * and dismissible — the editor still works that way (D-113).
+ */
+function SidewaysNote(): React.JSX.Element | null {
+  const sideways = useSyncExternalStore(subscribeOrientation, readSideways, () => false);
+  const [dismissed, setDismissed] = useState(false);
+  if (!sideways || dismissed) return null;
+  return (
+    <div className="fixed inset-0 z-[70] grid place-items-center p-6" style={{ background: 'rgb(0 0 0 / 0.55)' }} role="dialog" aria-label="Turn your phone upright">
+      <div className="max-w-sm rounded-2xl bg-panel p-5 text-center" style={{ boxShadow: 'var(--shadow-lg)' }}>
+        <div aria-hidden className="mx-auto mb-3 h-12 w-7 rounded-md border-2" style={{ borderColor: 'var(--c-accent)' }} />
+        <p className="text-[15px] font-semibold">Turn your phone upright</p>
+        <p className="mt-1 text-[13px] text-ink-muted">The editor is laid out for a phone held upright, so the picture has room.</p>
+        <button type="button" onClick={() => { setDismissed(true); }} className="mt-4 rounded-lg border border-edge px-4 py-2 text-[13px] font-medium">
+          Keep going sideways
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const SIDEWAYS = '(orientation: landscape) and (max-height: 500px)';
+
+function subscribeOrientation(onChange: () => void): () => void {
+  if (typeof matchMedia !== 'function') return () => undefined;
+  const query = matchMedia(SIDEWAYS);
+  query.addEventListener('change', onChange);
+  return () => { query.removeEventListener('change', onChange); };
+}
+
+function readSideways(): boolean {
+  return typeof matchMedia === 'function' && matchMedia(SIDEWAYS).matches;
+}
 
 /** Time, play and undo — the line under the picture. */
 function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
-  const [timeMs, setTimeMs] = useState(clock.timeMs);
   const [playing, setPlaying] = useState(clock.playing);
+  const shownPlaying = useRef(clock.playing);
+  const now = useRef<HTMLSpanElement>(null);
   const durationMs = useEditor((s) => totalDurationMs(s.project));
   // Subscribed so the arrows enable and disable as the history changes.
   useEditor((s) => s.history);
   const { undo, redo, canUndo, canRedo } = useEditor.getState();
 
-  useEffect(() => {
-    const handle = setInterval(() => {
-      setTimeMs(clock.timeMs);
-      setPlaying(clock.playing);
-    }, 1000 / READOUT_HZ);
-    return () => { clearInterval(handle); };
-  }, [clock]);
+  // The time is written straight to the page each frame (D-112); only the
+  // play/pause icon is React state, and it changes when playback does.
+  useClockFrames(clock, (timeMs, isPlaying) => {
+    if (now.current) now.current.textContent = clockTime(Math.min(timeMs, durationMs));
+    if (isPlaying !== shownPlaying.current) {
+      shownPlaying.current = isPlaying;
+      setPlaying(isPlaying);
+    }
+  });
 
   return (
     <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-edge bg-panel px-3 py-1">
       <span className="tabular text-[12px] text-ink-muted" data-phone-time>
-        <span className="text-ink">{clockTime(Math.min(timeMs, durationMs))}</span> / {clockTime(durationMs)}
+        <span ref={now} className="text-ink">{clockTime(0)}</span> / {clockTime(durationMs)}
       </span>
       <button
         type="button"
-        onClick={() => { if (clock.playing) clock.pause(); else clock.play(); setPlaying(clock.playing); }}
+        onClick={() => { if (clock.playing) clock.pause(); else clock.play(); }}
         aria-label={playing ? 'Pause' : 'Play'}
         className="grid size-10 place-items-center rounded-full"
         style={{ background: 'var(--c-panel-alt)', color: 'var(--c-ink)' }}
@@ -199,14 +247,14 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
   const open = useOverlays((o) => o.openPhonePanel);
   const durationMs = Math.max(1, timelineSpanMs(project));
   const spans = useMemo(() => sceneSpans(project.scenes), [project.scenes]);
-  const [timeMs, setTimeMs] = useState(clock.timeMs);
   const [tip, setTip] = useState(() => !readTipSeen());
   const lane = useRef<HTMLDivElement>(null);
+  const playhead = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    const handle = setInterval(() => { setTimeMs(clock.timeMs); }, 1000 / READOUT_HZ);
-    return () => { clearInterval(handle); };
-  }, [clock]);
+  // Moved with the picture, frame by frame, without re-rendering the strip (D-112).
+  useClockFrames(clock, (timeMs) => {
+    if (playhead.current) playhead.current.style.left = `${(Math.min(timeMs, durationMs) / durationMs) * 100}%`;
+  });
 
   const seekTo = (clientX: number): void => {
     const box = lane.current?.getBoundingClientRect();
@@ -214,7 +262,6 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
     const at = Math.max(0, Math.min(durationMs, ((clientX - box.left) / box.width) * durationMs));
     clock.pause();
     clock.seek(at);
-    setTimeMs(at);
     setPlayhead(at);
   };
 
@@ -244,7 +291,6 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
               onClick={() => {
                 clock.pause();
                 clock.seek(span.startMs);
-                setTimeMs(span.startMs);
                 setPlayhead(span.startMs);
                 selectSceneClip(span.index);
               }}
@@ -270,9 +316,11 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
           );
         })}
         <span
+          ref={playhead}
           aria-hidden
-          className="pointer-events-none absolute -inset-y-1 w-0.5 rounded-full"
-          style={{ left: `${(Math.min(timeMs, durationMs) / durationMs) * 100}%`, background: 'var(--c-ink)' }}
+          data-phone-playhead
+          className="pointer-events-none absolute -inset-y-1 left-0 w-0.5 rounded-full"
+          style={{ background: 'var(--c-ink)' }}
         />
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-muted">

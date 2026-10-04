@@ -287,7 +287,8 @@ test.describe('offline export', () => {
     await page.waitForTimeout(1200);
 
     await page.getByTitle('Export (⌘E)').click();
-    await page.getByRole('button', { name: /^Export( again)?$/ }).last().click();
+    // The window loads on demand (D-112): its own button, not the top bar's.
+    await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: /^Export( again)?$/ }).click();
 
     // Let it get properly under way before pulling the plug.
     await expect(page.getByText(/Encoding frame/)).toBeVisible({ timeout: 20_000 });
@@ -309,7 +310,8 @@ test.describe('offline export', () => {
     await page.waitForTimeout(1200);
 
     await page.getByTitle('Export (⌘E)').click();
-    await page.getByRole('button', { name: /^Export( again)?$/ }).last().click();
+    // The window loads on demand (D-112): its own button, not the top bar's.
+    await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: /^Export( again)?$/ }).click();
     await expect(page.getByText(/Encoding frame/)).toBeVisible({ timeout: 20_000 });
 
     /*

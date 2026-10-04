@@ -36,9 +36,19 @@ function subscribe(onChange: () => void): () => void {
   };
 }
 
+/** Shorter than this on a touch screen is a phone on its side, whatever its width. */
+const PHONE_SIDEWAYS_MAX_HEIGHT = 500;
+
 function read(): Layout {
   const width = window.innerWidth;
   if (width <= PHONE_MAX) return 'phone';
+  /*
+   * A phone turned sideways is 800-odd pixels wide and under 450 tall: wide
+   * enough for the tablet layout's break and far too short for it (D-113). It
+   * is still a phone, and gets the phone's layout.
+   */
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  if (coarse && window.innerHeight <= PHONE_SIDEWAYS_MAX_HEIGHT) return 'phone';
   if (width <= TABLET_MAX) return 'tablet';
   return 'desktop';
 }

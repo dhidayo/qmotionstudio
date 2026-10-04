@@ -3,6 +3,7 @@ import { SCHEMA_VERSION, type Project } from '@/document/types';
 import { referencedMedia } from '@/document/select/media';
 import type { MediaStore } from '@/media/store';
 import { persistMedia } from '@/persist/media';
+import { isSampleId } from '@/media/samples';
 import { writeLastOpened, writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
 import type { SaveState } from './saveState';
@@ -45,7 +46,7 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
     let cancelled = false;
     const timer = setTimeout(() => {
       setState('saving');
-      void save(latest.current.project, latest.current.media, known.current)
+      void queued(() => save(latest.current.project, latest.current.media, known.current))
         .then(() => {
           void askToKeep();
           if (!cancelled) setState('saved');
@@ -66,6 +67,40 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
   }, [project, media, enabled, setState]);
 
   /*
+   * A new photograph is saved the moment it arrives, not after the debounce
+   * (D-111).
+   *
+   * Adding photos and then reloading straight away is exactly what someone
+   * checking "did it keep my pictures?" does — and a reload inside the
+   * debounce, before a multi-megabyte write had finished, lost them. The
+   * document is read from the store at that moment rather than from the
+   * render that happens to be current: the upload has already put the photo
+   * into it by the time this runs.
+   */
+  useEffect(() => {
+    if (!enabled) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = media.subscribe(() => {
+      const fresh = media.ids().some((id) => !known.current.has(id) && !isSampleId(id));
+      if (!fresh || timer !== null) return;
+      timer = setTimeout(() => {
+        timer = null;
+        setState('saving');
+        void queued(() => save(useEditor.getState().project, media, known.current))
+          .then(() => { setState('saved'); })
+          .catch((error: unknown) => {
+            console.error('Could not save a new photograph.', error);
+            setState('failed');
+          });
+      }, 0);
+    });
+    return () => {
+      unsubscribe();
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [media, enabled, setState]);
+
+  /*
    * Save immediately when the page is being hidden or torn down.
    *
    * The debounce leaves a window — edit something and reload within it and the
@@ -80,8 +115,8 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
     if (!enabled) return;
 
     const flush = (): void => {
-      const { project: current, media: store } = latest.current;
-      void save(current, store, known.current).catch((error: unknown) => {
+      const { media: store } = latest.current;
+      void save(useEditor.getState().project, store, known.current).catch((error: unknown) => {
         console.error('Could not save the project as the page went away.', error);
       });
     };
@@ -97,6 +132,19 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
       window.removeEventListener('pagehide', flush);
     };
   }, [enabled]);
+}
+
+/**
+ * Saves run one after another, never two at once: the debounce, a new photo
+ * and the page going away can all ask for one within the same moment, and two
+ * interleaved writes of the same blob are twice the work for the same result.
+ */
+let chain: Promise<void> = Promise.resolve();
+
+function queued(run: () => Promise<void>): Promise<void> {
+  const next = chain.then(run, run);
+  chain = next.catch(() => undefined);
+  return next;
 }
 
 /**

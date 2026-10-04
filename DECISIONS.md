@@ -2639,3 +2639,88 @@ object, hold and move should not be interpreted to object movement." On touch:
   element on this frame to edit it. Only where a person picks: adding music
   selects the new clip, and that must not stop a preview someone is listening
   to (§10).
+
+## D-111 — photos are stored as bytes, saved on arrival, and never lost silently
+
+"When I refresh the page on mobile, the pictures disappear." WebKit refuses to
+store a Blob in IndexedDB in a private window, and Safari has been unreliable
+with stored Blobs generally: every photo write failed, the document saved
+anyway, and a reload opened a project pointing at photographs that were never
+kept. Nobody was told — the restore's list of missing files went nowhere.
+
+- Media is written as its bytes and type (an ArrayBuffer) and rebuilt into a
+  Blob on reading. Anything saved the old way still reads.
+- A new photograph is saved the moment it arrives, not after the 700ms
+  debounce: "add a photo, reload to check" is exactly what people do, and a
+  reload inside the debounce lost it. Saves are queued, never interleaved.
+- The samples ship with the app and are no longer copied into storage.
+- A photo that cannot be reopened is said, in a notice that stays up long
+  enough to read; a failed save shows "Not saved" in the phone's top bar.
+- The phone tests now run in WebKit as well as Chromium (`phone-webkit`).
+
+## D-112 — a phone gets a picture it can play smoothly, and a first visit that arrives quickly
+
+Played on a mid-range phone the preview managed under twenty frames a second
+with hitches past 100ms, and the playheads moved "with little pauses".
+
+- **Resolution.** A phone previews at no more than 2× and 720px on the short
+  edge — a 3× screen had asked for 922×1640 redrawn every frame, through blur
+  passes that cost in proportion. If playback still misses frames the preview
+  steps down to 0.75 and then 0.5 of that, never back up during the session.
+  Export is unaffected; it renders at full size from its own rig.
+- **Playheads.** The timeline, the phone strip, the Lifestyle scrubber and the
+  time readouts follow the clock frame by frame by writing straight to the
+  page (`useClockFrames`) instead of re-rendering whole panels twelve times a
+  second — smoother and far cheaper.
+- **The canvas layer** no longer measures every element sixty times a second
+  when nothing is selected; a press works out what is under it on the spot.
+  Together: 18–22fps became 42–43fps under a 4× CPU slowdown.
+- **First visit.** The video library (mediabunny) loads with the first video,
+  and the export and project windows when first opened: the main script went
+  from 929KB to 524KB. The service worker registers once the editor is up and
+  idle — and not in Data Saver mode — instead of competing with the first
+  load, and it no longer precaches every poster and sample photo (2.7MB);
+  pictures are cached as they are shown — including the ones this visit
+  showed before the worker started, re-requested once it takes over, so the
+  opening project still reopens offline with its photographs. The two fonts
+  the editor waits for are preloaded alongside the script. A loading screen
+  shows before any script arrives, and the canvas says "Loading design…"
+  until it can draw. Measured on Chrome's "Fast 3G" profile, first visit:
+  something on screen at 1.5s instead of 3.8s, the design drawn at 3.5s
+  instead of 4.6s.
+- **Design cards** show their poster at once (a soft placeholder until it
+  arrives), fetch their loop only while on screen, abandon a download scrolled
+  away, and stay as posters on a slow or data-saving connection — including
+  one Safari does not report, found out by a loop taking too long to start.
+
+## D-113 — touch screens: a menu that looks like one, no surprise zoom
+
+- The phone's menu is the three-line button, first in the top bar; the logo
+  and title follow and open the same menu.
+- iOS Safari zooms the page into any field under 16px when it is focused and
+  stays zoomed, which hid Cancel and every close button off the edge. Fields
+  are 16px on touch screens, and search boxes are no longer focused for you
+  there — the keyboard covered half the list before anything was asked for.
+- The page itself does not pinch-zoom (the picture has its own pinch zoom).
+- A phone on its side gets the phone layout, with a dismissible note that the
+  editor is laid out for a phone held upright.
+- Sheets cap their height as a share of the screen rather than in `dvh`, which
+  a browser that does not know it drops — letting a sheet grow past the top.
+
+## D-114 — long settings show one section at a time on a phone
+
+A caption's settings ran to three screens in a bottom sheet. Inside a phone
+sheet each titled `Section` of a panel now registers itself and only the
+chosen one draws, under a row of tabs named after them; a toolbar button opens
+on the relevant tab (Crop → "Photo 2", a caption's Style → "Content"). The
+panels themselves are unchanged and the desktop inspector is untouched.
+
+## D-115 — "Fill frame" fills the canvas
+
+It used to mean "ignore the template's inset", and no template had one, so it
+changed nothing. Now, labelled "Fill canvas", the photo becomes a full-bleed
+picture behind the rest of the design — its other photos and its words stay on
+top — with the design's own timing and fade and a slow 6% push-in. It is a
+pass over every scene template's output, applied in the template registry, so
+every design gets it and the preview and export agree. The photo stays
+selectable and can be moved and resized like any other.

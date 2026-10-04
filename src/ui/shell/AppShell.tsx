@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Artboard } from '@/ui/artboard/Artboard';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { Timeline } from '@/ui/timeline/Timeline';
@@ -15,7 +15,6 @@ import { watermarked } from '@/entitlements';
 import { ClockProvider } from './ClockProvider';
 import { Sheet } from './Sheet';
 import { useLayout } from './useLayout';
-import { ProjectsDialog } from '@/ui/projects/ProjectsDialog';
 import { MediaStore } from '@/media/store';
 import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
 import { loadTemplate } from '@/templates/registry';
@@ -30,8 +29,15 @@ import { ContextMenu } from './ContextMenu';
 import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
-import { ExportDialog } from '@/ui/export/ExportDialog';
 import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
+
+/*
+ * Opened rarely and heavy — the export pipeline, the project list — so they
+ * load when first opened rather than with the editor (D-112).
+ */
+const loadExportDialog = () => import('@/ui/export/ExportDialog');
+const ExportDialog = lazy(async () => ({ default: (await loadExportDialog()).ExportDialog }));
+const ProjectsDialog = lazy(async () => ({ default: (await import('@/ui/projects/ProjectsDialog')).ProjectsDialog }));
 
 export function AppShell(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -85,6 +91,17 @@ export function AppShell(): React.JSX.Element {
   );
 
   useEffect(() => { clock.setDuration(duration); }, [clock, duration]);
+
+  /*
+   * The export window is fetched once the editor has settled, so pressing
+   * Export opens it at once rather than after a download (D-112).
+   */
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadExportDialog().catch((error: unknown) => { console.warn('Could not prepare the export window.', error); });
+    }, 3_000);
+    return () => { clearTimeout(timer); };
+  }, []);
 
   /*
    * Publish the playhead, wherever the transport happens to be.
@@ -410,13 +427,15 @@ export function AppShell(): React.JSX.Element {
         </>
       )}
       </>}
-      {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
+      <Suspense fallback={null}>
+        {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
+        {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
+      </Suspense>
       <Toast />
       <ContextMenu />
       <EffectPicker />
       <PhotoPickerDialog />
       <ShortcutsDialog />
-        {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </ClockProvider>
     </MediaProvider>
   );

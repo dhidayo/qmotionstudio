@@ -62,6 +62,31 @@
   }
 }
 
+/*
+ * Touch screens (D-113).
+ *
+ * iOS Safari zooms the whole page into any field set smaller than 16px the
+ * moment it is focused, and leaves it zoomed: the effect picker's search did
+ * it on opening, after which Cancel and every sheet's close button sat off the
+ * edge until the page was scrolled back — "Cancel slightly need me to scroll
+ * to the right". Sixteen pixels is the size it leaves alone.
+ *
+ * The page itself does not pinch-zoom either: in an editor a stray pinch
+ * outside the picture enlarges the toolbars, not the work. The picture has
+ * its own pinch zoom (D-110), which this does not touch.
+ */
+@media (pointer: coarse) {
+  html {
+    touch-action: pan-x pan-y;
+  }
+
+  input:not([type='range'], [type='checkbox'], [type='radio'], [type='color'], [type='file']),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 @keyframes toast-in-out {
   0% { opacity: 0; transform: translate(-50%, 6px); }
   8% { opacity: 1; transform: translate(-50%, 0); }

@@ -22,6 +22,7 @@ import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 import { capturePointer } from './pointerCapture';
 import { SceneTools } from './SceneTools';
 import { useAddLayers } from './useAddLayers';
+import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { MusicTrack } from './MusicTrack';
 import {
   dragResult, formatSeconds, msToPct, pxToMs, rowCount, snap, tickIntervalMs,
@@ -36,12 +37,9 @@ import {
  * different instruments, and giving Showcase a track editor for its single
  * scene would be clutter dressed as capability.
  *
- * Time is read from the clock on an interval rather than per frame, for the
- * same reason the scrub bar does it: the artboard is a canvas, and re-rendering
- * React sixty times a second to move a one-pixel playhead costs more than the
- * frame it is reporting on.
+ * The playhead and the readout follow the clock frame by frame without
+ * re-rendering the panel (D-112) — see `useClockFrames`.
  */
-const READOUT_HZ = 20;
 const SNAP_MS = 100;
 /** Pointer slop below which a press counts as a click rather than a drag. */
 const CLICK_SLOP_PX = 3;
@@ -86,26 +84,35 @@ export function Timeline({
   const overhang = durationMs > videoMs + 1;
   const spans = sceneSpans(project.scenes);
 
-  const [timeMs, setTimeMs] = useState(0);
   const [playing, setPlaying] = useState(clock.playing);
+  const shownPlaying = useRef(clock.playing);
+  const playheadLine = useRef<HTMLDivElement>(null);
+  const readout = useRef<HTMLSpanElement>(null);
 
   /*
    * The clock is a plain mutable object so the artboard can redraw without
-   * re-rendering React sixty times a second (see PreviewClock). Chrome that
-   * needs to *display* the time samples it slowly instead — and publishes it,
-   * so panels outside the timeline can act on the playhead without each one
-   * starting a poll of its own.
+   * re-rendering React sixty times a second (see PreviewClock). The playhead,
+   * the readout and the slider's value follow it frame by frame by being
+   * written straight to the page (D-112) — re-rendering this whole panel, every
+   * clip in it, twelve times a second made the playhead step and cost frames
+   * the picture needed. Only the play/pause label is state.
    */
   const setPlayhead = useEditor((s) => s.setPlayhead);
-  useEffect(() => {
-    const handle = setInterval(() => {
-      setTimeMs(clock.timeMs);
-      setPlaying(clock.playing);
-      // The shell publishes the playhead for the whole application; this
-      // interval is only the readout's own.
-    }, 1000 / READOUT_HZ);
-    return () => { clearInterval(handle); };
-  }, [clock]);
+  useClockFrames(clock, (timeMs, isPlaying) => {
+    if (playheadLine.current) playheadLine.current.style.left = `${msToPct(timeMs, durationMs)}%`;
+    laneRef.current?.setAttribute('aria-valuenow', String(Math.round(timeMs)));
+    const text = readout.current;
+    if (text) {
+      // Said plainly, so a held last frame does not read as a stall.
+      const past = timeMs > videoMs;
+      text.textContent = `${formatSeconds(timeMs)} / ${formatSeconds(videoMs)}${past ? ' past end' : ''}`;
+      text.style.color = past ? 'var(--c-ink-faint)' : 'var(--c-ink-muted)';
+    }
+    if (isPlaying !== shownPlaying.current) {
+      shownPlaying.current = isPlaying;
+      setPlaying(isPlaying);
+    }
+  });
 
   const laneRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -187,7 +194,6 @@ export function Timeline({
 
   const scrubTo = useCallback((clientX: number): void => {
     clock.seek(laneMs(clientX));
-    setTimeMs(clock.timeMs);
     /*
      * Published straight away, not left to the 20Hz sampler.
      *
@@ -211,7 +217,6 @@ export function Timeline({
   const seekTo = useCallback((projectMs: number): void => {
     clock.pause();
     clock.seek(projectMs);
-    setTimeMs(clock.timeMs);
     setPlayhead(clock.timeMs);
   }, [clock, setPlayhead]);
 
@@ -434,24 +439,17 @@ export function Timeline({
       />}
       {/* Transport and the "Add …" buttons. Scrolls sideways rather than
           pushing the page wider on a phone. */}
-      <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge px-3 py-1.5">
+      <div className={`flex shrink-0 items-center gap-2 border-b border-edge px-3 py-1.5 ${embedded ? 'flex-wrap' : 'overflow-x-auto'}`}>
         <button
           type="button"
-          onClick={() => { if (clock.playing) clock.pause(); else clock.play(); setPlaying(clock.playing); }}
+          onClick={() => { if (clock.playing) clock.pause(); else clock.play(); }}
           aria-label={playing ? 'Pause' : 'Play'}
           className="w-16 rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
         >
           {playing ? 'Pause' : 'Play'}
         </button>
 
-        <span
-          className="tabular w-32 text-[11px]"
-          style={{ color: timeMs > videoMs ? 'var(--c-ink-faint)' : 'var(--c-ink-muted)' }}
-        >
-          {formatSeconds(timeMs)} / {formatSeconds(videoMs)}
-          {/* Said plainly, so a held last frame does not read as a stall. */}
-          {timeMs > videoMs && <span className="ml-1">past end</span>}
-        </span>
+        <span ref={readout} className="tabular w-32 text-[11px] text-ink-muted" />
 
         <div className="ml-2 flex items-center gap-1" role="group" aria-label="Add overlay">
           <AddButton onClick={layers.addPhoto} title="Add a photo overlay">+ Photo</AddButton>
@@ -556,7 +554,8 @@ export function Timeline({
           <Row label="Time" height={20} lane={false}>
             <div
               ref={laneRef}
-              className="relative h-full cursor-ew-resize"
+              // Clipped, so the last second's label cannot push the panel sideways.
+              className="relative h-full cursor-ew-resize overflow-hidden"
               onPointerDown={onRulerDown}
               onPointerMove={onRulerMove}
               role="slider"
@@ -572,11 +571,9 @@ export function Timeline({
                * overhanging music can actually be auditioned, and this follows.
                */
               aria-valuemax={Math.round(durationMs)}
-              aria-valuenow={Math.round(timeMs)}
               onKeyDown={(e) => {
                 if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
                 clock.seek(clock.timeMs + (e.key === 'ArrowRight' ? 100 : -100));
-                setTimeMs(clock.timeMs);
               }}
             >
               {ticks.map((t) => (
@@ -797,8 +794,10 @@ export function Timeline({
 
             {/* Playhead, over every row. */}
             <div
-              className="pointer-events-none absolute inset-y-0 w-px"
-              style={{ left: `${msToPct(timeMs, durationMs)}%`, background: 'var(--c-accent)' }}
+              ref={playheadLine}
+              data-playhead
+              className="pointer-events-none absolute inset-y-0 left-0 w-px"
+              style={{ background: 'var(--c-accent)' }}
               aria-hidden
             />
           </div>

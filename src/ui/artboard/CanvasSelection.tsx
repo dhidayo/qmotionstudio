@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, shiftBy, slotBoxes, toLocal,
   type OrientedBox, type PlacedBox,
@@ -152,6 +152,8 @@ type Pinch = {
   readonly origin: Point;
 };
 
+const NO_TARGETS: readonly Target[] = [];
+
 /** How far a finger may wander and still have tapped. */
 const TAP_SLOP_PX = 8;
 const DOUBLE_TAP_MS = 300;
@@ -178,7 +180,20 @@ export function CanvasSelection({
   const selectedSlot = useEditor((s) => s.selectedSlot);
   const selectSlot = useEditor((s) => s.selectSlot);
   const selectScene = useEditor((s) => s.selectScene);
-  const playheadMs = useEditor((s) => s.playheadMs);
+  /*
+   * The playhead only while something on the canvas needs following (D-112):
+   * a selection, a hover outline, a press, or text being typed into. With none
+   * of those this layer has nothing to draw, and re-rendering it every frame —
+   * measuring every element's box sixty times a second — cost a playing phone
+   * frames it did not have. A press reads the playhead when it happens.
+   */
+  const following = selectedOverlay !== null || selectedSlot !== null || selectedLogo;
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [pressing, setPressing] = useState(false);
+  const textEditing = useOverlays((o) => o.textEdit !== null);
+  const live = following || hovered !== null || pressing || textEditing;
+  const livePlayhead = useEditor((s) => (live ? s.playheadMs : null));
+  const playheadMs = livePlayhead ?? 0;
 
   const dragRef = useRef<Drag | null>(null);
   const openMenu = useOverlays((o) => o.openMenu);
@@ -192,8 +207,7 @@ export function CanvasSelection({
   const template = useEditor((s) => s.template);
   const selectSlotTab = useEditor((s) => s.selectSlot);
   const setInspectorTab = useEditor((s) => s.setInspectorTab);
-  /** True while a press on the canvas is held, so the toolbar keeps out of the way of a drag. */
-  const [pressing, setPressing] = useState(false);
+  // `pressing` (declared above) is true while a press on the canvas is held, so the toolbar keeps out of the way of a drag.
   const layout = useLayout();
   /** Picking something stops the preview where it is (point 5): you are about to edit this frame. */
   const holdStill = useHoldStill();
@@ -242,7 +256,6 @@ export function CanvasSelection({
   const boxRef = useRef<HTMLDivElement | null>(null);
   const focusOnRelease = useRef(false);
   const [guides, setGuides] = useState<readonly Guide[]>([]);
-  const [hovered, setHovered] = useState<string | null>(null);
   const [cursor, setCursor] = useState<string>('default');
 
   const measure = useMeasureContext();
@@ -262,7 +275,7 @@ export function CanvasSelection({
    * in, so scanning it backwards finds the topmost thing first, which is what
    * the user is pointing at.
    */
-  const targets = useMemo((): readonly Target[] => {
+  const targetsAt = useCallback((playheadMs: number): readonly Target[] => {
     const list: Target[] = [];
 
     /*
@@ -327,7 +340,15 @@ export function CanvasSelection({
     }
 
     return list;
-  }, [project.overlays, project.scenes, aspect, playheadMs, selectedScene, measure, drawn, logoAspect]);
+  }, [project.overlays, project.scenes, aspect, selectedScene, measure, drawn, logoAspect]);
+
+  const targets = useMemo(
+    (): readonly Target[] => (livePlayhead === null ? NO_TARGETS : targetsAt(livePlayhead)),
+    [livePlayhead, targetsAt],
+  );
+  /** What is on screen now, worked out on the spot when nothing is being followed. */
+  const targetsNow = (): readonly Target[] =>
+    livePlayhead === null ? targetsAt(useEditor.getState().playheadMs) : targets;
 
   const selected =
     targets.find((t) =>
@@ -448,8 +469,9 @@ export function CanvasSelection({
   };
 
   const pick = (point: Point): Target | null => {
-    for (let i = targets.length - 1; i >= 0; i--) {
-      const target = targets[i];
+    const list = targetsNow();
+    for (let i = list.length - 1; i >= 0; i--) {
+      const target = list[i];
       if (target && hits(target.box, point)) return target;
     }
     return null;

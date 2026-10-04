@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
 import { spanOf } from '@/document/select/motion';
@@ -8,15 +8,15 @@ import { MotionBar } from '@/ui/timeline/MotionBar';
 import { sceneSpans, timelineSpanMs } from '@/document/select/timeline';
 import { EFFECT_ROW_PX, EffectClipView, laneEffects, packEffectRows } from '@/ui/timeline/EffectRows';
 import { useOverlays } from '@/ui/shell/overlays';
+import { useClockFrames } from '@/ui/hooks/useClockFrames';
 
 /**
  * §1.1: showcase scrubs with a simple slider, not a track timeline.
  *
- * The readout samples the clock on an interval rather than subscribing per
- * frame — the artboard is a canvas and re-rendering React at 60fps to move a
- * slider thumb would cost more than the frame it is reporting on.
+ * The thumb and the readout follow the clock frame by frame without
+ * re-rendering React (D-112): written straight to the slider and the text, so
+ * they move as smoothly as the picture and cost next to nothing.
  */
-const READOUT_HZ = 12;
 
 export function ScrubBar({
   clock,
@@ -37,25 +37,27 @@ export function ScrubBar({
    * a change of speed or design until something else happened to move.
    */
   const durationMs = useEditor((s) => timelineSpanMs(s.project));
-  const [timeMs, setTimeMs] = useState(0);
   const [playing, setPlaying] = useState(clock.playing);
+  const shownPlaying = useRef(clock.playing);
+  const range = useRef<HTMLInputElement>(null);
+  const readout = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    const handle = setInterval(() => {
-      setTimeMs(clock.timeMs);
-      setPlaying(clock.playing);
-    }, 1000 / READOUT_HZ);
-    return () => { clearInterval(handle); };
-  }, [clock]);
+  useClockFrames(clock, (timeMs, isPlaying) => {
+    if (range.current) range.current.value = String(Math.round(timeMs));
+    if (readout.current) readout.current.textContent = `${format(Math.min(timeMs, durationMs))} / ${format(durationMs)}`;
+    if (isPlaying !== shownPlaying.current) {
+      shownPlaying.current = isPlaying;
+      setPlaying(isPlaying);
+    }
+  });
 
   const toggle = (): void => {
     if (clock.playing) clock.pause();
     else clock.play();
-    setPlaying(clock.playing);
   };
 
   const openPicker = useOverlays((o) => o.openPicker);
-  const seek = (at: number): void => { clock.pause(); clock.seek(at); setTimeMs(at); setPlayhead(at); };
+  const seek = (at: number): void => { clock.pause(); clock.seek(at); setPlayhead(at); };
 
   return (
     <div className="shrink-0 border-t border-edge bg-panel">
@@ -84,22 +86,22 @@ export function ScrubBar({
             min={0}
             max={Math.max(1, durationMs)}
             step={1}
-            value={Math.round(timeMs)}
+            ref={range}
+            defaultValue={0}
             onChange={(e) => {
               const next = Number(e.target.value);
               clock.seek(next);
-              setTimeMs(next);
               setPlayhead(next);
             }}
             aria-label="Scrub"
             // A phone's thumb needs something taller than a hairline to land on.
             className={`${phone ? 'h-7' : 'h-1'} w-full accent-[var(--c-accent)]`}
           />
-          <ShowcaseMotion durationMs={durationMs} onSeek={(at) => { clock.pause(); clock.seek(at); setTimeMs(at); setPlayhead(at); }} />
+          <ShowcaseMotion durationMs={durationMs} onSeek={seek} />
         </div>
 
-        {!phone && <span className="tabular w-20 shrink-0 text-right text-[11px] text-ink-muted sm:w-24">
-          {format(Math.min(timeMs, durationMs))} / {format(durationMs)}
+        {!phone && <span ref={readout} className="tabular w-20 shrink-0 text-right text-[11px] text-ink-muted sm:w-24">
+          {format(0)} / {format(durationMs)}
         </span>}
         {!phone && <button
           type="button"

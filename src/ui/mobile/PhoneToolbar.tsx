@@ -73,7 +73,7 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
         context: overlayLabel(overlay),
         tools: [
           ...first,
-          { label: overlay.content.kind === 'text' ? 'Style' : 'Settings', icon: 'settings', onSelect: () => { o.openPhonePanel('element'); } },
+          { label: overlay.content.kind === 'text' ? 'Style' : 'Settings', icon: 'settings', onSelect: () => { o.openPhonePanel('element', overlay.content.kind === 'text' ? 'Content' : 'Placement'); } },
           { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target }); } },
           { label: 'Copy', icon: 'copy', onSelect: () => { s.dispatch(actions.duplicateOverlay(overlay.id, totalDurationMs(s.project))); } },
           del(),
@@ -87,6 +87,9 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
     const key = s.selectedSlot;
     const photo = /^photo:(\d+)$/.exec(key);
     const label = photo?.[1] !== undefined ? `photo ${Number(photo[1]) + 1}` : 'this text';
+    // The section the settings open on: this photo's own, or this text's (D-114).
+    const textSlot = key.startsWith('text:') ? useEditor.getState().template?.textSlots.find((t) => `text:${t.id}` === key) : undefined;
+    const sectionName = photo?.[1] !== undefined ? `Photo ${Number(photo[1]) + 1}` : textSlot?.label ?? '';
     const target = { kind: 'element' as const, target: { kind: 'slot' as const, key }, label };
     return {
       context: label.charAt(0).toUpperCase() + label.slice(1),
@@ -94,9 +97,9 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
         photo?.[1] !== undefined
           ? { label: 'Replace', icon: 'replace', onSelect: () => { o.openPhotoPicker({ kind: 'slot', index: Number(photo[1]) }); } }
           : { label: 'Edit text', icon: 'edit', onSelect: () => { o.openTextEdit(key); } },
-        { label: photo ? 'Crop' : 'Style', icon: 'settings', onSelect: () => { o.openPhonePanel('element'); } },
+        { label: photo ? 'Crop' : 'Style', icon: 'settings', onSelect: () => { o.openPhonePanel('element', sectionName); } },
         { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target }); } },
-        { label: 'Motion', icon: 'motion', onSelect: () => { o.openPhonePanel('effects'); } },
+        { label: 'Motion', icon: 'motion', onSelect: () => { o.openPhonePanel('effects', sectionName); } },
         { label: photo ? 'Delete' : 'Remove', icon: 'trash', danger: true, onSelect: () => { deleteSlot(key); } },
         done,
       ],
@@ -109,7 +112,7 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
       tools: [
         { label: 'Replace', icon: 'replace', onSelect: () => { o.openPhotoPicker({ kind: 'logo' }); } },
         { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target: { kind: 'element', target: { kind: 'logo' }, label: 'the logo' } }); } },
-        { label: 'Settings', icon: 'settings', onSelect: () => { o.openPhonePanel('style'); } },
+        { label: 'Settings', icon: 'settings', onSelect: () => { o.openPhonePanel('style', 'Logo'); } },
         del('Remove'),
         done,
       ],

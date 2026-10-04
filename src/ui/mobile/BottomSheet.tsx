@@ -51,7 +51,10 @@ export function BottomSheet({
       <div
         className="flex min-h-0 flex-col rounded-t-2xl bg-panel"
         style={{
-          maxHeight: tall ? '88dvh' : '62dvh',
+          // Of the screen the sheet covers, not `dvh`: a browser that does not
+          // know `dvh` drops the rule, and the sheet then grows past the top
+          // of the screen, taking its close button with it.
+          maxHeight: tall ? '90%' : '64%',
           boxShadow: '0 -8px 30px rgb(0 0 0 / 0.18)',
           transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
           transition: dragging ? 'none' : 'transform 160ms ease-out',

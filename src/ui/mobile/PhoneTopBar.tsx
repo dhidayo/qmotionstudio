@@ -1,5 +1,6 @@
 import { useEditor } from '@/state/store';
 import { useOverlays } from '@/ui/shell/overlays';
+import { Icon } from './Icon';
 
 /**
  * The phone's top bar (D-109): one row, nothing hidden off the edge.
@@ -17,20 +18,34 @@ export function PhoneTopBar(): React.JSX.Element {
 
   return (
     <header
-      className="flex shrink-0 items-center gap-2 border-b border-edge bg-panel px-3"
+      className="flex shrink-0 items-center gap-1.5 border-b border-edge bg-panel pl-1.5 pr-3"
       style={{ height: 52, paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
+      {/*
+        * The menu is the three lines everyone knows as "menu" (D-113). The
+        * logo alone was the way in, and "no one will know that the menu icon
+        * is the menu".
+        */}
+      <button
+        type="button"
+        onClick={() => { open('project'); }}
+        aria-label="Menu"
+        data-phone-menu
+        className="grid size-10 shrink-0 place-items-center rounded-lg active:bg-panel-alt"
+      >
+        <Icon name="menu" size={24} />
+      </button>
       <button
         type="button"
         onClick={() => { open('project'); }}
         aria-label={`Project: ${name}. Menu`}
         data-phone-project
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1.5 pr-2 text-left"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1.5 pr-1 text-left"
       >
-        <img src="/brand-q.png" alt="" aria-hidden width={28} height={28} className="size-7 shrink-0 rounded-md" />
+        <img src="/brand-q.png" alt="" aria-hidden width={26} height={26} className="size-[26px] shrink-0 rounded-md" />
         <span className="min-w-0 truncate text-[14px] font-semibold">{name}</span>
-        <span aria-hidden className="shrink-0 text-[11px] text-ink-faint">▾</span>
       </button>
+      <SaveWarning />
 
       <button
         type="button"
@@ -50,5 +65,25 @@ export function PhoneTopBar(): React.JSX.Element {
         Export
       </button>
     </header>
+  );
+}
+
+/**
+ * Said when a save fails, and only then (D-111). The phone has no room for the
+ * computer's "Saved" badge, but "your work is not being kept" is the one thing
+ * nobody may be left to discover after a reload.
+ */
+function SaveWarning(): React.JSX.Element | null {
+  const state = useEditor((s) => s.saveState);
+  if (state !== 'failed') return null;
+  return (
+    <span
+      role="alert"
+      data-save-state="failed"
+      className="shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold"
+      style={{ background: 'var(--c-pro-soft)', color: 'var(--c-danger)' }}
+    >
+      Not saved
+    </span>
   );
 }

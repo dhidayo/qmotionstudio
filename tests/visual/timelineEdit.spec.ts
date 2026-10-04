@@ -372,6 +372,7 @@ test.describe('picking something stops the preview (D-110)', () => {
     page.evaluate(() => (globalThis as unknown as { __motionStudio: { clock: { playing: () => boolean } } }).__motionStudio.clock.playing());
 
   test('clicking a clip on the timeline pauses playback where it is', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only clock handle, which the production build rightly omits.');
     await openAd(page);
     await addText(page);
     await page.getByRole('button', { name: 'Play', exact: true }).click();

@@ -21,12 +21,21 @@ import type { MediaStore } from '@/media/store';
  * The export path runs the same renderFrame from a fixed timestep instead. That
  * is the only difference between the two, and it is why they agree.
  */
+/** Under about forty frames a second, averaged over this many frames, is "slow". */
+const SLOW_FRAME_MS = 25;
+const SLOW_WINDOW_FRAMES = 45;
+
 export function usePreviewLoop(
   canvas: HTMLCanvasElement | null,
   project: Project,
   clock: PreviewClock,
   rig: RenderRig,
   media: MediaStore,
+  /**
+   * Called when playback has been missing frames for a while (D-112), so the
+   * artboard can draw at a lower resolution. Null when it cannot go lower.
+   */
+  onSlow: (() => void) | null = null,
 ): DrawnScene | null {
   /*
    * What the loop last drew, published to React (B).
@@ -39,6 +48,8 @@ export function usePreviewLoop(
    */
   const [drawn, setDrawn] = useState<DrawnScene | null>(null);
   const lastDrawn = useRef<DrawnScene | null>(null);
+  const slow = useRef(onSlow);
+  useEffect(() => { slow.current = onSlow; }, [onSlow]);
 
   useEffect(() => {
     if (!canvas) return;
@@ -51,11 +62,28 @@ export function usePreviewLoop(
     let frame = 0;
     let previous = performance.now();
     let cancelled = false;
+    /** Frame gaps while playing, to notice a device that cannot keep up. */
+    let gaps = 0;
+    let gapTotal = 0;
 
     const tick = (now: number): void => {
       if (cancelled) return;
       const delta = now - previous;
       previous = now;
+
+      if (clock.playing && slow.current) {
+        // A hidden tab or a breakpoint is not slowness; cap what one gap can say.
+        gapTotal += Math.min(delta, 100);
+        gaps += 1;
+        if (gaps >= SLOW_WINDOW_FRAMES) {
+          if (gapTotal / gaps > SLOW_FRAME_MS) slow.current();
+          gaps = 0;
+          gapTotal = 0;
+        }
+      } else {
+        gaps = 0;
+        gapTotal = 0;
+      }
 
       const timeMs = clock.tick(delta);
 

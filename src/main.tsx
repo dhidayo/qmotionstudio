@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { loadFonts } from '@/fonts/registry';
+import { registerOfflineSupport } from './pwa';
 import './styles/index.css';
 
 const host = document.getElementById('root');
@@ -27,6 +28,7 @@ loadFonts(document.fonts)
         <App />
       </StrictMode>,
     );
+    registerOfflineSupport();
   })
   .catch((error: unknown) => {
     // §16: never swallow an error. A failed font load means every frame after

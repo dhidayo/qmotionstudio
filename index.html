@@ -12,12 +12,30 @@
     <meta name="theme-color" content="#0d0d10" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
     <title>Q Motion Studio</title>
+    <!-- The two faces the editor waits for before it draws (src/fonts/registry.ts),
+         fetched alongside the script rather than after it (D-112). -->
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/archivo-latin.woff2" as="font" type="font/woff2" crossorigin />
     <!-- Before first paint, so the shell never flashes the wrong theme. A file
          rather than inline, so the security policy can forbid inline scripts. -->
     <script src="/theme-boot.js"></script>
+    <!-- The first thing a slow connection shows, before any script has
+         arrived (D-112); React replaces it when the editor is ready. -->
+    <style>
+      .boot { display: grid; place-items: center; height: 100%; background: #f6f6f7; color: #6b6b76;
+        font: 14px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; text-align: center; }
+      :root[data-theme='dark'] .boot { background: #111115; color: #b4b4be; }
+      .boot img { width: 56px; height: 56px; border-radius: 14px; display: block; margin: 0 auto 14px; }
+      .boot strong { display: block; color: #17171b; font-size: 16px; margin-bottom: 4px; }
+      :root[data-theme='dark'] .boot strong { color: #f4f4f6; }
+      .boot-bar { width: 140px; height: 3px; margin: 16px auto 0; border-radius: 3px; overflow: hidden; background: rgb(127 127 140 / 0.2); }
+      .boot-bar::after { content: ''; display: block; width: 40%; height: 100%; border-radius: 3px; background: #4f46e5;
+        animation: boot-slide 1.1s ease-in-out infinite; }
+      @keyframes boot-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot" role="status"><div><img src="/brand-q.png" alt="" /><strong>Q Motion Studio</strong>Getting the editor ready…<div class="boot-bar"></div></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

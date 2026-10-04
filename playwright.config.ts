@@ -46,6 +46,19 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     /*
+     * The phone tests again, in Safari's engine (D-111).
+     *
+     * WebKit would not store a photo in IndexedDB in a private window, and a
+     * reload lost every picture — invisible in Chromium, where the same code
+     * worked. Phones are where Safari is, so the phone suite runs in both.
+     * Needs `npx playwright install webkit` once.
+     */
+    {
+      name: 'phone-webkit',
+      testMatch: /phone\.spec\.ts/,
+      use: { ...devices['iPhone 13'] },
+    },
+    /*
      * The measurements, on a quiet machine.
      *
      * §14's frame and build budgets and §10's drift budget are the only tests

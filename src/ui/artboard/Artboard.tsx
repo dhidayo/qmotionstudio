@@ -5,8 +5,10 @@ import type { PreviewClock } from '@/core/time/clock';
 import type { Project } from '@/document/types';
 import type { MediaStore } from '@/media/store';
 import { renderParams } from '@/dev/renderParams';
+import { PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { useEditor } from '@/state/store';
 import { NO_ZOOM, useOverlays } from '@/ui/shell/overlays';
+import { useLayout } from '@/ui/shell/useLayout';
 import { usePreviewLoop } from './usePreviewLoop';
 import { CanvasSelection } from './CanvasSelection';
 
@@ -16,6 +18,21 @@ import { CanvasSelection } from './CanvasSelection';
  * picture that is about to be exported at 2.
  */
 const MAX_PREVIEW_SHORT_EDGE = 1080;
+
+/*
+ * A phone previews at most at 2× and 720 on the short edge (D-112).
+ *
+ * A 3× phone screen asked for a 922×1640 canvas — one and a half megapixels
+ * redrawn every frame, through blur passes that cost in proportion — and
+ * played at under twenty frames a second on a mid-range phone. The picture
+ * on a six-inch screen at 2× is indistinguishable from 3× while it moves; the
+ * export renders at full size regardless, from its own rig.
+ */
+const PHONE_PREVIEW_SHORT_EDGE = 720;
+const PHONE_MAX_DPR = 2;
+
+/** How far the preview may step down on a phone that still cannot keep up. */
+const QUALITY_STEPS = [1, 0.75, 0.5] as const;
 
 type Props = {
   project: Project;
@@ -51,14 +68,27 @@ export function Artboard({ project, clock, rig, media, padding = 24 }: Props): R
   // Backing store: device pixels, capped. renderFrame derives one uniform scale
   // from whatever size it finds, so preview and export lay out identically —
   // only the resolution differs.
-  const dpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+  const phone = useLayout() === 'phone';
+  /*
+   * Steps down, never back up, when playback on a phone keeps missing frames:
+   * a steady picture a little softer beats a sharp one that stutters. Reset by
+   * a reload, which is when a different phone could be holding it.
+   */
+  const [step, setStep] = useState(0);
+  const quality = phone ? QUALITY_STEPS[step] ?? 1 : 1;
+  const deviceDpr = typeof devicePixelRatio === 'number' ? devicePixelRatio : 1;
+  const dpr = (phone ? Math.min(deviceDpr, PHONE_MAX_DPR) : deviceDpr) * quality;
   // ?thumb= pins the backing store so `npm run thumbs` captures a consistent
   // size regardless of the window it happens to run in.
   const thumb = renderParams().thumbShortEdge;
-  const wanted = thumb ?? Math.min(Math.min(display.w, display.h) * dpr, MAX_PREVIEW_SHORT_EDGE);
+  const ceiling = phone ? PHONE_PREVIEW_SHORT_EDGE : MAX_PREVIEW_SHORT_EDGE;
+  const wanted = thumb ?? Math.min(Math.min(display.w, display.h) * dpr, ceiling);
   const backing = renderSizeFor(project.aspect, Math.max(2, Math.round(wanted)));
 
-  const drawn = usePreviewLoop(canvas, project, clock, rig, media);
+  // The test card draws itself and never records a scene; it is not "loading".
+  const placeholder = project.scenes.every((scene) => scene.templateId === PLACEHOLDER_TEMPLATE_ID);
+  const canStepDown = phone && thumb === null && step < QUALITY_STEPS.length - 1;
+  const drawn = usePreviewLoop(canvas, project, clock, rig, media, canStepDown ? () => { setStep((n) => n + 1); } : null);
   // A pinch on a phone zooms the view, never the document (D-110).
   const zoom = useOverlays((o) => o.viewZoom);
   const setZoom = useOverlays((o) => o.setViewZoom);
@@ -106,6 +136,21 @@ export function Artboard({ project, clock, rig, media, padding = 24 }: Props): R
             }}
           />
           <CanvasSelection project={project} drawn={drawn} width={display.w} />
+          {/* Said while the design's code is still arriving, so a slow
+              connection shows progress rather than an empty frame (D-112). */}
+          {drawn === null && thumb === null && !placeholder && (
+            <div
+              role="status"
+              data-canvas-loading
+              className="pointer-events-none absolute inset-0 grid place-items-center text-[13px]"
+              style={{ color: 'rgb(255 255 255 / 0.75)' }}
+            >
+              <span className="flex items-center gap-2">
+                <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Loading design…
+              </span>
+            </div>
+          )}
         </div>
       )}
       {zoomed && (

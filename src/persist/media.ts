@@ -2,6 +2,7 @@ import { decodeAudio } from '@/media/audio/decode';
 import { decodeImage } from '@/media/image/decode';
 import { decodeVideo } from '@/media/video/decode';
 import type { MediaEntry, MediaStore } from '@/media/store';
+import { isSampleId } from '@/media/samples';
 import { readMedia, writeMedia, type StoredMedia } from './db';
 
 /**
@@ -35,6 +36,9 @@ export async function persistMedia(
 ): Promise<void> {
   for (const id of store.ids()) {
     if (known.has(id)) continue;
+    // The samples ship with the app and are fetched again on demand; storing
+    // a megabyte of them per device was space spent on nothing (D-111).
+    if (isSampleId(id)) continue;
     const entry = store.get(id);
     if (!entry) continue;
     await writeMedia(storable(entry));
@@ -58,6 +62,9 @@ export async function restoreMedia(
 
   for (const id of ids) {
     if (store.has(id)) continue;
+    // Samples are fetched with the app, not stored (D-111); the stand-ins for
+    // empty slots were never media at all.
+    if (isSampleId(id) || id.startsWith('__empty_')) continue;
 
     const stored = await readMedia(id);
     if (!stored) {

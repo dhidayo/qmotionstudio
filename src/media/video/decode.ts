@@ -1,5 +1,5 @@
 import type { MediaEntry } from '../store';
-import { VideoClip } from './clip';
+import type { VideoClip } from './clip';
 
 /**
  * Custom media decode (§9).
@@ -48,7 +48,14 @@ export async function decodeVideo(
 
   let clip: VideoClip;
   try {
-    clip = await VideoClip.open(blob);
+    /*
+     * Loaded here, on the first video, not with the editor (D-112): the
+     * demuxer is the largest thing the app ships, and most sessions never add
+     * a clip. It was a third of the script a phone downloaded before showing
+     * anything.
+     */
+    const { VideoClip: Clip } = await import('./clip');
+    clip = await Clip.open(blob);
   } catch (error) {
     throw new UnsupportedVideoError(
       error instanceof Error
