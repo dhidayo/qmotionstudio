@@ -70,7 +70,15 @@ export type Ease = EaseName | SpringSpec;
 
 export type AnimatedProp =
   | 'x' | 'y' | 'scaleX' | 'scaleY' | 'rotation' | 'opacity'
-  | 'blur' | 'letterSpacing' | 'clipProgress' | 'cornerRadius';
+  | 'blur' | 'letterSpacing' | 'clipProgress' | 'cornerRadius'
+  /*
+   * Depth and turn (D-117). `z` orders the children of a `depthSort` group
+   * frame by frame — nearer draws later — so cards on a ring pass in front of
+   * and behind each other as they go round. `turnY` and `turnX` turn a layer
+   * about its vertical and horizontal axes, in degrees: foreshortened and
+   * shaded, the way a card on a carousel faces away from the camera.
+   */
+  | 'z' | 'turnX' | 'turnY';
 
 /**
  * Resolved animated values at an instant. Named PropValues rather than
@@ -125,7 +133,45 @@ export type Reveal =
   | { readonly kind: 'maskWipe'; readonly dir: Direction; readonly startMs: number; readonly durationMs: number }
   | { readonly kind: 'perWord'; readonly startMs: number; readonly durationMs: number; readonly staggerMs: number }
   | { readonly kind: 'perChar'; readonly startMs: number; readonly durationMs: number; readonly staggerMs: number }
-  | { readonly kind: 'swap'; readonly altText: string; readonly atMs: number; readonly durationMs: number };
+  | { readonly kind: 'swap'; readonly altText: string; readonly atMs: number; readonly durationMs: number }
+  | KineticReveal
+  /** Numbers in the text count up from zero, keeping their format (D-118). */
+  | { readonly kind: 'count'; readonly startMs: number; readonly durationMs: number };
+
+/**
+ * Kinetic type (D-118): each letter, word or line moves into place on its own
+ * clock, and can leave again — the building block of a story told in words.
+ *
+ * Drawn inside the text layer rather than as one layer per letter, so the
+ * words stay one element: selectable, editable on the canvas, and laid out by
+ * the same measured run as every other text.
+ */
+export type KineticMotion =
+  | 'rise' | 'drop' | 'pop' | 'scatter' | 'wave' | 'focus' | 'slideLeft' | 'slideRight'
+  | 'split' | 'flip' | 'stretch' | 'glitch' | 'typewriter' | 'zoom' | 'tilt';
+
+export type KineticUnit = 'char' | 'word' | 'line';
+
+export type KineticOrder = 'start' | 'end' | 'center' | 'random';
+
+export type KineticReveal = {
+  readonly kind: 'kinetic';
+  readonly unit: KineticUnit;
+  readonly motion: KineticMotion;
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly staggerMs: number;
+  readonly order?: KineticOrder;
+  /** A blinking caret after the last letter shown (typewriter). */
+  readonly caret?: boolean;
+  /** Leave again, from `atMs`: the same motion played out, or a fade. */
+  readonly exit?: {
+    readonly atMs: number;
+    readonly durationMs: number;
+    readonly staggerMs: number;
+    readonly motion: KineticMotion | 'fade';
+  };
+};
 
 export type ObjectFit = 'cover' | 'contain';
 
@@ -233,6 +279,12 @@ export type TextProps = {
  */
 export type GroupProps = {
   readonly slot?: SlotRef;
+  /**
+   * Draw the children nearest-last by their animated `z`, re-sorted every frame
+   * (D-117). For arrangements whose depth order changes as they move — rings,
+   * carousels, helices — which a fixed layer order cannot express.
+   */
+  readonly depthSort?: boolean;
   /**
    * The extent an element effect works in, in the group's own coordinates
    * (D-100). A group has no box of its own; without this, an effect on it uses

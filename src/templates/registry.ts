@@ -1,6 +1,7 @@
 import type { Aspect } from '@/core/types';
 import { validateTemplate, type SceneTemplate, type Template, type TemplateIssue } from './schema';
 import { withPhotoFill } from './_shared/fill';
+import { AD_FILM_TEMPLATES, SCENE_VARIANTS, adFilm, sceneVariant, type FamilyId, type SceneVariant } from './catalog';
 
 /**
  * Template registry (§7).
@@ -41,10 +42,45 @@ function pathFor(id: string): string | undefined {
 }
 
 export function knownTemplateIds(): readonly string[] {
-  return Object.keys(modules)
-    .map((path) => path.split('/').pop()?.replace(/\.ts$/, '') ?? '')
+  return [
+    ...Object.keys(modules).map((path) => path.split('/').pop()?.replace(/\.ts$/, '') ?? ''),
+    ...SCENE_VARIANTS.map((variant) => variant.id),
+    ...AD_FILM_TEMPLATES.map((film) => film.id),
+  ]
     .filter((id) => id.length > 0)
     .sort();
+}
+
+/**
+ * The family modules (D-119), loaded on first use: asking for any ring
+ * variant loads the ring code once, and every ring variant after is free.
+ */
+type FamilyModule = { readonly create: (variant: SceneVariant) => SceneTemplate };
+const FAMILIES: Record<FamilyId, () => Promise<FamilyModule>> = {
+  type: () => import('./_families/type'),
+  element: () => import('./_families/element'),
+  product: () => import('./_families/product'),
+  orbit: () => import('./_families/orbit'),
+  flow: () => import('./_families/flow'),
+  depth: () => import('./_families/depth'),
+  marquee: () => import('./_families/marquee'),
+  tiles: () => import('./_families/tiles'),
+  deck: () => import('./_families/deck'),
+  hero: () => import('./_families/hero'),
+  cuts: () => import('./_families/cuts'),
+  halo: () => import('./_families/halo'),
+  timeline: () => import('./_families/timeline'),
+  business: () => import('./_families/business'),
+};
+
+/** A template from the catalogue rather than from a file of its own, or undefined. */
+async function fromCatalogue(id: string): Promise<Template | undefined> {
+  const film = adFilm(id);
+  if (film) return film;
+  const variant = sceneVariant(id);
+  if (!variant) return undefined;
+  const family = await FAMILIES[variant.family]();
+  return family.create(variant);
 }
 
 /**
@@ -58,17 +94,20 @@ export async function loadTemplate(id: string): Promise<Template> {
   const hit = cache.get(id);
   if (hit) return hit;
 
-  const path = pathFor(id);
-  if (!path) throw new Error(`Unknown template "${id}". Known: ${knownTemplateIds().join(', ')}`);
+  let template = await fromCatalogue(id);
+  if (!template) {
+    const path = pathFor(id);
+    if (!path) throw new Error(`Unknown template "${id}". Known: ${knownTemplateIds().join(', ')}`);
 
-  const loader = modules[path];
-  if (!loader) throw new Error(`Template "${id}" resolved to a path with no loader: ${path}`);
+    const loader = modules[path];
+    if (!loader) throw new Error(`Template "${id}" resolved to a path with no loader: ${path}`);
 
-  const module = await loader();
-  const template = module.default;
+    const module = await loader();
+    template = module.default;
 
-  if (template.id !== id) {
-    throw new Error(`Template in ${path} declares id "${template.id}" but the filename says "${id}".`);
+    if (template.id !== id) {
+      throw new Error(`Template in ${path} declares id "${template.id}" but the filename says "${id}".`);
+    }
   }
 
   const issues = validateTemplate(template);

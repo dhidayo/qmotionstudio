@@ -4,6 +4,7 @@ import { ellipsePath, roundedRectPath } from '@/core/math/geometry';
 import { activeElementFx, applyElementMotion, type ActiveElementFx } from '@/core/effects/run';
 import type { ElementBox } from '@/core/effects/types';
 import { withBlur } from './blur';
+import { depthOrdered, turnOf } from './depth';
 import { withIsolation, type Glow } from './isolate';
 import { drawShape } from './layers/shape';
 import { drawGradient } from './layers/gradient';
@@ -71,6 +72,8 @@ export function drawLayer(dc: DrawContext, layer: Layer, sceneTimeMs: number): v
   ctx.translate(props.x, props.y);
   if (props.rotation !== 0) ctx.rotate((props.rotation * Math.PI) / 180);
   if (props.scaleX !== 1 || props.scaleY !== 1) ctx.scale(props.scaleX, props.scaleY);
+  const turn = turnOf(props.turnY, props.turnX);
+  if (turn) ctx.transform(turn.a, turn.b, turn.c, turn.d, 0, 0);
 
   const box = boxOf(layer);
   const anchorX = layer.anchorX ?? 0.5;
@@ -80,6 +83,7 @@ export function drawLayer(dc: DrawContext, layer: Layer, sceneTimeMs: number): v
 
   const paint = (): void => {
     paintLayer(dc, layer, originX, originY, localMs, props);
+    if (turn && turn.shade > 0.01) shadeTurned(dc, layer, originX, originY, box, turn.shade);
   };
 
   if (fx) {
@@ -91,6 +95,7 @@ export function drawLayer(dc: DrawContext, layer: Layer, sceneTimeMs: number): v
   if (props.blur > 0.001) {
     withBlur(ctx, props.blur, { x: originX, y: originY, w: box.w, h: box.h }, dc.depth, (target) => {
       paintLayer({ ...dc, ctx: target }, layer, originX, originY, localMs, props);
+      if (turn && turn.shade > 0.01) shadeTurned({ ...dc, ctx: target }, layer, originX, originY, box, turn.shade);
     });
   } else {
     paint();
@@ -132,7 +137,8 @@ function paintLayer(
 
     case 'group': {
       const child = atDepth(dc, dc.depth + 1);
-      for (const c of layer.children) drawLayer(child, c, localMs);
+      const children = layer.props.depthSort === true ? depthOrdered(layer.children, localMs) : layer.children;
+      for (const c of children) drawLayer(child, c, localMs);
       return;
     }
 
@@ -294,6 +300,29 @@ function drawWithEffects(
 }
 
 /** Children of a group are drawn with time relative to the group, not the scene. */
+/**
+ * Darkens a turned picture or panel by how far it faces away (D-117), clipped
+ * to its own shape so rounded corners stay rounded.
+ */
+function shadeTurned(
+  dc: DrawContext,
+  layer: Layer,
+  x: number,
+  y: number,
+  box: { w: number; h: number },
+  shade: number,
+): void {
+  if (layer.type !== 'image' && layer.type !== 'shape' && layer.type !== 'video') return;
+  const { ctx } = dc;
+  ctx.save();
+  ctx.fillStyle = `rgba(0,0,0,${shade.toFixed(3)})`;
+  const radius = 'cornerRadius' in layer.props ? layer.props.cornerRadius ?? 0 : 0;
+  if (layer.type === 'shape' && layer.props.shape === 'ellipse') ellipsePath(ctx, x, y, box.w, box.h);
+  else roundedRectPath(ctx, x, y, box.w, box.h, radius);
+  ctx.fill();
+  ctx.restore();
+}
+
 export function drawLayers(dc: DrawContext, layers: readonly Layer[], sceneTimeMs: number): void {
   for (const layer of layers) drawLayer(dc, layer, sceneTimeMs);
 }

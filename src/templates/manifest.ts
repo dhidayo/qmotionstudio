@@ -1,5 +1,6 @@
 import type { Aspect } from '@/core/types';
-import type { Tier } from './schema';
+import type { AdTemplate, Tier } from './schema';
+import { AD_FILM_TEMPLATES, SCENE_VARIANTS, type SceneVariant } from './catalog';
 
 /**
  * Eager template metadata.
@@ -56,10 +57,62 @@ export type TemplateSummary = {
 };
 
 export const CATEGORIES: readonly string[] = [
-  'Story Ads', 'Soft Pop', 'Depth Stage', 'Angle Stage', 'Kinetic Type', 'Split Frame', 'Basics',
+  // Corporate Ads: whole films.
+  'Story Ads', 'Text Stories', 'Product Films', 'Business Promos',
+  // Scenes: words first, then products, then photographs in motion.
+  'Text Motion', 'Elements', 'Kinetic Type', 'Product Display', 'Business',
+  'Ring Path', 'Flow Track', 'Depth Stage', 'Angle Stage', 'Tile Field', 'Deck Motion',
+  'Hero Stage', 'Photo Reveal', 'Scene Cuts', 'Photo Collage', 'Timeline',
+  'Soft Pop', 'Split Frame', 'Basics',
 ];
 
+const ALL_ASPECTS: readonly Aspect[] = ['9:16', '4:5', '1:1', '4:3', '16:9'];
+
+/** The library's view of a catalogue variant (D-119). */
+function sceneSummary(variant: SceneVariant): TemplateSummary {
+  return {
+    id: variant.id,
+    name: variant.name,
+    category: variant.category,
+    kind: 'scene',
+    tier: variant.tier ?? 'free',
+    ...(variant.isNew === true ? { isNew: true } : {}),
+    supportedAspects: ALL_ASPECTS,
+    photoSlots: { min: variant.photos.min, max: variant.photos.max },
+    blurb: variant.blurb,
+    ...(variant.posterAtMs === undefined ? {} : { posterAtMs: variant.posterAtMs }),
+  };
+}
+
+/** A film's running time: its scenes, less the overlap of each transition (D-004). */
+function filmLengthMs(film: AdTemplate): number {
+  return film.scenes.reduce((total, ref, i) => {
+    const overlap = i === 0 || ref.transitionIn === null || ref.transitionIn.kind === 'cut' ? 0 : ref.transitionIn.durationMs;
+    return total + ref.durationMs - overlap;
+  }, 0);
+}
+
+/** The library's view of an ad film. */
+function filmSummary(film: AdTemplate): TemplateSummary {
+  const counts = film.scenes.map((scene) => scene.photoCount ?? 0);
+  return {
+    id: film.id,
+    name: film.name,
+    category: film.category,
+    kind: 'ad',
+    tier: film.tier,
+    ...(film.isNew === true ? { isNew: true } : {}),
+    supportedAspects: film.supportedAspects,
+    photoSlots: { min: Math.min(...counts), max: Math.max(...counts) },
+    sceneCount: film.scenes.length,
+    durationMs: filmLengthMs(film),
+    blurb: film.blurb ?? '',
+  };
+}
+
 export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
+  ...AD_FILM_TEMPLATES.map(filmSummary),
+  ...SCENE_VARIANTS.map(sceneSummary),
   {
     id: 'blank',
     name: 'Blank',

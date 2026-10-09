@@ -4,6 +4,7 @@ import type { GlyphRun, TextAlign, TextLine, TextSpec } from '@/core/text/layout
 import { progress, roundedRectPath } from '@/core/math/geometry';
 import { resolvePaint } from '../paint';
 import type { DrawContext } from '../drawContext';
+import { countedText, drawKinetic, unitsOf } from './kinetic';
 
 /**
  * Text layers (§6.3).
@@ -240,6 +241,44 @@ function applyReveal(
           ctx.fillText(word.text, offsetX + word.x, baseline + (1 - alpha) * props.fontSizePx * 0.25);
           ctx.restore();
         }
+      }
+      return;
+    }
+
+    case 'kinetic': {
+      const units = unitsOf(reveal, run, x, y, blockWidth, props.fontSizePx, align);
+      drawKinetic(
+        {
+          ctx,
+          props,
+          fill: resolvePaint(props.fill, dc.palette),
+          outline: outlineStyle,
+          accent: dc.palette.accent,
+        },
+        reveal,
+        units,
+        localMs,
+      );
+      return;
+    }
+
+    case 'count': {
+      // The one place a frame measures: the counted line is a different
+      // string every frame, and caching each would fill the cache with
+      // numbers nobody will see again. One measureText per line is cheap.
+      const p = progress(localMs, reveal.startMs, reveal.startMs + reveal.durationMs);
+      for (const line of run.lines) {
+        const shown = countedText(line.text, p);
+        const width = ctx.measureText(shown).width;
+        const baseline = y + baselineOf(line, props.fontSizePx);
+        const at = x + offsetFor(width, blockWidth, align);
+        if (outlineStyle !== null && props.outline) {
+          ctx.lineWidth = props.outline.width;
+          ctx.strokeStyle = outlineStyle;
+          ctx.lineJoin = 'round';
+          ctx.strokeText(shown, at, baseline);
+        }
+        ctx.fillText(shown, at, baseline);
       }
       return;
     }

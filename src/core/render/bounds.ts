@@ -10,6 +10,7 @@ import type { DrawnScene } from './rig';
 import { overlayLayer } from './overlays';
 import { lockupSpec, logoGeometry } from './logo';
 import { nudgeAt, slotKey, slotOf } from './slots';
+import { depthOrdered, turnOf } from './depth';
 
 /**
  * Where things are on the frame, for direct manipulation.
@@ -428,8 +429,10 @@ export function slotBoxes(
 
     // The nudge is already composed into the tracks the renderer draws, but
     // these are the *base* layers, so it has to be added here as well.
-    const ownScaleX = props.scaleX * nudge.scale;
-    const ownScaleY = props.scaleY * nudge.scale;
+    // A turned card is drawn narrower (D-117), and so is its box.
+    const turn = turnOf(props.turnY, props.turnX);
+    const ownScaleX = props.scaleX * nudge.scale * (turn ? Math.abs(turn.a) : 1);
+    const ownScaleY = props.scaleY * nudge.scale * (turn ? Math.abs(turn.d) : 1);
     const ownRotation = props.rotation + nudge.rotation;
 
     // Two steps, because the two offsets live in different spaces: the anchor
@@ -512,7 +515,11 @@ function* flatten(
       parent.rotation,
     );
 
-    yield* flatten(layer.children, {
+    // In the order they are drawn now, so the one in front is the one picked (D-117).
+    const children = layer.type === 'group' && layer.props.depthSort === true
+      ? depthOrdered(layer.children, localMs)
+      : layer.children;
+    yield* flatten(children, {
       timeMs: localMs,
       x: origin.x,
       y: origin.y,

@@ -29,6 +29,9 @@ export const DEFAULT_PROPS: Readonly<MutableProps> = Object.freeze({
   letterSpacing: 0,
   clipProgress: 1,
   cornerRadius: 0,
+  z: 0,
+  turnX: 0,
+  turnY: 0,
 });
 
 export const ANIMATED_PROPS = Object.keys(DEFAULT_PROPS) as readonly AnimatedProp[];
