@@ -5,6 +5,7 @@ import type { SaveState } from '@/ui/persist/saveState';
 import { ProjectTitle } from '@/ui/projects/ProjectTitle';
 import { MODE_LABEL } from './modeLabels';
 import { useOverlays } from './overlays';
+import { useLayout } from './useLayout';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -13,6 +14,7 @@ export function TopBar(): React.JSX.Element {
   const setTheme = useEditor((s) => s.setTheme);
   const { tier } = useEntitlements(project.mode);
   const save = useEditor((s) => s.saveState);
+  const compact = useLayout() !== 'desktop';
 
   return (
     <header
@@ -29,6 +31,17 @@ export function TopBar(): React.JSX.Element {
 
       <ModeSwitch />
 
+      {/* One chip that opens the five shapes when the bar is short of room (D-116). */}
+      {compact ? (
+        <button
+          type="button"
+          onClick={() => { useOverlays.getState().openPhonePanel('aspect'); }}
+          aria-label={`Frame shape ${project.aspect}. Change`}
+          className="flex shrink-0 items-center gap-1 rounded-md border border-edge px-2 py-1 text-[12px] font-medium tabular hover:bg-panel-alt"
+        >
+          {project.aspect} <span aria-hidden className="text-[10px] text-ink-faint">▾</span>
+        </button>
+      ) : (
       <div className="flex items-center gap-1" role="group" aria-label="Aspect ratio">
         {ASPECTS.map((aspect) => (
           <AspectButton
@@ -39,6 +52,7 @@ export function TopBar(): React.JSX.Element {
           />
         ))}
       </div>
+      )}
 
       <UndoRedo />
 
@@ -227,7 +241,7 @@ function ModeSwitch(): React.JSX.Element {
                 ? `Keeps the selected scene and drops the other ${sceneCount - 1}. Undoable.`
                 : m === 'showcase' ? 'One looping scene' : 'Several scenes, transitions and overlays'
             }
-            className="rounded-sm px-2 py-0.5 text-[12px] transition-colors"
+            className="whitespace-nowrap rounded-sm px-2 py-0.5 text-[12px] transition-colors"
             style={
               active
                 ? { background: 'var(--c-accent-soft)', color: 'var(--c-accent)', fontWeight: 600 }

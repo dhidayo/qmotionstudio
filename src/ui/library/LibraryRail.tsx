@@ -111,7 +111,7 @@ export function LibraryRail({
               <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
                 {category}
               </h3>
-              <div className={sheet ? 'grid grid-cols-2 gap-2.5' : 'grid grid-cols-2 gap-2'}>
+              <div className={sheet ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-2 gap-2'}>
                 {visible
                   .filter((t) => t.category === category)
                   .map((template) => (

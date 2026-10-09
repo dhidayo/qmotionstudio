@@ -10,7 +10,9 @@ import { expect, test, type Page } from '@playwright/test';
  * was always right; that was the bug.
  */
 
-test.use({ viewport: { width: 1500, height: 940 } });
+// 63px taller since the tool strip moved in under the picture (D-116): the
+// pixel counts below are calibrated to the canvas size these were written for.
+test.use({ viewport: { width: 1500, height: 1003 } });
 
 const SELECTION = '[data-selection-box]';
 

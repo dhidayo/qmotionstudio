@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { RenderRig } from '@/core/render/rig';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Project } from '@/document/types';
 import type { MediaStore } from '@/media/store';
-import * as actions from '@/document/actions';
 import { sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
 import { useEditor } from '@/state/store';
 import { posterUrl } from '@/templates/manifest';
 import { Artboard } from '@/ui/artboard/Artboard';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
-import { useMediaStore } from '@/ui/media/MediaProvider';
-import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
+import { StartActions } from '@/ui/editing/StartActions';
 import { Icon } from './Icon';
 import { PhonePanels } from './PhonePanels';
 import { PhoneToolbar } from './PhoneToolbar';
@@ -64,7 +62,7 @@ export function PhoneLayout({
       </main>
       <PhoneTransport clock={clock} />
       {project.mode === 'motionAd' ? <PhoneTimeline clock={clock} /> : <ScrubBar clock={clock} variant="phone" />}
-      <StartActions />
+      <StartActions variant="phone" onChooseDesign={() => { useOverlays.getState().openPhonePanel('designs'); }} />
       <PhoneToolbar />
       <PhonePanels clock={clock} />
       <SidewaysNote />
@@ -159,75 +157,6 @@ function clockTime(ms: number): string {
   const seconds = Math.floor(total % 60);
   const tenths = Math.floor((total * 10) % 10);
   return `${minutes}:${seconds.toString().padStart(2, '0')}.${tenths}`;
-}
-
-/**
- * "Choose a design" and "Add your photos" — the two things a new project is
- * waiting for, said as what they do (point 3 of the review). Shown while the
- * picture is still the sample photographs; once it is yours, the room goes
- * back to the picture.
- */
-function StartActions(): React.JSX.Element | null {
-  const media = useMediaStore();
-  const photos = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.photos);
-  const selecting = useEditor((s) =>
-    s.selectedOverlay !== null || s.selectedSlot !== null || s.selectedLogo || s.selectedEffect !== null || s.selectedAudio !== null,
-  );
-  const dispatch = useEditor((s) => s.dispatch);
-  const showToast = useEditor((s) => s.showToast);
-  const open = useOverlays((o) => o.openPhonePanel);
-  const input = useRef<HTMLInputElement>(null);
-
-  // A new photo takes a sample's place, in order, so the design keeps its framing.
-  const onAdded = useCallback((ids: string[]) => {
-    const current = useEditor.getState().project.scenes[useEditor.getState().selectedScene]?.inputs.photos ?? [];
-    const extra: string[] = [];
-    let slot = 0;
-    for (const id of ids) {
-      while (slot < current.length && current[slot]?.mediaId.startsWith('sample:') !== true) slot++;
-      if (slot < current.length) { dispatch(actions.replacePhoto(slot, id)); slot++; }
-      else extra.push(id);
-    }
-    if (extra.length > 0) dispatch(actions.addPhotos(extra));
-    showToast(ids.length === 1 ? 'Photo added.' : `${ids.length} photos added.`);
-  }, [dispatch, showToast]);
-  const { state: upload, addFiles } = useUpload(media, onAdded, { artboardLongestEdge: 1920 });
-
-  const samplesOnly = photos === undefined || photos.every((p) => p.mediaId.startsWith('sample:'));
-  if (!samplesOnly || selecting) return null;
-
-  return (
-    <div className="flex shrink-0 gap-2 border-t border-edge bg-panel px-3 py-2" data-start-actions>
-      <button
-        type="button"
-        onClick={() => { open('designs'); }}
-        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-edge py-2.5 text-[14px] font-semibold"
-      >
-        <Icon name="designs" size={18} /> Choose a design
-      </button>
-      <button
-        type="button"
-        onClick={() => { input.current?.click(); }}
-        disabled={upload.busy}
-        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-[14px] font-semibold text-accent-ink"
-      >
-        <Icon name="photo" size={18} /> {upload.busy ? 'Reading…' : 'Add your photos'}
-      </button>
-      <input
-        ref={input}
-        type="file"
-        accept={ACCEPT_ATTRIBUTE}
-        multiple
-        hidden
-        aria-label="Add your photos"
-        onChange={(e) => {
-          void addFiles([...(e.target.files ?? [])]);
-          e.target.value = '';
-        }}
-      />
-      {upload.error !== null && <span className="sr-only" role="alert">{upload.error}</span>}
-    </div>
-  );
 }
 
 const TIP_KEY = 'ms.phoneTimelineTip';

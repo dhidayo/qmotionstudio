@@ -223,13 +223,6 @@ export function CanvasSelection({
   const pinch = useRef<Pinch | null>(null);
   const pan = useRef<{ from: Point; zoom: ViewZoom } | null>(null);
   const lastTap = useRef<{ key: string; at: number } | null>(null);
-  /** "Tap it again for its menu" waits a moment, in case the second tap is a double-tap. */
-  const menuTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancelMenu = (): void => {
-    if (menuTimer.current !== null) clearTimeout(menuTimer.current);
-    menuTimer.current = null;
-  };
-  useEffect(() => () => { if (menuTimer.current !== null) clearTimeout(menuTimer.current); }, []);
 
   /*
    * The selection box takes keyboard focus when something is clicked on the
@@ -572,7 +565,6 @@ export function CanvasSelection({
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0) return;
-    cancelMenu();
     const touch = event.pointerType !== 'mouse';
     if (touch) fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -651,41 +643,39 @@ export function CanvasSelection({
   };
 
   /** A press that ended where it began. */
-  const onTap = (tap: Press, x: number, y: number, now: number): void => {
+  /*
+   * A press that ended where it began (D-110, revised by D-116).
+   *
+   * A click or a tap selects, and that is all it does. Pressing a selected
+   * element again used to bring up its menu after a pause — "it keeps showing
+   * context menu, and I believe that's distracting". The menu is a deliberate
+   * gesture now: right-click, or press and hold on a touch screen. A double
+   * click or double tap still edits — types into text, replaces a picture.
+   */
+  const onTap = (tap: Press, now: number): void => {
     const again = (key: string): boolean =>
       lastTap.current !== null && lastTap.current.key === key && now - lastTap.current.at < DOUBLE_TAP_MS;
 
-    if (!tap.touch) {
-      // Clicking what is already selected brings up its menu (point 6); a
-      // double-click cancels that and edits instead.
-      if (tap.target && tap.wasSelected) {
-        const target = tap.target;
-        menuTimer.current = setTimeout(() => { menuTimer.current = null; openTargetMenu(target, x, y); }, DOUBLE_TAP_MS);
-      }
-      return;
-    }
+    // A mouse selected on the press; its double-click is the browser's own.
+    if (!tap.touch) return;
 
-    if (tap.target && tap.wasSelected) {
-      if (again(tap.target.key)) {
+    if (tap.target) {
+      if (tap.wasSelected && again(tap.target.key)) {
         lastTap.current = null;
         primaryEdit(tap.target);
         return;
       }
+      if (!tap.wasSelected) {
+        select(tap.target);
+        holdStill();
+      }
       lastTap.current = { key: tap.target.key, at: now };
-      const target = tap.target;
-      menuTimer.current = setTimeout(() => { menuTimer.current = null; openTargetMenu(target, x, y); }, DOUBLE_TAP_MS);
       return;
     }
-    // Something is selected and this tap is elsewhere: put it down first.
+    // A tap on the empty picture puts the selection down.
     if (selected) {
       lastTap.current = null;
       select(null);
-      return;
-    }
-    if (tap.target) {
-      select(tap.target);
-      holdStill();
-      lastTap.current = { key: tap.target.key, at: now };
       return;
     }
     // A double-tap on the empty picture fits it back to the screen.
@@ -817,7 +807,7 @@ export function CanvasSelection({
       setGuides([]);
       endInteraction();
     }
-    if (tap && !tap.moved && !cancelled && !longPress.current.fired) onTap(tap, event.clientX, event.clientY, event.timeStamp);
+    if (tap && !tap.moved && !cancelled && !longPress.current.fired) onTap(tap, event.timeStamp);
   };
 
   /** What a double-click on a thing means: type into it, or choose a new picture for it. */
@@ -834,7 +824,6 @@ export function CanvasSelection({
 
   const onDoubleClick = (event: React.MouseEvent<HTMLDivElement>): void => {
     // A touch double-tap is handled as taps (D-110); this is the mouse's.
-    cancelMenu();
     const target = pick(toDesign(event));
     if (!target) return;
     event.preventDefault();

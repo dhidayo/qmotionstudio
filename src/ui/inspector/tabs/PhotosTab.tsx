@@ -83,6 +83,7 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
             accept={ACCEPT_ATTRIBUTE}
             multiple
             hidden
+            aria-label="Add photos to this scene"
             onChange={(e) => {
               void addFiles([...(e.target.files ?? [])]);
               e.target.value = '';

@@ -28,8 +28,9 @@ test.describe('at desktop width', () => {
   test('both side panels are columns', async ({ page }) => {
     await open(page);
     await expect(page.getByRole('complementary', { name: 'Template library' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Choose a design', exact: true })).toHaveCount(0);
     await expect(page.locator('[data-sheet]')).toHaveCount(0);
+    // And the same way in as a phone's, under the picture (D-116).
+    await expect(page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a design' })).toBeVisible();
   });
 });
 
@@ -42,7 +43,8 @@ test.describe('at tablet width', () => {
     await expect(page.getByRole('complementary', { name: 'Template library' })).toHaveCount(0);
     const wide = await canvasWidth(page);
 
-    await page.getByRole('button', { name: 'Photos, text and style', exact: true }).click();
+    // The tool strip's Photos opens the inspector as a sheet (D-116).
+    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Photos', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Photos, text and style' })).toBeVisible();
 
     // The inspector's own controls are in there — the same component, not a
@@ -56,25 +58,20 @@ test.describe('at tablet width', () => {
     expect(await canvasWidth(page)).toBeCloseTo(wide, 0);
   });
 
-  test('tapping the artboard behind a sheet closes it', async ({ page }) => {
-    /*
-     * The sheet covers the toolbar on purpose, so the two cannot be swapped
-     * without closing one — which is how a sheet behaves everywhere else, and
-     * is what makes tapping away from it the obvious way out.
-     */
+  test('tapping outside a panel closes it', async ({ page }) => {
     await open(page);
 
-    await page.getByRole('button', { name: 'Choose a design', exact: true }).click();
-    const sheet = page.getByRole('dialog', { name: 'Choose a design' });
-    await expect(sheet).toBeVisible();
+    // Designs opens as a window over the editor (D-116); a tap outside it closes it.
+    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a design' }).click();
+    const designs = page.getByRole('dialog', { name: 'Choose a design' });
+    await expect(designs).toBeVisible();
+    await page.mouse.click(12, 500);
+    await expect(designs).toHaveCount(0);
 
-    // Well above the sheet, over the dimmed area.
-    await page.mouse.click(450, 80);
-    await expect(page.locator('[data-sheet]')).toHaveCount(0);
-
-    // And the other one opens now that nothing is in the way.
-    await page.getByRole('button', { name: 'Photos, text and style', exact: true }).click();
+    // And the inspector sheet opens now that nothing is in the way.
+    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Text', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Photos, text and style' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Text' })).toHaveAttribute('aria-selected', 'true');
   });
 });
 

@@ -179,7 +179,7 @@ test.describe('fingers on the canvas', () => {
     expect((await state(page)).transforms, 'the selected element moves').not.toBe(start.transforms);
   });
 
-  test('a tap elsewhere puts the selection down — even on another element', async ({ page }) => {
+  test('a tap on the empty picture puts the selection down; a tap on another element selects it', async ({ page }) => {
     await open(page, LIFESTYLE);
     await tap(page, await at(page, PHOTO.x, PHOTO.y));
     expect((await state(page)).slot).toMatch(/^photo:/);
@@ -187,16 +187,24 @@ test.describe('fingers on the canvas', () => {
     expect((await state(page)).slot).toBeNull();
 
     await tap(page, await at(page, PHOTO.x, PHOTO.y));
-    // The headline is another element: the first tap only deselects.
+    // Clicks always select (D-116): the headline is picked straight away.
     await tap(page, await at(page, 0.5, 0.08));
-    expect((await state(page)).slot).toBeNull();
+    expect((await state(page)).slot).toMatch(/^text:/);
   });
 
-  test('tap a selected element again for its menu', async ({ page }) => {
+  test('a second tap selects and nothing more; press and hold brings the menu', async ({ page }) => {
     await open(page, LIFESTYLE);
     const photo = await at(page, PHOTO.x, PHOTO.y);
     await tap(page, photo);
-    await page.touchscreen.tap(photo.x, photo.y);
+    await tap(page, photo);
+    await page.waitForTimeout(500);
+    await expect(page.getByRole('menu'), 'no menu from a plain tap').toHaveCount(0);
+    expect((await state(page)).slot).toMatch(/^photo:/);
+
+    const cdp = await fingers(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [photo] });
+    await page.waitForTimeout(700);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: /^Replace photo/ })).toBeVisible();

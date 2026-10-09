@@ -28,7 +28,7 @@ test('a HEIC upload decodes and lands in the photo list', async ({ page }) => {
 
   const countBefore = await page.getByText(/^Photos \(\d+\)$/).textContent();
 
-  await page.locator('input[type="file"]').first().setInputFiles(FIXTURE);
+  await page.getByLabel('Add photos to this scene').setInputFiles(FIXTURE);
 
   // The WASM path loads ~2MB and then decodes, so this needs real headroom.
   await expect(page.getByText(/^Photos \(\d+\)$/)).not.toHaveText(countBefore ?? '', { timeout: 30_000 });
@@ -77,7 +77,7 @@ test('falls back to WASM when the browser cannot decode HEIC', async ({ page }) 
 
   const before = await page.getByText(/^Photos \(\d+\)$/).textContent();
 
-  await page.locator('input[type="file"]').first().setInputFiles({
+  await page.getByLabel('Add photos to this scene').setInputFiles({
     name: 'sample.heic',
     mimeType: 'image/heic',
     buffer: readFileSync(FIXTURE),
@@ -96,7 +96,7 @@ test('a corrupt file reports clearly instead of failing silently', async ({ page
   await page.waitForTimeout(800);
 
   // §16: never swallow a decode error.
-  await page.locator('input[type="file"]').first().setInputFiles({
+  await page.getByLabel('Add photos to this scene').setInputFiles({
     name: 'broken.png',
     mimeType: 'image/png',
     buffer: Buffer.from('this is definitely not a png'),

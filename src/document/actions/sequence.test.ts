@@ -254,3 +254,36 @@ describe('switching template reconciles the photo count', () => {
     ).toBe(before);
   });
 });
+
+describe('placeOwnPhotos (D-116)', () => {
+  it('fills every photo slot in every scene, in order, repeating a short set', async () => {
+    const { placeOwnPhotos } = await import('./index');
+    const photo = (mediaId: string) => ({ mediaId, frame: '3:4' as const, sizeMode: 'template' as const, sizePct: 100, cropMode: 'original' as const, cropRect: { x: 0, y: 0, w: 0.5, h: 0.5 } });
+    const base = createProject();
+    const scene = base.scenes[0];
+    if (!scene) throw new Error('no scene');
+    const project = {
+      ...base,
+      scenes: [
+        { ...scene, id: 'a', inputs: { ...scene.inputs, photos: [photo('sample:dune'), photo('sample:tide')] } },
+        { ...scene, id: 'b', inputs: { ...scene.inputs, photos: [] } },
+        { ...scene, id: 'c', inputs: { ...scene.inputs, photos: [photo('sample:ember'), photo('sample:reef'), photo('sample:bloom')] } },
+      ],
+    };
+    const next = placeOwnPhotos(['u1', 'u2', 'u3', 'u4']).apply(project, { sceneIndex: 0 });
+    expect(next.scenes.map((s) => s.inputs.photos.map((p) => p.mediaId))).toEqual([['u1', 'u2'], [], ['u3', 'u4', 'u1']]);
+    // Frames stay; the old crops go with the old pictures.
+    expect(next.scenes[2]?.inputs.photos[0]).toMatchObject({ frame: '3:4', sizeMode: 'template' });
+    expect(next.scenes[2]?.inputs.photos[0]?.cropRect).toBeUndefined();
+  });
+
+  it('a one-scene design takes the extra photos as new slots', async () => {
+    const { placeOwnPhotos } = await import('./index');
+    const base = createProject();
+    const scene = base.scenes[0];
+    if (!scene) throw new Error('no scene');
+    const project = { ...base, scenes: [{ ...scene, inputs: { ...scene.inputs, photos: [{ mediaId: 'sample:dune', frame: '1:1' as const, sizeMode: 'template' as const, sizePct: 100, cropMode: 'template' as const }] } }] };
+    const next = placeOwnPhotos(['u1', 'u2', 'u3']).apply(project, { sceneIndex: 0 });
+    expect(next.scenes[0]?.inputs.photos.map((p) => p.mediaId)).toEqual(['u1', 'u2', 'u3']);
+  });
+});

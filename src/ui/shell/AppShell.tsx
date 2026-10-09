@@ -30,6 +30,8 @@ import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
+import { PhonePanels } from '@/ui/mobile/PhonePanels';
+import { ToolStrip } from './ToolStrip';
 
 /*
  * Opened rarely and heavy — the export pipeline, the project list — so they
@@ -350,7 +352,7 @@ export function AppShell(): React.JSX.Element {
 
   const layout = useLayout();
   /** Which panel is open as a sheet, below desktop width. Never both. */
-  const [sheet, setSheet] = useState<'library' | 'inspector' | null>(null);
+  const [sheet, setSheet] = useState<'inspector' | null>(null);
 
   const exporting = useEditor((s) => s.exporting);
   const setExporting = useEditor((s) => s.setExporting);
@@ -375,31 +377,11 @@ export function AppShell(): React.JSX.Element {
         {layout === 'desktop' && <LibraryRail />}
 
         <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
-          {layout !== 'desktop' && (
-            <div className="flex shrink-0 items-center gap-1.5 border-b border-edge bg-panel px-2 py-1.5">
-              <button
-                type="button"
-                onClick={() => { setSheet(sheet === 'library' ? null : 'library'); }}
-                aria-expanded={sheet === 'library'}
-                className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
-              >
-                Choose a design
-              </button>
-              <button
-                type="button"
-                onClick={() => { setSheet(sheet === 'inspector' ? null : 'inspector'); }}
-                aria-expanded={sheet === 'inspector'}
-                className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
-              >
-                Photos, text and style
-              </button>
-            </div>
-          )}
-
           <div className="relative min-h-0 flex-1">
             <Artboard project={project} clock={clock} rig={rig} media={media} />
             <PerfOverlay rig={rig} />
           </div>
+          <ToolStrip onOpenPanel={layout === 'desktop' ? undefined : () => { setSheet('inspector'); }} />
           {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}
         </main>
 
@@ -408,14 +390,6 @@ export function AppShell(): React.JSX.Element {
 
       {layout !== 'desktop' && (
         <>
-          <Sheet
-            open={sheet === 'library'}
-            title="Choose a design"
-            side="left"
-            onClose={() => { setSheet(null); }}
-          >
-            <LibraryRail />
-          </Sheet>
           <Sheet
             open={sheet === 'inspector'}
             title="Photos, text and style"
@@ -426,6 +400,8 @@ export function AppShell(): React.JSX.Element {
           </Sheet>
         </>
       )}
+      {/* Designs and Add, opened from the tool strip, as windows (D-116). */}
+      <PhonePanels clock={clock} scenePicker={false} />
       </>}
       <Suspense fallback={null}>
         {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}

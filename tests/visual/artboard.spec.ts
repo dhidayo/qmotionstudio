@@ -53,7 +53,9 @@ async function readTextCacheSize(page: Page): Promise<number> {
   });
 }
 
-test.use({ viewport: { width: 1440, height: 900 } });
+// 63px taller since the tool strip moved in under the picture (D-116), so the
+// canvas — and every baseline here — keeps the size it was recorded at.
+test.use({ viewport: { width: 1440, height: 963 } });
 
 test.describe('M0 — aspect scaling', () => {
   test.beforeEach(async ({ page }) => {

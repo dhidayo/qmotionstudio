@@ -204,6 +204,52 @@ export function replacePhoto(index: number, mediaId: string): Action {
   };
 }
 
+/**
+ * "Add your photos": the person's photographs take every photo slot in the
+ * design, in order, across all of its scenes (D-116).
+ *
+ * Each slot keeps its frame and size — only the picture changes — so the
+ * design still looks like itself, now with their pictures. Fewer photographs
+ * than slots repeat in order rather than leaving samples mixed in; more than a
+ * one-scene design holds are added to it, up to `maxExtra`. One undo step,
+ * however many scenes it touches.
+ */
+export function placeOwnPhotos(mediaIds: readonly string[], maxExtra = 8): Action {
+  return {
+    label: mediaIds.length === 1 ? 'Use your photo' : `Use ${mediaIds.length} photos`,
+    apply: (project) => {
+      if (mediaIds.length === 0) return project;
+      let cursor = 0;
+      const next = (): string => {
+        const id = mediaIds[cursor % mediaIds.length] ?? '';
+        cursor += 1;
+        return id;
+      };
+      const scenes = project.scenes.map((scene) => {
+        const photos = scene.inputs.photos;
+        if (photos.length === 0) return scene;
+        // The old crop belonged to the old picture, as in `replacePhoto`.
+        const replaced = photos.map((photo): PhotoInput => {
+          const { cropRect: _crop, ...rest } = photo;
+          return { ...rest, mediaId: next() };
+        });
+        // A single scene takes any photographs left over, as new slots.
+        const extra = project.scenes.length === 1
+          ? mediaIds.slice(photos.length, photos.length + maxExtra).map((mediaId): PhotoInput => ({
+              mediaId,
+              frame: photos[0]?.frame ?? '3:4',
+              sizeMode: 'template',
+              sizePct: 100,
+              cropMode: 'template',
+            }))
+          : [];
+        return { ...scene, inputs: { ...scene.inputs, photos: [...replaced, ...extra] } };
+      });
+      return { ...project, scenes };
+    },
+  };
+}
+
 export function removeAllPhotos(): Action {
   return {
     label: 'Remove all photos',

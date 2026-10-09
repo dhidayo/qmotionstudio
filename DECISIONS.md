@@ -2724,3 +2724,31 @@ top — with the design's own timing and fade and a slow 6% push-in. It is a
 pass over every scene template's output, applied in the template registry, so
 every design gets it and the preview and export agree. The photo stays
 selectable and can be moved and resized like any other.
+
+## D-116 — one way in on every screen; clicks select; your photos go everywhere
+
+From a review against a comparable editor and testing on a computer:
+
+- **Tools under the picture, everywhere.** The phone's "Choose a design" and
+  "Add your photos", and its Designs / Add / Photos / Text / Effects / Style
+  tools, now sit under the picture on tablets and computers too — "an easier
+  way for visitors to approach the product, even on desktops". Photos, Text,
+  Effects and Style open those pages of the inspector (beside the picture on a
+  wide screen, as a sheet on a narrower one); Designs and Add open their own
+  windows. The phone's bottom sheets are centred windows on wider screens. The
+  tablet's old "Choose a design / Photos, text and style" buttons are gone, and
+  its header folds the five frame shapes into one chip so it fits one row.
+- **Always there.** "Choose a design" and "Add your photos" no longer hide once
+  the picture holds a photo of the person's own, or while something is
+  selected.
+- **Add your photos fills the whole design.** The picked photographs go into
+  every photo slot, in order, across all scenes, repeating a short set rather
+  than leaving samples mixed in; a one-scene design takes any extras as new
+  slots. Frames and sizes stay, old crops go. One undo puts the old ones back.
+- **Clicks select; the menu is a deliberate gesture.** Clicking or tapping an
+  element that is already selected used to bring up its menu after a pause —
+  "distracting and not the expected behaviour". A click or tap selects and
+  nothing more, including on another element while one is selected (this
+  replaces D-110's "the first tap only deselects"). The menu is right-click, or
+  press and hold on a touch screen; a double-click or double-tap edits text or
+  replaces a picture, as before. Dragging still moves only what is selected.

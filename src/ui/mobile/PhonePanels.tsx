@@ -25,7 +25,14 @@ import { Icon, type IconName } from './Icon';
  * are the same components as the desktop inspector's — only the box they sit
  * in is the phone's.
  */
-export function PhonePanels({ clock }: { clock: PreviewClock }): React.JSX.Element | null {
+export function PhonePanels({
+  clock,
+  scenePicker: drawsScenePicker = true,
+}: {
+  clock: PreviewClock;
+  /** False where the timeline is always on screen and draws its own (a computer). */
+  scenePicker?: boolean;
+}): React.JSX.Element | null {
   const panel = useOverlays((o) => o.phonePanel);
   const picking = useOverlays((o) => o.scenePicker);
   const openScenePicker = useOverlays((o) => o.openScenePicker);
@@ -34,7 +41,7 @@ export function PhonePanels({ clock }: { clock: PreviewClock }): React.JSX.Eleme
    * phone's timeline is folded away — so it is drawn here unless the full
    * timeline is open and drawing its own.
    */
-  const scenePicker = picking !== null && panel !== 'timeline'
+  const scenePicker = drawsScenePicker && picking !== null && panel !== 'timeline'
     ? <ScenePicker mode={picking} onClose={() => { openScenePicker(null); }} />
     : null;
   if (panel === null) return scenePicker;
