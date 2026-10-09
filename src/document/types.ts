@@ -48,11 +48,16 @@ export type PhotoInput = {
   readonly cropRect?: Rect;
 };
 
-export type BackgroundTreatment = 'solid' | 'gradient' | 'blurredPhoto' | 'pattern';
+/** `picture` is a photograph of the person's own behind the design (D-120). */
+export type BackgroundTreatment = 'solid' | 'gradient' | 'blurredPhoto' | 'pattern' | 'picture';
 
 export type LookSettings = {
   readonly palette: Palette;
   readonly background: BackgroundTreatment;
+  /** The photograph a `picture` background shows (D-120). */
+  readonly backgroundMediaId?: string;
+  /** How far the background colour is laid over that photograph, 0–1, so words stay readable. Absent: 0.35. */
+  readonly backgroundDim?: number;
   readonly grain: number;
   readonly vignette: number;
   /** Multiplies time before layers are evaluated — never baked into keyframes. */

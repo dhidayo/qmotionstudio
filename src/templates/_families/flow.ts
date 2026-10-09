@@ -39,7 +39,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       type: 'image',
       startMs: 0,
       endMs: durationMs,
-      tracks: sampled(0, durationMs, 80, (ms) => pose(i, ms)),
+      tracks: sampled(0, durationMs, 80, (ms) => pose(i, ms), stage.w * 0.45),
       props: cardProps(photo, card, inputs, u),
     }));
     return [backgroundLayer(inputs, ctx), glow(ctx, { x: stage.cx, y: stage.cy }, Math.min(stage.w, stage.h) * 1.3, 0.16), depthGroup(ctx, 'flow', cards), head];
@@ -80,7 +80,8 @@ function poseFor(shape: Shape, p: SceneVariant['params'], stage: Stage, n: numbe
         const side = Math.sign(off);
         const near = Math.min(a, 1);
         const along = side * (near * card * 0.62 + Math.max(0, a - 1) * gap);
-        const fade = clamp01(3.2 - a);
+        // Gone before it reaches the far end, where it wraps round to the other side.
+        const fade = clamp01(Math.min(3.2 - a, (n / 2 - a) * 2.5));
         if (shape === 'centerLock') {
           return { x: stage.cx + off * card * 0.82, y: stage.cy, scale: lerp(1.12, 0.78, near), opacity: fade, z: -a };
         }

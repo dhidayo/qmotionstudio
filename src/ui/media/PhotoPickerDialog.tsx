@@ -32,8 +32,9 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
   const apply = useCallback((mediaId: string): void => {
     if (target.kind === 'slot') dispatch(actions.replacePhoto(target.index, mediaId));
     else if (target.kind === 'overlay') dispatch(actions.setOverlayMedia(target.id, mediaId));
+    else if (target.kind === 'background') dispatch(actions.setBackgroundPicture(mediaId));
     else dispatch(actions.setLogoMedia(mediaId));
-    showToast(target.kind === 'logo' ? 'Logo replaced.' : 'Photo replaced.');
+    showToast(target.kind === 'logo' ? 'Logo replaced.' : target.kind === 'background' ? 'Background changed.' : 'Photo replaced.');
     close(null);
   }, [target, dispatch, showToast, close]);
 
@@ -58,7 +59,7 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
    * the one thing they came here to do, which is use their own.
    */
   const ids = store.ids('image').filter((id) => !id.startsWith('sample:'));
-  const title = target.kind === 'logo' ? 'Replace the logo' : 'Replace photo';
+  const title = target.kind === 'logo' ? 'Replace the logo' : target.kind === 'background' ? 'Background picture' : 'Replace photo';
   const phone = useLayout() === 'phone';
 
   const upload = (

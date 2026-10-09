@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { OPEN_TEST_RELEASE } from '../../src/entitlements/testRelease';
 
 /**
  * §12's gating, which M7 asks to "behave correctly with the dev toggle".
@@ -15,7 +16,7 @@ const tierToggle = (page: Page) => page.getByRole('button', { name: /^Tier: / })
 async function setTier(page: Page, tier: 'free' | 'pro'): Promise<void> {
   // The public build has no switch and is always free (D-093): asking for
   // free there is already satisfied, and asking for pro is a test bug.
-  if (process.env['PW_PROD'] === '1') {
+  if (process.env['PW_PROD'] === '1' && !OPEN_TEST_RELEASE) {
     if (tier === 'pro') throw new Error('The public build cannot be switched to Pro.');
     return;
   }
@@ -128,7 +129,7 @@ test.describe('the public build (D-093)', () => {
    * must offer no way in — including a tier left in storage by a dev session
    * or typed in by hand.
    */
-  test.skip(process.env['PW_PROD'] !== '1', 'Only the production build hides the switch.');
+  test.skip(process.env['PW_PROD'] !== '1' || OPEN_TEST_RELEASE, 'Only the production build hides the switch, and not during the open test release (D-122).');
 
   test('offers no way to switch to Pro', async ({ page }) => {
     await page.addInitScript(() => { localStorage.setItem('ms.tier', 'pro'); });

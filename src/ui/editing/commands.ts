@@ -5,6 +5,7 @@ import { sceneLengthMs, sceneSpans, totalDurationMs } from '@/document/select/ti
 import { summaryFor } from '@/templates/manifest';
 import { useEditor } from '@/state/store';
 import { useOverlays, type MenuItem } from '@/ui/shell/overlays';
+import type { Layout } from '@/ui/shell/useLayout';
 
 /**
  * What can be done to a thing on the timeline or the canvas (D-104), in one
@@ -301,6 +302,38 @@ export function logoMenu(): readonly MenuItem[] {
     { label: 'Logo settings', onSelect: () => { s.selectLogo(true); } },
     { kind: 'separator' },
     { label: 'Remove logo', hint: 'Delete', danger: true, onSelect: () => { s.selectLogo(true); deleteSelection(); } },
+  ];
+}
+
+/**
+ * Style's Background section, wherever Style is on this screen (D-120): a
+ * sheet on a phone, beside the picture on a computer, a sheet from the side
+ * on a tablet.
+ */
+export function showBackgroundSettings(layout: Layout): void {
+  const s = useEditor.getState();
+  const o = useOverlays.getState();
+  if (layout === 'phone') {
+    o.openPhonePanel('style', 'Background');
+    return;
+  }
+  // Put down a layer, music or effect, so Style is what the inspector shows.
+  s.selectOverlay(null);
+  s.selectAudio(null);
+  s.selectEffect(null);
+  s.setInspectorTab('look');
+  if (layout === 'tablet') o.setInspectorSheet(true);
+  o.focusInspectorSection('Background');
+}
+
+/** Right-click, or a long press, on the design where nothing is (D-120). */
+export function backgroundMenu(layout: Layout): readonly MenuItem[] {
+  const o = useOverlays.getState();
+  return [
+    { label: 'Change background…', hint: 'Colour, gradient or pattern', onSelect: () => { showBackgroundSettings(layout); } },
+    { label: 'Use a picture as background…', onSelect: () => { o.openPhotoPicker({ kind: 'background' }); } },
+    { kind: 'separator' },
+    { label: 'Choose a different design…', onSelect: () => { o.openPhonePanel('designs'); } },
   ];
 }
 

@@ -1,5 +1,8 @@
 import { useEffect } from 'react';
 import * as actions from '@/document/actions';
+import { DEFAULT_BACKGROUND_DIM } from '@/templates/_shared/chrome';
+import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
+import { useOverlays } from '@/ui/shell/overlays';
 import { PALETTE_ROLES, type PaletteRole } from '@/core/types';
 import type { BackgroundTreatment } from '@/document/types';
 import { useEditor } from '@/state/store';
@@ -17,10 +20,11 @@ const ROLE_LABELS: Record<PaletteRole, string> = {
 };
 
 const BACKGROUND_LABELS: Record<BackgroundTreatment, string> = {
-  solid: 'Solid',
+  solid: 'Colour',
   gradient: 'Gradient',
-  blurredPhoto: 'Blurred photo',
   pattern: 'Pattern',
+  blurredPhoto: 'Blurred photo',
+  picture: 'Your picture',
 };
 
 /** §8.4. */
@@ -43,6 +47,8 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
 
   return (
     <div>
+      <BackgroundSection backgrounds={backgrounds} />
+
       {palettes.length > 0 && (
         <Section title="Preset palettes">
           <div className="grid grid-cols-3 gap-1.5">
@@ -82,19 +88,6 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
             />
           ))}
         </div>
-      </Section>
-
-      <Section title="Background">
-        <Segmented
-          label="Treatment"
-          value={look.background}
-          columns={2}
-          options={backgrounds.map((b) => ({ value: b, label: BACKGROUND_LABELS[b] }))}
-          onChange={(background) => { dispatch(actions.setBackground(background)); }}
-        />
-        {backgrounds.length === 1 && (
-          <EmptyNote>This template fills the frame with your photo, so there is no background to treat.</EmptyNote>
-        )}
       </Section>
 
       <LogoSection template={template} />
@@ -154,5 +147,100 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
 
       <SceneLayoutReset />
     </div>
+  );
+}
+
+/**
+ * The background, first in Style (D-120): what is behind the design — a
+ * colour, a gradient, a pattern, a blur of the first photo, or a picture of
+ * the person's own — and its colour, without going through the palette.
+ */
+function BackgroundSection({ backgrounds }: { backgrounds: readonly BackgroundTreatment[] }): React.JSX.Element | null {
+  const dispatch = useEditor((s) => s.dispatch);
+  const look = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.look);
+  const scenes = useEditor((s) => s.project.scenes.length);
+  const showToast = useEditor((s) => s.showToast);
+  const openPhotoPicker = useOverlays((o) => o.openPhotoPicker);
+  const store = useMediaStore();
+  useMediaRevision();
+  if (!look) return null;
+
+  const fixed = backgrounds.length === 1;
+  const picture = look.background === 'picture' ? look.backgroundMediaId : undefined;
+  const pictureUrl = picture === undefined ? null : store.previewUrl(picture);
+
+  return (
+    <Section title="Background">
+      <div data-inspector-section="Background" className="flex flex-col gap-2">
+        {fixed ? (
+          <EmptyNote>This design fills the frame with your photo, so the colour shows only round its edges.</EmptyNote>
+        ) : (
+          <Segmented
+            label="Behind the design"
+            value={look.background}
+            columns={2}
+            options={backgrounds.map((b) => ({ value: b, label: BACKGROUND_LABELS[b] }))}
+            onChange={(background) => {
+              // A picture needs choosing first; it takes effect once there is one.
+              if (background === 'picture' && look.backgroundMediaId === undefined) {
+                openPhotoPicker({ kind: 'background' });
+                return;
+              }
+              dispatch(actions.setBackground(background));
+            }}
+          />
+        )}
+        {look.background === 'picture' && (
+          <div className="flex items-center gap-2">
+            {pictureUrl !== null && (
+              <img src={pictureUrl} alt="Background picture" className="size-12 shrink-0 rounded-md border border-edge object-cover" />
+            )}
+            <button
+              type="button"
+              onClick={() => { openPhotoPicker({ kind: 'background' }); }}
+              className="flex-1 rounded-md border border-edge px-2 py-1.5 text-[12px] font-semibold hover:bg-panel-alt"
+            >
+              {picture === undefined ? 'Choose a picture…' : 'Change picture…'}
+            </button>
+          </div>
+        )}
+        {look.background === 'picture' && picture !== undefined && (
+          <Slider
+            label="Dim"
+            value={Math.round((look.backgroundDim ?? DEFAULT_BACKGROUND_DIM) * 100)}
+            min={0}
+            max={90}
+            suffix="%"
+            onChange={(pct) => { dispatch(actions.setBackgroundDim(pct / 100)); }}
+          />
+        )}
+        {look.background !== 'blurredPhoto' && (
+          <ColorField
+            label={look.background === 'picture' ? 'Dim colour' : 'Background colour'}
+            value={look.palette.bg}
+            onChange={(color) => { dispatch(actions.setPaletteRole('bg', color)); }}
+          />
+        )}
+        {(look.background === 'gradient' || look.background === 'pattern') && (
+          <ColorField
+            label="Second colour"
+            value={look.palette.surface}
+            onChange={(color) => { dispatch(actions.setPaletteRole('surface', color)); }}
+          />
+        )}
+        {scenes > 1 && (
+          <button
+            type="button"
+            onClick={() => {
+              dispatch(actions.backgroundOnEveryScene());
+              showToast('Every scene has this background now. Undo takes it back.');
+            }}
+            className="rounded-md border border-edge px-2 py-1.5 text-[12px] hover:bg-panel-alt"
+          >
+            Use on every scene
+          </button>
+        )}
+      </div>
+    </Section>
   );
 }

@@ -18,7 +18,7 @@ import { NO_ZOOM, useOverlays, type ViewZoom } from '@/ui/shell/overlays';
 import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { useLayout } from '@/ui/shell/useLayout';
 import { LongPress } from '@/ui/shell/ContextMenu';
-import { deleteSelection, logoMenu, overlayMenu, slotMenu } from '@/ui/editing/commands';
+import { backgroundMenu, deleteSelection, logoMenu, overlayMenu, slotMenu } from '@/ui/editing/commands';
 import { InlineTextEditor, SelectionToolbar, screenBounds, type ToolbarAction } from './CanvasEditing';
 import { DESIGN_SHORT_EDGE } from '@/core/render/bounds';
 import { TEXT_BASE } from '@/core/render/overlays';
@@ -558,8 +558,12 @@ export function CanvasSelection({
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>): void => {
     const target = pick(toDesign(event));
-    if (!target) return;
     event.preventDefault();
+    if (!target) {
+      // Where nothing is, the design's own background (D-120).
+      openMenu({ x: event.clientX, y: event.clientY, title: 'Background', items: backgroundMenu(layout) });
+      return;
+    }
     openTargetMenu(target, event.clientX, event.clientY);
   };
 
@@ -594,6 +598,10 @@ export function CanvasSelection({
       longPress.current.start(event, (x, y) => {
         dragRef.current = null;
         openTargetMenu(under, x, y);
+      });
+    } else if (touch) {
+      longPress.current.start(event, (x, y) => {
+        openMenu({ x, y, title: 'Background', items: backgroundMenu(layout) });
       });
     }
 

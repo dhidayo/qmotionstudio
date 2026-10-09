@@ -7,6 +7,7 @@
  * without breaking D-001.
  */
 import { useSyncExternalStore } from 'react';
+import { OPEN_TEST_RELEASE } from './testRelease';
 
 export type Tier = 'free' | 'pro';
 
@@ -61,11 +62,12 @@ export function getLimits(tier: Tier, mode: Mode): Limits {
  *
  * On in development. Off in a production build unless that build is made
  * with `VITE_TIER_TOGGLE=1`, which is for a private staging copy and for
- * `npm run e2e:prod` — never for the public site. When real subscriptions
- * arrive, this and `setTier` are what they replace.
+ * `npm run e2e:prod` — and while the open test release lasts (D-122,
+ * `testRelease.ts`), on the public site too. When real subscriptions arrive,
+ * this and `setTier` are what they replace.
  */
 export const TIER_SWITCHABLE: boolean =
-  import.meta.env.DEV || import.meta.env.VITE_TIER_TOGGLE === '1';
+  import.meta.env.DEV || import.meta.env.VITE_TIER_TOGGLE === '1' || OPEN_TEST_RELEASE;
 
 const TIER_KEY = 'ms.tier';
 let currentTier: Tier = readTier();

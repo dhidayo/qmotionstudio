@@ -711,6 +711,61 @@ export function setBackground(background: BackgroundTreatment): Action {
   };
 }
 
+/** A photograph of the person's own behind the design (D-120). */
+export function setBackgroundPicture(mediaId: string): Action {
+  return {
+    label: 'Background picture',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({
+        ...inputs,
+        look: { ...inputs.look, background: 'picture', backgroundMediaId: mediaId },
+      })),
+  };
+}
+
+export function setBackgroundDim(dim: number): Action {
+  return {
+    label: 'Change background dim',
+    coalesceKey: 'backgroundDim',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({
+        ...inputs,
+        look: { ...inputs.look, backgroundDim: clamp(dim, 0, 1) },
+      })),
+  };
+}
+
+/**
+ * This scene's background — treatment, picture, dim and colours — on every
+ * scene of the ad (D-120), so a film keeps one backdrop from start to end.
+ */
+export function backgroundOnEveryScene(): Action {
+  return {
+    label: 'Background on every scene',
+    apply: (project, scope) => {
+      const from = project.scenes[scope.sceneIndex]?.inputs.look;
+      if (!from) return project;
+      const scenes = project.scenes.map((scene, index) => {
+        if (index === scope.sceneIndex) return scene;
+        const look = { ...scene.inputs.look, background: from.background, palette: { ...scene.inputs.look.palette, bg: from.palette.bg, surface: from.palette.surface } };
+        const { backgroundMediaId: _picture, backgroundDim: _dim, ...rest } = look;
+        return {
+          ...scene,
+          inputs: {
+            ...scene.inputs,
+            look: {
+              ...rest,
+              ...(from.backgroundMediaId === undefined ? {} : { backgroundMediaId: from.backgroundMediaId }),
+              ...(from.backgroundDim === undefined ? {} : { backgroundDim: from.backgroundDim }),
+            },
+          },
+        };
+      });
+      return { ...project, scenes };
+    },
+  };
+}
+
 export function setGrain(grain: number): Action {
   return {
     label: 'Change grain',

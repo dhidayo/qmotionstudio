@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
 import { Artboard } from '@/ui/artboard/Artboard';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { Timeline } from '@/ui/timeline/Timeline';
@@ -14,6 +14,7 @@ import { MediaProvider } from '@/ui/media/MediaProvider';
 import { watermarked } from '@/entitlements';
 import { ClockProvider } from './ClockProvider';
 import { Sheet } from './Sheet';
+import { useOverlays } from './overlays';
 import { useLayout } from './useLayout';
 import { MediaStore } from '@/media/store';
 import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
@@ -351,8 +352,9 @@ export function AppShell(): React.JSX.Element {
   useAutosave(project, media, restore.phase === 'ready');
 
   const layout = useLayout();
-  /** Which panel is open as a sheet, below desktop width. Never both. */
-  const [sheet, setSheet] = useState<'inspector' | null>(null);
+  /** The inspector as a sheet, below desktop width. */
+  const sheet = useOverlays((o) => o.inspectorSheet);
+  const setSheet = useOverlays((o) => o.setInspectorSheet);
 
   const exporting = useEditor((s) => s.exporting);
   const setExporting = useEditor((s) => s.setExporting);
@@ -381,7 +383,7 @@ export function AppShell(): React.JSX.Element {
             <Artboard project={project} clock={clock} rig={rig} media={media} />
             <PerfOverlay rig={rig} />
           </div>
-          <ToolStrip onOpenPanel={layout === 'desktop' ? undefined : () => { setSheet('inspector'); }} />
+          <ToolStrip onOpenPanel={layout === 'desktop' ? undefined : () => { setSheet(true); }} />
           {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}
         </main>
 
@@ -391,10 +393,10 @@ export function AppShell(): React.JSX.Element {
       {layout !== 'desktop' && (
         <>
           <Sheet
-            open={sheet === 'inspector'}
+            open={sheet}
             title="Photos, text and style"
             side="right"
-            onClose={() => { setSheet(null); }}
+            onClose={() => { setSheet(false); }}
           >
             <Inspector />
           </Sheet>

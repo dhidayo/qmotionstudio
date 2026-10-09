@@ -46,7 +46,9 @@ export type PickerState = {
 export type PhotoTarget =
   | { readonly kind: 'slot'; readonly index: number }
   | { readonly kind: 'overlay'; readonly id: string }
-  | { readonly kind: 'logo' };
+  | { readonly kind: 'logo' }
+  /** The scene's background picture (D-120). */
+  | { readonly kind: 'background' };
 
 /**
  * The phone layout's panels (D-109) — one open at a time, each a bottom sheet.
@@ -75,6 +77,15 @@ type OverlayState = {
   /** The "Replace photo" chooser. */
   photoPicker: PhotoTarget | null;
   openPhotoPicker: (target: PhotoTarget | null) => void;
+  /**
+   * The inspector as a sheet, below desktop width, and the section to bring
+   * into view in it (and beside the picture on a desktop) — "Background" from
+   * the tool strip or the canvas menu (D-120).
+   */
+  inspectorSheet: boolean;
+  setInspectorSheet: (open: boolean) => void;
+  inspectorSection: string | null;
+  focusInspectorSection: (section: string | null) => void;
   /** The list of keyboard shortcuts. */
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
@@ -101,6 +112,10 @@ export const useOverlays = create<OverlayState>((set) => ({
   openTextEdit: (textEdit) => { set({ textEdit, menu: null }); },
   photoPicker: null,
   openPhotoPicker: (photoPicker) => { set({ photoPicker, menu: null }); },
+  inspectorSheet: false,
+  setInspectorSheet: (inspectorSheet) => { set({ inspectorSheet, menu: null }); },
+  inspectorSection: null,
+  focusInspectorSection: (inspectorSection) => { set({ inspectorSection, menu: null }); },
   shortcutsOpen: false,
   setShortcutsOpen: (shortcutsOpen) => { set({ shortcutsOpen, menu: null }); },
   scenePicker: null,

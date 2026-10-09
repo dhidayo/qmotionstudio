@@ -206,14 +206,35 @@ export type Pose = {
  * indistinguishable from the curve; the easing lives in the function.
  * Properties that never leave their rest value are left out entirely.
  */
-export function sampled(fromMs: number, toMs: number, stepMs: number, at: (ms: number) => Pose): Tracks {
+export function sampled(
+  fromMs: number,
+  toMs: number,
+  stepMs: number,
+  at: (ms: number) => Pose,
+  /**
+   * A move further than this between two samples is a wrap — a card leaving
+   * one edge and coming back at the other — and becomes an instant cut.
+   * Interpolated, it streaks across the frame for one sample step.
+   */
+  jump = Number.POSITIVE_INFINITY,
+): Tracks {
   const steps = Math.max(1, Math.ceil((toMs - fromMs) / stepMs));
+  let previous: { x: number; y: number } | null = null;
   const keys = { x: [] as Keyframe[], y: [] as Keyframe[], scaleX: [] as Keyframe[], scaleY: [] as Keyframe[], rotation: [] as Keyframe[], opacity: [] as Keyframe[], z: [] as Keyframe[], turnY: [] as Keyframe[], turnX: [] as Keyframe[], blur: [] as Keyframe[] };
   const used = { scaleX: false, scaleY: false, rotation: false, opacity: false, z: false, turnY: false, turnX: false, blur: false };
   for (let i = 0; i <= steps; i++) {
     const ms = Math.min(toMs, fromMs + i * stepMs);
     const t = ms - fromMs;
     const pose = at(ms);
+    if (previous && Math.hypot(pose.x - previous.x, pose.y - previous.y) > jump) {
+      // Hold every property where it was until this moment, then cut.
+      for (const key of Object.keys(keys) as (keyof typeof keys)[]) {
+        const track = keys[key];
+        const last = track[track.length - 1];
+        if (last) track.push(kf(t, last.v, 'linear'));
+      }
+    }
+    previous = { x: pose.x, y: pose.y };
     const sx = pose.scaleX ?? pose.scale ?? 1;
     const sy = pose.scaleY ?? pose.scale ?? 1;
     keys.x.push(kf(t, pose.x, 'linear'));

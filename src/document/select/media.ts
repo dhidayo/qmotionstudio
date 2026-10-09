@@ -66,6 +66,8 @@ export function referencedMedia(project: Project): ReadonlySet<string> {
   for (const scene of project.scenes) {
     for (const photo of scene.inputs.photos) ids.add(photo.mediaId);
     if (scene.inputs.logo.mediaId !== null) ids.add(scene.inputs.logo.mediaId);
+    const backdrop = scene.inputs.look.backgroundMediaId;
+    if (backdrop !== undefined) ids.add(backdrop);
   }
   for (const overlay of project.overlays) {
     if (overlay.content.kind !== 'text') ids.add(overlay.content.mediaId);

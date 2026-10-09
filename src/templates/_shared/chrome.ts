@@ -34,6 +34,9 @@ export function contentFloor(design: Size, safe: Rect): number {
   return Math.min(safe.y + safe.h, design.h - unit * 0.125);
 }
 
+/** How much of the background colour covers a background picture until the person says otherwise. */
+export const DEFAULT_BACKGROUND_DIM = 0.35;
+
 /** §8.4's background treatment, as the bottom layer of a scene. */
 export function backgroundLayer(inputs: SceneInputs, ctx: BuildContext): Layer {
   const { design, durationMs } = ctx;
@@ -77,6 +80,45 @@ export function backgroundLayer(inputs: SceneInputs, ctx: BuildContext): Layer {
           h: design.h * 1.2,
           fit: 'cover',
         },
+      };
+    }
+
+    case 'picture': {
+      // A photograph of the person's own, filling the frame and drifting
+      // slowly closer, with the background colour laid over it so the words
+      // on top stay readable (D-120). Gradient until one is chosen.
+      const mediaId = inputs.look.backgroundMediaId;
+      if (mediaId === undefined) return gradientBackground(base, design);
+      const dim = Math.min(1, Math.max(0, inputs.look.backgroundDim ?? DEFAULT_BACKGROUND_DIM));
+      return {
+        ...base,
+        type: 'group',
+        anchorX: 0.5,
+        anchorY: 0.5,
+        props: {},
+        children: [
+          {
+            ...base,
+            id: ctx.id('bgPicture'),
+            type: 'image',
+            anchorX: 0.5,
+            anchorY: 0.5,
+            tracks: {
+              x: [kf(0, design.w / 2)],
+              y: [kf(0, design.h / 2)],
+              scaleX: [kf(0, 1, 'linear'), kf(durationMs, 1.06, 'linear')],
+              scaleY: [kf(0, 1, 'linear'), kf(durationMs, 1.06, 'linear')],
+            },
+            props: { mediaId, w: design.w, h: design.h, fit: 'cover' },
+          },
+          {
+            ...base,
+            id: ctx.id('bgDim'),
+            type: 'shape',
+            tracks: { opacity: [kf(0, dim)] },
+            props: { shape: 'rect', w: design.w, h: design.h, fill: roleFill('bg') },
+          },
+        ],
       };
     }
 

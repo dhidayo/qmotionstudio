@@ -40,7 +40,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       type: 'image',
       startMs: 0,
       endMs: durationMs,
-      tracks: sampled(0, durationMs, 80, (ms) => pose(i, ms)),
+      tracks: sampled(0, durationMs, 80, (ms) => pose(i, ms), stage.w * 0.45),
       props: cardProps(photo, card, inputs, u),
     }));
     return [backgroundLayer(inputs, ctx), glow(ctx, { x: stage.cx, y: stage.cy }, Math.min(stage.w, stage.h) * 1.5, 0.2), depthGroup(ctx, 'depth', cards), head];
