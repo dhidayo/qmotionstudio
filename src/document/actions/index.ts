@@ -6,6 +6,7 @@ import { nudgeAt, nudgePoses } from '@/core/render/slots';
 import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../select/motion';
 import { MAX_TRACKS, compactTracks, overlapsOn, placeNew, settleTrack, usedTracks } from '../select/tracks';
 import { sceneLengthMs, sceneSpans } from '../select/timeline';
+import { projectPhotos } from '../select/media';
 import { LOGO_KEY } from '../types';
 import type {
   AnimPreset,
@@ -262,6 +263,132 @@ export function placeOwnPhotos(
         return { ...scene, inputs: { ...scene.inputs, photos: [...replaced, ...extra] } };
       });
       return { ...project, scenes };
+    },
+  };
+}
+
+// ── Your photos (D-147) ─────────────────────────────────────────────────────
+//
+// "When I click add, you simply add to list of photos that can be used in the
+// project." A phone's camera hands over one picture at a time; replacing the
+// scene's photos with each one lost the picture before. Adding now only ever
+// adds — to the project's list, and to the scene's own photos while it has
+// spots free — and each scene picks which of the list it shows.
+
+function withLibrary(project: Project, mediaIds: readonly string[]): Project {
+  const current = project.photoLibrary ?? projectPhotos(project);
+  const added = mediaIds.filter((id) => !current.includes(id) && !id.startsWith('sample:'));
+  if (added.length === 0 && project.photoLibrary !== undefined) return project;
+  return { ...project, photoLibrary: [...current, ...added], updatedAt: Date.now() };
+}
+
+/** Photographs into "Your photos" alone, placed nowhere yet. */
+export function addToLibrary(mediaIds: readonly string[]): Action {
+  return { label: 'Add to Your photos', apply: (project) => withLibrary(project, mediaIds) };
+}
+
+/** Wraps an action so the photographs it uses also join "Your photos", in the same undo step. */
+export function alsoInLibrary(action: Action, mediaIds: readonly string[]): Action {
+  return { ...action, apply: (project, scope) => withLibrary(action.apply(project, scope), mediaIds) };
+}
+
+/**
+ * A scene's spots, showing `active` in order and repeating it when there are
+ * more spots than photographs (§8.1). Each spot keeps its frame and size; a
+ * crop belonged to the old picture and goes with it. Spots are added, up to
+ * `maxPhotos`, when there are more chosen photographs than spots.
+ */
+function fillSpots(photos: readonly PhotoInput[], active: readonly string[], maxPhotos: number): readonly PhotoInput[] {
+  if (active.length === 0) return photos;
+  const limit = maxPhotos > 0 ? maxPhotos : Number.POSITIVE_INFINITY;
+  const count = Math.max(1, Math.min(limit, Math.max(photos.length, active.length)));
+  const out: PhotoInput[] = [];
+  for (let i = 0; i < count; i++) {
+    const mediaId = active[i % active.length] ?? '';
+    const slot = photos[i];
+    if (slot === undefined) {
+      out.push({ mediaId, frame: photos[0]?.frame ?? '3:4', sizeMode: 'template', sizePct: 100, cropMode: 'template' });
+    } else if (slot.mediaId === mediaId) {
+      out.push(slot);
+    } else {
+      const { cropRect: _crop, ...rest } = slot;
+      out.push({ ...rest, mediaId });
+    }
+  }
+  return out;
+}
+
+/**
+ * "Add your photos" (D-147): new photographs join "Your photos", and the scene
+ * being worked on takes them after the ones it already shows, while it has
+ * room. A scene already full keeps what it has; the new ones wait in the list.
+ */
+export function addYourPhotos(mediaIds: readonly string[], options: { readonly maxPhotos: number }): Action {
+  return {
+    label: mediaIds.length === 1 ? 'Add your photo' : `Add ${mediaIds.length} photos`,
+    apply: (project, scope) => {
+      if (mediaIds.length === 0) return project;
+      const placed = editPhotos(project, scope, (photos) => {
+        const shown = [...new Set(photos.map((p) => p.mediaId).filter((id) => !id.startsWith('sample:') && !id.startsWith('__empty_')))];
+        const room = options.maxPhotos > 0 ? options.maxPhotos - shown.length : mediaIds.length;
+        const fresh = mediaIds.filter((id) => !shown.includes(id)).slice(0, Math.max(0, room));
+        if (fresh.length === 0) return photos;
+        return fillSpots(photos, [...shown, ...fresh], options.maxPhotos);
+      });
+      return withLibrary(placed, mediaIds);
+    },
+  };
+}
+
+/**
+ * Which of "Your photos" this scene shows (D-147), in order. With none chosen
+ * the scene goes back to `fallback` — the sample pictures — rather than
+ * drawing empty spots.
+ */
+export function setScenePhotos(
+  active: readonly string[],
+  options: { readonly maxPhotos: number; readonly fallback: readonly string[] },
+): Action {
+  return {
+    label: 'Choose photos for this scene',
+    apply: (project, scope) =>
+      editPhotos(project, scope, (photos) => fillSpots(photos, active.length > 0 ? active : options.fallback, options.maxPhotos)),
+  };
+}
+
+/**
+ * Takes a photograph out of the project (D-147): out of "Your photos", out of
+ * every scene that shows it — those scenes carry on with the rest of their
+ * photographs, or the samples when it was their only one — and off the canvas
+ * where it was added on top, or behind as the background.
+ */
+export function removeFromLibrary(mediaId: string, fallback: readonly string[]): Action {
+  return {
+    label: 'Delete photo',
+    apply: (project) => {
+      const scenes = project.scenes.map((scene): Scene => {
+        const { photos, look } = scene.inputs;
+        let inputs = scene.inputs;
+        if (photos.some((p) => p.mediaId === mediaId)) {
+          const rest = [...new Set(photos.map((p) => p.mediaId).filter((id) => id !== mediaId && !id.startsWith('__empty_')))];
+          const own = rest.filter((id) => !id.startsWith('sample:'));
+          const keep = own.length > 0 ? own : fallback;
+          inputs = { ...inputs, photos: keep.length > 0 ? fillSpots(photos, keep, photos.length) : [] };
+        }
+        if (look.backgroundMediaId === mediaId) {
+          const { backgroundMediaId: _gone, ...keep } = look;
+          inputs = { ...inputs, look: { ...keep, background: look.background === 'picture' ? 'solid' : look.background } };
+        }
+        return inputs === scene.inputs ? scene : { ...scene, inputs };
+      });
+      const overlays = project.overlays.filter((o) => o.content.kind === 'text' || o.content.mediaId !== mediaId);
+      return {
+        ...project,
+        scenes,
+        overlays: overlays.length === project.overlays.length ? project.overlays : overlays,
+        photoLibrary: projectPhotos(project).filter((id) => id !== mediaId),
+        updatedAt: Date.now(),
+      };
     },
   };
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import * as actions from '@/document/actions';
+import { useShallow } from 'zustand/react/shallow';
+import { projectPhotos } from '@/document/select/media';
 import { useEditor } from '@/state/store';
 import { useOverlays, type PhotoTarget } from '@/ui/shell/overlays';
 import { useMediaRevision, useMediaStore } from './MediaProvider';
@@ -40,8 +42,11 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
 
   const onAdded = useCallback((ids: string[]) => {
     const first = ids[0];
-    if (first !== undefined) apply(first);
-  }, [apply]);
+    if (first === undefined) return;
+    // A new photograph stays in Your photos for later (D-147); a logo is not one.
+    if (target.kind !== 'logo') dispatch(actions.addToLibrary([first]));
+    apply(first);
+  }, [apply, dispatch, target.kind]);
   const { state: uploadState, addFiles } = useUpload(store, onAdded, { artboardLongestEdge: 1920 });
 
   useEffect(() => {
@@ -58,7 +63,8 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
    * them as replacements put a wall of stock pictures between the person and
    * the one thing they came here to do, which is use their own.
    */
-  const ids = store.ids('image').filter((id) => !id.startsWith('sample:'));
+  const library = useEditor(useShallow((s) => projectPhotos(s.project)));
+  const ids = library.filter((id) => store.has(id));
   const title = target.kind === 'logo' ? 'Replace the logo' : target.kind === 'background' ? 'Background picture' : 'Replace photo';
   const phone = useLayout() === 'phone';
 
@@ -95,7 +101,7 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
 
   const yours = ids.length > 0 && (
     <>
-      <h3 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Or use one you added</h3>
+      <h3 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Or use one of Your photos</h3>
       <div className={`grid gap-2 ${phone ? 'grid-cols-3' : 'grid-cols-4'}`}>
         {ids.map((id) => {
           const url = store.previewUrl(id);

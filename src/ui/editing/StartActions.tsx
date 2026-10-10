@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import * as actions from '@/document/actions';
+import { scenePhotoIds } from '@/document/select/media';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
@@ -34,6 +35,7 @@ export function StartActions({
       <button
         type="button"
         onClick={onChooseDesign}
+        data-tour="design"
         className={`flex items-center justify-center gap-2 rounded-xl border border-edge bg-panel font-semibold hover:bg-panel-alt ${size}`}
       >
         <Icon name="designs" size={18} /> Choose a design
@@ -42,7 +44,8 @@ export function StartActions({
         type="button"
         onClick={add.pick}
         disabled={add.busy}
-        title="Your photos go into every photo in the design, in order. Nothing is uploaded."
+        data-tour="photos"
+        title="Adds to Your photos and fills this scene's free photo spots. Nothing is uploaded."
         className={`flex items-center justify-center gap-2 rounded-xl bg-accent font-semibold text-accent-ink hover:bg-accent-hover ${size}`}
       >
         <Icon name="photo" size={18} /> {add.busy ? 'Reading…' : 'Add your photos'}
@@ -53,13 +56,20 @@ export function StartActions({
   );
 }
 
-/** Picks photographs and puts them into every photo slot of the design (D-116). */
-export function useAddYourPhotos(): {
+/**
+ * Picks photographs — or takes one with the camera — adds them to "Your
+ * photos" and fills the scene's free photo spots (D-116, D-147).
+ */
+export function useAddYourPhotos(label = 'Add your photos'): {
   pick: () => void;
+  /** Opens the camera on a phone; a file picker elsewhere. */
+  takePhoto: () => void;
+  addFiles: (files: readonly File[]) => Promise<void>;
   busy: boolean;
   error: string | null;
   input: React.JSX.Element;
 } {
+  const camera = useRef<HTMLInputElement>(null);
   const media = useMediaStore();
   const dispatch = useEditor((s) => s.dispatch);
   const showToast = useEditor((s) => s.showToast);
@@ -71,36 +81,57 @@ export function useAddYourPhotos(): {
     const max = s.template?.photoSlots.max ?? scene?.inputs.photos.length ?? 0;
     const many = s.project.scenes.length > 1;
     const where = many ? `scene ${s.selectedScene + 1}` : 'the design';
+    const saved = ids.length === 1 ? 'Your photo is saved in Your photos' : `Your ${ids.length} photos are saved in Your photos`;
     if (max === 0 && (scene?.inputs.photos.length ?? 0) === 0) {
-      // A scene of words alone has nowhere to put them; say where they can go.
-      showToast(`${many ? `Scene ${s.selectedScene + 1}` : 'This design'} has no photo spots. Your photos are ready under Photos → + Add photo, to place on top.`);
+      // A scene of words alone has nowhere to put them; keep them for the scenes that do.
+      dispatch(actions.addYourPhotos(ids, { maxPhotos: 0 }));
+      showToast(`${saved}. ${many ? `Scene ${s.selectedScene + 1}` : 'This design'} has no photo spots — use + Add photo in Photos to place one on top.`);
       return;
     }
-    // The scene being worked on only (D-137); "Use on every scene" in Photos spreads them.
-    dispatch(actions.placeOwnPhotos(ids, { maxPhotos: max }));
-    showToast(ids.length === 1
-      ? `Your photo is in ${where}. Undo puts the old one back.`
-      : `Your ${ids.length} photos are in ${where}, in order. Undo puts the old ones back.`);
+    // Added to the project's photos, and to this scene while it has room (D-147).
+    const before = scene === undefined ? [] : scenePhotoIds(scene);
+    dispatch(actions.addYourPhotos(ids, { maxPhotos: max }));
+    const after = useEditor.getState().project.scenes[s.selectedScene];
+    const placed = (after === undefined ? 0 : scenePhotoIds(after).length) - before.length;
+    showToast(placed > 0
+      ? `${saved} and ${placed === 1 ? 'is' : 'are'} in ${where}. Add more any time — nothing is replaced.`
+      : `${saved}. ${where[0]?.toUpperCase() ?? ''}${where.slice(1)} is full (${max} photos) — choose which to show in Photos.`);
   }, [dispatch, showToast]);
   const { state: upload, addFiles } = useUpload(media, onAdded, { artboardLongestEdge: 1920 });
 
   return {
     pick: () => { input.current?.click(); },
+    takePhoto: () => { camera.current?.click(); },
+    addFiles,
     busy: upload.busy,
     error: upload.error,
     input: (
-      <input
-        ref={input}
-        type="file"
-        accept={ACCEPT_ATTRIBUTE}
-        multiple
-        hidden
-        aria-label="Add your photos"
-        onChange={(e) => {
-          void addFiles([...(e.target.files ?? [])]);
-          e.target.value = '';
-        }}
-      />
+      <>
+        <input
+          ref={input}
+          type="file"
+          accept={ACCEPT_ATTRIBUTE}
+          multiple
+          hidden
+          aria-label={label}
+          onChange={(e) => {
+            void addFiles([...(e.target.files ?? [])]);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={camera}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          aria-label="Take a photo"
+          onChange={(e) => {
+            void addFiles([...(e.target.files ?? [])]);
+            e.target.value = '';
+          }}
+        />
+      </>
     ),
   };
 }

@@ -60,6 +60,7 @@ export function PhoneTopBar(): React.JSX.Element {
       <button
         type="button"
         onClick={() => { setExporting(true); }}
+        data-tour="export"
         className="shrink-0 rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink"
       >
         Export

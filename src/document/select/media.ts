@@ -1,4 +1,4 @@
-import type { Project } from '@/document/types';
+import type { Project, Scene } from '@/document/types';
 import { activeOverlaysAt } from './timeline';
 
 /**
@@ -75,8 +75,33 @@ export function referencedMedia(project: Project): ReadonlySet<string> {
   for (const clip of project.audio) ids.add(clip.mediaId);
 
   if (project.brand.logo) ids.add(project.brand.logo.mediaId);
+  // Kept even while no scene shows them, so they are still there tomorrow (D-147).
+  for (const id of project.photoLibrary ?? []) ids.add(id);
 
   return ids;
+}
+
+const isOwnPhoto = (id: string): boolean => !id.startsWith('sample:') && !id.startsWith('__empty_');
+
+/**
+ * The photographs a scene is using, once each, in slot order (D-147).
+ *
+ * A scene with fewer photographs than spots repeats them in order, so the
+ * distinct ids in slot order are exactly the list the person chose.
+ */
+export function scenePhotoIds(scene: Scene): readonly string[] {
+  return [...new Set(scene.inputs.photos.map((p) => p.mediaId).filter(isOwnPhoto))];
+}
+
+/**
+ * "Your photos" for the project (D-147): the library first, then anything a
+ * scene shows that the library does not list — every project saved before
+ * the library existed — so nothing the person added is missing from it.
+ */
+export function projectPhotos(project: Project): readonly string[] {
+  const onTop = project.overlays.flatMap((o) => (o.content.kind === 'photo' ? [o.content.mediaId] : []));
+  const behind = project.scenes.flatMap((s) => (s.inputs.look.backgroundMediaId === undefined ? [] : [s.inputs.look.backgroundMediaId]));
+  return [...new Set([...(project.photoLibrary ?? []), ...userPhotoIds(project), ...onTop, ...behind])].filter(isOwnPhoto);
 }
 
 /**

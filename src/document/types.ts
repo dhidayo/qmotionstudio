@@ -365,6 +365,13 @@ export type Project = {
   readonly effects?: readonly EffectClip[];
   readonly brand: Brand;
   /**
+   * "Your photos" (D-147): every photograph the person has added to this
+   * project, in the order they arrived, whether or not a scene shows it yet.
+   * Scenes pick from it; adding never replaces what is already there. Absent
+   * on projects saved before it existed, which read it from their scenes.
+   */
+  readonly photoLibrary?: readonly string[];
+  /**
    * D-013. Set when the project was expanded from a multi-scene ad template.
    * Provenance only — scenes stay a flat array, exactly as §5 specifies.
    */

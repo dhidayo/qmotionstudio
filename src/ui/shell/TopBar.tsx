@@ -117,6 +117,7 @@ function ExportButton(): React.JSX.Element {
     <button
       type="button"
       onClick={() => { setExporting(true); }}
+      data-tour="export"
       title="Export (⌘E)"
       className="rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-accent-ink hover:bg-accent-hover"
     >

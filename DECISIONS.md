@@ -3161,3 +3161,38 @@ tap adds it; everything about it stays editable.
 Style now reads My brand, Looks, Colours, Background, then **More** (folded
 by default), which holds texture and timing — things people change rarely.
 A section can now start folded; once opened or closed it is remembered.
+
+## D-147 — Your photos: adding never replaces
+
+"When I click take another photo, only the current photo is shown on template
+and the previously taken photo is lost … let the photos remain as part of
+uploaded photos for the project … I can select active photos and inactive
+photos for different scenes."
+
+A phone's camera hands over one picture at a time, and "Add your photos"
+used to replace the scene's photos with whatever it was given — so each new
+shot replaced the last. Now the project keeps **Your photos**
+(`project.photoLibrary`): every photograph added, taken, used on top or as a
+background, in the order it arrived, until the person deletes it. It is
+saved, reloaded and carried in project files like any photo a scene shows.
+Projects saved before it existed read it from their scenes.
+
+Adding only adds: new photos join Your photos and fill the scene's spots
+after the ones it already shows, while it has room. A full scene keeps its
+photos and says so; the new ones wait in the list. In Photos, a tap uses a
+photo in this scene or takes it out — the number on it is its place — and ×
+deletes it from the project, from every scene that showed it (those carry on
+with their other photos, or the samples) and from the canvas. Undo brings it
+back. Phones get a **Take a photo** button beside Add photos. Replace photo
+offers Your photos, and a photo uploaded there joins them.
+
+## D-148 — the quick start points at the button
+
+"I expected a popup on the element that you want the user to click as step
+1 … something that is interactive and not just series of information that
+block screen." D-142's card is now a guided tour: one small popup at a time,
+beside the real button — Choose a design, then Add your photos, then Export
+— with a ring round it. The person presses the button itself; the popup moves
+on once the step is done, however it was done. Nothing is dimmed or covered,
+it steps aside while a sheet or dialog is open, and **Skip tour** closes it
+for good (the menu brings it back).
