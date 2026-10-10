@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import * as actions from '@/document/actions';
 import type { Overlay, TextStyle } from '@/document/types';
-import { DEFAULT_OVERLAY_TEXT_STYLE } from '@/document/defaults';
-import { addLayer } from '@/ui/editing/addLayer';
 import { deleteSlot, undoHint } from '@/ui/editing/commands';
 import { Icon } from '@/ui/mobile/Icon';
 import { TextStyleControls } from '../OverlayPanel';
-import { FONTS } from '@/fonts/registry';
+import { FontPicker } from '../FontPicker';
+import { TextGallery } from '@/ui/text/TextGallery';
 import { useEditor } from '@/state/store';
 import type { SceneTemplate, TextSlotDef } from '@/templates/schema';
 import { resolveStyle } from '@/templates/_shared/text';
@@ -37,8 +36,8 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
   const overlays = useEditor((s) => s.project.overlays);
   const corporate = useEditor((s) => s.project.mode === 'motionAd');
   const [open, setOpen] = useState<string | null>(() => (selectedSlot?.startsWith('text:') === true ? selectedSlot : null));
-  // Low in the frame, where designs leave room, rather than over their headline.
-  const addText = (): string => addLayer({ kind: 'text', text: 'Your text', style: DEFAULT_OVERLAY_TEXT_STYLE }, { x: 0.5, y: 0.78 });
+  // "+ Add text" opens the gallery of ready-made styles (D-145).
+  const [gallery, setGallery] = useState(false);
 
   // Text picked on the canvas opens here — decided while rendering, as the
   // selection changes, rather than a render later.
@@ -70,12 +69,20 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
         <button
           type="button"
           data-add-text
-          onClick={() => { const id = addText(); setOpen(`layer:${id}`); }}
+          aria-expanded={gallery}
+          onClick={() => { setGallery(!gallery); }}
           className="rounded-md bg-accent px-2.5 py-1 text-[12px] font-semibold text-accent-ink hover:bg-accent-hover"
         >
-          + Add text
+          {gallery ? 'Close styles' : '+ Add text'}
         </button>
       </div>
+
+      {gallery && (
+        <>
+          <p className="mb-2 text-[11px] text-ink-muted">Pick a style — it goes on the canvas, ready to type over. Fonts and effects stay changeable.</p>
+          <TextGallery onAdded={(id) => { setGallery(false); setOpen(`layer:${id}`); }} />
+        </>
+      )}
 
       {template.textSlots.length === 0 && layers.length === 0 && (
         <EmptyNote>This design has no text of its own. Add some with <strong>+ Add text</strong>.</EmptyNote>
@@ -305,14 +312,7 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
         </p>
       </div>
 
-      <Segmented
-        label="Font"
-        value={style.fontId}
-        options={Object.values(FONTS)
-          .filter((f) => f.family.length > 0)
-          .map((f) => ({ value: f.id, label: f.label }))}
-        onChange={(fontId) => { patch({ fontId }, { label: 'Change font' }); }}
-      />
+      <FontPicker value={style.fontId} onChange={(fontId) => { patch({ fontId }, { label: 'Change font' }); }} />
 
       <Segmented
         label="Weight"

@@ -89,7 +89,8 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
 
       <LogoSection template={template} />
 
-      <Section title="Texture">
+      {/* Settings few people need, folded until asked for (D-146). */}
+      <Section title="More" defaultOpen={false}>
         {template?.look.supportsGrain === false ? (
           <EmptyNote>This template does not use grain.</EmptyNote>
         ) : (
@@ -121,9 +122,6 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
             onChange={(cornerRadius) => { dispatch(actions.setCornerRadius(cornerRadius)); }}
           />
         )}
-      </Section>
-
-      <Section title="Timing">
         <Slider
           label="Duration"
           value={Math.round(durationMs / 100) / 10}

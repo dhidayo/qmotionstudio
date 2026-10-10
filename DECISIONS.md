@@ -3047,3 +3047,117 @@ in-house writers (stored ZIP with CRC-32; a PDF of JPEG pages), not libraries,
 and the slides come from the same renderer as the video, watermark included
 on the free plan. This is the roadmap's Carousel Studio built from what
 exists: every Corporate Ads scene is already a designed slide.
+
+## D-136 — nothing pushed off a short phone screen
+
+"When I click on some elements… I don't get to see the use this design
+button, it's pushed down beyond the screen." The design preview on a phone
+was `inset-0` with the video sized by its own aspect, so a tall 9:16 preview
+on a short screen (or with Safari's toolbar showing) pushed the buttons below
+the fold. The preview is now exactly `100dvh` tall — the visible height, not
+the layout height — and the video fills whatever room is left above the
+buttons, which never shrink. The Export and Projects dialogs scroll inside
+themselves within `100dvh` for the same reason. A test at 375×600 in both
+engines checks the button is inside the viewport for a Design and a Video,
+and fails on the old layout.
+
+## D-137 — your photos fill the scene you are on
+
+"When I clicked on a scene and add your photos, the photos is applied to all
+scenes. I expected… only the current scene." In a video, Add your photos now
+fills only the scene being worked on (up to that scene's photo spots), and
+says so: "Your 3 photos are in scene 2." Photos has **Use on every scene**
+for when that is what you want. A scene with no photo spots of its own points to
+Photos → + Add photo, which puts a photo on top anywhere.
+
+## D-138 — the effects already on something come first
+
+Opening the effects library on an element or scene that already has effects
+now lists them at the top — "On it now · 2" — each with its controls and its
+own delete, above the effects that can be added. You see what is there before
+piling more on.
+
+## D-139 — Save to Photos says it saved
+
+The share sheet does not say whether the picture or video was saved. When it
+returns without an error, Export now replaces its button with
+"✓ Saved — your video is in Photos" (and the same for pictures), so a phone
+user knows it worked.
+
+## D-140 — Design and Video
+
+The two modes are renamed for what they make: **Design** (was Showcase), one
+scene that can be saved and exported as a picture or a short clip, and
+**Video** (was Corporate Ads), a sequence of scenes. A design is a building
+block: in a video, **Add a scene** has two sources — a new scene from the
+library, or **My designs**, every design saved on this device, brought in
+with its words, colours and photos and a cross-fade. So the way to build a
+video from your own work is: make designs, then put them in order.
+
+## D-141 — a project file, and one menu on every screen
+
+**Save project file** writes a `.qmotion` file — a stored ZIP of the project
+JSON with every photo, sound and uploaded font it uses — and **Open project
+file…** reads one back as a new project, so work moves between devices and
+can be backed up without an account. The reader accepts only stored entries
+from our own writer, checks every listed photo and font before using it, and
+runs the usual migrations; a cut-short or altered file is called damaged. On
+iPhones and iPads the open picker accepts any file, because iOS greys out an
+extension it does not know.
+
+The desktop now has the same single **Menu** as the phone (☰, left of the
+logo): New design, New video, Open…, the project file, Rename, Save as, Make
+a copy, the quick start, shortcuts and the theme. The small ▾ next to the
+project name went: it was a second, partial menu that people did not find.
+
+## D-142 — a quick start on the first visit
+
+A small card on the first visit with three steps — Choose a design, Add your
+photos, Export — each ticking itself off when done the ordinary way. "Got it"
+or ✕ closes it for good on this device; the menu brings it back. It never
+appears in thumbnails or frozen frames, and tests start with it closed.
+
+## D-143 — designs grouped by what they are for
+
+"Organize the design based on purpose." The library opens grouped by what an
+organisation needs to say — Headlines & hooks, Products, Sales & prices,
+Calls to action, Numbers & results, Quotes & reviews, People & teams, Events &
+dates… for designs; Announcements, Product launches & offers, Brand &
+company, Customer stories & results, Hiring, Events & webinars, Thanks &
+celebrations for videos. A switch keeps the old grouping by style, and search
+matches purposes too ("pricing", "hiring"). The mapping lives in one file and
+a test keeps every design in a group of its own kind.
+
+## D-144 — any font: the app's, the device's, or your own
+
+The font of any text is chosen from a list in three groups: the app's own
+fonts (still the defaults), **Your fonts** — uploaded .ttf, .otf, .woff or
+.woff2 files, up to 8 MB, kept in IndexedDB and loaded before the first
+frame — and fonts every device has (Georgia, Times New Roman, Palatino,
+Garamond, Arial, Helvetica, Verdana, Trebuchet, Impact, Courier, a rounded
+and a handwriting face). Uploaded fonts travel in the project file and are
+handed to the export worker, so the video matches the preview. A broken file
+is refused with a message rather than silently falling back.
+
+Doing this found a real bug: a template text whose words had never been
+edited did not take a new font, because the build memo listed only edited
+texts. It now includes texts with style overrides too (test fails without the
+fix).
+
+I cannot draw new typefaces; free open-source fonts can be bundled with the
+app if wanted.
+
+## D-145 — + Add text opens a gallery of styles
+
+"Fonts can have effects… Add texts will show lots of templates with
+preformatted effects." **+ Add text** now opens a gallery of nineteen styles
+— Headline, Serif, Sticker, Pill, Neon, Shine, Sparkle, Loud, Typewriter,
+Script, Glitch and others — each a font, colour and outline or glow with an
+entrance and an effect already set, previewed in the scene's own colours. One
+tap adds it; everything about it stays editable.
+
+## D-146 — Style keeps the everyday things in view
+
+Style now reads My brand, Looks, Colours, Background, then **More** (folded
+by default), which holds texture and timing — things people change rarely.
+A section can now start folded; once opened or closed it is remembered.

@@ -55,6 +55,18 @@ function sectionKey(title: string): string {
   return title.replace(/\s*\(\d+\)$/, '');
 }
 
+const OPENED_KEY = 'ms.sections.opened';
+
+function readSet(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
 function readClosed(): Set<string> {
   try {
     const raw = localStorage.getItem(CLOSED_KEY);
@@ -65,23 +77,29 @@ function readClosed(): Set<string> {
   }
 }
 
-/** Remembered on this device: a viewer's convenience (browser storage), forgotten in a private window. */
-function useRememberedOpen(title: string): [boolean, () => void] {
+/**
+ * Remembered on this device: a viewer's convenience (browser storage),
+ * forgotten in a private window. A section that starts folded (`defaultOpen`
+ * false — Style's "More") remembers being opened instead.
+ */
+function useRememberedOpen(title: string, defaultOpen = true): [boolean, () => void] {
   const key = sectionKey(title);
-  const [open, setOpen] = useState(() => !readClosed().has(key));
+  const storeKey = defaultOpen ? CLOSED_KEY : OPENED_KEY;
+  const [open, setOpen] = useState(() => (defaultOpen ? !readClosed().has(key) : readSet(OPENED_KEY).has(key)));
   const toggle = useCallback(() => {
     setOpen((was) => {
-      const closed = readClosed();
-      if (was) closed.add(key);
-      else closed.delete(key);
+      const marked = readSet(storeKey);
+      // Marked when it is not in its default state.
+      if (was === defaultOpen) marked.add(key);
+      else marked.delete(key);
       try {
-        localStorage.setItem(CLOSED_KEY, JSON.stringify([...closed]));
+        localStorage.setItem(storeKey, JSON.stringify([...marked]));
       } catch {
         // Folding still works for this visit.
       }
       return !was;
     });
-  }, [key]);
+  }, [key, storeKey, defaultOpen]);
   return [open, toggle];
 }
 
@@ -89,21 +107,24 @@ export function Section({
   title,
   children,
   actions,
+  defaultOpen = true,
 }: {
   title?: string;
   children: ReactNode;
   /** Buttons on the bar itself, such as a delete — beside the name, always in reach. */
   actions?: ReactNode;
+  /** False for settings few people need, folded until asked for. */
+  defaultOpen?: boolean;
 }): React.JSX.Element {
   if (title === undefined) {
     return <section className="mb-3">{children}</section>;
   }
-  return <TitledSection title={title} actions={actions}>{children}</TitledSection>;
+  return <TitledSection title={title} actions={actions} defaultOpen={defaultOpen}>{children}</TitledSection>;
 }
 
-function TitledSection({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }): React.JSX.Element {
+function TitledSection({ title, children, actions, defaultOpen }: { title: string; children: ReactNode; actions?: ReactNode; defaultOpen: boolean }): React.JSX.Element {
   const accordion = useContext(AccordionContext);
-  const [freeOpen, freeToggle] = useRememberedOpen(title);
+  const [freeOpen, freeToggle] = useRememberedOpen(title, defaultOpen);
   // Before paint, so a sheet never flashes every section open.
   useLayoutEffect(() => (accordion === null ? undefined : accordion.register(title)), [accordion, title]);
   const open = accordion === null ? freeOpen : accordion.isOpen(title);

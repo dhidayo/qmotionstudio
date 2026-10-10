@@ -15,6 +15,8 @@ import {
 } from './types';
 import { canUseRealtimeExport, startRealtimeExport } from './fallback/mediaRecorder';
 import { renderMixdown } from '@/core/audio/mixdown';
+import { usedUserFonts } from '@/document/select/media';
+import { readFont } from '@/persist/db';
 
 export { ExportCancelled };
 export type { ExportHandle, ExportProgress, ExportResult, ExportPath } from './types';
@@ -185,8 +187,12 @@ export function startExport(options: {
    * the setup is not. The worker is started either way; it simply receives the
    * request a moment later.
    */
-  void renderMixdown(project.audio, (id) => media.getAudioBuffer(id), { durationMs })
-    .then((mix) => {
+  // Uploaded fonts travel with the request: the worker cannot see the page's (D-144).
+  const fontsUsed = Promise.all([...usedUserFonts(project)].map((id) => readFont(id)))
+    .then((found) => found.filter((font): font is NonNullable<typeof font> => font !== null));
+
+  void Promise.all([renderMixdown(project.audio, (id) => media.getAudioBuffer(id), { durationMs }), fontsUsed])
+    .then(([mix, fonts]) => {
       if (cancelled) return;
 
       const request: ExportRequest = {
@@ -197,6 +203,7 @@ export function startExport(options: {
         durationMs,
         watermark,
         media: usedMedia,
+        ...(fonts.length === 0 ? {} : { fonts }),
         ...(mix === null ? {} : { audio: mix }),
       };
 

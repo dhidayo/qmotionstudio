@@ -143,7 +143,10 @@ export function structureKey(
     p.cropRect ? [p.cropRect.x, p.cropRect.y, p.cropRect.w, p.cropRect.h] : null,
   ]);
 
-  const texts = Object.keys(inputs.texts)
+  // Every text with words *or* a style of its own: restyling text whose words
+  // were never edited (a new font on the design's own headline) has to rebuild
+  // too — keyed by the edited words alone, it silently did nothing (D-144).
+  const texts = [...new Set([...Object.keys(inputs.texts), ...Object.keys(inputs.styleOverrides.texts)])]
     .sort()
     .map((id) => {
       const style = inputs.styleOverrides.texts[id];

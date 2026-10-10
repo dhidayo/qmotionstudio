@@ -127,11 +127,11 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
       role="dialog"
       aria-modal="true"
       aria-label="Switch project"
-      className="fixed inset-0 z-50 grid place-items-center p-6"
+      className="fixed inset-0 z-50 grid place-items-center p-3 sm:p-6"
       style={{ background: 'rgb(0 0 0 / 0.45)' }}
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <div className="w-[560px] max-w-full rounded-lg border border-edge bg-panel p-4 shadow-lg">
+      <div className="max-h-[calc(100dvh-48px)] w-[560px] max-w-full overflow-y-auto overscroll-contain rounded-lg border border-edge bg-panel p-4 shadow-lg">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h2 className="text-[13px] font-semibold">Your projects</h2>
           <button
@@ -139,14 +139,14 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
             onClick={() => { void startNew('template').then(onClose); }}
             className="ml-auto rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink hover:bg-accent-hover"
           >
-            New project
+            New design
           </button>
           <button
             type="button"
             onClick={() => { void startNew('blank').then(onClose); }}
             className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
           >
-            New blank canvas
+            New video
           </button>
           <button
             type="button"

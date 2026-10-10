@@ -23,6 +23,9 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
   const selectPhoto = useEditor((s) => s.selectPhoto);
 
   const fileInput = useRef<HTMLInputElement>(null);
+  const sceneCount = useEditor((s) => s.project.scenes.length);
+  const showToast = useEditor((s) => s.showToast);
+  const ownIds = photos.map((p) => p.mediaId).filter((id) => !id.startsWith('sample:') && !id.startsWith('__empty_'));
   const [dragOver, setDragOver] = useState(false);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
 
@@ -95,8 +98,19 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
           </p>
         )}
 
-        <div className="mt-2 flex gap-1">
+        <div className="mt-2 flex flex-wrap gap-1">
           <Button onClick={useSamples}>Try sample photos</Button>
+          {sceneCount > 1 && ownIds.length > 0 && (
+            <Button
+              onClick={() => {
+                // A whole video in this scene's photos, carried on scene to scene (D-137).
+                dispatch(actions.placeOwnPhotos(ownIds, { everyScene: true }));
+                showToast(`These photos are now in all ${sceneCount} scenes, in turn. Undo takes them back out.`);
+              }}
+            >
+              Use on every scene
+            </Button>
+          )}
           <Button
             onClick={() => { dispatch(actions.removeAllPhotos()); selectPhoto(null); }}
             variant="danger"

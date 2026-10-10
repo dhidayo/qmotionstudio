@@ -13,9 +13,9 @@ import { Icon } from '@/ui/mobile/Icon';
  * They used to disappear once the picture held a photo of the person's own,
  * or while something was selected — "Add Your Photos should be always shown,
  * to be able to replace all photos on template instead of only replace when
- * specific items are selected, same for choose template". Adding photos now
- * puts them into every photo slot of the design, across all its scenes, in one
- * step that one undo takes back.
+ * specific items are selected, same for choose template". Adding photos puts
+ * them into the photo slots of the scene being worked on (D-137) — the whole
+ * design when it is one scene — in one step that one undo takes back.
  */
 export function StartActions({
   onChooseDesign,
@@ -66,10 +66,21 @@ export function useAddYourPhotos(): {
   const input = useRef<HTMLInputElement>(null);
 
   const onAdded = useCallback((ids: string[]) => {
-    dispatch(actions.placeOwnPhotos(ids));
+    const s = useEditor.getState();
+    const scene = s.project.scenes[s.selectedScene];
+    const max = s.template?.photoSlots.max ?? scene?.inputs.photos.length ?? 0;
+    const many = s.project.scenes.length > 1;
+    const where = many ? `scene ${s.selectedScene + 1}` : 'the design';
+    if (max === 0 && (scene?.inputs.photos.length ?? 0) === 0) {
+      // A scene of words alone has nowhere to put them; say where they can go.
+      showToast(`${many ? `Scene ${s.selectedScene + 1}` : 'This design'} has no photo spots. Your photos are ready under Photos → + Add photo, to place on top.`);
+      return;
+    }
+    // The scene being worked on only (D-137); "Use on every scene" in Photos spreads them.
+    dispatch(actions.placeOwnPhotos(ids, { maxPhotos: max }));
     showToast(ids.length === 1
-      ? 'Your photo is in every photo of the design. Undo puts the old ones back.'
-      : `Your ${ids.length} photos are in the design, in order. Undo puts the old ones back.`);
+      ? `Your photo is in ${where}. Undo puts the old one back.`
+      : `Your ${ids.length} photos are in ${where}, in order. Undo puts the old ones back.`);
   }, [dispatch, showToast]);
   const { state: upload, addFiles } = useUpload(media, onAdded, { artboardLongestEdge: 1920 });
 

@@ -56,6 +56,12 @@ describe('structureKey — what must NOT invalidate the build (D-006)', () => {
 });
 
 describe('structureKey — what MUST invalidate the build', () => {
+  it('a new font on text whose words were never edited (D-144)', () => {
+    const untouched = inputs({ texts: {} });
+    const restyled = inputs({ texts: {}, styleOverrides: { texts: { headline: { fontId: 'sys:georgia' } } } });
+    expect(keyOf(restyled)).not.toBe(keyOf(untouched));
+  });
+
   const base = keyOf(inputs());
 
   it('reacts to photo count', () => {

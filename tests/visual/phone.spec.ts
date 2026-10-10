@@ -267,6 +267,32 @@ test.describe('the background and the plan (D-120, D-122)', () => {
   });
 });
 
+test.describe('nothing pushed off a short phone screen (D-136)', () => {
+  test.use({ viewport: { width: 375, height: 600 } });
+
+  for (const [mode, card] of [['Design', 'type-typewriter'], ['Video', 'story-big-news']] as const) {
+    test(`"Use this design" stays on screen — ${mode}`, async ({ page }) => {
+      await page.goto(mode === 'Video' ? '/?template=story-big-news&aspect=9:16' : '/');
+      await page.waitForSelector('canvas');
+      await page.waitForTimeout(800);
+      await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Designs' }).click();
+      await page.locator(`[data-design-card="${card}"]`).click();
+      const use = page.getByRole('button', { name: 'Use this design' });
+      await expect(use).toBeVisible();
+      const box = await use.boundingBox();
+      expect(box).not.toBeNull();
+      expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(600);
+      // And the picture never covers it.
+      const picture = await page.locator('[data-design-preview-actions]').evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + 8);
+        return el.contains(top);
+      });
+      expect(picture).toBe(true);
+    });
+  }
+});
+
 test.describe('Corporate Ads on a phone', () => {
   test('the timeline is folded, with a one-time note, and opens in full', async ({ page }) => {
     await open(page, AD);

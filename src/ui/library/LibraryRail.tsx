@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { CATEGORIES, posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
 import { lookPreset } from '@/templates/_shared/look';
+import { purposeOf, purposesFor } from '@/templates/purpose';
 import { useEditor } from '@/state/store';
 import { useEntitlements } from '@/entitlements';
 import { PlayingPreview, noHover } from './PlayingPreview';
@@ -54,11 +55,15 @@ export function LibraryRail({
       if (showFavourites && !favourites.includes(t.id)) return false;
       if (query.length === 0) return true;
       // Category is searchable too, so typing "depth" finds the whole group.
-      return `${t.name} ${t.category} ${t.blurb}`.toLowerCase().includes(query);
+      return `${t.name} ${t.category} ${purposeOf(t)} ${t.blurb}`.toLowerCase().includes(query);
     });
   }, [mode, search, tierFilter, showFavourites, favourites]);
 
-  const categories = CATEGORIES.filter((c) => visible.some((t) => t.category === c));
+  // By purpose — what it is for — unless the person chose to browse by look (D-143).
+  const [groupBy, setGroupBy] = useGroupBy();
+  const groupOf = (t: TemplateSummary): string => (groupBy === 'purpose' ? purposeOf(t) : t.category);
+  const order: readonly string[] = groupBy === 'purpose' ? purposesFor(mode === 'motionAd' ? 'ad' : 'scene') : CATEGORIES;
+  const categories = order.filter((c) => visible.some((t) => groupOf(t) === c));
   const { collapsed, toggle, setAll } = useCollapsedCategories();
   // A search shows everything it found: a match hidden in a folded group is a match missed.
   const searching = search.trim().length > 0;
@@ -101,6 +106,15 @@ export function LibraryRail({
             onClick={toggleFavouritesFilter}
             label={`★ ${favourites.length}`}
           />
+          <button
+            type="button"
+            data-group-by
+            onClick={() => { setGroupBy(groupBy === 'purpose' ? 'style' : 'purpose'); }}
+            title={groupBy === 'purpose' ? 'Grouped by what each design is for. Click to group by how it looks.' : 'Grouped by how each design looks. Click to group by what it is for.'}
+            className={`rounded-md border border-edge px-1.5 text-ink-muted hover:bg-panel-alt ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
+          >
+            By {groupBy === 'purpose' ? 'purpose' : 'style'}
+          </button>
           {!searching && categories.length > 1 && (
             <button
               type="button"
@@ -123,7 +137,7 @@ export function LibraryRail({
           </p>
         ) : (
           categories.map((category) => {
-            const inCategory = visible.filter((t) => t.category === category);
+            const inCategory = visible.filter((t) => groupOf(t) === category);
             const open = !folded(category);
             const id = `library-${category.toLowerCase().replace(/\s+/g, '-')}`;
             return (
@@ -177,6 +191,23 @@ function groundOf(template: TemplateSummary): string {
 }
 
 const FOLDED_KEY = 'ms.library.folded';
+const GROUP_KEY = 'ms.library.groupBy';
+
+/** Purpose or style, remembered on this device (D-143). */
+function useGroupBy(): ['purpose' | 'style', (next: 'purpose' | 'style') => void] {
+  const [groupBy, set] = useState<'purpose' | 'style'>(() => {
+    try {
+      return localStorage.getItem(GROUP_KEY) === 'style' ? 'style' : 'purpose';
+    } catch {
+      return 'purpose';
+    }
+  });
+  const choose = useCallback((next: 'purpose' | 'style'): void => {
+    set(next);
+    try { localStorage.setItem(GROUP_KEY, next); } catch { /* for this visit */ }
+  }, []);
+  return [groupBy, choose];
+}
 
 /**
  * Which categories are folded, remembered on this device (a viewer's
@@ -369,17 +400,21 @@ function DesignPreview({
     <div
       role="dialog"
       aria-label={`Preview of ${template.name}`}
-      className="fixed inset-0 z-[60] flex flex-col bg-panel"
-      style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      className="fixed inset-x-0 top-0 z-[60] flex flex-col bg-panel"
+      // The visible height, not the layout's: on a phone the browser's own bars
+      // come and go, and a 100vh sheet puts its last row under them (D-136).
+      style={{ height: '100dvh', paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
-      <div className="flex items-center gap-2 px-3 py-2">
+      <div className="flex shrink-0 items-center gap-2 px-3 py-2">
         <button type="button" onClick={onBack} className="rounded-lg px-2 py-1.5 text-[14px] font-medium text-accent">
           ‹ Back
         </button>
         <span className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold">{template.name}</span>
         <span className="w-14" />
       </div>
-      <div className="grid min-h-0 flex-1 place-items-center px-4" style={{ background: 'var(--c-stage)' }}>
+      {/* The picture takes whatever room is left and fits inside it; it never
+          sets the height itself, so the button below can never be pushed off. */}
+      <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: 'var(--c-stage)' }}>
         <video
           src={previewUrl(template.id)}
           poster={posterUrl(template.id)}
@@ -387,11 +422,10 @@ function DesignPreview({
           muted
           loop
           playsInline
-          className="max-h-full max-w-full rounded-lg"
-          style={{ boxShadow: 'var(--shadow-lg)' }}
+          className="absolute inset-3 h-[calc(100%-24px)] w-[calc(100%-24px)] object-contain"
         />
       </div>
-      <div className="px-4 pb-3 pt-3">
+      <div className="shrink-0 px-4 pb-3 pt-3" data-design-preview-actions>
         <p className="text-[13px] text-ink-muted">{template.blurb}</p>
         {template.kind === 'ad' && (
           <p className="tabular mt-0.5 text-[12px] text-ink-faint">

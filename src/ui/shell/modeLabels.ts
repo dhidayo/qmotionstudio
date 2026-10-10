@@ -8,11 +8,12 @@ import type { ProjectMode } from '@/document/types';
  * label would mean a migration for nothing. The names people see are here, in
  * one place, so the next rename is one line.
  *
- *   Lifestyle       one looping scene: a reel, a post, a moment (was Showcase)
- *   Corporate Ads   several scenes, transitions, layers, logo and music
- *                   (was Motion Ads)
+ *   Design   one scene, perfected: a post, a story, a slide — and kept, to
+ *            become a scene of a video later (D-140; was Lifestyle, Showcase)
+ *   Video    scenes in sequence — new ones or your saved designs — with
+ *            transitions, layers, logo and music (was Corporate Ads, Motion Ads)
  */
 export const MODE_LABEL: Readonly<Record<ProjectMode, string>> = {
-  showcase: 'Lifestyle',
-  motionAd: 'Corporate Ads',
+  showcase: 'Design',
+  motionAd: 'Video',
 };

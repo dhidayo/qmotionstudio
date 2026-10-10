@@ -138,7 +138,7 @@ test.describe('scene sequencing', () => {
     // Exact: the library has designs called "Timeline Arc" and so on.
     await expect(page.getByLabel('Timeline', { exact: true })).toBeHidden();
 
-    await page.getByRole('button', { name: 'Corporate Ads' }).click();
+    await page.getByRole('button', { name: 'Video', exact: true }).click();
     await expect(page.getByLabel('Timeline', { exact: true })).toBeVisible();
     // The music row is real since M6; it invites a track rather than promising one.
     await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
@@ -348,6 +348,8 @@ test.describe('the sequence is editable', () => {
     // Change the look of beat *three* and confirm beat one is untouched.
     await page.getByRole('button', { name: /^3\./ }).click();
     await page.getByRole('tab', { name: 'Style' }).click();
+    // Grain lives under Style → More, folded until asked for (D-146).
+    await page.getByRole('button', { name: 'More', exact: true }).click();
     await page.getByLabel('Grain').fill('1');
     await page.waitForTimeout(400);
 
@@ -390,7 +392,7 @@ test.describe('the sequence is editable', () => {
     await expect(page.getByRole('button', { name: 'Parallax Depth', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Launch Story/ })).toBeHidden();
 
-    await page.getByRole('button', { name: 'Corporate Ads' }).click();
+    await page.getByRole('button', { name: 'Video', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Launch Story/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Parallax Depth', exact: true })).toBeHidden();
   });

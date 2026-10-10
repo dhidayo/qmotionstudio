@@ -27,7 +27,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('library', () => {
-  test('groups templates by category', async ({ page }) => {
+  test('groups designs by what they are for, or by style on request (D-143)', async ({ page }) => {
+    for (const purpose of ['Headlines & hooks', 'Sales & prices', '3D & depth']) {
+      await expect(page.getByRole('heading', { name: purpose })).toBeVisible();
+    }
+    await page.locator('[data-group-by]').click();
     for (const category of ['Depth Stage', 'Angle Stage', 'Kinetic Type']) {
       await expect(page.getByRole('heading', { name: category })).toBeVisible();
     }
@@ -35,24 +39,24 @@ test.describe('library', () => {
 
   test('search narrows to matching templates and clears again', async ({ page }) => {
     const search = page.getByRole('searchbox', { name: 'Search templates' });
-    await search.fill('stack');
+    await search.fill('pricing');
 
-    await expect(page.getByRole('button', { name: 'Card Stack', exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Angle Stage' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Pricing Plans', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Photo galleries' })).toBeHidden();
 
     await search.fill('');
-    await expect(page.getByRole('heading', { name: 'Angle Stage' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Photo galleries' })).toBeVisible();
   });
 
-  test('searching a category name finds the whole group', async ({ page }) => {
-    await page.getByRole('searchbox', { name: 'Search templates' }).fill('kinetic');
-    await expect(page.getByRole('heading', { name: 'Kinetic Type' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Depth Stage' })).toBeHidden();
+  test('searching a purpose finds the whole group', async ({ page }) => {
+    await page.getByRole('searchbox', { name: 'Search templates' }).fill('people & teams');
+    await expect(page.getByRole('heading', { name: 'People & teams' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Photo galleries' })).toBeHidden();
   });
 
   test('the free/pro filter splits the library', async ({ page }) => {
     await page.getByRole('button', { name: 'Pro', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Kinetic Type' })).toBeVisible();
+    await expect(page.locator('[data-design-card]').first()).toBeVisible();
     // Parallax Depth is free, so it should be gone.
     await expect(page.getByTitle(/receding planes/)).toBeHidden();
   });
@@ -187,6 +191,8 @@ test.describe('history', () => {
 
   test('a slider drag is one undo step, not one per frame', async ({ page }) => {
     await page.getByRole('tab', { name: 'Style' }).click();
+    // Vignette lives under Style → More, folded until asked for (D-146).
+    await page.getByRole('button', { name: 'More', exact: true }).click();
     const slider = page.getByRole('slider', { name: 'Vignette' });
 
     await slider.focus();

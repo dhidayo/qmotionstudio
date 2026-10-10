@@ -10,6 +10,7 @@ import { noHover } from '@/ui/library/PlayingPreview';
 import { useOverlays, type PickerState } from '@/ui/shell/overlays';
 import { EffectPreview, type PreviewEffect } from './EffectPreview';
 import { addElementEffect, addFrameEffect } from './addEffect';
+import { CurrentEffects } from './EffectEditors';
 
 /**
  * The effect library (D-100).
@@ -114,7 +115,7 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
     ? 'Added on top of how it already moves. Change when it runs, how strong, and its settings in the panel.'
     : picker.target.kind === 'timeline'
       ? 'Goes at the playhead and covers everything — scenes and layers. Drag it on the FX lane to move it.'
-      : 'Moods cover the whole scene; moments go at the playhead. Fine-tune in the Motion panel.';
+      : 'Moods cover the whole scene; moments go at the playhead. Fine-tune them here or in Effects.';
 
   return (
     <div
@@ -171,6 +172,9 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          {/* What is on it already, editable and removable, before adding more (D-138). */}
+          {picker.target.kind === 'element' && <CurrentEffects target={{ kind: 'element', target: picker.target.target }} />}
+          {picker.target.kind === 'scene' && <CurrentEffects target={{ kind: 'scene' }} />}
           {groups.length === 0 && (
             <p className="py-8 text-center text-[12px] text-ink-faint">No effects match “{query}”.</p>
           )}

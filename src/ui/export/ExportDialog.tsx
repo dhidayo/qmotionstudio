@@ -115,7 +115,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
       aria-label="Export"
     >
       <div
-        className="w-[360px] max-w-[calc(100vw-24px)] rounded-lg border border-edge bg-panel p-4"
+        className="max-h-[calc(100dvh-24px)] w-[360px] max-w-[calc(100vw-24px)] overflow-y-auto overscroll-contain rounded-lg border border-edge bg-panel p-4"
         style={{ boxShadow: 'var(--shadow-lg)' }}
       >
         <div className="mb-3 flex items-baseline justify-between">
@@ -303,6 +303,7 @@ function ImagesExport({
   const stem = (project.name.trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'motion-studio') + `-${shortEdge}p`;
 
   const run = (): void => {
+    setSent(false);
     setState({ kind: 'running', done: 0, total: count });
     void renderStills({
       project,
@@ -340,13 +341,16 @@ function ImagesExport({
       });
   };
 
+  const [sent, setSent] = useState(false);
   const share = (files: readonly File[]): void => {
     setShareError(null);
-    navigator.share({ files: [...files], title: project.name }).catch((reason: unknown) => {
-      if (reason instanceof DOMException && reason.name === 'AbortError') return;
-      console.error('Sharing the images failed.', reason);
-      setShareError(reason instanceof Error ? reason.message : String(reason));
-    });
+    navigator.share({ files: [...files], title: project.name })
+      .then(() => { setSent(true); })
+      .catch((reason: unknown) => {
+        if (reason instanceof DOMException && reason.name === 'AbortError') return;
+        console.error('Sharing the images failed.', reason);
+        setShareError(reason instanceof Error ? reason.message : String(reason));
+      });
   };
 
   return (
@@ -385,9 +389,15 @@ function ImagesExport({
           <p className="mb-2 text-[12px] text-ink-muted">
             {format === 'pdf' ? 'Your PDF is ready. Send it to LinkedIn or save it to Files.' : isApple() ? <>Tap <strong style={{ color: 'var(--c-ink)' }}>Save to Photos</strong>, then <strong style={{ color: 'var(--c-ink)' }}>Save {state.files.length === 1 ? 'Image' : `${state.files.length} Images`}</strong>.</> : 'Save them to your gallery or send them straight to an app.'}
           </p>
-          <button type="button" onClick={() => { share(state.files); }} className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink">
-            {format === 'pdf' ? 'Share the PDF' : isApple() ? 'Save to Photos' : 'Save or share'}
-          </button>
+          {sent ? (
+            <p className="flex items-center gap-2 rounded-xl border px-3 py-3 text-[14px] font-semibold" style={{ borderColor: 'var(--c-accent)', color: 'var(--c-accent)' }} role="status" data-saved>
+              <span aria-hidden>✓</span> {format === 'pdf' ? 'Done — the PDF went where you sent it.' : isApple() ? `Saved — ${state.files.length === 1 ? 'your picture is' : `your ${state.files.length} pictures are`} in Photos.` : 'Done — sent where you chose.'}
+            </p>
+          ) : (
+            <button type="button" onClick={() => { share(state.files); }} className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink">
+              {format === 'pdf' ? 'Share the PDF' : isApple() ? 'Save to Photos' : 'Save or share'}
+            </button>
+          )}
           {shareError !== null && <p className="mt-2 text-[11px]" style={{ color: 'var(--c-danger)' }}>Could not open sharing: {shareError}</p>}
         </div>
       )}
@@ -405,18 +415,23 @@ function ImagesExport({
 /** The finished video, offered to Photos first and to Files second. */
 function SaveToPhotos({ file, bytes }: { file: File; bytes: number }): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
+  // Said once the sheet reports it went through (D-139): "no notifications if
+  // it has been saved or not… would have helped the users from clicking multiple times".
+  const [sent, setSent] = useState(false);
   // An iPad asks for the desktop site, so it says "Macintosh" — with a touch screen.
   const apple = isApple();
 
   const share = (): void => {
     setError(null);
     // Needs the tap that called it: the share sheet only opens from a gesture.
-    navigator.share({ files: [file], title: file.name }).catch((reason: unknown) => {
-      // Closing the sheet is a choice, not a failure.
-      if (reason instanceof DOMException && reason.name === 'AbortError') return;
-      console.error('Sharing the export failed.', reason);
-      setError(reason instanceof Error ? reason.message : String(reason));
-    });
+    navigator.share({ files: [file], title: file.name })
+      .then(() => { setSent(true); })
+      .catch((reason: unknown) => {
+        // Closing the sheet is a choice, not a failure.
+        if (reason instanceof DOMException && reason.name === 'AbortError') return;
+        console.error('Sharing the export failed.', reason);
+        setError(reason instanceof Error ? reason.message : String(reason));
+      });
   };
 
   return (
@@ -425,13 +440,19 @@ function SaveToPhotos({ file, bytes }: { file: File; bytes: number }): React.JSX
         Your video is ready — {(bytes / 1024 / 1024).toFixed(1)}MB.{' '}
         {apple ? <>Tap <strong style={{ color: 'var(--c-ink)' }}>Save to Photos</strong>, then <strong style={{ color: 'var(--c-ink)' }}>Save Video</strong>.</> : 'Save it to your gallery or send it straight to an app.'}
       </p>
-      <button
-        type="button"
-        onClick={share}
-        className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink"
-      >
-        {apple ? 'Save to Photos' : 'Save or share'}
-      </button>
+      {sent ? (
+        <p className="flex items-center gap-2 rounded-xl border px-3 py-3 text-[14px] font-semibold" style={{ borderColor: 'var(--c-accent)', color: 'var(--c-accent)' }} role="status" data-saved>
+          <span aria-hidden>✓</span> {apple ? 'Saved — your video is in Photos.' : 'Done — your video went where you sent it.'}
+        </p>
+      ) : (
+        <button
+          type="button"
+          onClick={share}
+          className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink"
+        >
+          {apple ? 'Save to Photos' : 'Save or share'}
+        </button>
+      )}
       <button
         type="button"
         onClick={() => { downloadBlob(file, file.name); }}

@@ -146,7 +146,7 @@ test.describe('the project, named at the top (D-099)', () => {
     await page.getByLabel('Rename project').fill('Original');
     await page.getByLabel('Rename project').press('Enter');
 
-    await page.getByRole('button', { name: 'Project menu' }).click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('menuitem', { name: /^Save as/ }).click();
     const dialog = page.getByRole('dialog', { name: 'Save as' });
     await dialog.getByLabel('Name').fill('Version two');
@@ -169,7 +169,7 @@ test.describe('the project, named at the top (D-099)', () => {
     await page.getByLabel('Rename project').fill('Keeper');
     await page.getByLabel('Rename project').press('Enter');
 
-    await page.getByRole('button', { name: 'Project menu' }).click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
     await page.getByRole('menuitem', { name: /^Make a copy/ }).click();
 
     await expect(toast(page)).toContainText('Copy saved as “Keeper copy”');
@@ -181,10 +181,10 @@ test.describe('the project, named at the top (D-099)', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_500);
 
-    await page.getByRole('button', { name: 'Project menu' }).click();
-    await page.getByRole('menuitem', { name: /^New blank canvas/ }).click();
+    await page.getByRole('button', { name: 'Menu', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^New video/ }).click();
 
-    await expect(page.getByRole('button', { name: /^Project: Untitled canvas/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Project: Untitled video/ })).toBeVisible();
     await expect(sceneClips(page)).toHaveCount(1);
     await expect(sceneClips(page).first()).toHaveText(/1\. Blank/);
     // And the tools for building on it are right there.

@@ -55,7 +55,7 @@ test.describe('autosave', () => {
      * the badge read "Not saved" for the rest of the session.
      */
     await openEditor(page);
-    await page.getByRole('button', { name: 'Corporate Ads' }).click();
+    await page.getByRole('button', { name: 'Video', exact: true }).click();
     await page.getByTitle('Add a text overlay').click();
     await setOverlayText(page, MARKER);
 
@@ -64,7 +64,7 @@ test.describe('autosave', () => {
 
   test('a reload brings the work back', async ({ page }) => {
     await openEditor(page);
-    await page.getByRole('button', { name: 'Corporate Ads' }).click();
+    await page.getByRole('button', { name: 'Video', exact: true }).click();
     await page.getByTitle('Add a text overlay').click();
     await setOverlayText(page, MARKER);
     await settled(page);
@@ -80,7 +80,7 @@ test.describe('autosave', () => {
      * document — so the panel has to be reopened before its field exists.
      */
     await expect(page.getByTitle(MARKER)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Corporate Ads' })).toHaveAttribute(
+    await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -187,13 +187,13 @@ test.describe('the project list (§13)', () => {
 
   test('a new project starts clean and leaves the old one alone', async ({ page }) => {
     await openEditor(page);
-    await page.getByRole('button', { name: 'Corporate Ads' }).click();
+    await page.getByRole('button', { name: 'Video', exact: true }).click();
     await page.getByTitle('Add a text overlay').click();
     await setOverlayText(page, MARKER);
     await settled(page);
 
     await openList(page);
-    await page.getByRole('button', { name: 'New project' }).click();
+    await page.getByRole('button', { name: 'New design' }).click();
     await expect(dialog(page)).toHaveCount(0);
 
     // The new one has none of the old one's work …

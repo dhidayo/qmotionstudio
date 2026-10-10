@@ -216,10 +216,24 @@ export function replacePhoto(index: number, mediaId: string): Action {
  * one-scene design holds are added to it, up to `maxExtra`. One undo step,
  * however many scenes it touches.
  */
-export function placeOwnPhotos(mediaIds: readonly string[], maxExtra = 8): Action {
+/**
+ * Your photos into a design's photo spots, in order (D-116, D-137).
+ *
+ * By default only the scene being worked on: "when I clicked on a scene and
+ * add your photos, the photos is applied to all scenes. I expected … only the
+ * current scene so that I can design the next screen separately." With
+ * `everyScene`, every scene's spots are filled in turn, carrying on through
+ * the list rather than restarting, so neighbouring scenes do not open on the
+ * same picture. The scene worked on takes any photos left over as new spots,
+ * up to `maxPhotos` — its design's limit.
+ */
+export function placeOwnPhotos(
+  mediaIds: readonly string[],
+  options: { readonly everyScene?: boolean; readonly maxPhotos?: number } = {},
+): Action {
   return {
     label: mediaIds.length === 1 ? 'Use your photo' : `Use ${mediaIds.length} photos`,
-    apply: (project) => {
+    apply: (project, scope) => {
       if (mediaIds.length === 0) return project;
       let cursor = 0;
       const next = (): string => {
@@ -227,24 +241,24 @@ export function placeOwnPhotos(mediaIds: readonly string[], maxExtra = 8): Actio
         cursor += 1;
         return id;
       };
-      const scenes = project.scenes.map((scene) => {
+      const scenes = project.scenes.map((scene, index) => {
+        const here = index === scope.sceneIndex;
+        if (!here && options.everyScene !== true) return scene;
         const photos = scene.inputs.photos;
-        if (photos.length === 0) return scene;
         // The old crop belonged to the old picture, as in `replacePhoto`.
         const replaced = photos.map((photo): PhotoInput => {
           const { cropRect: _crop, ...rest } = photo;
           return { ...rest, mediaId: next() };
         });
-        // A single scene takes any photographs left over, as new slots.
-        const extra = project.scenes.length === 1
-          ? mediaIds.slice(photos.length, photos.length + maxExtra).map((mediaId): PhotoInput => ({
-              mediaId,
-              frame: photos[0]?.frame ?? '3:4',
-              sizeMode: 'template',
-              sizePct: 100,
-              cropMode: 'template',
-            }))
-          : [];
+        const room = here ? Math.max(0, (options.maxPhotos ?? photos.length) - photos.length) : 0;
+        const extra = mediaIds.slice(photos.length, photos.length + room).map((mediaId): PhotoInput => ({
+          mediaId,
+          frame: photos[0]?.frame ?? '3:4',
+          sizeMode: 'template',
+          sizePct: 100,
+          cropMode: 'template',
+        }));
+        if (replaced.length === 0 && extra.length === 0) return scene;
         return { ...scene, inputs: { ...scene.inputs, photos: [...replaced, ...extra] } };
       });
       return { ...project, scenes };
@@ -1141,7 +1155,7 @@ export function duplicateProject(project: Project): Project {
 
 export function setMode(mode: ProjectMode): Action {
   return {
-    label: mode === 'motionAd' ? 'Switch to Corporate Ads' : 'Switch to Lifestyle',
+    label: mode === 'motionAd' ? 'Switch to Video' : 'Switch to Design',
     apply: (project, scope) => {
       if (project.mode === mode) return project;
 

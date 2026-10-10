@@ -688,6 +688,9 @@ test.describe('saving to Photos on a phone (D-125)', () => {
     expect(shared?.name).toMatch(/\.mp4$/);
     expect(shared?.type).toBe('video/mp4');
     expect(shared?.size ?? 0).toBeGreaterThan(10_000);
+    // Said once it has gone through, so nobody taps it again (D-139).
+    await expect(offer.locator('[data-saved]')).toBeVisible();
+    await expect(offer.getByRole('button', { name: /^(Save to Photos|Save or share)$/ })).toHaveCount(0);
 
     // Files is still there for whoever wants it.
     await offer.getByRole('button', { name: 'Save to Files instead' }).click();

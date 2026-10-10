@@ -83,3 +83,46 @@ export function makeZip(files: readonly { readonly name: string; readonly data: 
 
   return new Blob([...parts, ...central, new Uint8Array(end.buffer)] as BlobPart[], { type: 'application/zip' });
 }
+
+/**
+ * Reads a ZIP this app wrote — stored entries only (D-141). A file someone has
+ * re-compressed is refused with a reason rather than half-read.
+ */
+export function readZip(bytes: Uint8Array): Map<string, Uint8Array> {
+  try {
+    return readEntries(bytes);
+  } catch (error: unknown) {
+    // A cut-short or altered file reads past its own end: say so plainly.
+    if (error instanceof RangeError) throw new Error('That project file is damaged.', { cause: error });
+    throw error;
+  }
+}
+
+function readEntries(bytes: Uint8Array): Map<string, Uint8Array> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  // The end record is the last 22 bytes (this writer adds no comment).
+  let end = -1;
+  for (let at = bytes.length - 22; at >= Math.max(0, bytes.length - 22 - 65_535); at--) {
+    if (view.getUint32(at, true) === 0x06054b50) { end = at; break; }
+  }
+  if (end < 0) throw new Error('That file is not a Q Motion Studio project.');
+  const count = view.getUint16(end + 10, true);
+  let at = view.getUint32(end + 16, true);
+  const decoder = new TextDecoder();
+  const files = new Map<string, Uint8Array>();
+  for (let i = 0; i < count; i++) {
+    if (view.getUint32(at, true) !== 0x02014b50) throw new Error('That project file is damaged.');
+    const method = view.getUint16(at + 10, true);
+    const size = view.getUint32(at + 20, true);
+    const nameLength = view.getUint16(at + 28, true);
+    const extraLength = view.getUint16(at + 30, true);
+    const commentLength = view.getUint16(at + 32, true);
+    const local = view.getUint32(at + 42, true);
+    const name = decoder.decode(bytes.subarray(at + 46, at + 46 + nameLength));
+    if (method !== 0) throw new Error('That project file was compressed again after saving. Open the original .qmotion file.');
+    const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+    files.set(name, bytes.slice(start, start + size));
+    at += 46 + nameLength + extraLength + commentLength;
+  }
+  return files;
+}

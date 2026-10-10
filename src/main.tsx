@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import { loadFonts } from '@/fonts/registry';
+import { loadSavedFonts } from '@/fonts/userFonts';
 import { registerOfflineSupport } from './pwa';
 import './styles/index.css';
 
@@ -22,6 +23,8 @@ const root = createRoot(host);
  * FontFaceSet are not visible inside a worker.
  */
 loadFonts(document.fonts)
+  // Then the person's own uploaded fonts (D-144), before any text is measured.
+  .then(() => loadSavedFonts(document.fonts))
   .then(() => {
     root.render(
       <StrictMode>

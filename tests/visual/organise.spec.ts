@@ -90,6 +90,29 @@ test('an effect folds and deletes from its own bar', async ({ page }) => {
   await expect(card).toHaveCount(0);
 });
 
+test('the effects already on something are listed first in the library, and can be changed or removed there (D-138)', async ({ page }) => {
+  await page.goto('/?template=pop-float&aspect=1:1');
+  await page.waitForSelector('canvas');
+  await page.waitForTimeout(1_500);
+  await page.getByRole('tab', { name: 'Effects' }).click();
+  const addEffect = page.getByRole('button', { name: '+ Add effect' }).first();
+  await addEffect.click();
+  const library = page.getByRole('dialog', { name: 'Effects' });
+  // Nothing on it yet: no list of current effects.
+  await expect(library.locator('[data-current-effects]')).toHaveCount(0);
+  await library.getByRole('tab', { name: 'Stylize' }).click();
+  await library.locator('[data-effect="sepia"]').click();
+  await expect(library).toHaveCount(0);
+
+  await addEffect.click();
+  const current = library.locator('[data-current-effects]');
+  await expect(current).toContainText('On this scene now · 1');
+  await expect(current.locator('[data-effect-row="sepia"]')).toBeVisible();
+  await current.getByRole('button', { name: 'Remove Sepia' }).click();
+  await expect(library.locator('[data-current-effects]')).toHaveCount(0);
+  await expect(page.locator('[data-effect-row="sepia"]')).toHaveCount(0);
+});
+
 test('my brand: saved from one design, put on another in one tap', async ({ page }) => {
   await page.goto('/?template=type-typewriter&aspect=1:1');
   await page.waitForSelector('canvas');
@@ -121,5 +144,32 @@ test.describe('on a phone', () => {
     await sheet.getByRole('button', { name: 'Wipe' }).tap();
     await expect(sheet.getByRole('button', { name: 'Wipe' })).toHaveAttribute('aria-pressed', 'true');
     await expect(sheet.getByRole('button', { name: 'Left' })).toBeVisible();
+  });
+});
+
+test.describe('a first visit', () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test('the quick start shows once, ticks off each step as it is done, and stays closed', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('canvas');
+    const card = page.locator('[data-quick-start]');
+    await expect(card).toBeVisible();
+    await expect(card.locator('[data-quick-step="1"]')).toHaveAttribute('data-done', 'false');
+
+    // Step one done the ordinary way, from the library.
+    await page.locator('[data-design-card="type-mask-wipe"]').click();
+    await expect(card.locator('[data-quick-step="1"]')).toHaveAttribute('data-done', 'true');
+
+    await card.getByRole('button', { name: 'Got it' }).click();
+    await expect(card).toHaveCount(0);
+    await page.reload();
+    await page.waitForSelector('canvas');
+    await expect(page.locator('[data-quick-start]')).toHaveCount(0);
+
+    // And back from the menu.
+    await page.locator('[data-app-menu]').click();
+    await page.getByRole('menuitem', { name: /^Show the quick start/ }).click();
+    await expect(page.locator('[data-quick-start]')).toBeVisible();
   });
 });

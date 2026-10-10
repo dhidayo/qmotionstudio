@@ -14,7 +14,7 @@ import { registerAacEncoder } from '@mediabunny/aac-encoder';
 import type { Project } from '@/document/types';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { renderFrame } from '@/core/render/renderFrame';
-import { loadFonts } from '@/fonts/registry';
+import { loadFonts, loadUserFont } from '@/fonts/registry';
 import { loadTemplate } from '@/templates/registry';
 import { MediaStore } from '@/media/store';
 import { decodeImage } from '@/media/image/decode';
@@ -81,6 +81,8 @@ async function run(request: ExportRequest): Promise<void> {
      * preview, which is exactly what M4 is meant to prove cannot happen.
      */
     await loadFonts(self.fonts);
+    // The person's own fonts, as the preview has them (D-144).
+    for (const font of request.fonts ?? []) await loadUserFont(self.fonts, font.id, font.name, font.bytes);
 
     // Media arrives as Blobs and is decoded here. Transferring ImageBitmaps
     // would detach them on the main thread and break the live preview (§9's

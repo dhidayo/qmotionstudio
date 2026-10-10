@@ -388,3 +388,45 @@ function ElementEffectRow({ target, effect }: { target: actions.ElementTarget; e
     </EffectCard>
   );
 }
+
+/**
+ * What is on something already, at the top of the effect library (D-138):
+ * "when I click on effects and it has certain effects, it should list the
+ * effects at the top and user can click, update and modify it… then they can
+ * make informed decision maybe to add the second effect." Each is the same
+ * navy card as in the Effects tab — settings, fold, delete — so nothing needs
+ * the timeline to be found or removed.
+ */
+export function CurrentEffects({ target }: { target: { kind: 'scene' } | { kind: 'element'; target: actions.ElementTarget } }): React.JSX.Element | null {
+  const elementEffects = useEditor((s) => {
+    if (target.kind !== 'element') return null;
+    const scene = s.project.scenes[s.selectedScene];
+    const t = target.target;
+    if (t.kind === 'overlay') return s.project.overlays.find((o) => o.id === t.id)?.effects ?? null;
+    return scene?.inputs.elementEffects?.[actions.targetKey(t)] ?? null;
+  });
+  const sceneEffects = useEditor((s) => (target.kind === 'scene' ? s.project.scenes[s.selectedScene]?.inputs.effects ?? null : null));
+  const sceneMs = useEditor((s) => {
+    const scene = s.project.scenes[s.selectedScene];
+    return scene ? sceneLengthMs(scene) : 0;
+  });
+
+  if (target.kind === 'element') {
+    if (!elementEffects || elementEffects.length === 0) return null;
+    return (
+      <section className="mb-4" data-current-effects>
+        <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">On it now · {elementEffects.length}</h3>
+        {elementEffects.map((effect) => <ElementEffectRow key={effect.id} target={target.target} effect={effect} />)}
+        <p className="mt-1 text-[11px] text-ink-faint">Change or remove these here, or add another below.</p>
+      </section>
+    );
+  }
+  if (!sceneEffects || sceneEffects.length === 0) return null;
+  return (
+    <section className="mb-4" data-current-effects>
+      <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">On this scene now · {sceneEffects.length}</h3>
+      {sceneEffects.map((clip) => <SceneEffectRow key={clip.id} clip={clip} sceneMs={sceneMs} />)}
+      <p className="mt-1 text-[11px] text-ink-faint">Change or remove these here, or add another below.</p>
+    </section>
+  );
+}

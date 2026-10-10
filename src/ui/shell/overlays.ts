@@ -86,6 +86,11 @@ type OverlayState = {
   setInspectorSheet: (open: boolean) => void;
   inspectorSection: string | null;
   focusInspectorSection: (section: string | null) => void;
+  /** Bumped by the menu's Rename, which the project title answers (D-141). */
+  renameAsked: number;
+  askRename: () => void;
+  saveAsOpen: boolean;
+  setSaveAsOpen: (open: boolean) => void;
   /** The list of keyboard shortcuts. */
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
@@ -116,6 +121,10 @@ export const useOverlays = create<OverlayState>((set) => ({
   setInspectorSheet: (inspectorSheet) => { set({ inspectorSheet, menu: null }); },
   inspectorSection: null,
   focusInspectorSection: (inspectorSection) => { set({ inspectorSection, menu: null }); },
+  renameAsked: 0,
+  askRename: () => { set((state) => ({ renameAsked: state.renameAsked + 1, menu: null })); },
+  saveAsOpen: false,
+  setSaveAsOpen: (saveAsOpen) => { set({ saveAsOpen, menu: null }); },
   shortcutsOpen: false,
   setShortcutsOpen: (shortcutsOpen) => { set({ shortcutsOpen, menu: null }); },
   scenePicker: null,

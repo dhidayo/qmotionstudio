@@ -8,6 +8,7 @@ import { ElementEffectsEditor } from '@/ui/effects/EffectEditors';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from './controls';
 import { useLayout } from '@/ui/shell/useLayout';
+import { FontPicker } from './FontPicker';
 
 /**
  * The overlay editor (§1.2, §3C).
@@ -286,12 +287,7 @@ export function TextStyleControls({ id, style }: { id: string; style: TextStyle 
 
   return (
     <>
-      <Segmented
-        value={style.fontId}
-        options={[{ value: 'headline', label: 'Headline' }, { value: 'body', label: 'Body' }]}
-        onChange={(fontId) => { patch({ fontId }); }}
-        label="Font"
-      />
+      <FontPicker value={style.fontId} onChange={(fontId) => { patch({ fontId }); }} />
       <Segmented
         value={style.weight}
         options={([400, 500, 600, 700, 800] as const).map((w) => ({ value: w, label: String(w) }))}

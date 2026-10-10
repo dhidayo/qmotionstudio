@@ -91,7 +91,7 @@ test.describe('the logo lives in Look (D-105)', () => {
     await page.getByRole('tab', { name: 'Style' }).click();
     await expect(page.getByLabel('Add a logo')).toBeAttached();
 
-    await page.getByRole('button', { name: 'Corporate Ads' }).click();
+    await page.getByRole('button', { name: 'Video', exact: true }).click();
     await page.getByRole('tab', { name: 'Style' }).click();
     await expect(page.getByLabel('Add a logo')).toBeAttached();
   });
@@ -99,8 +99,8 @@ test.describe('the logo lives in Look (D-105)', () => {
   test('the product and its modes go by their new names', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle('Q Motion Studio');
-    await expect(page.getByRole('button', { name: 'Lifestyle' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Corporate Ads' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Design', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Video', exact: true })).toBeVisible();
     // Exact: designs such as "App Showcase" are cards in the library now.
     await expect(page.getByRole('button', { name: 'Showcase', exact: true })).toHaveCount(0);
   });

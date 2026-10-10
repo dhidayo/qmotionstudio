@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as actions from '@/document/actions';
-import { createSceneFrom } from '@/document/defaults';
-import { userPhotoIds } from '@/document/select/media';
+import { createSceneFrom, newId } from '@/document/defaults';
+import type { Project } from '@/document/types';
+import { migrate } from '@/document/migrate';
+import { listProjects } from '@/persist/db';
+import { restoreMedia } from '@/persist/media';
+import { useMediaStore } from '@/ui/media/MediaProvider';
+import { referencedMedia, userPhotoIds } from '@/document/select/media';
 import { PlayingPreview, noHover } from '@/ui/library/PlayingPreview';
 import { useEntitlements } from '@/entitlements';
-import { CATEGORIES, posterUrl, previewUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
+import { posterUrl, previewUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
+import { DESIGN_PURPOSES, purposeOf } from '@/templates/purpose';
 import { loadSceneTemplate } from '@/templates/registry';
 import { useEditor } from '@/state/store';
 
@@ -46,6 +52,8 @@ export function ScenePicker({
 
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
+  // Where a new scene comes from (D-140): the library, or a design already made and saved.
+  const [source, setSource] = useState<'library' | 'mine'>('library');
   const search = useRef<HTMLInputElement | null>(null);
 
   const current = project.scenes[index];
@@ -74,11 +82,13 @@ export function ScenePicker({
       wanted.length === 0
       || t.name.toLowerCase().includes(wanted)
       || t.category.toLowerCase().includes(wanted)
+      || purposeOf(t).toLowerCase().includes(wanted)
       || t.blurb.toLowerCase().includes(wanted);
-    return CATEGORIES
+    // By purpose, as the library opens (D-143).
+    return DESIGN_PURPOSES
       .map((category) => ({
         category,
-        templates: all.filter((t) => t.category === category && t.listed !== false && matches(t)),
+        templates: all.filter((t) => purposeOf(t) === category && t.listed !== false && matches(t)),
       }))
       .filter((group) => group.templates.length > 0);
   }, [all, query]);
@@ -158,6 +168,29 @@ export function ScenePicker({
           </button>
         </div>
 
+        {mode === 'add' && (
+          <div className="flex gap-1.5 border-b border-edge px-4 py-2" role="tablist" aria-label="Where the scene comes from">
+            {([['library', 'New scene'], ['mine', 'My designs']] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={source === value}
+                onClick={() => { setSource(value); }}
+                className="rounded-full border px-3 py-1 text-[12px]"
+                style={source === value
+                  ? { borderColor: 'var(--c-accent)', background: 'var(--c-accent-soft)', color: 'var(--c-accent)', fontWeight: 600 }
+                  : { borderColor: 'var(--c-edge)', color: 'var(--c-ink-muted)' }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {mode === 'add' && source === 'mine' ? (
+          <MyDesigns query={query} onAdded={onClose} />
+        ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
           {blank && query.trim().length === 0 && (
             <section className="mb-4">
@@ -210,6 +243,97 @@ export function ScenePicker({
             </section>
           ))}
         </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Designs made and saved on their own, as scenes (D-140): "Can I design
+ * multiple and save, then, on video I can do Add scene and the options will
+ * be new scene or saved scene." Each comes in whole — its photos, words, look,
+ * logo and effects — after the selected scene. The saved design itself is
+ * untouched: the video gets a copy.
+ */
+function MyDesigns({ query, onAdded }: { query: string; onAdded: () => void }): React.JSX.Element {
+  const projectId = useEditor((s) => s.project.id);
+  const index = useEditor((s) => s.selectedScene);
+  const dispatch = useEditor((s) => s.dispatch);
+  const selectScene = useEditor((s) => s.selectScene);
+  const showToast = useEditor((s) => s.showToast);
+  const media = useMediaStore();
+  const [designs, setDesigns] = useState<readonly Project[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void listProjects()
+      .then((stored) => {
+        if (!alive) return;
+        const found: Project[] = [];
+        for (const entry of stored) {
+          const result = migrate({ ...entry.project, schemaVersion: entry.schemaVersion });
+          if (result.ok && result.project.mode === 'showcase' && result.project.id !== projectId && result.project.scenes.length > 0) found.push(result.project);
+        }
+        setDesigns(found);
+      })
+      .catch((error: unknown) => {
+        console.error('Could not read your saved designs.', error);
+        if (alive) setDesigns([]);
+      });
+    return () => { alive = false; };
+  }, [projectId]);
+
+  const use = async (design: Project): Promise<void> => {
+    const scene = design.scenes[0];
+    if (!scene || busy !== null) return;
+    setBusy(design.id);
+    try {
+      // Its photos are on this device; bring them in before the scene arrives.
+      await restoreMedia(media, referencedMedia(design));
+      await loadSceneTemplate(scene.templateId);
+      dispatch(actions.addScene({ ...scene, id: newId('scn'), transitionIn: { kind: 'crossFade', durationMs: 500 } }, index + 1));
+      selectScene(index + 1);
+      showToast(`Added your design “${design.name}” as scene ${index + 2}.`);
+      onAdded();
+    } catch (error: unknown) {
+      console.error(`Could not add the design "${design.name}".`, error);
+      showToast('That design could not be added. Try again.');
+      setBusy(null);
+    }
+  };
+
+  const wanted = query.trim().toLowerCase();
+  const shown = (designs ?? []).filter((d) => wanted.length === 0 || d.name.toLowerCase().includes(wanted));
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-my-designs>
+      {designs === null && <p className="py-6 text-center text-[12px] text-ink-faint">Reading your designs…</p>}
+      {designs !== null && designs.length === 0 && (
+        <p className="py-6 text-center text-[12px] leading-relaxed text-ink-muted">
+          No saved designs yet. Make one with Menu → New design; it is saved as you go, and comes here to be a scene.
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">
+        {shown.map((design) => {
+          const scene = design.scenes[0];
+          return (
+            <button
+              key={design.id}
+              type="button"
+              data-my-design={design.id}
+              disabled={busy !== null}
+              onClick={() => { void use(design); }}
+              className="overflow-hidden rounded-md border border-edge text-left hover:border-accent disabled:cursor-wait"
+            >
+              <span className="relative block aspect-square w-full" style={{ background: scene?.inputs.look.palette.bg ?? 'var(--c-panel-alt)' }}>
+                {scene && <img src={posterUrl(scene.templateId)} alt="" loading="lazy" className="absolute inset-0 size-full object-cover opacity-90" />}
+              </span>
+              <span className="block truncate px-1.5 py-1 text-[11px] font-semibold">{busy === design.id ? 'Adding…' : design.name}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useOverlays } from '@/ui/shell/overlays';
 import { useEditor } from '@/state/store';
 import { MAX_NAME, useProjectActions } from './useProjectActions';
 
@@ -18,24 +19,27 @@ import { MAX_NAME, useProjectActions } from './useProjectActions';
 export function ProjectTitle(): React.JSX.Element {
   const name = useEditor((s) => s.project.name);
   const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
-  const { rename, makeCopy, startNew } = useProjectActions();
+  const { rename } = useProjectActions();
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
-  const [menuOpen, setMenuOpen] = useState(false);
-  /**
-   * Where the menu opens, in window coordinates.
-   *
-   * The top bar scrolls sideways on narrow screens, and a scrolling box clips
-   * anything that hangs out of it — so a menu positioned inside the bar was
-   * opened and cut off in the same instant. Fixed to the window instead, at
-   * the button's own position.
-   */
-  const [anchor, setAnchor] = useState<{ top: number; left: number } | null>(null);
-  const trigger = useRef<HTMLButtonElement | null>(null);
-  const [savingAs, setSavingAs] = useState(false);
+  // Asked for from the menu (D-141): the menu is the one place for project actions.
+  const renameAsked = useOverlays((o) => o.renameAsked);
+  const savingAs = useOverlays((o) => o.saveAsOpen);
+  const setSavingAs = useOverlays((o) => o.setSaveAsOpen);
   const input = useRef<HTMLInputElement | null>(null);
-  const menu = useRef<HTMLDivElement | null>(null);
+
+  const beginRename = (): void => {
+    setDraft(name);
+    setEditing(true);
+  };
+
+  const [seenAsk, setSeenAsk] = useState(renameAsked);
+  if (renameAsked !== seenAsk) {
+    setSeenAsk(renameAsked);
+    setDraft(name);
+    setEditing(true);
+  }
 
   useEffect(() => {
     if (!editing) return;
@@ -43,39 +47,13 @@ export function ProjectTitle(): React.JSX.Element {
     input.current?.select();
   }, [editing]);
 
-  // Closes on a click anywhere else, and on Escape.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onPointer = (event: PointerEvent): void => {
-      if (menu.current && event.target instanceof Node && !menu.current.contains(event.target)) setMenuOpen(false);
-    };
-    const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') setMenuOpen(false); };
-    window.addEventListener('pointerdown', onPointer);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('pointerdown', onPointer);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [menuOpen]);
-
-  const beginRename = (): void => {
-    setDraft(name);
-    setEditing(true);
-    setMenuOpen(false);
-  };
-
   const commit = (): void => {
     setEditing(false);
     void rename(draft);
   };
 
-  const run = (action: () => void): void => {
-    setMenuOpen(false);
-    action();
-  };
-
   return (
-    <div className="relative flex min-w-0 items-center gap-1" ref={menu}>
+    <div className="relative flex min-w-0 items-center gap-1">
       {editing ? (
         <input
           ref={input}
@@ -105,22 +83,6 @@ export function ProjectTitle(): React.JSX.Element {
       )}
 
       <button
-        ref={trigger}
-        type="button"
-        onClick={() => {
-          const box = trigger.current?.getBoundingClientRect();
-          if (box) setAnchor({ top: box.bottom + 4, left: Math.max(8, box.left - 160) });
-          setMenuOpen((open) => !open);
-        }}
-        aria-label="Project menu"
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        className="rounded-md px-1.5 py-1 text-[11px] text-ink-muted hover:bg-panel-alt"
-      >
-        ▾
-      </button>
-
-      <button
         type="button"
         onClick={() => { setProjectsOpen(true); }}
         className="shrink-0 rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
@@ -128,54 +90,12 @@ export function ProjectTitle(): React.JSX.Element {
         Switch project
       </button>
 
-      {menuOpen && anchor && (
-        <div
-          role="menu"
-          aria-label="Project"
-          className="fixed z-50 w-56 rounded-md border border-edge bg-panel py-1 shadow-lg"
-          style={{ top: anchor.top, left: anchor.left }}
-        >
-          <MenuItem onSelect={() => { run(beginRename); }}>Rename</MenuItem>
-          <MenuItem onSelect={() => { run(() => { setSavingAs(true); }); }} hint="A new copy you keep working on">Save as…</MenuItem>
-          <MenuItem onSelect={() => { run(() => { void makeCopy(); }); }} hint="A copy in your list; you stay here">Make a copy</MenuItem>
-          <Divider />
-          <MenuItem onSelect={() => { run(() => { void startNew('template'); }); }}>New project</MenuItem>
-          <MenuItem onSelect={() => { run(() => { void startNew('blank'); }); }} hint="Build from scratch">New blank canvas</MenuItem>
-          <Divider />
-          <MenuItem onSelect={() => { run(() => { setProjectsOpen(true); }); }}>Switch project…</MenuItem>
-        </div>
-      )}
-
       {savingAs && <SaveAsDialog onClose={() => { setSavingAs(false); }} />}
     </div>
   );
 }
 
-function MenuItem({
-  children,
-  hint,
-  onSelect,
-}: {
-  children: React.ReactNode;
-  hint?: string;
-  onSelect: () => void;
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      onClick={onSelect}
-      className="block w-full px-3 py-1.5 text-left text-[12px] hover:bg-panel-alt focus:bg-panel-alt focus:outline-none"
-    >
-      {children}
-      {hint !== undefined && <span className="block text-[10px] text-ink-faint">{hint}</span>}
-    </button>
-  );
-}
 
-function Divider(): React.JSX.Element {
-  return <div role="separator" className="my-1 border-t border-edge" />;
-}
 
 /** "Save as": name the copy, then carry on working in it. */
 function SaveAsDialog({ onClose }: { onClose: () => void }): React.JSX.Element {

@@ -16,7 +16,7 @@ import { ClockProvider } from './ClockProvider';
 import { Sheet } from './Sheet';
 import { useOverlays } from './overlays';
 import { useLayout } from './useLayout';
-import { MediaStore } from '@/media/store';
+import type { MediaStore } from '@/media/store';
 import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
 import { loadTemplate } from '@/templates/registry';
 import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
@@ -26,6 +26,7 @@ import { useAudioPlayback } from '@/ui/audio/useAudioPlayback';
 import { useAutosave } from '@/ui/persist/useAutosave';
 import { useRestore } from '@/ui/persist/useRestore';
 import { Toast } from './Toast';
+import { QuickStart } from '@/ui/onboarding/QuickStart';
 import { ContextMenu } from './ContextMenu';
 import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
@@ -42,7 +43,7 @@ const loadExportDialog = () => import('@/ui/export/ExportDialog');
 const ExportDialog = lazy(async () => ({ default: (await loadExportDialog()).ExportDialog }));
 const ProjectsDialog = lazy(async () => ({ default: (await import('@/ui/projects/ProjectsDialog')).ProjectsDialog }));
 
-export function AppShell(): React.JSX.Element {
+export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   const project = useEditor((s) => s.project);
 
   /*
@@ -59,10 +60,10 @@ export function AppShell(): React.JSX.Element {
    */
   const duration = timelineSpanMs(project);
 
-  // One media store, rig and clock for the preview. The export path will create
-  // its own set, which is the whole point of D-001 — the two never share
-  // scratch space.
-  const media = useMemo(() => new MediaStore(), []);
+  // One media store (made by App, so the top bar's menu can save it into a
+  // project file — D-141), rig and clock for the preview. The export path
+  // creates its own set, which is the whole point of D-001 — the two never
+  // share scratch space.
   // Created empty on purpose: duration is owned by the effect below, so the
   // clock never needs rebuilding when the document's length changes.
   const clock = useMemo(() => new PreviewClock(0), []);
@@ -409,6 +410,7 @@ export function AppShell(): React.JSX.Element {
         {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </Suspense>
+      <QuickStart />
       <Toast />
       <ContextMenu />
       <EffectPicker />

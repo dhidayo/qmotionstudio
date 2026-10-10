@@ -101,14 +101,21 @@ test.describe('on a computer', () => {
     await expect.poll(async () => (await photoIds(page))[0]?.every((id) => id.startsWith('sample:'))).toBe(true);
   });
 
-  test('in an ad, your photos fill the photo slots of every scene', async ({ page }) => {
+  test('in a video, your photos fill the scene you are on — and every scene only when asked (D-137)', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, '/?template=launch-story&aspect=9:16&frozen=2000');
     await page.getByLabel('Add your photos').setInputFiles([
       { name: 'red.png', mimeType: 'image/png', buffer: (await pictures(page))[0] ?? Buffer.alloc(0) },
     ]);
+    // Scene 1 is the one selected when the video opens.
+    await expect.poll(async () => (await photoIds(page))[0]?.every((id) => id.startsWith('upload:'))).toBe(true);
+    const others = (await photoIds(page)).slice(1).flat();
+    expect(others.length).toBeGreaterThan(0);
+    expect(others.some((id) => id.startsWith('upload:'))).toBe(false);
+
+    await page.getByRole('tab', { name: 'Photos' }).click();
+    await page.getByRole('button', { name: 'Use on every scene' }).click();
     await expect.poll(async () => (await photoIds(page)).flat().every((id) => id.startsWith('upload:'))).toBe(true);
-    expect((await photoIds(page)).filter((scene) => scene.length > 0).length).toBeGreaterThan(1);
   });
 });
 

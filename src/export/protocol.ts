@@ -20,6 +20,8 @@ export type ExportRequest = {
   readonly watermark: boolean;
   /** mediaId → source blob. */
   readonly media: readonly (readonly [string, Blob])[];
+  /** Uploaded fonts the text uses (D-144): the worker has its own FontFaceSet. */
+  readonly fonts?: readonly { readonly id: string; readonly name: string; readonly bytes: ArrayBuffer }[];
   /**
    * The finished audio mix, as raw PCM (§10, D-053).
    *

@@ -21,6 +21,12 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: BASE_URL,
+    /*
+     * The quick start (D-142) is a first visit's card; the suite is not about
+     * it, and a card over the picture would sit under clicks meant for the
+     * canvas. Marked as seen everywhere; its own test starts from nothing.
+     */
+    storageState: { cookies: [], origins: [{ origin: BASE_URL, localStorage: [{ name: 'ms.quickstart', value: 'done' }] }] },
     trace: 'on-first-retry',
   },
   /*

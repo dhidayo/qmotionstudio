@@ -104,16 +104,16 @@ export function useProjectActions(): {
   const startNew = useCallback(async (kind: 'template' | 'blank'): Promise<void> => {
     const { aspect } = useEditor.getState().project;
     const project = kind === 'blank'
-      // A blank canvas is built with the timeline's own tools — photos, text and
-      // video as layers — which live in Motion Ads, so that is where it opens.
-      ? createProject({ name: 'Untitled canvas', aspect, mode: 'motionAd', templateId: 'blank', photoCount: 0 })
+      // A new video starts empty: scenes come from the library or from your
+      // saved designs (D-140), layers from the timeline's own tools.
+      ? createProject({ name: 'Untitled video', aspect, mode: 'motionAd', templateId: 'blank', photoCount: 0 })
       : createProject({ aspect, look: designLook(DEFAULT_TEMPLATE_ID) });
     try {
       await flush();
       await write(project);
       await writeLastOpened(project.id);
       openProject(project);
-      showToast(kind === 'blank' ? 'New blank canvas. Add photos, text and video from the timeline.' : 'New project started.');
+      showToast(kind === 'blank' ? 'New video. Add scenes — new ones or your saved designs — and layers from the timeline.' : 'New design started.');
     } catch (error: unknown) {
       fail('start a new project', error);
     }

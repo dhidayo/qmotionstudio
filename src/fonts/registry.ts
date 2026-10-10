@@ -72,7 +72,68 @@ export const FONTS: Readonly<Record<FontId, FontDef>> = {
   },
 };
 
+/**
+ * Fonts every device already has (D-144): "allow users to be able to change
+ * font of selected text from system fonts… such as Georgia, Times New Roman".
+ * Nothing to download, so nothing to wait for; each names a stack that falls
+ * back sensibly where the first choice is missing (Android has no Georgia).
+ */
+export const SYSTEM_FONTS: readonly { readonly id: FontId; readonly label: string; readonly stack: string }[] = [
+  { id: 'sys:georgia', label: 'Georgia', stack: "Georgia, 'Times New Roman', serif" },
+  { id: 'sys:times', label: 'Times New Roman', stack: "'Times New Roman', Times, serif" },
+  { id: 'sys:palatino', label: 'Palatino', stack: "Palatino, 'Palatino Linotype', 'Book Antiqua', serif" },
+  { id: 'sys:garamond', label: 'Garamond', stack: "Garamond, 'EB Garamond', Baskerville, serif" },
+  { id: 'sys:arial', label: 'Arial', stack: 'Arial, Helvetica, sans-serif' },
+  { id: 'sys:helvetica', label: 'Helvetica', stack: "'Helvetica Neue', Helvetica, Arial, sans-serif" },
+  { id: 'sys:verdana', label: 'Verdana', stack: 'Verdana, Geneva, sans-serif' },
+  { id: 'sys:trebuchet', label: 'Trebuchet', stack: "'Trebuchet MS', 'Lucida Grande', sans-serif" },
+  { id: 'sys:rounded', label: 'Rounded', stack: "ui-rounded, 'SF Pro Rounded', 'Arial Rounded MT Bold', system-ui, sans-serif" },
+  { id: 'sys:impact', label: 'Impact', stack: "Impact, 'Arial Black', 'Helvetica Neue', sans-serif" },
+  { id: 'sys:courier', label: 'Courier', stack: "'Courier New', Courier, ui-monospace, monospace" },
+  { id: 'sys:cursive', label: 'Handwriting', stack: "'Segoe Script', 'Snell Roundhand', 'Bradley Hand', 'Brush Script MT', cursive" },
+];
+const SYSTEM_BY_ID = new Map(SYSTEM_FONTS.map((font) => [font.id, font]));
+
+/** Fonts the person added (D-144), by id, as registered once their face has loaded. */
+const USER_FONTS = new Map<FontId, { readonly family: string; readonly label: string }>();
+
+/** The family name an uploaded font is registered under: unique, and never a real font's name. */
+export function userFamily(id: FontId): string {
+  return `QMU ${id.replace(/[^a-zA-Z0-9]/g, '')}`;
+}
+
+export function isUserFont(id: FontId): boolean {
+  return id.startsWith('user:');
+}
+
+/**
+ * Loads an uploaded font into a FontFaceSet — the document's, or the export
+ * worker's — and makes it known to `familyOf`. Rejects if the file is not a
+ * font the browser can read, so a bad upload is said, not silently ignored.
+ */
+export async function loadUserFont(target: FontFaceSet, id: FontId, label: string, bytes: ArrayBuffer): Promise<void> {
+  const family = userFamily(id);
+  const face = new FontFace(family, bytes, { display: 'block' });
+  const ready = await face.load();
+  target.add(ready);
+  USER_FONTS.set(id, { family, label });
+}
+
+export function userFonts(): readonly { readonly id: FontId; readonly label: string }[] {
+  return [...USER_FONTS].map(([id, font]) => ({ id, label: font.label }));
+}
+
+/** A font's name as the picker shows it. */
+export function fontLabel(id: FontId): string {
+  return FONTS[id]?.label ?? SYSTEM_BY_ID.get(id)?.label ?? USER_FONTS.get(id)?.label ?? 'Font';
+}
+
 export function familyOf(id: FontId): string {
+  const system = SYSTEM_BY_ID.get(id);
+  if (system) return system.stack;
+  const user = USER_FONTS.get(id);
+  // An uploaded font that is not here (a project from another device) falls back to the body face.
+  if (user) return `"${user.family}", ui-sans-serif, system-ui, sans-serif`;
   const def = FONTS[id] ?? FONTS['body'];
   if (!def) return 'sans-serif';
   return def.family.length > 0 ? `"${def.family}", ${def.fallback}` : def.fallback;

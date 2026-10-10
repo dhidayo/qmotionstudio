@@ -6,6 +6,9 @@ import { ProjectTitle } from '@/ui/projects/ProjectTitle';
 import { MODE_LABEL } from './modeLabels';
 import { useOverlays } from './overlays';
 import { useLayout } from './useLayout';
+import { useProjectActions } from '@/ui/projects/useProjectActions';
+import { useProjectFile } from '@/ui/projects/useProjectFile';
+import { showQuickStart } from '@/ui/onboarding/quickStartState';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -20,6 +23,7 @@ export function TopBar(): React.JSX.Element {
       className="brand-surface flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge bg-panel px-3 lg:gap-4"
       style={{ height: 'var(--h-topbar)' }}
     >
+      <AppMenu />
       <div className="flex shrink-0 items-center gap-2 pr-1">
         {/* The owner's Q, cut from their own artwork by `npm run brand`. */}
         <img src="/brand-q.png" alt="" aria-hidden width={24} height={24} className="size-6 rounded-md" />
@@ -199,7 +203,7 @@ function ModeSwitch(): React.JSX.Element {
   const choose = (next: 'showcase' | 'motionAd'): void => {
     setMode(next);
     if (next === 'showcase' && (sceneCount > 1 || layerCount > 0)) {
-      showToast('Lifestyle keeps the selected scene. Press ⌘Z to bring the rest of the ad back.');
+      showToast('Design keeps the selected scene. Press ⌘Z to bring the rest of the video back.');
     }
   };
 
@@ -218,7 +222,7 @@ function ModeSwitch(): React.JSX.Element {
             title={
               lossy
                 ? `Keeps the selected scene and drops the other ${sceneCount - 1}. Undoable.`
-                : m === 'showcase' ? 'One design, looping — a post, a story, a reel' : 'A video of several scenes, with transitions, layers and music'
+                : m === 'showcase' ? 'One design — a post, a story, a slide. Saved designs can become scenes of a video.' : 'Scenes in sequence — new ones or your saved designs — with transitions, layers and music'
             }
             className="whitespace-nowrap rounded-sm px-2 py-0.5 text-[12px] transition-colors"
             style={
@@ -286,5 +290,61 @@ function SaveBadge({ state }: { state: SaveState }): React.JSX.Element | null {
     >
       {failed ? 'Not saved' : 'Saving…'}
     </span>
+  );
+}
+
+/**
+ * The menu (D-141), the same three lines a phone has, at the start of the
+ * bar: everything about the project as a whole — new, open, save to a file,
+ * copies — and help, kept out of the bar so the bar stays about the work.
+ */
+function AppMenu(): React.JSX.Element {
+  const { startNew, makeCopy } = useProjectActions();
+  const file = useProjectFile();
+  const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
+  const theme = useEditor((s) => s.theme);
+  const setTheme = useEditor((s) => s.setTheme);
+  const openMenu = useOverlays((o) => o.openMenu);
+
+  const open = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    const box = event.currentTarget.getBoundingClientRect();
+    openMenu({
+      x: box.left,
+      y: box.bottom + 4,
+      title: 'Q Motion Studio',
+      items: [
+        { label: 'New design', hint: 'One scene', onSelect: () => { void startNew('template'); } },
+        { label: 'New video', hint: 'Scenes in sequence', onSelect: () => { void startNew('blank'); } },
+        { label: 'Open…', hint: 'Your projects', onSelect: () => { setProjectsOpen(true); } },
+        { kind: 'separator' },
+        { label: 'Save project file', hint: '.qmotion — keep or share', onSelect: file.save },
+        { label: 'Open project file…', onSelect: file.open },
+        { kind: 'separator' },
+        { label: 'Rename…', onSelect: () => { useOverlays.getState().askRename(); } },
+        { label: 'Save as…', hint: 'A new copy you keep working on', onSelect: () => { useOverlays.getState().setSaveAsOpen(true); } },
+        { label: 'Make a copy', hint: 'A copy in your list; you stay here', onSelect: () => { void makeCopy(); } },
+        { kind: 'separator' },
+        { label: 'Show the quick start', onSelect: () => { showQuickStart(); } },
+        { label: 'Keyboard shortcuts', hint: '?', onSelect: () => { useOverlays.getState().setShortcutsOpen(true); } },
+        { label: theme === 'dark' ? 'Light theme' : 'Dark theme', onSelect: () => { setTheme(theme === 'dark' ? 'light' : 'dark'); } },
+      ],
+    });
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={open}
+        aria-label="Menu"
+        data-app-menu
+        className="grid size-9 shrink-0 place-items-center rounded-md hover:bg-panel-alt"
+      >
+        <svg aria-hidden width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+          <path d="M4 7h16M4 12h16M4 17h16" />
+        </svg>
+      </button>
+      {file.input}
+    </>
   );
 }

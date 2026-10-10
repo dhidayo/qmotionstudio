@@ -31,6 +31,8 @@ import type { MediaKind } from '@/media/store';
 const projectStore = createStore('motion-studio-projects', 'projects');
 const mediaStore = createStore('motion-studio-media', 'media');
 const metaStore = createStore('motion-studio-meta', 'meta');
+// Uploaded fonts (D-144): in a database of their own, as media is.
+const fontStore = createStore('motion-studio-fonts', 'fonts');
 
 /** What a saved project looks like on disk. */
 export type StoredProject = {
@@ -141,4 +143,21 @@ export async function readLastOpened(): Promise<string | null> {
 
 export async function writeLastOpened(id: string): Promise<void> {
   await set('lastOpened', id, metaStore);
+}
+
+/** An uploaded font, as its bytes (ArrayBuffers, as media, for WebKit — D-111). */
+export type StoredFont = { readonly id: string; readonly name: string; readonly bytes: ArrayBuffer };
+
+export async function writeFont(font: StoredFont): Promise<void> {
+  await set(font.id, font, fontStore);
+}
+
+export async function readFont(id: string): Promise<StoredFont | null> {
+  return (await get<StoredFont>(id, fontStore)) ?? null;
+}
+
+export async function listFonts(): Promise<readonly StoredFont[]> {
+  const ids = await keys(fontStore);
+  const found = await Promise.all(ids.map((id) => get<StoredFont>(id, fontStore)));
+  return found.filter((font): font is StoredFont => font !== undefined);
 }

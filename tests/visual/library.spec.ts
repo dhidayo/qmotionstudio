@@ -12,7 +12,7 @@ test('a category folds, stays folded after a reload, and a search still finds wh
   await page.goto('/');
   await page.waitForSelector('canvas');
   const library = page.getByRole('complementary', { name: 'Template library' });
-  const header = library.getByRole('button', { name: /^Text Motion/ });
+  const header = library.getByRole('button', { name: /^Headlines & hooks/ });
   await expect(header).toHaveAttribute('aria-expanded', 'true');
   await expect(library.locator('[data-design-card="type-typewriter"]')).toBeVisible();
 
@@ -22,7 +22,7 @@ test('a category folds, stays folded after a reload, and a search still finds wh
 
   await page.reload();
   await page.waitForSelector('canvas');
-  await expect(library.getByRole('button', { name: /^Text Motion/ })).toHaveAttribute('aria-expanded', 'false');
+  await expect(library.getByRole('button', { name: /^Headlines & hooks/ })).toHaveAttribute('aria-expanded', 'false');
 
   await library.getByLabel('Search templates').fill('typewriter');
   await expect(library.locator('[data-design-card="type-typewriter"]')).toBeVisible();

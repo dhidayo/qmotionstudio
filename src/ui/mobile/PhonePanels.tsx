@@ -19,6 +19,8 @@ import { MAX_NAME, useProjectActions } from '@/ui/projects/useProjectActions';
 import { SectionTabs } from '@/ui/inspector/controls';
 import { BottomSheet } from './BottomSheet';
 import { TierSwitch } from '@/ui/shell/TierSwitch';
+import { useProjectFile } from '@/ui/projects/useProjectFile';
+import { showQuickStart } from '@/ui/onboarding/quickStartState';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import * as actions from '@/document/actions';
 import { TRANSITION_LABELS } from '@/ui/timeline/transitionLabels';
@@ -201,6 +203,7 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const setTheme = useEditor((s) => s.setTheme);
   const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
   const { rename, saveAs, makeCopy, startNew } = useProjectActions();
+  const file = useProjectFile();
   const [draft, setDraft] = useState(name);
 
   const row = (label: string, run: () => void, hint?: string): React.JSX.Element => (
@@ -246,11 +249,14 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
       </div>
 
       <div className="mt-4 divide-y divide-[var(--c-edge)] border-y border-edge">
-        {row('Switch project', () => { onClose(); setProjectsOpen(true); })}
+        {row('New design', () => { void startNew('template'); onClose(); }, 'One scene')}
+        {row('New video', () => { void startNew('blank'); onClose(); }, 'Scenes in sequence')}
+        {row('Open…', () => { onClose(); setProjectsOpen(true); }, 'Your projects')}
+        {row('Save project file', () => { file.save(); }, '.qmotion')}
+        {row('Open project file…', () => { file.open(); })}
         {row('Save as a copy and keep working on it', () => { void saveAs(`${name} copy`); onClose(); })}
         {row('Make a copy', () => { void makeCopy(); onClose(); })}
-        {row('New project', () => { void startNew('template'); onClose(); })}
-        {row('New blank canvas', () => { void startNew('blank'); onClose(); })}
+        {row('Show the quick start', () => { showQuickStart(); onClose(); })}
         {row(theme === 'dark' ? 'Light theme' : 'Dark theme', () => { setTheme(theme === 'dark' ? 'light' : 'dark'); })}
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">
@@ -260,7 +266,8 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
         </div>
         <TierSwitch size="large" />
       </div>
-      <p className="mt-3 text-[12px] text-ink-faint">Your photos stay on your device. Nothing is uploaded.</p>
+      {file.input}
+      <p className="mt-3 text-[12px] text-ink-faint">Your photos stay on your device. Nothing is uploaded. Save a project file to keep a copy anywhere.</p>
     </BottomSheet>
   );
 }

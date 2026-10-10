@@ -102,3 +102,20 @@ export function userPhotoIds(project: Project): readonly string[] {
   return [...seen];
 }
 
+
+/**
+ * The uploaded fonts a project's text uses (D-144) — what an export and a
+ * project file have to carry, since nobody else's device has them.
+ */
+export function usedUserFonts(project: Project): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const scene of project.scenes) {
+    for (const style of Object.values(scene.inputs.styleOverrides.texts)) {
+      if (style.fontId?.startsWith('user:') === true) ids.add(style.fontId);
+    }
+  }
+  for (const overlay of project.overlays) {
+    if (overlay.content.kind === 'text' && overlay.content.style.fontId.startsWith('user:')) ids.add(overlay.content.style.fontId);
+  }
+  return ids;
+}

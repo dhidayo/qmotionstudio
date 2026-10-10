@@ -7,19 +7,30 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.use({ viewport: { width: 1440, height: 960 } });
 
+/**
+ * Downloads are caught in the page and kept there: a slide ZIP is megabytes,
+ * and sending it out as a list of numbers (and back in to read it) took most
+ * of a test's time on a busy machine. Only names, sizes and the few bytes a
+ * test looks at leave the page.
+ */
 async function captureDownloads(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const store = globalThis as unknown as { __downloads?: { name: string; bytes: number[] }[] };
+    const store = globalThis as unknown as { __downloads?: { name: string; buffer: ArrayBuffer }[] };
     store.__downloads = [];
     HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
       if (!this.download) return;
       const name = this.download;
-      void fetch(this.href).then((r) => r.arrayBuffer()).then((buffer) => { store.__downloads?.push({ name, bytes: [...new Uint8Array(buffer)] }); });
+      void fetch(this.href).then((r) => r.arrayBuffer()).then((buffer) => { store.__downloads?.push({ name, buffer }); });
     };
   });
 }
 
-const downloads = (page: Page) => page.evaluate(() => (globalThis as unknown as { __downloads: { name: string; bytes: number[] }[] }).__downloads);
+const downloads = (page: Page) => page.evaluate(() =>
+  (globalThis as unknown as { __downloads: { name: string; buffer: ArrayBuffer }[] }).__downloads.map((d) => ({ name: d.name, size: d.buffer.byteLength })));
+
+/** Bytes `start` to `end` of the first download. */
+const bytesOf = (page: Page, start: number, end: number) => page.evaluate(([from, to]) =>
+  [...new Uint8Array((globalThis as unknown as { __downloads: { buffer: ArrayBuffer }[] }).__downloads[0]?.buffer ?? new ArrayBuffer(0), from, Math.max(0, to - from))], [start, end] as const);
 
 async function openImages(page: Page, url: string): Promise<void> {
   await page.goto(url);
@@ -39,8 +50,8 @@ test('a four-scene video becomes four slides, in order, in one ZIP', async ({ pa
   expect(zip?.name).toMatch(/-slides\.zip$/);
 
   // Read the archive back in the page: four PNGs, each the frame's size, each different.
-  const report = await page.evaluate(async (bytes) => {
-    const data = new Uint8Array(bytes);
+  const report = await page.evaluate(async () => {
+    const data = new Uint8Array((globalThis as unknown as { __downloads: { buffer: ArrayBuffer }[] }).__downloads[0]?.buffer ?? new ArrayBuffer(0));
     const view = new DataView(data.buffer);
     const end = data.length - 22;
     const count = view.getUint16(end + 10, true);
@@ -63,7 +74,7 @@ test('a four-scene video becomes four slides, in order, in one ZIP', async ({ pa
       at += 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
     }
     return slides;
-  }, zip?.bytes ?? []);
+  });
 
   expect(report.map((slide) => slide.name.slice(-7))).toEqual(['-01.png', '-02.png', '-03.png', '-04.png']);
   for (const slide of report) expect([slide.w, slide.h]).toEqual([720, 900]);
@@ -78,9 +89,8 @@ test('as a PDF, one page per scene', async ({ page }) => {
   await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(1);
   const [pdf] = await downloads(page);
   expect(pdf?.name).toMatch(/\.pdf$/);
-  const text = String.fromCharCode(...(pdf?.bytes.slice(0, 9) ?? []));
-  expect(text).toBe('%PDF-1.4\n');
-  const head = (pdf?.bytes ?? []).slice(0, 4000).map((b) => String.fromCharCode(b)).join('');
+  const head = (await bytesOf(page, 0, Math.min(4000, pdf?.size ?? 0))).map((b) => String.fromCharCode(b)).join('');
+  expect(head.slice(0, 9)).toBe('%PDF-1.4\n');
   expect(head).toContain('/Count 4');
 });
 
@@ -91,7 +101,7 @@ test('one design becomes one picture', async ({ page }) => {
   await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(1);
   const [png] = await downloads(page);
   expect(png?.name).toMatch(/\.png$/);
-  expect(png?.bytes.slice(1, 4)).toEqual([0x50, 0x4e, 0x47]);
+  expect(await bytesOf(page, 1, 4)).toEqual([0x50, 0x4e, 0x47]);
 });
 
 test('on a phone, the slides go to Photos through the share sheet', async ({ page }) => {
@@ -116,5 +126,6 @@ test('on a phone, the slides go to Photos through the share sheet', async ({ pag
   await offer.getByRole('button', { name: /^(Save to Photos|Save or share)$/ }).click();
   const shared = await page.evaluate(() => (globalThis as unknown as { __shared?: string[] }).__shared);
   expect(shared?.length).toBe(4);
+  await expect(offer.locator('[data-saved]')).toBeVisible();
   for (const entry of shared ?? []) expect(entry).toMatch(/\.png:image\/png$/);
 });

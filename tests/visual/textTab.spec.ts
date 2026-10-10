@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 
 /**
  * The Text tab as a list (D-124): "each text shown as collapsible element in
@@ -65,6 +66,8 @@ test('added text joins the list, and is deleted from it', async ({ page }) => {
   await open(page);
   const before = await fingerprint(page);
   await page.locator('[data-add-text]').click();
+  // A ready-made style from the gallery (D-145).
+  await page.locator('[data-text-preset="neon"]').click();
   const added = page.locator('[data-text-tile^="layer:"]');
   await expect(added).toHaveCount(1);
   await expect(added.getByRole('button', { expanded: true })).toBeVisible();
@@ -126,10 +129,40 @@ test.describe('a longer video from one design (D-129)', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_200);
     await page.locator('[data-continue-video]').first().click();
-    await expect(page.getByRole('button', { name: 'Corporate Ads', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('dialog', { name: 'Add a scene' })).toBeVisible();
     // One scene so far — the design — on the timeline behind the picker.
     await expect(page.getByRole('button', { name: /^1\. Typewriter/ })).toHaveCount(1);
     await expect(page.getByRole('button', { name: /^2\. / })).toHaveCount(0);
   });
+});
+
+test('the font of any text can be any font: the app\'s, the device\'s, or one uploaded', async ({ page }) => {
+  await open(page);
+  await tile(page, 'text:headline').getByRole('button', { expanded: false }).first().click();
+  const picker = tile(page, 'text:headline').locator('[data-font-picker]');
+  const before = await fingerprint(page);
+  await picker.getByRole('button', { name: /^Font: / }).click();
+  await picker.locator('[data-font-option="sys:georgia"]').click();
+  await expect(picker.getByRole('button', { name: 'Font: Georgia. Change' })).toBeVisible();
+  await expect.poll(async () => changed(before, await fingerprint(page))).toBeGreaterThan(0.3);
+
+  // An uploaded font is checked by loading it: a file that is not a font is refused, and said.
+  await picker.getByRole('button', { name: /^Font: / }).click();
+  await picker.getByLabel('Upload a font').setInputFiles({ name: 'broken.ttf', mimeType: 'font/ttf', buffer: Buffer.from('not a font') });
+  await expect(picker.getByText(/could not be read as a font/)).toBeVisible();
+
+  // A real font goes in, is chosen, and is kept for the next visit.
+  await picker.getByLabel('Upload a font').setInputFiles({ name: 'My-Brand-Sans.woff2', mimeType: 'font/woff2', buffer: readFileSync('public/fonts/archivo-latin.woff2') });
+  await expect(picker.getByRole('button', { name: 'Font: My Brand Sans. Change' })).toBeVisible();
+  // Past the autosave's pause, so the reload finds the choice on disk.
+  await page.waitForTimeout(1_200);
+  await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'saved', { timeout: 10_000 });
+  await page.reload();
+  await page.waitForSelector('canvas');
+  await page.getByRole('tab', { name: 'Text' }).click();
+  await tile(page, 'text:headline').getByRole('button', { expanded: false }).first().click();
+  // Still on this device: listed under Your fonts.
+  await tile(page, 'text:headline').getByRole('button', { name: /^Font: / }).click();
+  await expect(tile(page, 'text:headline').locator('[data-font-option^="user:"]', { hasText: 'My Brand Sans' })).toBeVisible();
 });
