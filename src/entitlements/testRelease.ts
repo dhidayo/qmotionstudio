@@ -10,4 +10,4 @@
  * A file of its own, free of `import.meta.env`, so the browser tests can read
  * the same answer the build did.
  */
-export const OPEN_TEST_RELEASE = true;
+export const OPEN_TEST_RELEASE: boolean = true;

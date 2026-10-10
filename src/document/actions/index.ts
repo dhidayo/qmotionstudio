@@ -350,6 +350,22 @@ export function setText(slotId: string, text: string): Action {
   };
 }
 
+/**
+ * A removed text put back as the design wrote it (D-124): the slot's own text
+ * returns, rather than an empty field to retype.
+ */
+export function restoreText(slotId: string): Action {
+  return {
+    label: 'Put text back',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        if (!(slotId in inputs.texts)) return inputs;
+        const { [slotId]: _removed, ...texts } = inputs.texts;
+        return { ...inputs, texts };
+      }),
+  };
+}
+
 export function setTextStyle(
   slotId: string,
   patch: Partial<TextStyle>,

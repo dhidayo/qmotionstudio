@@ -274,7 +274,7 @@ function MediaPicker({
 }
 
 /** The subset of §8.2's text block that means something without a template slot. */
-function TextStyleControls({ id, style }: { id: string; style: TextStyle }): React.JSX.Element {
+export function TextStyleControls({ id, style }: { id: string; style: TextStyle }): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const patch = (fields: Partial<TextStyle>, options?: { coalesceKey?: string }): void => {
     dispatch(actions.setOverlayTextStyle(id, fields, {

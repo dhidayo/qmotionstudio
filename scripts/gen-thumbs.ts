@@ -193,11 +193,19 @@ async function renderTemplate(page: Page, summary: TemplateSummary): Promise<Res
   const posterAt = summary.posterAtMs ?? DEFAULT_POSTER_AT_MS;
   const settleMs = summary.kind === 'ad' ? 1_800 : 700;
 
+  /*
+   * A design of words alone on a plain ground is mostly ground: a headline
+   * across a wide frame inks under 2% of it, and was being called blank. Such
+   * designs (no photo slots, D-119) need only show something; a blank frame
+   * is still 0%.
+   */
+  const wordsOnly = summary.photoSlots.max === 0;
+  const least = wordsOnly ? 0.004 : 0.02;
   let aspectsChecked = 0;
   for (const aspect of summary.supportedAspects) {
     await openTemplate(page, summary.id, aspect, posterAt, settleMs);
     const coverage = await frameCoverage(page);
-    if (coverage < 0.02) {
+    if (coverage < least) {
       throw new Error(`renders blank at ${aspect} (coverage ${(coverage * 100).toFixed(1)}%)`);
     }
     aspectsChecked++;

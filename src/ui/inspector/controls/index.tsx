@@ -35,6 +35,18 @@ type Registry = (title: string) => () => void;
 const SectionRegistry = createContext<Registry | null>(null);
 const ActiveSection = createContext<{ active: string | null; first: string | null } | null>(null);
 
+/**
+ * Sections drawn one under another even inside `SectionTabs` — for a panel
+ * that organises itself another way, such as the Text tab's list (D-124).
+ */
+export function NoSectionTabs({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <SectionRegistry.Provider value={null}>
+      <ActiveSection.Provider value={null}>{children}</ActiveSection.Provider>
+    </SectionRegistry.Provider>
+  );
+}
+
 export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element | null {
   const register = useContext(SectionRegistry);
   const tabs = useContext(ActiveSection);

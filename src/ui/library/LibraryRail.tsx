@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CATEGORIES, posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
+import { lookPreset } from '@/templates/_shared/look';
 import { useEditor } from '@/state/store';
 import { useEntitlements } from '@/entitlements';
 import { PlayingPreview, noHover } from './PlayingPreview';
@@ -58,6 +59,11 @@ export function LibraryRail({
   }, [mode, search, tierFilter, showFavourites, favourites]);
 
   const categories = CATEGORIES.filter((c) => visible.some((t) => t.category === c));
+  const { collapsed, toggle, setAll } = useCollapsedCategories();
+  // A search shows everything it found: a match hidden in a folded group is a match missed.
+  const searching = search.trim().length > 0;
+  const folded = (category: string): boolean => !searching && collapsed.has(category);
+  const allFolded = categories.length > 0 && categories.every((c) => collapsed.has(c));
 
   return (
     <aside
@@ -95,6 +101,16 @@ export function LibraryRail({
             onClick={toggleFavouritesFilter}
             label={`★ ${favourites.length}`}
           />
+          {!searching && categories.length > 1 && (
+            <button
+              type="button"
+              data-fold-all
+              onClick={() => { setAll(allFolded ? [] : categories); }}
+              className={`ml-auto rounded-md px-1.5 text-ink-faint hover:text-ink ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
+            >
+              {allFolded ? 'Expand all' : 'Collapse all'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -106,14 +122,29 @@ export function LibraryRail({
               : 'Nothing matches that search.'}
           </p>
         ) : (
-          categories.map((category) => (
-            <section key={category} className="mb-4 last:mb-0">
-              <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
-                {category}
+          categories.map((category) => {
+            const inCategory = visible.filter((t) => t.category === category);
+            const open = !folded(category);
+            const id = `library-${category.toLowerCase().replace(/\s+/g, '-')}`;
+            return (
+            <section key={category} className={open ? 'mb-4 last:mb-0' : 'mb-1'} data-library-category={category}>
+              {/* A category folds away (D-123): the library is long, and most visits want one corner of it. */}
+              <h3>
+                <button
+                  type="button"
+                  onClick={() => { toggle(category); }}
+                  aria-expanded={open}
+                  aria-controls={id}
+                  className={`flex w-full items-center gap-1.5 rounded-md py-1 text-left font-semibold uppercase tracking-wider text-ink-faint hover:text-ink ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
+                >
+                  <span aria-hidden className="inline-block w-3 text-center transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
+                  <span className="min-w-0 flex-1 truncate">{category}</span>
+                  <span className="tabular font-normal normal-case tracking-normal">{inCategory.length}</span>
+                </button>
               </h3>
-              <div className={sheet ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-2 gap-2'}>
-                {visible
-                  .filter((t) => t.category === category)
+              {open && (
+              <div id={id} className={`mt-1 ${sheet ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-2 gap-2'}`}>
+                {inCategory
                   .map((template) => (
                     <TemplateCard
                       key={template.id}
@@ -129,12 +160,59 @@ export function LibraryRail({
                     />
                   ))}
               </div>
+              )}
             </section>
-          ))
+            );
+          })
         )}
       </div>
     </aside>
   );
+}
+
+/** The background colour a design opens in, from its look. */
+function groundOf(template: TemplateSummary): string {
+  const look = template.look === undefined ? undefined : lookPreset(template.look);
+  return look?.palette.bg ?? 'var(--c-panel-alt)';
+}
+
+const FOLDED_KEY = 'ms.library.folded';
+
+/**
+ * Which categories are folded, remembered on this device (a viewer's
+ * convenience, so browser storage, D-123). Storage can be missing or refuse —
+ * a private window — and then folding simply lasts for the visit.
+ */
+function useCollapsedCategories(): {
+  collapsed: ReadonlySet<string>;
+  toggle: (category: string) => void;
+  setAll: (categories: readonly string[]) => void;
+} {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => {
+    try {
+      const raw = localStorage.getItem(FOLDED_KEY);
+      const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed.filter((c): c is string => typeof c === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const remember = useCallback((next: ReadonlySet<string>): void => {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(FOLDED_KEY, JSON.stringify([...next]));
+    } catch {
+      // Not remembered between visits; folding still works now.
+    }
+  }, []);
+  const toggle = useCallback((category: string): void => {
+    const next = new Set(collapsed);
+    if (next.has(category)) next.delete(category);
+    else next.add(category);
+    remember(next);
+  }, [collapsed, remember]);
+  const setAll = useCallback((categories: readonly string[]): void => { remember(new Set(categories)); }, [remember]);
+  return { collapsed, toggle, setAll };
 }
 
 function FilterChip({
@@ -201,7 +279,8 @@ function TemplateCard({
           transitionDuration: 'var(--t-fast)',
         }}
       >
-        <span className="relative block aspect-square w-full" style={{ background: 'var(--c-panel-alt)' }}>
+        {/* The design's own ground behind its picture (D-121), so even before the poster loads the card is the colour the design opens in. */}
+        <span className="relative block aspect-square w-full" style={{ background: groundOf(template) }}>
           {playsItself ? <PlayingPreview id={template.id} /> : <>
           <img
             src={posterUrl(template.id)}

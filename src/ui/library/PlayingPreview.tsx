@@ -92,8 +92,8 @@ export function PlayingPreview({ id }: { id: string }): React.JSX.Element {
   return (
     <span
       ref={box}
-      className={`absolute inset-0 block ${posterReady ? '' : 'animate-pulse'}`}
-      style={{ background: 'var(--c-panel-alt)' }}
+      // The card behind shows the design's own ground until the poster lands (D-121).
+      className="absolute inset-0 block"
     >
       <img
         src={posterUrl(id)}

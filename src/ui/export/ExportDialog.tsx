@@ -16,7 +16,7 @@ import { Button, Section, Segmented } from '@/ui/inspector/controls';
 type Phase =
   | { kind: 'idle' }
   | { kind: 'running'; progress: ExportProgress }
-  | { kind: 'done'; fileName: string; bytes: number; seconds: number }
+  | { kind: 'done'; fileName: string; bytes: number; seconds: number; file: File; toPhotos: boolean }
   | { kind: 'error'; message: string };
 
 /** §11.8: real progress, a working cancel, and a clear error surface. */
@@ -60,12 +60,18 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
 
     started.result
       .then((result) => {
-        downloadBlob(result.blob, result.fileName);
+        const file = new File([result.blob], result.fileName, { type: result.blob.type || 'video/mp4' });
+        // On a phone the video goes to Photos through the share sheet (D-125);
+        // a download there lands in Files, where nobody looks for a video.
+        const toPhotos = savesToPhotos(file);
+        if (!toPhotos) downloadBlob(result.blob, result.fileName);
         setPhase({
           kind: 'done',
           fileName: result.fileName,
           bytes: result.blob.size,
           seconds: result.durationMs / 1000,
+          file,
+          toPhotos,
         });
       })
       .catch((error: unknown) => {
@@ -103,7 +109,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
       aria-label="Export"
     >
       <div
-        className="w-[360px] rounded-lg border border-edge bg-panel p-4"
+        className="w-[360px] max-w-[calc(100vw-24px)] rounded-lg border border-edge bg-panel p-4"
         style={{ boxShadow: 'var(--shadow-lg)' }}
       >
         <div className="mb-3 flex items-baseline justify-between">
@@ -177,11 +183,15 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
 
         {phase.kind === 'running' && <Progress progress={phase.progress} />}
 
-        {phase.kind === 'done' && (
+        {phase.kind === 'done' && !phase.toPhotos && (
           <p className="mb-3 text-[11px] leading-relaxed text-ink-muted">
             Saved <strong style={{ color: 'var(--c-ink)' }}>{phase.fileName}</strong> —{' '}
             {(phase.bytes / 1024 / 1024).toFixed(1)}MB in {phase.seconds.toFixed(1)}s.
           </p>
+        )}
+
+        {phase.kind === 'done' && phase.toPhotos && (
+          <SaveToPhotos file={phase.file} bytes={phase.bytes} />
         )}
 
         {phase.kind === 'error' && (
@@ -205,6 +215,70 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Whether this device saves a video by sharing it (D-125).
+ *
+ * A web page cannot write into the Photos app. On an iPhone or iPad the way
+ * there is the share sheet, whose "Save Video" puts the clip in Photos; a
+ * download goes to Files instead, which is not where anyone looks for a video
+ * they just made. Android phones share too, and their Gallery shows
+ * downloads, so they get both. A computer just downloads.
+ */
+function savesToPhotos(file: File): boolean {
+  if (typeof navigator.canShare !== 'function') return false;
+  const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  if (!touch) return false;
+  try {
+    return navigator.canShare({ files: [file] });
+  } catch {
+    return false;
+  }
+}
+
+/** The finished video, offered to Photos first and to Files second. */
+function SaveToPhotos({ file, bytes }: { file: File; bytes: number }): React.JSX.Element {
+  const [error, setError] = useState<string | null>(null);
+  // An iPad asks for the desktop site, so it says "Macintosh" — with a touch screen.
+  const apple = /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+  const share = (): void => {
+    setError(null);
+    // Needs the tap that called it: the share sheet only opens from a gesture.
+    navigator.share({ files: [file], title: file.name }).catch((reason: unknown) => {
+      // Closing the sheet is a choice, not a failure.
+      if (reason instanceof DOMException && reason.name === 'AbortError') return;
+      console.error('Sharing the export failed.', reason);
+      setError(reason instanceof Error ? reason.message : String(reason));
+    });
+  };
+
+  return (
+    <div className="mb-3" data-save-to-photos>
+      <p className="mb-2 text-[12px] leading-relaxed text-ink-muted">
+        Your video is ready — {(bytes / 1024 / 1024).toFixed(1)}MB.{' '}
+        {apple ? <>Tap <strong style={{ color: 'var(--c-ink)' }}>Save to Photos</strong>, then <strong style={{ color: 'var(--c-ink)' }}>Save Video</strong>.</> : 'Save it to your gallery or send it straight to an app.'}
+      </p>
+      <button
+        type="button"
+        onClick={share}
+        className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink"
+      >
+        {apple ? 'Save to Photos' : 'Save or share'}
+      </button>
+      <button
+        type="button"
+        onClick={() => { downloadBlob(file, file.name); }}
+        className="mt-1.5 w-full rounded-xl border border-edge py-2 text-[13px]"
+      >
+        Save to Files instead
+      </button>
+      {error !== null && (
+        <p className="mt-2 text-[11px]" style={{ color: 'var(--c-danger)' }}>Could not open sharing: {error}</p>
+      )}
     </div>
   );
 }
