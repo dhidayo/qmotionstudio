@@ -150,19 +150,19 @@ test.describe('on a phone', () => {
 test.describe('a first visit', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('the quick start shows once, ticks off each step as it is done, and stays closed', async ({ page }) => {
+  test('the quick start points at each step in turn, and stays closed once skipped (D-148)', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('canvas');
-    const card = page.locator('[data-quick-start]');
-    await expect(card).toBeVisible();
-    await expect(card.locator('[data-quick-step="1"]')).toHaveAttribute('data-done', 'false');
+    const tour = page.locator('[data-quick-start]');
+    await expect(tour).toBeVisible();
+    await expect(tour).toHaveAttribute('data-quick-step', '1');
 
-    // Step one done the ordinary way, from the library.
+    // Step one done the ordinary way, from the library: the tour moves on by itself.
     await page.locator('[data-design-card="type-mask-wipe"]').click();
-    await expect(card.locator('[data-quick-step="1"]')).toHaveAttribute('data-done', 'true');
+    await expect(tour).toHaveAttribute('data-quick-step', '2');
 
-    await card.getByRole('button', { name: 'Got it' }).click();
-    await expect(card).toHaveCount(0);
+    await tour.getByRole('button', { name: 'Skip tour' }).click();
+    await expect(tour).toHaveCount(0);
     await page.reload();
     await page.waitForSelector('canvas');
     await expect(page.locator('[data-quick-start]')).toHaveCount(0);

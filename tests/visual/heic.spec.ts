@@ -26,12 +26,12 @@ test('a HEIC upload decodes and lands in the photo list', async ({ page }) => {
   await page.waitForSelector('canvas');
   await page.waitForTimeout(800);
 
-  const countBefore = await page.getByText(/^Photos \(\d+\)$/).textContent();
+  const countBefore = await page.getByText(/^Your photos \(\d+\)$/).textContent();
 
   await page.getByLabel('Add photos to this scene').setInputFiles(FIXTURE);
 
   // The WASM path loads ~2MB and then decodes, so this needs real headroom.
-  await expect(page.getByText(/^Photos \(\d+\)$/)).not.toHaveText(countBefore ?? '', { timeout: 30_000 });
+  await expect(page.getByText(/^Your photos \(\d+\)$/)).not.toHaveText(countBefore ?? '', { timeout: 30_000 });
 
   // No error surfaced to the user.
   await expect(page.getByText(/HEIC|could not|Could not/)).toBeHidden();
@@ -75,7 +75,7 @@ test('falls back to WASM when the browser cannot decode HEIC', async ({ page }) 
   await page.waitForSelector('canvas');
   await page.waitForTimeout(800);
 
-  const before = await page.getByText(/^Photos \(\d+\)$/).textContent();
+  const before = await page.getByText(/^Your photos \(\d+\)$/).textContent();
 
   await page.getByLabel('Add photos to this scene').setInputFiles({
     name: 'sample.heic',
@@ -84,7 +84,7 @@ test('falls back to WASM when the browser cannot decode HEIC', async ({ page }) 
   });
 
   // Loading ~2MB of WASM and decoding a 1400×1050 image needs real headroom.
-  await expect(page.getByText(/^Photos \(\d+\)$/)).not.toHaveText(before ?? '', { timeout: 60_000 });
+  await expect(page.getByText(/^Your photos \(\d+\)$/)).not.toHaveText(before ?? '', { timeout: 60_000 });
   await expect(page.getByText(/Could not decode|could not be read/)).toBeHidden();
   expect(failures, failures.join('; ')).toHaveLength(0);
   expect(loadedWasm, 'the WASM decoder should have been fetched').toBe(true);
