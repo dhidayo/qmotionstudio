@@ -5,7 +5,7 @@ import {
   newId,
   STARTER_PHOTO_IDS,
 } from '@/document/defaults';
-import { paletteById } from './_shared/look';
+import { lookPreset, withLookPreset } from './_shared/look';
 import { loadSceneTemplate } from './registry';
 import type { AdTemplate } from './schema';
 
@@ -47,9 +47,9 @@ export async function expandAdTemplate(
     template.scenes.map((ref) => loadSceneTemplate(ref.templateId)),
   );
 
-  const palette = template.paletteId === undefined
-    ? DEFAULT_LOOK.palette
-    : paletteById(template.paletteId);
+  // The film's look (D-121): its palette and the ground it sits on.
+  const preset = template.paletteId === undefined ? undefined : lookPreset(template.paletteId);
+  const look = preset ? withLookPreset(DEFAULT_LOOK, preset) : DEFAULT_LOOK;
 
   // A cursor across the photo pool rather than a reset per scene: consecutive
   // beats showing the same photograph is the single thing that makes an
@@ -87,7 +87,7 @@ export async function expandAdTemplate(
         ...emptySceneInputs(),
         photos,
         texts: { ...ref.texts },
-        look: { ...DEFAULT_LOOK, palette },
+        look,
         ...(options.logo ? { logo: options.logo } : {}),
       },
     };

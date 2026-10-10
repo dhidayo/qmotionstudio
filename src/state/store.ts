@@ -3,7 +3,7 @@ import type { Aspect } from '@/core/types';
 import type { Project, ProjectMode, SlotKey } from '@/document/types';
 import type { SaveState } from '@/ui/persist/saveState';
 import {
-  createProject, DEFAULT_PHOTO_COUNT, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID,
+  createProject, DEFAULT_PHOTO_COUNT, DEFAULT_TEMPLATE_ID, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID,
 } from '@/document/defaults';
 import { totalDurationMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
@@ -11,6 +11,7 @@ import { loadTemplate } from '@/templates/registry';
 import { expandAdTemplate } from '@/templates/ad';
 import { userPhotoIds } from '@/document/select/media';
 import { summaryFor } from '@/templates/manifest';
+import { designLook, designLookPreset } from '@/templates/looks';
 import { renderParams } from '@/dev/renderParams';
 import * as actions from '@/document/actions';
 import {
@@ -272,8 +273,10 @@ function initialProject(): Project {
     ? Math.max(slots.min, Math.min(DEFAULT_PHOTO_COUNT, slots.max))
     : undefined;
 
+  const opening = templateId ?? DEFAULT_TEMPLATE_ID;
   const project = createProject({
     ...(templateId === undefined ? {} : { templateId }),
+    look: designLook(opening),
     ...(params.aspect === null ? {} : { aspect: params.aspect }),
     ...(photoCount === undefined ? {} : { photoCount }),
   });
@@ -504,9 +507,13 @@ export const useEditor = create<EditorState>((set, get) => ({
           if (options?.asBaseline === true) get().sealHistory();
           return;
         }
+        // What the card showed is what picking it gives (D-121): the
+        // design arrives in its own look. Undo puts the old one back.
+        const look = designLookPreset(templateId);
         get().dispatch(actions.setTemplate(templateId, {
           durationMs: template.defaultDurationMs,
           photoSlots: template.photoSlots,
+          ...(look ? { look } : {}),
         }));
         if (options?.asBaseline === true) get().sealHistory();
       })

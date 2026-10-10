@@ -18,6 +18,7 @@ import { useAddLayers } from '@/ui/timeline/useAddLayers';
 import { MAX_NAME, useProjectActions } from '@/ui/projects/useProjectActions';
 import { SectionTabs } from '@/ui/inspector/controls';
 import { BottomSheet } from './BottomSheet';
+import { TierSwitch } from '@/ui/shell/TierSwitch';
 import { Icon, type IconName } from './Icon';
 
 /**
@@ -246,6 +247,13 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
         {row('New project', () => { void startNew('template'); onClose(); })}
         {row('New blank canvas', () => { void startNew('blank'); onClose(); })}
         {row(theme === 'dark' ? 'Light theme' : 'Dark theme', () => { setTheme(theme === 'dark' ? 'light' : 'dark'); })}
+      </div>
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="text-[13px]">
+          Plan
+          <span className="block text-[11px] text-ink-faint">Test switch — try Free and Pro.</span>
+        </div>
+        <TierSwitch size="large" />
       </div>
       <p className="mt-3 text-[12px] text-ink-faint">Your photos stay on your device. Nothing is uploaded.</p>
     </BottomSheet>

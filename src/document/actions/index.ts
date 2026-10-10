@@ -1,5 +1,5 @@
 import type { Palette, PaletteRole, PropValues } from '@/core/types';
-import { DEFAULT_LOGO, newId } from '../defaults';
+import { DEFAULT_LOGO, newId, restyleLook } from '../defaults';
 import { NO_SLOT_TRANSFORM } from '../types';
 import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
 import { nudgeAt, nudgePoses } from '@/core/render/slots';
@@ -11,6 +11,7 @@ import type {
   AnimPreset,
   AudioClip,
   BackgroundTreatment,
+  LookRestyle,
   EffectClip,
   EffectParams,
   ElementEffect,
@@ -766,6 +767,15 @@ export function backgroundOnEveryScene(): Action {
   };
 }
 
+/** One of the Style tab's looks on this scene (D-121): the same design, restyled. */
+export function applyLook(restyle: LookRestyle): Action {
+  return {
+    label: 'Change look',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => ({ ...inputs, look: restyleLook(inputs.look, restyle) })),
+  };
+}
+
 export function setGrain(grain: number): Action {
   return {
     label: 'Change grain',
@@ -824,7 +834,7 @@ export function setCornerRadius(cornerRadius: number): Action {
  */
 export function setTemplate(
   templateId: string,
-  options?: { durationMs?: number; photoSlots?: { min: number; max: number } },
+  options?: { durationMs?: number; photoSlots?: { min: number; max: number }; look?: LookRestyle },
 ): Action {
   return {
     label: 'Change template',
@@ -833,10 +843,12 @@ export function setTemplate(
         if (scene.templateId === templateId) return scene;
 
         const durationMs = options?.durationMs;
+        const restyle = options?.look;
         const next: Scene = {
           ...scene,
           templateId,
           ...(durationMs === undefined ? {} : { durationMs }),
+          ...(restyle === undefined ? {} : { inputs: { ...scene.inputs, look: restyleLook(scene.inputs.look, restyle) } }),
         };
 
         const slots = options?.photoSlots;

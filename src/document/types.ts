@@ -65,6 +65,9 @@ export type LookSettings = {
   readonly cornerRadius: number;
 };
 
+/** A look's colours and ground, as one restyle (D-121). */
+export type LookRestyle = Pick<LookSettings, 'palette' | 'background' | 'vignette'>;
+
 export type TextStyle = {
   readonly fontId: FontId;
   readonly weight: 400 | 500 | 600 | 700 | 800;

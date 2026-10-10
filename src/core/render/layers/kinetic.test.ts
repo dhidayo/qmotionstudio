@@ -37,6 +37,11 @@ describe('kinetic type (D-118)', () => {
     expect(countedText('12,000', 0.5)).toMatch(/^\d{1,2},\d{3}$/);
     expect(countedText('No numbers here', 0.5)).toBe('No numbers here');
   });
+
+  it('leaves a figure made of several numbers as written, rather than counting each from nothing', () => {
+    expect(countedText('24/7', 0)).toBe('24/7');
+    expect(countedText('4.9/5 stars', 0.3)).toBe('4.9/5 stars');
+  });
 });
 
 describe('hash', () => {

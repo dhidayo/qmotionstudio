@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import * as actions from '@/document/actions';
-import { createProject } from '@/document/defaults';
+import { createProject, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
+import { designLook } from '@/templates/looks';
 import { SCHEMA_VERSION, type Project } from '@/document/types';
 import { writeLastOpened, writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
@@ -106,7 +107,7 @@ export function useProjectActions(): {
       // A blank canvas is built with the timeline's own tools — photos, text and
       // video as layers — which live in Motion Ads, so that is where it opens.
       ? createProject({ name: 'Untitled canvas', aspect, mode: 'motionAd', templateId: 'blank', photoCount: 0 })
-      : createProject({ aspect });
+      : createProject({ aspect, look: designLook(DEFAULT_TEMPLATE_ID) });
     try {
       await flush();
       await write(project);

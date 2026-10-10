@@ -164,7 +164,9 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
   const effects: Tool = { label: 'Effects', icon: 'effects', onSelect: () => { o.openPhonePanel('effects'); } };
   const style: Tool = { label: 'Style', icon: 'style', onSelect: () => { o.openPhonePanel('style'); } };
   const add: Tool = { label: 'Add', icon: 'add', onSelect: () => { o.openPhonePanel('add'); } };
-  return { context: null, tools: corporate ? [designs, add, photos, text, effects, style] : [designs, photos, text, effects, style] };
+  // D-120: the background, one tap away. "Backdrop" fits a phone's row of seven.
+  const background: Tool = { label: corporate ? 'Backdrop' : 'Background', icon: 'background', onSelect: () => { o.openPhonePanel('style', 'Background'); } };
+  return { context: null, tools: corporate ? [designs, add, photos, text, effects, style, background] : [designs, photos, text, effects, style, background] };
 }
 
 export function PhoneToolbar(): React.JSX.Element {

@@ -2,6 +2,7 @@ import type { Aspect, Palette } from '@/core/types';
 import {
   SCHEMA_VERSION,
   type LogoSettings,
+  type LookRestyle,
   type LookSettings,
   type PhotoInput,
   type Project,
@@ -26,6 +27,20 @@ export const DEFAULT_LOOK: LookSettings = {
   speed: 1,
   cornerRadius: 24,
 };
+
+/**
+ * A scene's look restyled (D-121). Speed, corner radius and grain are the
+ * person's and stay; so does a background picture of their own, which the new
+ * colour then dims (D-120).
+ */
+export function restyleLook(look: LookSettings, restyle: LookRestyle): LookSettings {
+  return {
+    ...look,
+    palette: restyle.palette,
+    background: look.background === 'picture' ? 'picture' : restyle.background,
+    vignette: restyle.vignette,
+  };
+}
 
 export const DEFAULT_LOGO: LogoSettings = {
   mediaId: null,
@@ -195,15 +210,19 @@ export function createProject(options?: {
   templateId?: string;
   /** Sized to the template's own slot range by the caller that knows it. */
   photoCount?: number;
+  /** The design's own look (D-121), from the caller that knows the design. */
+  look?: LookSettings;
 }): Project {
   const timestamp = Date.now();
+  const scene = createScene(options?.templateId ?? DEFAULT_TEMPLATE_ID, DEFAULT_SCENE_MS, options?.photoCount);
+  const look = options?.look;
   return {
     schemaVersion: SCHEMA_VERSION,
     id: id('prj'),
     name: options?.name ?? 'Untitled project',
     mode: options?.mode ?? 'showcase',
     aspect: options?.aspect ?? '9:16',
-    scenes: [createScene(options?.templateId ?? DEFAULT_TEMPLATE_ID, DEFAULT_SCENE_MS, options?.photoCount)],
+    scenes: [look === undefined ? scene : { ...scene, inputs: { ...scene.inputs, look } }],
     overlays: [],
     audio: [],
     brand: {

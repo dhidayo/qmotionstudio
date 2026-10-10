@@ -253,7 +253,11 @@ export function drawKinetic(
  */
 export function countedText(text: string, p: number): string {
   const eased = applyEase('outCubic', p);
-  return text.replace(/\d[\d,]*(\.\d+)?/g, (match) => {
+  const NUMBER = /\d[\d,]*(\.\d+)?/g;
+  // "24/7", "4.9/5", "9 to 5": several numbers make one figure, and counting
+  // each of them up from nothing reads as "0/0". Those stand as written.
+  if ((text.match(NUMBER) ?? []).length > 1) return text;
+  return text.replace(NUMBER, (match) => {
     const decimals = match.includes('.') ? (match.split('.')[1] ?? '').length : 0;
     const grouped = match.includes(',');
     const target = Number(match.replace(/,/g, ''));

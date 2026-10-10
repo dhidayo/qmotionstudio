@@ -104,7 +104,31 @@ export function drawVignette(ctx: Ctx2D, design: Size, amount: number): void {
  * for is not doing its job, and one that ruins the picture makes the free tier
  * feel like a punishment rather than a sample.
  */
-export function drawWatermark(ctx: Ctx2D, design: Size): void {
+/**
+ * The mark's ink for a ground (D-121). White with a dark halo was right on
+ * the near-black grounds every design used to share; on cream or sunshine it
+ * all but vanished. On a light ground it is dark with a light halo instead.
+ */
+export function watermarkInk(ground: string): { readonly fill: string; readonly halo: string } {
+  return isLight(ground)
+    ? { fill: 'rgba(20,20,24,0.78)', halo: 'rgba(255,255,255,0.6)' }
+    : { fill: 'rgba(255,255,255,0.86)', halo: 'rgba(0,0,0,0.55)' };
+}
+
+/** Whether a #rrggbb colour is light enough that dark words read on it. */
+function isLight(hex: string): boolean {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match?.[1]) return false;
+  const value = Number.parseInt(match[1], 16);
+  const channel = (shift: number): number => {
+    const c = ((value >> shift) & 0xff) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(16) + 0.7152 * channel(8) + 0.0722 * channel(0);
+  return luminance > 0.4;
+}
+
+export function drawWatermark(ctx: Ctx2D, design: Size, ground = '#000000'): void {
   const unit = Math.min(design.w, design.h);
   const size = unit * 0.026;
   const pad = unit * 0.045;
@@ -120,9 +144,10 @@ export function drawWatermark(ctx: Ctx2D, design: Size): void {
 
   // A soft shadow rather than a plate behind it: the mark has to read on a
   // bright sky and on a black frame, and a box would be the louder of the two.
-  ctx.shadowColor = 'rgba(0,0,0,0.55)';
+  const ink = watermarkInk(ground);
+  ctx.shadowColor = ink.halo;
   ctx.shadowBlur = size * 0.7;
-  ctx.fillStyle = 'rgba(255,255,255,0.86)';
+  ctx.fillStyle = ink.fill;
   ctx.fillText(text, x, y);
   ctx.restore();
 }

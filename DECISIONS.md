@@ -2752,3 +2752,116 @@ From a review against a comparable editor and testing on a computer:
   replaces D-110's "the first tap only deselects"). The menu is right-click, or
   press and hold on a touch screen; a double-click or double-tap edits text or
   replaces a picture, as before. Dragging still moves only what is selected.
+
+## D-117 — fake depth: z, turns, and depth-sorted groups
+
+Rings, coverflows, tunnels and turning cards need things to pass in front of
+and behind each other and to turn away from the viewer. Three animated
+properties do it without a 3D engine: `z` (draw order inside a group marked
+`depthSort`, re-sorted every frame), and `turnY` / `turnX` (a card turned about
+its upright or level axis, drawn as a foreshortened, slightly leaning
+parallelogram via one `ctx.transform`, darkened as it turns edge-on and further
+when its back is showing). Hit testing walks the same depth order, so a click
+lands on the card in front. A slot-tagged photo may sit in a turned card: the
+selection box is scaled by the turn so it hugs what is drawn.
+
+## D-118 — kinetic type and counting numbers
+
+Text reveals gained `kinetic` — a line, word or letter at a time, each unit
+rising, dropping, popping, scattering, waving, focusing, sliding, splitting,
+flipping, stretching, glitching, typing, zooming or tilting into place, in
+order, from the end, from the middle or at random, with an optional caret and
+a matching exit — and `count`, which counts the numbers in the text up from
+zero in their own format ("2,500+", "98.5%"). A figure made of several numbers
+("24/7", "4.9/5") stands as written: counting each from nothing read as "0/0".
+Randomness is a fixed hash of the unit's index, so every frame is
+reproducible and the export matches the preview.
+
+## D-119 — the template catalogue: families and variants
+
+To reach the breadth of the reference product (about 500 scene templates and
+36 multi-scene "profiles"), most of the library is now **families**: one
+motion idea — a ring of cards, words that rise into place, a product with
+callouts — and **variants** of it, each a few lines of data naming the
+family, its settings, its copy and its photo range
+(`src/templates/_catalog`). The family code (`src/templates/_families`) is
+loaded on demand per family, like any template; the data is small and eager,
+so the library lists everything without loading code. The manifest is
+generated from the catalogue for these, and `lint:templates` builds and
+checks every variant and film exactly as it checks a template file.
+
+Coverage against the reference, in our own designs and names:
+
+- **Text Motion** (23) and **Elements** (21): kinetic titles, quotes, big
+  numbers, question-and-answer, lower thirds; buttons, seals, ribbons,
+  metric cards, checklists, review cards, countdowns, date and price cards,
+  end cards — the pieces text-only stories are built from.
+- **Product Display** (12): spotlight, callouts, finishes, line-up,
+  before/after, turntable, spec sheet, price reveal, detail lens, new
+  arrival, range, unboxing.
+- **Business** (15): app screens on phones, dashboards and case studies in
+  browser windows, pricing plans, client logo wall, testimonials, team,
+  speakers, hiring, how-it-works, process, project board, webinar, social
+  feed, org chart.
+- **Showcase**: Ring Path (15), Flow Track (21), Depth Stage (17), Tile Field
+  (12), Deck Motion (12), Hero Stage and Photo Reveal (16), Scene Cuts (14),
+  Photo Collage (8), Timeline (7), alongside the earlier Angle Stage, Soft
+  Pop, Split Frame and Kinetic Type.
+- **Corporate Ads films** (20): ten text-only **Text Stories** (announcement,
+  mission, hiring, event, impact report, customer story, new service, sale,
+  webinar, thank-you), five **Product Films** and five **Business Promos**,
+  each a sequence of the scenes above with its copy written in, so every word
+  is editable and every scene swappable.
+
+Not replicated one-for-one: the reference's many near-duplicate variants
+(dozens of "Silk" and "Impact" motions differing in a timing value). Where
+they differ only in a number, one variant here with an adjustable motion
+covers them.
+
+## D-120 — the background is the person's to change
+
+"Allow users to change background too." Style now opens with **Background**:
+behind the design, a colour, a gradient, a pattern, a blur of the first photo,
+or **your picture** — a photograph of the person's own filling the frame,
+drifting slowly closer, with the background colour laid over it at an
+adjustable **dim** so the words stay readable. Its colour is set right there,
+not only through the palette. "Use on every scene" gives a whole ad one
+backdrop. It is reached from a **Background** tool under the picture (and in
+the phone's toolbar), and by right-clicking — or pressing and holding — where
+nothing is on the canvas. The picture is saved with the project, restored on
+reload, and sent to the exporter like any other photo.
+
+## D-121 — every design has its own look; looks restyle in a tap
+
+Every design used to open in the same near-black palette, because a new scene
+always got one default look and changing design kept whatever the scene had —
+"the dark background on every template makes it look somehow". Now:
+
+- **Thirteen new palettes** — linen, cream, blush, sky, mint, lilac (light);
+  sunshine, coral, terracotta, cobalt, emerald (colour); navy, orchid (dark) —
+  join the six dark ones, each held to a contrast test (ink on ground and on
+  cards at least 4.5:1). Each is paired with its ground as a **look**; light
+  looks carry no vignette, which reads as dirt on cream.
+- **Each design names its look** in the manifest. Hand-made designs and films
+  choose theirs; catalogue variants take their category's looks in turn —
+  words-first categories lean light and coloured, photographs in depth lean
+  dark — unless they name one. The library is no longer a wall of dark cards.
+- **What the card shows is what picking it gives**: choosing a design from the
+  library brings its look (undo puts the old one back); a new project opens in
+  its design's look; an ad film applies its look to every scene. Adding or
+  changing a scene *inside* an ad keeps the ad's look (D-098's continuity).
+- **Looks** lead the Style tab: every look as a swatch of the design's own
+  ground, ink, card and accent, and "Try another" to step through them — the
+  same design, restyled, in one tap. A background picture of the person's own
+  survives a change of look; the new colour dims it.
+- The free-tier mark turns dark on light grounds; white on cream all but
+  vanished.
+
+## D-122 — the open test release can switch Free and Pro
+
+"As product is in development and test mode, add on toggle for FREE and PRO
+to test for now. I can take it out later." D-093 kept the tier switch out of
+the public build; for the open test it is in, as a two-sided FREE | PRO switch
+in the top bar and in the phone's menu. One flag turns it off again:
+`OPEN_TEST_RELEASE` in `src/entitlements/testRelease.ts`. The production test
+that the public build offers no switch is skipped while the flag is on.

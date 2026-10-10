@@ -330,7 +330,7 @@ export function showBackgroundSettings(layout: Layout): void {
 export function backgroundMenu(layout: Layout): readonly MenuItem[] {
   const o = useOverlays.getState();
   return [
-    { label: 'Change background…', hint: 'Colour, gradient or pattern', onSelect: () => { showBackgroundSettings(layout); } },
+    { label: 'Change background…', onSelect: () => { showBackgroundSettings(layout); } },
     { label: 'Use a picture as background…', onSelect: () => { o.openPhotoPicker({ kind: 'background' }); } },
     { kind: 'separator' },
     { label: 'Choose a different design…', onSelect: () => { o.openPhonePanel('designs'); } },

@@ -2,6 +2,7 @@ import type { AdTemplate, Tier } from './schema';
 import { TEXT_STORY_SCENES } from './_catalog/text';
 import { PRODUCT_SCENES } from './_catalog/product';
 import { SHOWCASE_SCENES } from './_catalog/showcase';
+import { BUSINESS_SCENES } from './_catalog/business';
 import { AD_FILMS } from './_catalog/films';
 
 /**
@@ -38,11 +39,14 @@ export type SceneVariant = {
   readonly isNew?: boolean;
   /** Where the library's still is taken, when the default moment is not the best. */
   readonly posterAtMs?: number;
+  /** The look it opens in, when its category's turn would not suit it (D-121). */
+  readonly look?: string;
 };
 
 export const SCENE_VARIANTS: readonly SceneVariant[] = [
   ...TEXT_STORY_SCENES,
   ...PRODUCT_SCENES,
+  ...BUSINESS_SCENES,
   ...SHOWCASE_SCENES,
 ];
 

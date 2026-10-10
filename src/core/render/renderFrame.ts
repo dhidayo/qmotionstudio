@@ -132,7 +132,7 @@ export function renderFrame(
   //     looks has to blend them, not apply the incoming one to both. The
   //     watermark belongs to the *frame*, and goes over everything including
   //     the overlays, or it would be something a user could cover up.
-  if (rig.watermark()) drawWatermark(ctx, vp.design);
+  if (rig.watermark()) drawWatermark(ctx, vp.design, palette.bg);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 

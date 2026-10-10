@@ -54,6 +54,13 @@ export type TemplateSummary = {
    * canvas". Omitted means listed.
    */
   readonly listed?: boolean;
+  /**
+   * The look a design opens in (D-121): one of the Style tab's looks, by id.
+   * Varied on purpose — cream, white, colour and dark across the library — so
+   * the library is not a wall of near-black cards, and so what a card shows
+   * is what picking it gives.
+   */
+  readonly look?: string;
 };
 
 export const CATEGORIES: readonly string[] = [
@@ -68,8 +75,38 @@ export const CATEGORIES: readonly string[] = [
 
 const ALL_ASPECTS: readonly Aspect[] = ['9:16', '4:5', '1:1', '4:3', '16:9'];
 
+/**
+ * Each category's looks, dealt in turn to its designs unless a design names
+ * its own (D-121). Words-first categories lean light and coloured, where
+ * organisations' own brand pages live; photographs in depth lean dark, where a
+ * tunnel or a glow reads.
+ */
+const CATEGORY_LOOKS: Readonly<Record<string, readonly string[]>> = {
+  'Text Motion': ['cream', 'navy', 'sunshine', 'linen', 'cobalt', 'blush', 'midnight', 'mint', 'coral', 'lilac', 'emerald', 'paper', 'orchid', 'sky', 'terracotta'],
+  Elements: ['linen', 'sky', 'sunshine', 'navy', 'lilac', 'coral', 'cream', 'cobalt', 'mint', 'midnight', 'blush', 'emerald', 'paper', 'orchid', 'terracotta'],
+  'Product Display': ['linen', 'midnight', 'cream', 'sky', 'blush', 'navy', 'mint', 'bone', 'lilac', 'sunshine', 'paper', 'tide'],
+  Business: ['sky', 'navy', 'linen', 'lilac', 'cobalt', 'cream', 'mint', 'midnight', 'paper', 'emerald', 'blush', 'sunshine'],
+  'Depth Stage': ['midnight', 'navy', 'orchid', 'tide', 'ember', 'cobalt', 'forest', 'emerald'],
+};
+const PHOTO_LOOKS = ['midnight', 'cream', 'navy', 'linen', 'orchid', 'sky', 'ember', 'blush', 'tide', 'paper', 'emerald', 'lilac', 'forest', 'sunshine', 'cobalt', 'terracotta'];
+
+function variantLooks(variants: readonly SceneVariant[]): ReadonlyMap<string, string> {
+  const dealt = new Map<string, number>();
+  const looks = new Map<string, string>();
+  for (const variant of variants) {
+    const turn = dealt.get(variant.category) ?? 0;
+    dealt.set(variant.category, turn + 1);
+    const list = CATEGORY_LOOKS[variant.category] ?? PHOTO_LOOKS;
+    looks.set(variant.id, variant.look ?? list[turn % list.length] ?? 'midnight');
+  }
+  return looks;
+}
+
+const VARIANT_LOOKS = variantLooks(SCENE_VARIANTS);
+
 /** The library's view of a catalogue variant (D-119). */
 function sceneSummary(variant: SceneVariant): TemplateSummary {
+  const look = VARIANT_LOOKS.get(variant.id);
   return {
     id: variant.id,
     name: variant.name,
@@ -81,6 +118,7 @@ function sceneSummary(variant: SceneVariant): TemplateSummary {
     photoSlots: { min: variant.photos.min, max: variant.photos.max },
     blurb: variant.blurb,
     ...(variant.posterAtMs === undefined ? {} : { posterAtMs: variant.posterAtMs }),
+    ...(look === undefined ? {} : { look }),
   };
 }
 
@@ -107,6 +145,9 @@ function filmSummary(film: AdTemplate): TemplateSummary {
     sceneCount: film.scenes.length,
     durationMs: filmLengthMs(film),
     blurb: film.blurb ?? '',
+    ...(film.paletteId === undefined ? {} : { look: film.paletteId }),
+    // Inside the first beat, its words in place — not between two beats.
+    posterAtMs: Math.round((film.scenes[0]?.durationMs ?? 3_000) * 0.6),
   };
 }
 
@@ -129,6 +170,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Launch Story',
     category: 'Story Ads',
     kind: 'ad',
+    look: 'midnight',
     tier: 'free',
     isNew: true,
     supportedAspects: ['9:16', '4:5', '1:1', '4:3'],
@@ -143,6 +185,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Product Drop',
     category: 'Story Ads',
     kind: 'ad',
+    look: 'bone',
     tier: 'pro',
     supportedAspects: ['9:16', '4:5', '1:1', '16:9'],
     photoSlots: { min: 1, max: 6 },
@@ -156,6 +199,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Quick Pitch',
     category: 'Story Ads',
     kind: 'ad',
+    look: 'tide',
     tier: 'free',
     isNew: true,
     supportedAspects: ['9:16', '4:5', '1:1', '4:3', '16:9'],
@@ -170,6 +214,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Social Post',
     category: 'Story Ads',
     kind: 'ad',
+    look: 'paper',
     tier: 'free',
     isNew: true,
     supportedAspects: ['9:16', '4:5', '1:1', '4:3', '16:9'],
@@ -185,6 +230,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Proof Reel',
     category: 'Story Ads',
     kind: 'ad',
+    look: 'bone',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['9:16', '4:5', '1:1', '4:3', '16:9'],
@@ -200,6 +246,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Soft Showcase',
     category: 'Story Ads',
     kind: 'ad',
+    look: 'paper',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['9:16', '4:5', '1:1', '4:3', '16:9'],
@@ -216,6 +263,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Scatter',
     category: 'Soft Pop',
     kind: 'scene',
+    look: 'blush',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -230,6 +278,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Blowout',
     category: 'Soft Pop',
     kind: 'scene',
+    look: 'sunshine',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -244,6 +293,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Fizzle',
     category: 'Soft Pop',
     kind: 'scene',
+    look: 'lilac',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -258,6 +308,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Flip Out',
     category: 'Soft Pop',
     kind: 'scene',
+    look: 'sky',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -272,6 +323,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Float Away',
     category: 'Soft Pop',
     kind: 'scene',
+    look: 'cream',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -286,6 +338,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Dream Fade',
     category: 'Soft Pop',
     kind: 'scene',
+    look: 'midnight',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -300,6 +353,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Parallax Depth',
     category: 'Depth Stage',
     kind: 'scene',
+    look: 'cream',
     tier: 'free',
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 2, max: 6 },
@@ -310,6 +364,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Card Stack',
     category: 'Depth Stage',
     kind: 'scene',
+    look: 'navy',
     tier: 'free',
     isNew: true,
     supportedAspects: ['1:1', '4:5', '9:16', '4:3'],
@@ -323,6 +378,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Depth Tunnel',
     category: 'Depth Stage',
     kind: 'scene',
+    look: 'midnight',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -336,6 +392,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Spotlight',
     category: 'Depth Stage',
     kind: 'scene',
+    look: 'orchid',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -349,6 +406,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Pull Focus',
     category: 'Depth Stage',
     kind: 'scene',
+    look: 'tide',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -362,6 +420,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Fan Out',
     category: 'Angle Stage',
     kind: 'scene',
+    look: 'linen',
     tier: 'free',
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 3, max: 8 },
@@ -372,6 +431,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Tilt Sweep',
     category: 'Angle Stage',
     kind: 'scene',
+    look: 'navy',
     tier: 'pro',
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 2, max: 6 },
@@ -382,6 +442,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Cascade',
     category: 'Angle Stage',
     kind: 'scene',
+    look: 'blush',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -395,6 +456,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Flip Cards',
     category: 'Angle Stage',
     kind: 'scene',
+    look: 'cobalt',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -408,6 +470,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Pinwheel',
     category: 'Angle Stage',
     kind: 'scene',
+    look: 'mint',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -421,6 +484,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Split Pair',
     category: 'Split Frame',
     kind: 'scene',
+    look: 'paper',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -434,6 +498,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Contact Sheet',
     category: 'Split Frame',
     kind: 'scene',
+    look: 'midnight',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -447,6 +512,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Side Band',
     category: 'Split Frame',
     kind: 'scene',
+    look: 'sky',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -460,6 +526,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Panels',
     category: 'Split Frame',
     kind: 'scene',
+    look: 'linen',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -473,6 +540,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Picture in Picture',
     category: 'Split Frame',
     kind: 'scene',
+    look: 'cream',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -486,6 +554,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Statement',
     category: 'Kinetic Type',
     kind: 'scene',
+    look: 'midnight',
     tier: 'free',
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 1, max: 1 },
@@ -496,6 +565,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Phrase Swap',
     category: 'Kinetic Type',
     kind: 'scene',
+    look: 'coral',
     tier: 'pro',
     isNew: true,
     supportedAspects: ['1:1', '4:5', '9:16', '16:9'],
@@ -509,6 +579,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Big Number',
     category: 'Kinetic Type',
     kind: 'scene',
+    look: 'navy',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -522,6 +593,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'List Drop',
     category: 'Kinetic Type',
     kind: 'scene',
+    look: 'sunshine',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
@@ -535,6 +607,7 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     name: 'Pull Quote',
     category: 'Kinetic Type',
     kind: 'scene',
+    look: 'cream',
     tier: 'free',
     isNew: true,
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],

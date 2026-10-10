@@ -1,5 +1,6 @@
 import type { Palette } from '@/core/types';
 import type { BackgroundTreatment, LookSettings, TextStyle } from '@/document/types';
+import { restyleLook } from '@/document/defaults';
 import type { LookDef, NamedPalette } from '../schema';
 
 /**
@@ -88,7 +89,7 @@ export const PALETTES = {
   terracotta: {
     id: 'terracotta',
     label: 'Terracotta',
-    palette: { bg: '#a94a28', surface: '#bd5f3b', ink: '#fff7f0', inkMuted: '#f6d6c4', accent: '#ffd59a' },
+    palette: { bg: '#93391c', surface: '#a24527', ink: '#fff7f0', inkMuted: '#f6d6c4', accent: '#ffd59a' },
   },
   cobalt: {
     id: 'cobalt',
@@ -157,25 +158,16 @@ export const LOOK_PRESETS: readonly LookPreset[] = [
   preset('ember', 'gradient', 'dark'),
   preset('forest', 'gradient', 'dark'),
   preset('tide', 'gradient', 'dark'),
-  preset('bone', 'pattern', 'dark'),
+  preset('bone', 'gradient', 'dark'),
 ];
 
 export function lookPreset(id: string): LookPreset | undefined {
   return LOOK_PRESETS.find((look) => look.id === id);
 }
 
-/**
- * A scene's look restyled by a preset. Speed, corner radius and grain are the
- * person's and stay; so does a background picture of their own, which the
- * preset's colour then dims (D-120).
- */
+/** A scene's look restyled by a preset (D-121); see `restyleLook`. */
 export function withLookPreset(look: LookSettings, preset: LookPreset): LookSettings {
-  return {
-    ...look,
-    palette: preset.palette,
-    background: look.background === 'picture' ? 'picture' : preset.background,
-    vignette: preset.vignette,
-  };
+  return restyleLook(look, preset);
 }
 
 export const ALL_PALETTES: readonly NamedPalette[] = Object.values(PALETTES);

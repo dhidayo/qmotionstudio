@@ -2,6 +2,8 @@ import { useEditor, type InspectorTab } from '@/state/store';
 import { StartActions } from '@/ui/editing/StartActions';
 import { Icon, type IconName } from '@/ui/mobile/Icon';
 import { useOverlays } from './overlays';
+import { useLayout } from './useLayout';
+import { showBackgroundSettings } from '@/ui/editing/commands';
 
 /**
  * The phone's way in, on a computer too (D-116).
@@ -22,6 +24,8 @@ type Tool = {
   readonly icon: IconName;
   readonly tab?: InspectorTab;
   readonly panel?: 'designs' | 'add';
+  /** Style's Background section, wherever Style is on this screen (D-120). */
+  readonly background?: true;
 };
 
 const TOOLS: readonly Tool[] = [
@@ -31,6 +35,7 @@ const TOOLS: readonly Tool[] = [
   { label: 'Text', icon: 'text', tab: 'text' },
   { label: 'Effects', icon: 'effects', tab: 'motion' },
   { label: 'Style', icon: 'style', tab: 'look' },
+  { label: 'Background', icon: 'background', background: true },
 ];
 
 export function ToolStrip({ onOpenPanel }: { onOpenPanel?: (() => void) | undefined }): React.JSX.Element {
@@ -41,8 +46,13 @@ export function ToolStrip({ onOpenPanel }: { onOpenPanel?: (() => void) | undefi
     s.selectedOverlay !== null || s.selectedAudio !== null || s.selectedEffect !== null,
   );
   const openPanel = useOverlays((o) => o.openPhonePanel);
+  const layout = useLayout();
 
   const show = (tool: Tool): void => {
+    if (tool.background) {
+      showBackgroundSettings(layout);
+      return;
+    }
     if (tool.panel) {
       openPanel(tool.panel);
       return;
@@ -73,8 +83,8 @@ export function ToolStrip({ onOpenPanel }: { onOpenPanel?: (() => void) | undefi
               type="button"
               onClick={() => { show(tool); }}
               aria-pressed={tool.tab === undefined ? undefined : on}
-              title={tool.tab === undefined ? undefined : `Show ${tool.label.toLowerCase()} settings`}
-              className="flex w-16 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[11px] hover:bg-panel-alt"
+              title={tool.background ? 'Change the background: a colour, a gradient or a picture of your own' : tool.tab === undefined ? undefined : `Show ${tool.label.toLowerCase()} settings`}
+              className="flex min-w-16 flex-col items-center gap-0.5 rounded-lg px-1 py-1 text-[11px] hover:bg-panel-alt"
               style={{ color: on ? 'var(--c-accent)' : 'var(--c-ink)' }}
             >
               <Icon name={tool.icon} size={20} />

@@ -210,6 +210,20 @@ test.describe('fingers on the canvas', () => {
     await expect(menu.getByRole('menuitem', { name: /^Replace photo/ })).toBeVisible();
   });
 
+  test('press and hold where nothing is offers the background (D-120)', async ({ page }) => {
+    await open(page, LIFESTYLE);
+    const bare = await at(page, 0.03, 0.03);
+    const cdp = await fingers(page);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [bare] });
+    await page.waitForTimeout(700);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    const menu = page.getByRole('menu');
+    await expect(menu).toBeVisible();
+    await menu.getByRole('menuitem', { name: /^Change background/ }).click();
+    // Style, on its Background tab.
+    await expect(page.getByRole('tab', { name: 'Background', selected: true })).toBeVisible();
+  });
+
   test('pinch zooms the view, not the element, and Fit puts it back', async ({ page }) => {
     await open(page, LIFESTYLE);
     const cdp = await fingers(page);
@@ -223,6 +237,31 @@ test.describe('fingers on the canvas', () => {
     expect(after.slot, 'and nothing was selected').toBeNull();
     await fit.tap();
     await expect(fit).toHaveCount(0);
+  });
+});
+
+test.describe('the background and the plan (D-120, D-122)', () => {
+  test('Background is one tap from the toolbar, and fits beside the other tools', async ({ page }) => {
+    await open(page, LIFESTYLE);
+    const toolbar = page.locator('[data-phone-toolbar="main"]');
+    const background = toolbar.getByRole('button', { name: 'Background' });
+    await expect(background).toBeVisible();
+    // The whole word shows: no tool's label is cut off.
+    const clipped = await toolbar.locator('button span').evaluateAll((spans) => spans.some((s) => s.scrollWidth > s.clientWidth + 1));
+    expect(clipped).toBe(false);
+    await background.click();
+    await expect(page.getByRole('tab', { name: 'Background', selected: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Your picture' })).toBeVisible();
+  });
+
+  test('the menu carries the Free/Pro test switch', async ({ page }) => {
+    await open(page, LIFESTYLE);
+    await page.locator('[data-phone-menu]').click();
+    const tier = page.getByRole('button', { name: /^Tier: / });
+    await expect(tier).toBeVisible();
+    const before = await tier.getAttribute('aria-label');
+    await tier.click();
+    await expect(tier).not.toHaveAttribute('aria-label', before ?? '');
   });
 });
 

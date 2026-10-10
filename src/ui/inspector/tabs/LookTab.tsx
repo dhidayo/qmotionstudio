@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import * as actions from '@/document/actions';
 import { DEFAULT_BACKGROUND_DIM } from '@/templates/_shared/chrome';
+import { LOOK_PRESETS, type LookPreset } from '@/templates/_shared/look';
+import type { LookSettings } from '@/document/types';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { useOverlays } from '@/ui/shell/overlays';
 import { PALETTE_ROLES, type PaletteRole } from '@/core/types';
@@ -40,42 +42,26 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
     document.querySelector('[data-logo-section]')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, [selectedLogo]);
 
+  // "Background" from the tool strip or the canvas menu (D-120): its section, in view.
+  const focus = useOverlays((o) => o.inspectorSection);
+  useEffect(() => {
+    if (focus === null) return;
+    const section = document.querySelector(`[data-inspector-section="${focus}"]`)?.closest('section');
+    section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    useOverlays.getState().focusInspectorSection(null);
+  }, [focus]);
+
   if (!look) return <EmptyNote>No scene.</EmptyNote>;
 
-  const palettes = template?.look.palettes ?? [];
+  const offered = new Set((template?.look.palettes ?? []).map((p) => p.id));
+  const looks = LOOK_PRESETS.filter((look) => offered.has(look.id));
   const backgrounds = template?.look.backgrounds ?? ['solid'];
 
   return (
     <div>
-      <BackgroundSection backgrounds={backgrounds} />
+      {looks.length > 0 && <LooksSection looks={looks} />}
 
-      {palettes.length > 0 && (
-        <Section title="Preset palettes">
-          <div className="grid grid-cols-3 gap-1.5">
-            {palettes.map((preset) => {
-              const active = PALETTE_ROLES.every((role) => preset.palette[role] === look.palette[role]);
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => { dispatch(actions.applyPalette(preset.palette)); }}
-                  aria-pressed={active}
-                  title={preset.label}
-                  className="overflow-hidden rounded-md border"
-                  style={{ borderColor: active ? 'var(--c-accent)' : 'var(--c-edge)' }}
-                >
-                  <span className="flex h-6 w-full">
-                    {PALETTE_ROLES.map((role) => (
-                      <span key={role} className="flex-1" style={{ background: preset.palette[role] }} />
-                    ))}
-                  </span>
-                  <span className="block truncate px-1 py-0.5 text-[10px] text-ink-muted">{preset.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      )}
+      <BackgroundSection backgrounds={backgrounds} />
 
       <Section title="Colours">
         <div className="flex flex-col gap-1.5">
@@ -240,6 +226,80 @@ function BackgroundSection({ backgrounds }: { backgrounds: readonly BackgroundTr
             Use on every scene
           </button>
         )}
+      </div>
+    </Section>
+  );
+}
+
+/** Whether a scene's look is this preset's: its colours, and its ground unless the ground is the person's picture. */
+function isLook(look: LookSettings, preset: LookPreset): boolean {
+  return PALETTE_ROLES.every((role) => preset.palette[role] === look.palette[role])
+    && (look.background === 'picture' || look.background === preset.background);
+}
+
+/** How a look's ground reads at swatch size. */
+function swatchGround(preset: LookPreset): string {
+  const { bg, surface } = preset.palette;
+  if (preset.background === 'gradient') return `linear-gradient(112deg, ${surface}, ${bg})`;
+  if (preset.background === 'pattern') return `radial-gradient(circle, ${surface} 0, ${bg} 50%, ${surface}80 52%, ${bg} 100%)`;
+  return bg;
+}
+
+/**
+ * Looks (D-121): the same design restyled in one tap — light, cream,
+ * coloured or dark — and a button that steps through them, for "quick
+ * formatting of the same template". Each swatch is the look itself: its
+ * ground, its words in its ink, a card in its surface, its accent.
+ */
+function LooksSection({ looks }: { looks: readonly LookPreset[] }): React.JSX.Element | null {
+  const dispatch = useEditor((s) => s.dispatch);
+  const look = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.look);
+  if (!look) return null;
+  const current = looks.findIndex((preset) => isLook(look, preset));
+  const next = looks[(current + 1) % looks.length];
+
+  return (
+    <Section title="Looks">
+      <div data-inspector-section="Looks">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-ink-muted">The same design, in other colours.</p>
+          {next && (
+            <button
+              type="button"
+              data-next-look
+              onClick={() => { dispatch(actions.applyLook(next)); }}
+              className="shrink-0 rounded-md border border-edge px-2 py-1 text-[11px] font-semibold hover:bg-panel-alt"
+              title={`Try ${next.label}`}
+            >
+              Try another
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-3" role="list" aria-label="Looks">
+          {looks.map((preset) => {
+            const active = isLook(look, preset);
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                role="listitem"
+                data-look={preset.id}
+                onClick={() => { dispatch(actions.applyLook(preset)); }}
+                aria-pressed={active}
+                aria-label={`${preset.label} look`}
+                className="overflow-hidden rounded-md border-2 text-left"
+                style={{ borderColor: active ? 'var(--c-accent)' : 'transparent', boxShadow: active ? 'none' : 'inset 0 0 0 1px var(--c-edge)' }}
+              >
+                <span className="relative block h-12 w-full" style={{ background: swatchGround(preset) }}>
+                  <span className="absolute left-1.5 top-1 text-[15px] font-extrabold leading-none" style={{ color: preset.palette.ink }}>Aa</span>
+                  <span className="absolute bottom-1.5 left-1.5 h-1 w-5 rounded-full" style={{ background: preset.palette.accent }} />
+                  <span className="absolute bottom-1.5 right-1.5 h-5 w-6 rounded-sm" style={{ background: preset.palette.surface, boxShadow: `inset 0 0 0 1px ${preset.palette.inkMuted}40` }} />
+                </span>
+                <span className="block truncate bg-panel px-1 py-0.5 text-[10px] text-ink-muted">{preset.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </Section>
   );

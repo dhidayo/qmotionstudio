@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createProject } from '@/document/defaults';
+import { createProject, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
+import { designLook } from '@/templates/looks';
 import { migrate } from '@/document/migrate';
 import { referencedMedia } from '@/document/select/media';
 import * as actions from '@/document/actions';
@@ -109,7 +110,7 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
        * ask every remaining project what it still refers to, which belongs in
        * a sweep rather than in a button someone pressed by mistake.
        */
-      if (stored.project.id === current.id) openProject(createProject());
+      if (stored.project.id === current.id) openProject(createProject({ look: designLook(DEFAULT_TEMPLATE_ID) }));
       showToast(`Deleted “${stored.project.name}”.`);
       setConfirming(null);
       await refresh();

@@ -63,10 +63,13 @@ export function create(variant: SceneVariant): SceneTemplate {
     };
     const labelLayer = (slotId: string, words2: string, opts: Parameters<typeof placeText>[3]): Layer => {
       const slot = slots.find((s) => s.id === slotId) ?? headline;
-      const placed = placeText(ctx, slot, inputs, opts);
+      // Measured as the words it shows, not as the whole list it comes from.
+      const placed = placeText(ctx, slot, { ...inputs, texts: { ...inputs.texts, [slot.id]: words2 } }, opts);
       if (placed.layer.type !== 'text') return placed.layer;
       const { slot: _slot, ...props } = placed.layer.props;
-      return { ...placed.layer, props: { ...props, text: words2 } };
+      // A label pinned by its left or right edge reads from that edge.
+      const align = opts.anchorX === 0 ? 'left' : opts.anchorX === 1 ? 'right' : props.align;
+      return { ...placed.layer, props: { ...props, text: words2, align } };
     };
 
     switch (kind) {
@@ -169,7 +172,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       case 'logos': {
         // White tiles holding client logos; a highlight travels across them.
         const count = Math.max(6, n);
-        const cols = tall ? 3 : 4;
+        const cols = tall ? 2 : 4;
         const rows = Math.ceil(count / cols);
         const tileW = (stage.w / cols) * 0.86;
         const tileH = Math.min(tileW * 0.62, (stage.h / rows) * 0.86);
@@ -196,8 +199,8 @@ export function create(variant: SceneVariant): SceneTemplate {
         const quotes = words('quotes', '|');
         const names = words('names', '|');
         const count = Math.max(3, quotes.length);
-        const cardW = Math.min(stage.w * 0.78, u * 0.8);
-        const cardH = cardW * 0.62;
+        const cardW = tall ? stage.w * 0.9 : Math.min(stage.w * 0.78, u * 0.8);
+        const cardH = cardW * (tall ? 0.56 : 0.62);
         for (let k = 0; k < count; k++) {
           const ph = photo(k);
           const pose = (ms: number) => {
@@ -213,7 +216,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             const av = cardH * 0.2;
             items.push({ id: ctx.id('avatar'), type: 'image', startMs: 0, endMs: durationMs, tracks: { ...tracks, x: (tracks.x ?? []).map((key) => ({ ...key, v: key.v - cardW * 0.36 })), y: (tracks.y ?? []).map((key) => ({ ...key, v: key.v + cardH * 0.3 })) }, props: fitted(ph, av, av, av / 2, k < n) });
           }
-          const quote = labelLayer('quotes', `“${quotes[k] ?? ''}”`, { sizePx: u * 0.036, maxWidthPx: cardW * 0.84, x: 0, y: 0, lineHeight: 1.3, reveal: { kind: 'none' } });
+          const quote = labelLayer('quotes', `“${quotes[k] ?? ''}”`, { sizePx: u * (tall ? 0.046 : 0.038), maxWidthPx: cardW * 0.84, x: 0, y: 0, lineHeight: 1.3, reveal: { kind: 'none' } });
           const name = labelLayer('names', names[k] ?? '', { sizePx: u * 0.026, maxWidthPx: cardW * 0.6, x: 0, y: 0, anchorX: 0, fill: roleFill('inkMuted'), reveal: { kind: 'none' } });
           items.push({ ...quote, tracks: { ...tracks, y: (tracks.y ?? []).map((key) => ({ ...key, v: key.v - cardH * 0.3 })) } });
           items.push({ ...name, tracks: { ...tracks, x: (tracks.x ?? []).map((key) => ({ ...key, v: key.v - cardW * 0.24 })), y: (tracks.y ?? []).map((key) => ({ ...key, v: key.v + cardH * 0.26 })) } });
@@ -226,7 +229,12 @@ export function create(variant: SceneVariant): SceneTemplate {
         // Round portraits popping into a grid, a name under each.
         const names = words('names');
         const count = Math.max(3, Math.min(9, n));
-        const cols = tall ? 2 : Math.min(4, count);
+        // As many across as makes each portrait biggest in this frame.
+        let cols = 1;
+        for (let c = 1; c <= Math.min(5, count); c++) {
+          const size = (k: number): number => Math.min(stage.w / k, stage.h / Math.ceil(count / k));
+          if (size(c) > size(cols) + 1) cols = c;
+        }
         const rows = Math.ceil(count / cols);
         const cell = Math.min(stage.w / cols, stage.h / rows);
         const av = cell * 0.62;
@@ -251,7 +259,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         const count = Math.max(3, Math.min(6, steps.length));
         const vertical = tall;
         const pitch = (vertical ? stage.h : stage.w) / count;
-        const box = Math.min(pitch * 0.62, (vertical ? stage.w : stage.h) * 0.4);
+        const box = Math.min(pitch * (vertical ? 0.62 : 0.74), (vertical ? stage.w : stage.h) * 0.42);
         const turn = durationMs / count;
         for (let k = 0; k < count; k++) {
           const x = vertical ? stage.cx - stage.w * 0.2 : stage.cx + (k - (count - 1) / 2) * pitch;
@@ -266,8 +274,13 @@ export function create(variant: SceneVariant): SceneTemplate {
             return { x, y, scale: 1 + on * 0.12, opacity: clamp01((ms - k * 200) / 300) * (on || done ? 1 : 0.55) };
           });
           layers.push({ id: ctx.id('step'), type: 'shape', startMs: 0, endMs: durationMs, tracks: focus, props: { shape: 'rect', w: box, h: box, cornerRadius: box * 0.24, fill: roleFill('surface'), stroke: { paint: roleFill('accent'), width: Math.max(2, u * 0.004) } } });
+          // A photo per step when there are some; the step's number when not.
           const ph = photo(k);
-          if (ph && n > 0) layers.push({ id: ctx.id('stepPhoto'), type: 'image', startMs: 0, endMs: durationMs, tracks: focus, props: fitted(ph, box * 0.8, box * 0.8, box * 0.18, k < n) });
+          if (ph && inputs.photos.length > 0) layers.push({ id: ctx.id('stepPhoto'), type: 'image', startMs: 0, endMs: durationMs, tracks: focus, props: fitted(ph, box * 0.8, box * 0.8, box * 0.18, k < n) });
+          else {
+            const number = labelLayer('steps', String(k + 1), { sizePx: box * 0.42, maxWidthPx: box, x: 0, y: 0, fill: roleFill('accent'), reveal: { kind: 'none' } });
+            layers.push({ ...number, tracks: { ...focus, y: (focus.y ?? []).map((key) => ({ ...key, v: key.v - box * 0.24 })) } });
+          }
           layers.push(labelLayer('steps', steps[k] ?? '', { sizePx: u * 0.034, maxWidthPx: vertical ? stage.w * 0.5 : pitch * 0.92, x: vertical ? x + box * 0.75 : x, y: vertical ? y - u * 0.02 : y + box * 0.62, anchorX: vertical ? 0 : 0.5, reveal: LINE(turn * k + 200) }));
         }
         break;
@@ -330,8 +343,10 @@ export function create(variant: SceneVariant): SceneTemplate {
       }
 
       case 'social': {
-        // A feed of square posts sliding up, each with a like bar under it.
-        const post = Math.min(stage.w * 0.72, stage.h * 0.5);
+        // A feed of square posts sliding up, each with a like bar under it —
+        // sliding along, on a frame too short for a column of them.
+        const across = !tall && stage.w > stage.h * 1.2;
+        const post = across ? Math.min(stage.h * 0.66, stage.w * 0.3) : Math.min(stage.w * 0.72, stage.h * 0.5);
         const count = Math.max(3, Math.min(6, n));
         const items: Layer[] = [];
         for (let k = 0; k < count; k++) {
@@ -343,9 +358,11 @@ export function create(variant: SceneVariant): SceneTemplate {
             let off = k - b;
             off = ((off % count) + count) % count;
             if (off > count / 2) off -= count;
-            return { x: stage.cx, y: stage.cy + off * post * 1.3, opacity: clamp01(1.6 - Math.abs(off)), z: -Math.abs(off) };
+            if (across) return { x: stage.cx + off * post * 1.25, y: stage.cy - post * 0.08, opacity: clamp01(2.4 - Math.abs(off)), z: -Math.abs(off) };
+            // Gone before it reaches the headline above; in view longer below.
+            return { x: stage.cx, y: stage.cy + off * post * 1.3, opacity: off < 0 ? clamp01(1.5 + off * 1.6) : clamp01(1.6 - off), z: -Math.abs(off) };
           };
-          const tracks = sampled(0, durationMs, 70, pose, stage.h * 0.5);
+          const tracks = sampled(0, durationMs, 70, pose, across ? stage.w * 0.5 : stage.h * 0.5);
           items.push({ id: ctx.id('postCard'), type: 'shape', startMs: 0, endMs: durationMs, tracks: { ...tracks, y: (tracks.y ?? []).map((key) => ({ ...key, v: key.v + post * 0.08 })) }, props: { shape: 'rect', w: post * 1.06, h: post * 1.22, cornerRadius: u * 0.02, fill: roleFill('surface') } });
           items.push({ id: ctx.id('post'), type: 'image', startMs: 0, endMs: durationMs, tracks, props: fitted(ph, post, post, u * 0.01, k < n) });
           items.push(labelLayer('handle', `♥ ${120 + k * 37}   ${words('handle')[0] ?? ''}`, { sizePx: u * 0.03, maxWidthPx: post, x: 0, y: 0, anchorX: 0, reveal: { kind: 'none' } }));
@@ -386,7 +403,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             return { x: at.x, y: at.y, scale: Math.max(0.001, easeOutBack((ms - 200 - k * 120) / 500)) * (1 + lit * 0.1) };
           });
           layers.push({ id: ctx.id('member'), type: 'image', startMs: 0, endMs: durationMs, tracks, props: fitted(ph, av * 0.7, av * 0.7, av * 0.35, k < n) });
-          layers.push(labelLayer('names', names[k] ?? '', { sizePx: u * 0.028, maxWidthPx: av * 1.3, x: at.x, y: at.y + av * 0.42, reveal: LINE(500 + k * 120) }));
+          layers.push(labelLayer('names', names[k] ?? '', { sizePx: u * 0.028, maxWidthPx: av * 1.3, x: at.x, y: at.y + av * 0.46, reveal: LINE(500 + k * 120) }));
         }
         break;
       }

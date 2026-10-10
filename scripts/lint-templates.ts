@@ -4,6 +4,8 @@ import { resolve } from 'node:path';
 import { ASPECTS } from '../src/core/types';
 import { validateTemplate, type Template, type TemplateIssue } from '../src/templates/schema';
 import { TEMPLATE_MANIFEST, CATEGORIES } from '../src/templates/manifest';
+import { AD_FILM_TEMPLATES, SCENE_VARIANTS, type SceneVariant } from '../src/templates/catalog';
+import { lookPreset } from '../src/templates/_shared/look';
 
 /**
  * `npm run lint:templates` (§7).
@@ -22,7 +24,9 @@ import { TEMPLATE_MANIFEST, CATEGORIES } from '../src/templates/manifest';
  */
 
 const TEMPLATE_ROOT = resolve(process.cwd(), 'src/templates');
-const IGNORED_DIRS = new Set(['_shared', '_demo']);
+// The catalogue's data and family code are not template files (D-119); the
+// templates they make are checked below, from the catalogue itself.
+const IGNORED_DIRS = new Set(['_shared', '_demo', '_catalog', '_families']);
 
 async function templateFiles(): Promise<string[]> {
   const entries = await readdir(TEMPLATE_ROOT, { withFileTypes: true });
@@ -86,6 +90,36 @@ async function main(): Promise<void> {
     seen.set(template.id, relative);
   }
 
+  // ── The catalogue (D-119) ─────────────────────────────────────────────────
+  // Variants are made by their family's code; films are data. Both are held to
+  // the same rules as a template file.
+  const families = new Map<string, (variant: SceneVariant) => Template>();
+  const catalogued: Template[] = [...AD_FILM_TEMPLATES];
+  for (const variant of SCENE_VARIANTS) {
+    let make = families.get(variant.family);
+    if (!make) {
+      const module = (await import(pathToFileURL(resolve(TEMPLATE_ROOT, '_families', `${variant.family}.ts`)).href)) as { create?: (v: SceneVariant) => Template };
+      if (!module.create) {
+        issues.push({ templateId: variant.id, message: `family "${variant.family}" exports no create()` });
+        continue;
+      }
+      make = module.create;
+      families.set(variant.family, make);
+    }
+    catalogued.push(make(variant));
+  }
+  for (const template of catalogued) {
+    const where = `catalogue (${template.kind === 'ad' ? 'film' : 'variant'})`;
+    loaded.push({ template, file: where });
+    issues.push(...validateTemplate(template));
+    if (!CATEGORIES.includes(template.category)) {
+      issues.push({ templateId: template.id, message: `category "${template.category}" is not in the manifest's CATEGORIES` });
+    }
+    const duplicate = seen.get(template.id);
+    if (duplicate) issues.push({ templateId: template.id, message: `duplicate id, also declared by ${duplicate}` });
+    seen.set(template.id, where);
+  }
+
   // ── Manifest agreement ────────────────────────────────────────────────────
   // The library grid renders from the manifest without loading template code
   // (D-029), so drift between the two ships a card that opens something else.
@@ -112,7 +146,10 @@ async function main(): Promise<void> {
       if (summary.sceneCount !== template.scenes.length) mismatches.push('sceneCount');
       if (summary.durationMs !== template.defaultDurationMs) mismatches.push('durationMs');
       if (summary.blurb !== template.blurb) mismatches.push('blurb');
+      if (summary.look !== template.paletteId) mismatches.push('look (the ad\'s paletteId)');
     }
+
+    if (summary.look !== undefined && !lookPreset(summary.look)) mismatches.push(`look ("${summary.look}" is not one of the Style tab's looks)`);
 
     for (const field of mismatches) {
       issues.push({ templateId: template.id, message: `manifest disagrees with the template on ${field}` });
