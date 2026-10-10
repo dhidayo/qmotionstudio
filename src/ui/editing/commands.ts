@@ -337,6 +337,19 @@ export function backgroundMenu(layout: Layout): readonly MenuItem[] {
   ];
 }
 
+/**
+ * A longer video from the design on screen (D-129): "add a button somewhere
+ * to create multi-scene videos from Showcase … continue with design as scene
+ * 1". Corporate Ads keeps the current design as its first scene (setMode
+ * always has), then the scene picker opens for the second. One undo goes back.
+ */
+export function continueAsVideo(): void {
+  const s = useEditor.getState();
+  if (s.project.mode !== 'motionAd') s.setMode('motionAd');
+  useOverlays.getState().openScenePicker('add');
+  s.showToast('Your design is scene 1. Pick what comes next.');
+}
+
 /** Where a scene sits on the project clock, for "Move playhead here". */
 export function sceneStartMs(index: number): number {
   return sceneSpans(useEditor.getState().project.scenes)[index]?.startMs ?? 0;

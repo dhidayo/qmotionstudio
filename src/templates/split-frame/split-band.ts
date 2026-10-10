@@ -161,7 +161,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     baseSizePx: unit * 0.022,
     maxWidthPx: typeW,
     reveal: { kind: 'fade', startMs: 1_900, durationMs: 460 },
-    fallbackFill: roleFill('bg'),
+    // On the accent button: whatever reads there, not the background (D-126).
+    fallbackFill: roleFill('onAccent'),
   });
 
   const eyeRun = ctx.measure(specFor(eyebrow, fontString(eyebrow.fontId, eyebrow.fontSizePx, eyebrow.weight)));

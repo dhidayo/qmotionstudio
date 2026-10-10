@@ -275,6 +275,8 @@ function MediaPicker({
 
 /** The subset of §8.2's text block that means something without a template slot. */
 export function TextStyleControls({ id, style }: { id: string; style: TextStyle }): React.JSX.Element {
+  // No colour of its own means the look's ink: show that, not white (D-121's light looks).
+  const ink = useEditor((st) => st.project.scenes[st.selectedScene]?.inputs.look.palette.ink ?? '#ffffff');
   const dispatch = useEditor((s) => s.dispatch);
   const patch = (fields: Partial<TextStyle>, options?: { coalesceKey?: string }): void => {
     dispatch(actions.setOverlayTextStyle(id, fields, {
@@ -319,7 +321,7 @@ export function TextStyleControls({ id, style }: { id: string; style: TextStyle 
       />
       <Row label="Colour">
         <ColorField
-          value={style.color.length > 0 ? style.color : '#ffffff'}
+          value={style.color.length > 0 ? style.color : ink}
           onChange={(color) => { patch({ color }, { coalesceKey: `overlayColor:${id}` }); }}
           label="Text colour"
         />

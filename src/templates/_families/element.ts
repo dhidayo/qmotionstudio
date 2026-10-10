@@ -110,7 +110,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           tracks: { scaleX: [kf(landAt, 0), kf(landAt + 450, 1, 'outBack')], scaleY: [kf(landAt, 0), kf(landAt + 450, 1, 'outBack')] },
         }));
         layers.push(placeText(ctx, slot('button'), inputs, {
-          sizePx: u * 0.032, maxWidthPx: btnW * 0.9, x: btnX, y: cy - u * 0.02, fill: roleFill('bg'), reveal: FADE(landAt + 250),
+          sizePx: u * 0.032, maxWidthPx: btnW * 0.9, x: btnX, y: cy - u * 0.02, fill: roleFill('onAccent'), reveal: FADE(landAt + 250),
         }).layer);
         for (let i = 0; i < 2; i++) {
           layers.push(rect(ctx, 'ring', {
@@ -148,7 +148,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           w: btnW, h: btnH, x: cx - btnW / 2, y: btnY, anchorX: 0, radius: btnH / 2, fill: roleFill('accent'),
           tracks: { scaleX: [kf(at + 500, 0.001), kf(at + 1100, 1, 'inOutCubic')] },
         }));
-        layers.push(placeText(ctx, slot('button'), inputs, { sizePx: u * 0.04, maxWidthPx: btnW * 0.9, x: cx, y: btnY - u * 0.026, fill: roleFill('bg'), reveal: FADE(at + 700) }).layer);
+        layers.push(placeText(ctx, slot('button'), inputs, { sizePx: u * 0.04, maxWidthPx: btnW * 0.9, x: cx, y: btnY - u * 0.026, fill: roleFill('onAccent'), reveal: FADE(at + 700) }).layer);
         break;
       }
 
@@ -160,7 +160,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           tracks: { scaleX: [kf(at, 1.8), kf(at + 380, 1, 'outBack')], scaleY: [kf(at, 1.8), kf(at + 380, 1, 'outBack')], opacity: [kf(at, 0), kf(at + 200, 1)], rotation: [kf(at, -18), kf(at + 380, 0, 'outBack')] },
         }));
         layers.push(rect(ctx, 'sealEdge', {
-          w: r * 1.78, h: r * 1.78, x: cx, y: cy, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('bg', 0.5), width: Math.max(2, u * 0.004) },
+          w: r * 1.78, h: r * 1.78, x: cx, y: cy, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('onAccent', 0.5), width: Math.max(2, u * 0.004) },
           tracks: { opacity: [kf(at + 300, 0), kf(at + 600, 1)] },
         }));
         // Ticks round the seal, turning slowly.
@@ -177,8 +177,8 @@ export function create(variant: SceneVariant): SceneTemplate {
             },
           }));
         }
-        layers.push(placeText(ctx, slot('ring'), inputs, { sizePx: u * 0.028, maxWidthPx: r * 1.5, x: cx, y: cy - r * 0.62, fill: roleFill('bg'), reveal: FADE(at + 500) }).layer);
-        layers.push(placeText(ctx, headline, inputs, { sizePx: u * 0.06, maxWidthPx: r * 1.5, x: cx, y: cy - u * 0.045, fill: roleFill('bg'), reveal: POP(at + 450) }).layer);
+        layers.push(placeText(ctx, slot('ring'), inputs, { sizePx: u * 0.028, maxWidthPx: r * 1.5, x: cx, y: cy - r * 0.62, fill: roleFill('onAccent'), reveal: FADE(at + 500) }).layer);
+        layers.push(placeText(ctx, headline, inputs, { sizePx: u * 0.06, maxWidthPx: r * 1.5, x: cx, y: cy - u * 0.045, fill: roleFill('onAccent'), reveal: POP(at + 450) }).layer);
         break;
       }
 
@@ -206,7 +206,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             return { x: cx + Math.cos(rad) * along, y: cy + Math.sin(rad) * along - size * 0.62, rotation: angle };
           });
           const placed = placeText(ctx, headline, inputs, {
-            sizePx: size, maxWidthPx: run.width + 4, x: 0, y: 0, anchorX: 0, fill: roleFill('bg'), reveal: { kind: 'fade', startMs: 300, durationMs: 400 }, tracks,
+            sizePx: size, maxWidthPx: run.width + 4, x: 0, y: 0, anchorX: 0, fill: roleFill('onAccent'), reveal: { kind: 'fade', startMs: 300, durationMs: 400 }, tracks,
           });
           // Only the first copy is the editable original; the rest repeat its words.
           layers.push(isFirst ? placed.layer : unslotted(placed.layer, words('headline')));
@@ -223,7 +223,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           fill: roleFill('accent'), radius: u * 0.01,
           tracks: { scaleX: [kf(250, 0.001), kf(900, 1, 'inOutCubic')] },
         }));
-        layers.push(placeText(ctx, headline, inputs, { sizePx: size, maxWidthPx: safe.w * 0.9, x: cx, y: top, fill: roleFill('bg'), reveal: { kind: 'maskWipe', dir: 'right', startMs: 450, durationMs: 650 } }).layer);
+        layers.push(placeText(ctx, headline, inputs, { sizePx: size, maxWidthPx: safe.w * 0.9, x: cx, y: top, fill: roleFill('onAccent'), reveal: { kind: 'maskWipe', dir: 'right', startMs: 450, durationMs: 650 } }).layer);
         layers.push(placeText(ctx, subline, inputs, { sizePx: u * 0.036, maxWidthPx: safe.w * 0.85, x: cx, y: top + head.height + u * 0.06, fill: roleFill('inkMuted'), reveal: FADE(1200) }).layer);
         break;
       }
@@ -258,7 +258,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         }));
         const size = u * 0.085;
         layers.push(placeText(ctx, headline, inputs, {
-          sizePx: size, maxWidthPx: safe.w * 0.9, x: cx, y: cy - size * 0.6, fill: roleFill('bg'), reveal: POP(800),
+          sizePx: size, maxWidthPx: safe.w * 0.9, x: cx, y: cy - size * 0.6, fill: roleFill('onAccent'), reveal: POP(800),
           tracks: { rotation: [kf(0, angle)] },
         }).layer);
         layers.push(placeText(ctx, subline, inputs, { sizePx: u * 0.036, maxWidthPx: safe.w * 0.85, x: cx, y: cy + bandH * 0.9, fill: roleFill('inkMuted'), reveal: FADE(1300) }).layer);
@@ -356,7 +356,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             const centre = x + chip.w / 2;
             const bob = sampled(0, durationMs, 100, (ms) => ({ x: centre, y: y + Math.sin(ms / 700 + k) * u * 0.006 * Math.min(1, Math.max(0, (ms - at - 500) / 400)), scale: ms < at ? 0 : ms < at + 450 ? Math.min(1.08, ((ms - at) / 450) * 1.12) : 1 }));
             layers.push(rect(ctx, 'chip', { w: chip.w, h: chipH, x: centre, y, radius: chipH / 2, fill: k % 3 === 0 ? roleFill('accent') : roleFill('surface'), stroke: { paint: roleFill('ink', 0.14), width: Math.max(1, u * 0.002) }, tracks: bob }));
-            const label = placeText(ctx, slot('chips'), inputs, { sizePx: size, maxWidthPx: chip.w, x: centre, y: y - size * 0.62, fill: k % 3 === 0 ? roleFill('bg') : roleFill('ink'), reveal: { kind: 'fade', startMs: at + 150, durationMs: 300 }, tracks: { ...bob, y: (bob.y ?? []).map((key) => ({ ...key, v: key.v - size * 0.62 })) } });
+            const label = placeText(ctx, slot('chips'), inputs, { sizePx: size, maxWidthPx: chip.w, x: centre, y: y - size * 0.62, fill: k % 3 === 0 ? roleFill('onAccent') : roleFill('ink'), reveal: { kind: 'fade', startMs: at + 150, durationMs: 300 }, tracks: { ...bob, y: (bob.y ?? []).map((key) => ({ ...key, v: key.v - size * 0.62 })) } });
             layers.push(unslotted(label.layer, chip.item));
             x += chip.w + size * 0.6;
             k += 1;
@@ -413,7 +413,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           const pillH = u * 0.1;
           const py = top + head.height + u * 0.1;
           layers.push(rect(ctx, 'pill', { w: pillW, h: pillH, x: cx, y: py, radius: pillH / 2, fill: roleFill('accent'), tracks: { scaleX: [kf(at, 2.2), kf(at + 320, 1, 'outBack')], scaleY: [kf(at, 2.2), kf(at + 320, 1, 'outBack')], opacity: [kf(at, 0), kf(at + 150, 1)], rotation: [kf(at, -8), kf(at + 320, -3, 'outBack')] } }));
-          layers.push(placeText(ctx, slot('promise'), inputs, { sizePx: u * 0.042, maxWidthPx: pillW * 0.9, x: cx, y: py - u * 0.028, fill: roleFill('bg'), reveal: FADE(at + 200), tracks: { rotation: [kf(0, -3)] } }).layer);
+          layers.push(placeText(ctx, slot('promise'), inputs, { sizePx: u * 0.042, maxWidthPx: pillW * 0.9, x: cx, y: py - u * 0.028, fill: roleFill('onAccent'), reveal: FADE(at + 200), tracks: { rotation: [kf(0, -3)] } }).layer);
         }
         if (kind === 'eyebrow' || kind === 'split') {
           layers.push(placeText(ctx, subline, inputs, { sizePx: u * 0.036, maxWidthPx: safe.w * 0.85, x: cx, y: top + head.height + u * (kind === 'eyebrow' ? 0.09 : 0.04), fill: roleFill('inkMuted'), reveal: FADE(1500) }).layer);
@@ -431,7 +431,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         const btnH = u * 0.095;
         const by = cy - u * 0.11 + head.height + u * 0.1;
         layers.push(rect(ctx, 'button', { w: btnW, h: btnH, x: cx, y: by, radius: btnH / 2, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 1000, 0), kf(at + 1450, 1, 'outBack')], scaleY: [kf(at + 1000, 0), kf(at + 1450, 1, 'outBack')] } }));
-        layers.push(placeText(ctx, slot('button'), inputs, { sizePx: u * 0.036, maxWidthPx: btnW * 0.9, x: cx, y: by - u * 0.023, fill: roleFill('bg'), reveal: FADE(at + 1300) }).layer);
+        layers.push(placeText(ctx, slot('button'), inputs, { sizePx: u * 0.036, maxWidthPx: btnW * 0.9, x: cx, y: by - u * 0.023, fill: roleFill('onAccent'), reveal: FADE(at + 1300) }).layer);
         layers.push(placeText(ctx, slot('site'), inputs, { sizePx: u * 0.03, maxWidthPx: safe.w * 0.8, x: cx, y: by + btnH, fill: roleFill('inkMuted'), reveal: FADE(at + 1700) }).layer);
         break;
       }
@@ -487,7 +487,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         const slide: Tracks = { y: [kf(100, cardY - u * 0.1), kf(800, cardY, 'outBack')], opacity: [kf(100, 0), kf(400, 1)] };
         layers.push(rect(ctx, 'card', { w: cardW, h: cardH, x: cx, y: cardY, radius: u * 0.03, fill: roleFill('surface'), stroke: { paint: roleFill('ink', 0.12), width: Math.max(1, u * 0.002) }, tracks: slide }));
         layers.push(rect(ctx, 'cardTop', { w: cardW, h: cardH * 0.26, x: cx, y: cardY - cardH / 2, anchorY: 0, radius: u * 0.03, fill: roleFill('accent'), tracks: { y: (slide.y ?? []).map((key) => ({ ...key, v: key.v - cardH / 2 })), opacity: slide.opacity ?? [] } }));
-        layers.push(placeText(ctx, slot('month'), inputs, { sizePx: u * 0.045, maxWidthPx: cardW, x: cx, y: cardY - cardH / 2 + cardH * 0.04, fill: roleFill('bg'), reveal: FADE(700) }).layer);
+        layers.push(placeText(ctx, slot('month'), inputs, { sizePx: u * 0.045, maxWidthPx: cardW, x: cx, y: cardY - cardH / 2 + cardH * 0.04, fill: roleFill('onAccent'), reveal: FADE(700) }).layer);
         layers.push(placeText(ctx, slot('day'), inputs, { sizePx: u * 0.17, maxWidthPx: cardW, x: cx, y: cardY - cardH * 0.16, reveal: { kind: 'count', startMs: 700, durationMs: 900 } }).layer);
         const head = placeText(ctx, headline, inputs, { sizePx: u * 0.065, maxWidthPx: safe.w * 0.9, x: cx, y: cardY + cardH / 2 + u * 0.06, reveal: RISE(1100) });
         layers.push(head.layer);
@@ -505,7 +505,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           }));
         }
         layers.push(placeText(ctx, headline, inputs, { sizePx: u * 0.07, maxWidthPx: safe.w * 0.9, x: cx, y: by - r * 1.55, reveal: RISE(150) }).layer);
-        layers.push(placeText(ctx, slot('price'), inputs, { sizePx: u * 0.14, maxWidthPx: r * 1.8, x: cx, y: by - u * 0.09, fill: roleFill('bg'), reveal: POP(950) }).layer);
+        layers.push(placeText(ctx, slot('price'), inputs, { sizePx: u * 0.14, maxWidthPx: r * 1.8, x: cx, y: by - u * 0.09, fill: roleFill('onAccent'), reveal: POP(950) }).layer);
         const was = placeText(ctx, slot('was'), inputs, { sizePx: u * 0.05, maxWidthPx: r * 1.6, x: cx, y: by + r * 1.05, fill: roleFill('inkMuted'), reveal: FADE(1300) });
         layers.push(was.layer);
         layers.push(rect(ctx, 'strike', { w: was.width + u * 0.02, h: Math.max(3, u * 0.006), x: cx, y: by + r * 1.05 + was.height * 0.5, fill: roleFill('inkMuted'), tracks: { scaleX: [kf(1600, 0), kf(1900, 1, 'outCubic')] } }));

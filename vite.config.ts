@@ -60,7 +60,7 @@ export default defineConfig({
         name: 'Q Motion Studio',
         short_name: 'Q Motion',
         description: 'Turn photographs into motion. Everything stays on your device.',
-        theme_color: '#0d0d10',
+        theme_color: '#0d1b45',
         background_color: '#0d0d10',
         display: 'standalone',
         orientation: 'any',
@@ -95,7 +95,8 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'pictures',
-              expiration: { maxEntries: 120 },
+              // Every card's poster, and the samples, with room to grow.
+              expiration: { maxEntries: 600 },
             },
           },
         ],

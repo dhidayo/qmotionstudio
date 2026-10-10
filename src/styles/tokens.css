@@ -22,11 +22,18 @@
   /* Readable as small print on white (about 3.6:1), not just present. */
   --c-ink-faint: #85858f;
 
-  /* Accent */
-  --c-accent: #4f46e5;
-  --c-accent-hover: #4338ca;
+  /* Brand (D-128): deep navy with off-white — the product's own colour, on
+     its bars and headings. "A deep navy blue color for the background and
+     offwhite color for the text… Make deep navy blue one of my main colors." */
+  --c-brand: #0d1b45;
+  --c-brand-hover: #182a63;
+  --c-brand-ink: #f7f4ec;
+
+  /* Accent: a clear blue from the same family, for actions and selection. */
+  --c-accent: #2546c4;
+  --c-accent-hover: #1c39a6;
   --c-accent-ink: #ffffff;
-  --c-accent-soft: #eeedfd;
+  --c-accent-soft: #e8ecfb;
 
   /* Status */
   --c-pro: #b45309;
@@ -77,10 +84,15 @@
   --c-ink-muted: #b4b4be;
   --c-ink-faint: #8c8c98;
 
-  --c-accent: #7d76f6;
-  --c-accent-hover: #8f89f8;
-  --c-accent-ink: #ffffff;
-  --c-accent-soft: #2a2850;
+  /* A step lighter than the light theme's, to stand off the dark panels. */
+  --c-brand: #15285f;
+  --c-brand-hover: #1e3373;
+  --c-brand-ink: #f7f4ec;
+
+  --c-accent: #6f8dff;
+  --c-accent-hover: #89a2ff;
+  --c-accent-ink: #0d1b45;
+  --c-accent-soft: #1b2552;
 
   --c-pro: #fbbf24;
   --c-pro-soft: #3a2d10;

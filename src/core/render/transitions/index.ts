@@ -1,4 +1,5 @@
 import type { Ctx2D, Direction, Size } from '@/core/types';
+import { context2d, type AnyCanvas } from '../surface';
 import type { TransitionKind } from '@/document/types';
 import { applyEase } from '@/core/anim/easings';
 
@@ -27,13 +28,13 @@ export type TransitionOptions = {
   readonly size: Size;
   readonly direction: Direction;
   /** A third full-size surface, for transitions that cannot read and write one canvas. */
-  readonly scratch: OffscreenCanvas;
+  readonly scratch: AnyCanvas;
 };
 
 export type TransitionFn = (
   out: Ctx2D,
-  a: OffscreenCanvas,
-  b: OffscreenCanvas,
+  a: AnyCanvas,
+  b: AnyCanvas,
   progress: number,
   options: TransitionOptions,
 ) => void;
@@ -41,7 +42,7 @@ export type TransitionFn = (
 const clamp01 = (p: number): number => (p < 0 ? 0 : p > 1 ? 1 : p);
 
 /** Draws a whole buffer at 1:1 with the identity transform already set by the caller. */
-function blit(out: Ctx2D, source: OffscreenCanvas, size: Size): void {
+function blit(out: Ctx2D, source: AnyCanvas, size: Size): void {
   out.drawImage(source, 0, 0, size.w, size.h);
 }
 
@@ -164,7 +165,7 @@ function edgeEnd(direction: Direction, size: Size, edge: number, feather: number
  */
 export const zoomBlur: TransitionFn = (out, a, b, progress, { size, scratch }) => {
   const p = clamp01(progress);
-  const ctx = scratch.getContext('2d');
+  const ctx = context2d(scratch);
   if (!ctx) throw new Error('zoomBlur: the scratch buffer has no 2D context.');
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -177,7 +178,7 @@ export const zoomBlur: TransitionFn = (out, a, b, progress, { size, scratch }) =
   const cx = size.w / 2;
   const cy = size.h / 2;
 
-  const smear = (source: OffscreenCanvas, baseScale: number, alpha: number, spread: number): void => {
+  const smear = (source: AnyCanvas, baseScale: number, alpha: number, spread: number): void => {
     for (let i = 0; i < steps; i++) {
       const t = i / (steps - 1);
       const scale = baseScale * (1 + spread * t);
@@ -227,7 +228,7 @@ export const scale: TransitionFn = (out, a, b, progress, { size }) => {
   const cx = size.w / 2;
   const cy = size.h / 2;
 
-  const draw = (source: OffscreenCanvas, factor: number, alpha: number): void => {
+  const draw = (source: AnyCanvas, factor: number, alpha: number): void => {
     const w = size.w * factor;
     const h = size.h * factor;
     out.globalAlpha = alpha;

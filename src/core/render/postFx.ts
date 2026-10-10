@@ -1,4 +1,5 @@
 import type { Ctx2D, Size } from '@/core/types';
+import { makeCanvas, context2d, type AnyCanvas } from './surface';
 
 /**
  * Frame post-effects: grain and vignette (§8.4).
@@ -10,7 +11,7 @@ import type { Ctx2D, Size } from '@/core/types';
 /** One tile, generated once and repeated. */
 const NOISE_TILE = 128;
 
-let noisePattern: { canvas: OffscreenCanvas } | null = null;
+let noisePattern: { canvas: AnyCanvas } | null = null;
 
 /**
  * Builds the grain tile.
@@ -21,11 +22,11 @@ let noisePattern: { canvas: OffscreenCanvas } | null = null;
  * per frame — which is what makes it read as moving grain rather than as a
  * static texture stuck to the screen.
  */
-function noiseTile(): OffscreenCanvas {
+function noiseTile(): AnyCanvas {
   if (noisePattern) return noisePattern.canvas;
 
-  const canvas = new OffscreenCanvas(NOISE_TILE, NOISE_TILE);
-  const ctx = canvas.getContext('2d');
+  const canvas = makeCanvas(NOISE_TILE, NOISE_TILE);
+  const ctx = context2d(canvas);
   if (!ctx) throw new Error('postFx: could not acquire a 2D context for the grain tile.');
 
   const image = ctx.createImageData(NOISE_TILE, NOISE_TILE);

@@ -9,8 +9,42 @@ import type { Paint, Palette } from '@/core/types';
  */
 export function resolvePaint(paint: Paint, palette: Palette): string {
   if (paint.kind === 'color') return paint.value;
-  const base = palette[paint.role];
+  const base = paint.role === 'onAccent' ? onAccent(palette.accent) : palette[paint.role];
   return paint.alpha === undefined ? base : withAlpha(base, paint.alpha);
+}
+
+const ON_LIGHT = '#141418';
+const ON_DARK = '#ffffff';
+const onAccentCache = new Map<string, string>();
+
+/**
+ * What reads on the accent (D-126): near-black or white, whichever has the
+ * higher contrast with it. Per accent colour, remembered — it is asked for on
+ * every frame by every button.
+ */
+export function onAccent(accent: string): string {
+  const known = onAccentCache.get(accent);
+  if (known !== undefined) return known;
+  const l = luminance(accent);
+  // Contrast against white and against near-black (luminance ~0.007).
+  const withWhite = 1.05 / (l + 0.05);
+  const withBlack = (l + 0.05) / (0.007 + 0.05);
+  const chosen = withBlack > withWhite ? ON_LIGHT : ON_DARK;
+  if (onAccentCache.size > 64) onAccentCache.clear();
+  onAccentCache.set(accent, chosen);
+  return chosen;
+}
+
+/** WCAG relative luminance of #rgb / #rrggbb; mid-grey for anything else. */
+function luminance(color: string): number {
+  const hex = color.trim().replace(/^#/, '');
+  const full = hex.length === 3 ? hex.replace(/./g, (c) => c + c) : hex.slice(0, 6);
+  if (!/^[0-9a-f]{6}$/i.test(full)) return 0.2;
+  const channel = (i: number): number => {
+    const c = Number.parseInt(full.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
 }
 
 /** Accepts #rgb, #rrggbb and #rrggbbaa; multiplies any existing alpha. */

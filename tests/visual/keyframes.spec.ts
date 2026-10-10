@@ -264,7 +264,8 @@ test.describe('clicking the timeline moves the playhead', () => {
     expect(await now(page)).toBe(before);
 
     await page.mouse.click(at.x, at.y);
-    expect(await now(page)).toBeLessThan(before);
+    // The seek lands on the next render, not inside the click.
+    await expect.poll(() => now(page)).toBeLessThan(before);
   });
 
   test('the empty music row is a time axis like any other', async ({ page }) => {

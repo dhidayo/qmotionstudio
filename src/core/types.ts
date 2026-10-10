@@ -41,11 +41,20 @@ export type Palette = Record<PaletteRole, string>;
  * re-running the template's build() — which the spec forbids inside the render
  * loop (§16) but would otherwise happen sixty times a second.
  */
+/**
+ * A palette role, or `onAccent`: words and marks drawn *on* the accent colour
+ * — a button's label, a seal's lettering, a price in a starburst. It is not a
+ * colour anyone sets; it is white or near-black, whichever reads on the accent
+ * (D-126). It used to be the background colour, which made the Style tab's
+ * "Background" change the lettering on every button.
+ */
+export type PaintRole = PaletteRole | 'onAccent';
+
 export type Paint =
   | { readonly kind: 'color'; readonly value: string }
-  | { readonly kind: 'role'; readonly role: PaletteRole; readonly alpha?: number };
+  | { readonly kind: 'role'; readonly role: PaintRole; readonly alpha?: number };
 
-export const roleFill = (role: PaletteRole, alpha?: number): Paint =>
+export const roleFill = (role: PaintRole, alpha?: number): Paint =>
   alpha === undefined ? { kind: 'role', role } : { kind: 'role', role, alpha };
 
 export const colorFill = (value: string): Paint => ({ kind: 'color', value });

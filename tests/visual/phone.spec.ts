@@ -219,6 +219,8 @@ test.describe('fingers on the canvas', () => {
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     const menu = page.getByRole('menu');
     await expect(menu).toBeVisible();
+    // The lift of the long press is not a tap on the menu (the ghost-click guard); a real tap comes after it.
+    await page.waitForTimeout(600);
     await menu.getByRole('menuitem', { name: /^Change background/ }).click();
     // Style, on its Background tab.
     await expect(page.getByRole('tab', { name: 'Background', selected: true })).toBeVisible();

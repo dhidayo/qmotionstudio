@@ -1,4 +1,5 @@
 import type { Ctx2D, FxParamValue, Palette, Size } from '@/core/types';
+import { type AnyCanvas } from '@/core/render/surface';
 
 /**
  * The effect library's vocabulary (D-100).
@@ -134,7 +135,7 @@ export type FrameIO = {
   /** Design units → pixels. */
   readonly scale: number;
   /** A scratch surface the size of the frame, cleared, by index (0–2). */
-  scratch(index: number): { readonly canvas: OffscreenCanvas; readonly ctx: Ctx2D };
+  scratch(index: number): { readonly canvas: AnyCanvas; readonly ctx: Ctx2D };
 };
 
 export type FrameEffectDef = {

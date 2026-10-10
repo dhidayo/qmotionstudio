@@ -79,7 +79,7 @@ export function Inspector(): React.JSX.Element {
       style={{ width: 'var(--w-inspector)' }}
       aria-label="Inspector"
     >
-      <div className="flex border-b border-edge" role="tablist">
+      <div className="brand-surface flex border-b border-edge" role="tablist">
         {TABS.map(({ id, label }) => (
           <button
             key={id}

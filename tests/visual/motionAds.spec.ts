@@ -135,10 +135,11 @@ test.describe('scene sequencing', () => {
   test('Showcase keeps its slider and Motion Ads gets the track timeline (§1.1, §1.2)', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('canvas');
-    await expect(page.getByLabel('Timeline')).toBeHidden();
+    // Exact: the library has designs called "Timeline Arc" and so on.
+    await expect(page.getByLabel('Timeline', { exact: true })).toBeHidden();
 
     await page.getByRole('button', { name: 'Corporate Ads' }).click();
-    await expect(page.getByLabel('Timeline')).toBeVisible();
+    await expect(page.getByLabel('Timeline', { exact: true })).toBeVisible();
     // The music row is real since M6; it invites a track rather than promising one.
     await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
   });

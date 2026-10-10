@@ -12,8 +12,6 @@ import { expect, test, type Page } from '@playwright/test';
 
 test.use({ viewport: { width: 1500, height: 1003 } });
 
-type Harness = { __motionStudio: { editor: { getState: () => { setTemplate: (id: string) => void } } } };
-
 async function open(page: Page, url = '/'): Promise<void> {
   await page.goto(url);
   await page.waitForSelector('canvas');
@@ -107,6 +105,6 @@ test('designs open in looks of their own, light and dark', async ({ page }) => {
   expect(cream).toBeGreaterThan(180);
 
   // Picking another design from the library brings its look with it.
-  await page.evaluate(() => { (globalThis as unknown as Harness).__motionStudio.editor.getState().setTemplate('type-mask-wipe'); });
+  await page.locator('[data-design-card="type-mask-wipe"]').click();
   await expect.poll(async () => brightness(await corner(page))).toBeLessThan(70);
 });

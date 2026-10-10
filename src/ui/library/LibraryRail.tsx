@@ -127,7 +127,7 @@ export function LibraryRail({
             const open = !folded(category);
             const id = `library-${category.toLowerCase().replace(/\s+/g, '-')}`;
             return (
-            <section key={category} className={open ? 'mb-4 last:mb-0' : 'mb-1'} data-library-category={category}>
+            <section key={category} className={open ? 'mb-4 last:mb-0' : 'mb-1.5'} data-library-category={category}>
               {/* A category folds away (D-123): the library is long, and most visits want one corner of it. */}
               <h3>
                 <button
@@ -135,15 +135,15 @@ export function LibraryRail({
                   onClick={() => { toggle(category); }}
                   aria-expanded={open}
                   aria-controls={id}
-                  className={`flex w-full items-center gap-1.5 rounded-md py-1 text-left font-semibold uppercase tracking-wider text-ink-faint hover:text-ink ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
+                  className={`brand-surface flex w-full items-center gap-2 rounded-lg px-3 text-left font-semibold uppercase tracking-wider hover:bg-[var(--c-brand-hover)] ${sheet ? 'py-3 text-[13px]' : 'py-2.5 text-[11px]'}`}
                 >
                   <span aria-hidden className="inline-block w-3 text-center transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
                   <span className="min-w-0 flex-1 truncate">{category}</span>
-                  <span className="tabular font-normal normal-case tracking-normal">{inCategory.length}</span>
+                  <span className="tabular rounded-full px-2 py-0.5 font-normal normal-case tracking-normal" style={{ background: 'rgb(255 255 255 / 0.14)' }}>{inCategory.length}</span>
                 </button>
               </h3>
               {open && (
-              <div id={id} className={`mt-1 ${sheet ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-2 gap-2'}`}>
+              <div id={id} className={`mt-2 ${sheet ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-2 gap-2'}`}>
                 {inCategory
                   .map((template) => (
                     <TemplateCard

@@ -1,4 +1,5 @@
 import type { Ctx2D } from '@/core/types';
+import { makeCanvas, context2d, type AnyCanvas } from './surface';
 
 /**
  * Layer blur (§6.1's `blur` animated prop).
@@ -24,7 +25,7 @@ const MAX_DOWNSCALE = 24;
 /** Guards against a pathological layer size allocating gigabytes. */
 const MAX_SCRATCH_PIXELS = 32_000_000;
 
-type Surface = { canvas: OffscreenCanvas; ctx: Ctx2D };
+type Surface = { canvas: AnyCanvas; ctx: Ctx2D };
 
 /**
  * Three surfaces per nesting depth: one to draw into, two to ping-pong the
@@ -37,8 +38,8 @@ const pool: Surface[] = [];
 function surfaceAt(slot: number, w: number, h: number): Surface {
   let entry = pool[slot];
   if (!entry) {
-    const canvas = new OffscreenCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)));
-    const ctx = canvas.getContext('2d');
+    const canvas = makeCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)));
+    const ctx = context2d(canvas);
     if (!ctx) throw new Error('blur: could not acquire a 2D context for a scratch surface.');
     entry = { canvas, ctx };
     pool[slot] = entry;

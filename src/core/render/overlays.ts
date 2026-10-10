@@ -172,7 +172,7 @@ function contentLayer(
     case 'text': {
       const style = overlay.content.style;
       const fontSizePx = unit * TEXT_BASE * (style.sizePct / 100);
-      const fill: Paint = style.color.length > 0 ? colorFill(style.color) : roleFill('ink');
+      const fill: Paint = style.color.length > 0 ? colorFill(style.color) : style.pill ? roleFill('onAccent') : roleFill('ink');
       const maxWidthPx = style.wrap ? unit * 0.8 * (style.wrapWidthPct / 100) : null;
 
       return {

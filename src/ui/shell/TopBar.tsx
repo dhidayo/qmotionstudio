@@ -17,7 +17,7 @@ export function TopBar(): React.JSX.Element {
 
   return (
     <header
-      className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge bg-panel px-3 lg:gap-4"
+      className="brand-surface flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge bg-panel px-3 lg:gap-4"
       style={{ height: 'var(--h-topbar)' }}
     >
       <div className="flex shrink-0 items-center gap-2 pr-1">

@@ -644,3 +644,53 @@ test.describe('audio export (§10, M6)', () => {
     });
   }
 });
+
+test.describe('saving to Photos on a phone (D-125)', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(EXPORT_TIMEOUT_MS);
+    await captureDownloads(page);
+    // A touch screen that can share files, as an iPhone's Safari is. The
+    // sheet itself belongs to the phone; what is checked is that the finished
+    // video goes to it, whole, from the tap — and not to a download first.
+    await page.addInitScript(() => {
+      const real = window.matchMedia.bind(window);
+      window.matchMedia = (query: string): MediaQueryList => (query === '(pointer: coarse)'
+        ? { matches: true, media: query, onchange: null, addListener: () => undefined, removeListener: () => undefined, addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false }
+        : real(query));
+      const store = globalThis as unknown as { __shared?: { name: string; size: number; type: string } };
+      Object.defineProperty(navigator, 'canShare', { configurable: true, value: (data?: ShareData) => (data?.files?.length ?? 0) > 0 });
+      Object.defineProperty(navigator, 'share', {
+        configurable: true,
+        value: (data: ShareData) => {
+          const file = data.files?.[0];
+          if (file) store.__shared = { name: file.name, size: file.size, type: file.type };
+          return Promise.resolve();
+        },
+      });
+    });
+  });
+
+  test('the finished video is offered to Photos, not dropped in Files', async ({ page }) => {
+    await page.goto('/?template=type-typewriter&aspect=1:1');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(1_500);
+    await page.getByTitle('Export (⌘E)').click();
+    await page.getByRole('button', { name: '720p' }).click();
+    await page.getByRole('button', { name: /^Export$/ }).last().click();
+
+    const offer = page.locator('[data-save-to-photos]');
+    await expect(offer).toBeVisible({ timeout: 180_000 });
+    // No download behind the person's back.
+    expect(await page.evaluate(() => (globalThis as unknown as { __exported?: unknown }).__exported)).toBeUndefined();
+
+    await offer.getByRole('button', { name: /^(Save to Photos|Save or share)$/ }).click();
+    const shared = await page.evaluate(() => (globalThis as unknown as { __shared?: { name: string; size: number; type: string } }).__shared);
+    expect(shared?.name).toMatch(/\.mp4$/);
+    expect(shared?.type).toBe('video/mp4');
+    expect(shared?.size ?? 0).toBeGreaterThan(10_000);
+
+    // Files is still there for whoever wants it.
+    await offer.getByRole('button', { name: 'Save to Files instead' }).click();
+    await waitForExport(page, 10_000);
+  });
+});

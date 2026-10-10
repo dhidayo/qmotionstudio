@@ -9,6 +9,7 @@ import { sceneSpans, timelineSpanMs } from '@/document/select/timeline';
 import { EFFECT_ROW_PX, EffectClipView, laneEffects, packEffectRows } from '@/ui/timeline/EffectRows';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
+import { continueAsVideo } from '@/ui/editing/commands';
 
 /**
  * §1.1: showcase scrubs with a simple slider, not a track timeline.
@@ -111,6 +112,15 @@ export function ScrubBar({
           className="shrink-0 rounded-md border border-edge px-2 py-1 text-[11px] text-ink-muted hover:bg-panel-alt"
         >
           + <span className="hidden sm:inline">Effect</span><span className="sm:hidden">FX</span>
+        </button>}
+        {!phone && <button
+          type="button"
+          data-continue-video
+          onClick={continueAsVideo}
+          title="Make a longer video: this design becomes scene 1 and you pick the next"
+          className="shrink-0 rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink hover:bg-accent-hover"
+        >
+          + Scene
         </button>}
       </div>
       <EffectStrip durationMs={durationMs} onSeek={seek} phone={phone} />

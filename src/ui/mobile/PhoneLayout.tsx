@@ -15,6 +15,7 @@ import { Icon } from './Icon';
 import { PhonePanels } from './PhonePanels';
 import { PhoneToolbar } from './PhoneToolbar';
 import { PhoneTopBar } from './PhoneTopBar';
+import { continueAsVideo } from '@/ui/editing/commands';
 
 /**
  * The editor on a phone (D-109): a layout of its own, not the desktop one
@@ -111,6 +112,7 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
   const shownPlaying = useRef(clock.playing);
   const now = useRef<HTMLSpanElement>(null);
   const durationMs = useEditor((s) => totalDurationMs(s.project));
+  const corporate = useEditor((s) => s.project.mode === 'motionAd');
   // Subscribed so the arrows enable and disable as the history changes.
   useEditor((s) => s.history);
   const { undo, redo, canUndo, canRedo } = useEditor.getState();
@@ -139,7 +141,13 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
       >
         <Icon name={playing ? 'pause' : 'play'} size={20} />
       </button>
-      <span className="flex justify-end gap-1">
+      <span className="flex items-center justify-end gap-1">
+        {/* A longer video from this design (D-129), where the play controls are. */}
+        {!corporate && (
+          <button type="button" data-continue-video onClick={continueAsVideo} className="mr-1 rounded-full bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink">
+            + Scene
+          </button>
+        )}
         <button type="button" onClick={undo} disabled={!canUndo()} aria-label="Undo" className="grid size-9 place-items-center rounded-full disabled:opacity-35">
           <Icon name="undo" size={20} />
         </button>

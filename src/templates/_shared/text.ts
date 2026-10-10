@@ -53,8 +53,9 @@ export function textFor(
   // An explicit colour beats the palette role; an empty string means "use the
   // role", which is what keeps a palette switch repainting rather than
   // rebuilding (D-006).
+  // On a pill the words sit on the accent, so with no colour of their own they take what reads there (D-126).
   const fill: Paint =
-    style.color.length > 0 ? colorFill(style.color) : (options.fallbackFill ?? roleFill('ink'));
+    style.color.length > 0 ? colorFill(style.color) : style.pill ? roleFill('onAccent') : (options.fallbackFill ?? roleFill('ink'));
 
   const shadow = style.shadow
     ? { blur: fontSizePx * 0.28, offsetX: 0, offsetY: fontSizePx * 0.06, paint: colorFill('rgba(0,0,0,0.55)') }

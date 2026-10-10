@@ -22,6 +22,40 @@ import type { MediaStore } from '@/media/store';
  * safe to call before the context is running.
  */
 
+/**
+ * The audio clock, carried between its own updates (D-127).
+ *
+ * `AudioContext.currentTime` moves in steps of the device's audio buffer — on
+ * an iPhone about every 21ms, against a screen that wants a picture every
+ * 16ms. Read raw, some frames repeat the time before and the next jump ahead:
+ * motion that judders — "dragging, not moving in real time" — whenever music
+ * plays. Between steps the time is carried forward on the performance clock,
+ * never more than 50ms past the last step and never backwards, so the picture
+ * moves every frame and still cannot wander from the music.
+ */
+export class ClockSmoother {
+  #lastRaw = -1;
+  #seenAt = 0;
+  #last = Number.NEGATIVE_INFINITY;
+
+  /** `raw` and the result in seconds; `nowMs` from `performance.now()`. */
+  read(raw: number, nowMs: number): number {
+    if (raw !== this.#lastRaw) {
+      this.#lastRaw = raw;
+      this.#seenAt = nowMs;
+    }
+    const ahead = Math.min(0.05, Math.max(0, (nowMs - this.#seenAt) / 1000));
+    const smooth = Math.max(this.#last, raw + ahead);
+    this.#last = smooth;
+    return smooth;
+  }
+
+  reset(): void {
+    this.#lastRaw = -1;
+    this.#last = Number.NEGATIVE_INFINITY;
+  }
+}
+
 export class AudioEngine {
   #ctx: AudioContext | null = null;
   #master: GainNode | null = null;
@@ -58,6 +92,13 @@ export class AudioEngine {
    */
   #generation = 0;
 
+  /** The audio clock between its own steps (D-127); see `ClockSmoother`. */
+  #smoother = new ClockSmoother();
+
+  #smoothTime(ctx: AudioContext): number {
+    return this.#smoother.read(ctx.currentTime, performance.now());
+  }
+
   get hasAudio(): boolean {
     return this.#scheduled.length > 0;
   }
@@ -72,7 +113,7 @@ export class AudioEngine {
     if (!ctx || !this.#running || this.#scheduled.length === 0) return null;
     if (ctx.state !== 'running') return null;
 
-    const elapsed = (ctx.currentTime - this.#originContextTime) * 1000;
+    const elapsed = (this.#smoothTime(ctx) - this.#originContextTime) * 1000;
     const position = this.#originMs + elapsed;
 
     // The visual preview loops, so the audio has to as well; the loop point is
@@ -120,6 +161,7 @@ export class AudioEngine {
 
     this.#originMs = options.fromMs;
     this.#originContextTime = startAt;
+    this.#smoother.reset();
     this.#loopMs = Math.max(0, options.durationMs);
     this.#running = true;
 

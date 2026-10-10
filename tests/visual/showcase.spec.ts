@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
  * M3 — Showcase mode.
@@ -111,15 +111,14 @@ test.describe('inspector', () => {
 
   test('shows the template’s own text slots', async ({ page }) => {
     await page.getByRole('tab', { name: 'Text' }).click();
-    // Parallax Depth declares a headline and a caption.
-    await expect(page.getByRole('heading', { name: 'Headline' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Caption' })).toBeVisible();
+    // Parallax Depth declares a headline and a caption — a tile each (D-124).
+    await expect(page.locator('[data-text-tile="text:headline"]')).toContainText('Headline');
+    await expect(page.locator('[data-text-tile="text:caption"]')).toContainText('Caption');
   });
 
   test('editing text reflects in the render without rebuilding per keystroke', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
-    await page.getByRole('tab', { name: 'Text' }).click();
-    const field = page.getByRole('textbox', { name: 'Headline' });
+    const field = await headlineField(page);
 
     const before = await readStats(page);
     await field.fill('A brand new headline');
@@ -138,8 +137,9 @@ test.describe('inspector', () => {
     await page.waitForTimeout(200);
 
     const before = await readStats(page);
-    for (const name of ['Paper', 'Forest', 'Tide']) {
-      await page.getByTitle(name, { exact: true }).click();
+    // Looks on the same kind of ground, so only colours change (D-121).
+    for (const look of ['paper', 'forest', 'tide']) {
+      await page.locator(`[data-look="${look}"]`).click();
     }
     await page.waitForTimeout(400);
     const after = await readStats(page);
@@ -163,10 +163,16 @@ test.describe('inspector', () => {
   });
 });
 
+/** The headline's field, in its tile in the Text tab (D-124). */
+async function headlineField(page: Page): Promise<Locator> {
+  await page.getByRole('tab', { name: 'Text' }).click();
+  await page.locator('[data-text-tile="text:headline"]').getByRole('button', { expanded: false }).click();
+  return page.getByRole('textbox', { name: 'Headline' });
+}
+
 test.describe('history', () => {
   test('undo and redo round-trip a document edit', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Text' }).click();
-    const field = page.getByRole('textbox', { name: 'Headline' });
+    const field = await headlineField(page);
     const original = await field.inputValue();
 
     await field.fill('Changed');
@@ -195,8 +201,8 @@ test.describe('history', () => {
 
   test('⌘Z works from the keyboard', async ({ page }) => {
     await page.getByRole('tab', { name: 'Look' }).click();
-    await page.getByTitle('Paper', { exact: true }).click();
-    await expect(page.getByRole('button', { name: /^Undo Apply palette/ })).toBeEnabled();
+    await page.locator('[data-look="paper"]').click();
+    await expect(page.getByRole('button', { name: /^Undo Change look/ })).toBeEnabled();
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.getByRole('button', { name: 'Nothing to undo' })).toBeDisabled();

@@ -79,6 +79,14 @@ describe('the library', () => {
     expect(new Set(templates.map((t) => t.category)).size).toBeGreaterThanOrEqual(5);
   });
 
+  it('gives every design a name of its own', () => {
+    // Two cards called "Big Number" — one in Kinetic Type, one in Text Motion
+    // — and nobody can say which they meant, a test included.
+    const names = TEMPLATE_MANIFEST.map((t) => t.name.toLowerCase());
+    const twice = names.filter((name, i) => names.indexOf(name) !== i);
+    expect(twice).toEqual([]);
+  });
+
   it('leaves no category thin', () => {
     const counts = new Map<string, number>();
     // Only what the library shows: Basics holds Blank, which is offered from
@@ -108,6 +116,30 @@ describe.each(scenes.map((t) => [t.id, t] as const))('%s', (_id, template) => {
     // Ids included: they come from a counter so that this holds, and the memo
     // in front of build() is worthless if it does not.
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+  });
+
+  /**
+   * D-121: the Style tab's colours mean what they say in every design.
+   * "Background" is the ground, "Text" the words, "Accent" the highlights. A
+   * design that painted its whole frame in the accent and its words in the
+   * background colour turned those controls inside out ("the background color
+   * is changing the text color").
+   */
+  it('keeps the colours to their roles: no frame-filling accent or text colour, no words in the background colour', () => {
+    for (const aspect of aspects) {
+      const layers = buildAt(template, aspect);
+      const design = projectDesign(aspect);
+      for (const layer of flatten(layers)) {
+        if (layer.type === 'shape' && layer.props.fill.kind === 'role' && (layer.props.fill.alpha ?? 1) > 0.5) {
+          const fills = layer.props.w >= design.w * 0.95 && layer.props.h >= design.h * 0.95;
+          if (fills) expect.soft(layer.props.fill.role, `${layer.id} fills the frame at ${aspect}`).not.toMatch(/^(accent|ink|inkMuted)$/);
+        }
+        if (layer.type === 'text' && layer.props.fill.kind === 'role') {
+          // Words on an accent shape take `onAccent` (D-126); none take the background's colour.
+          expect.soft(layer.props.fill.role, `${layer.id} is text in the background colour at ${aspect}`).not.toBe('bg');
+        }
+      }
+    }
   });
 
   it('gives every layer its own id', () => {

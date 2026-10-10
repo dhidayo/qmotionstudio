@@ -1,4 +1,5 @@
 import type { Ctx2D, Size } from '@/core/types';
+import { makeCanvas, context2d, type AnyCanvas } from '@/core/render/surface';
 
 /**
  * Scratch surfaces for effects that read the picture back (D-100).
@@ -12,7 +13,7 @@ import type { Ctx2D, Size } from '@/core/types';
  * realms with separate copies of this module.
  */
 
-type Surface = { readonly canvas: OffscreenCanvas; readonly ctx: Ctx2D };
+type Surface = { readonly canvas: AnyCanvas; readonly ctx: Ctx2D };
 
 const pool: Surface[] = [];
 
@@ -22,8 +23,8 @@ export function scratchSurface(index: number, size: Size): Surface {
   const h = Math.max(1, Math.ceil(size.h));
   let entry = pool[index];
   if (!entry) {
-    const canvas = new OffscreenCanvas(w, h);
-    const ctx = canvas.getContext('2d');
+    const canvas = makeCanvas(w, h);
+    const ctx = context2d(canvas);
     if (!ctx) throw new Error('effects: could not acquire a 2D context for a scratch surface.');
     entry = { canvas, ctx };
     pool[index] = entry;

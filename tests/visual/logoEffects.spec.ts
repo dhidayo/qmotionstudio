@@ -101,7 +101,8 @@ test.describe('the logo lives in Look (D-105)', () => {
     await expect(page).toHaveTitle('Q Motion Studio');
     await expect(page.getByRole('button', { name: 'Lifestyle' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Corporate Ads' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Showcase' })).toHaveCount(0);
+    // Exact: designs such as "App Showcase" are cards in the library now.
+    await expect(page.getByRole('button', { name: 'Showcase', exact: true })).toHaveCount(0);
   });
 });
 

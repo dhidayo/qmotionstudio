@@ -26,6 +26,30 @@
   --radius-xl: var(--r-xl);
 }
 
+/*
+ * A navy area (D-128): the top bar, the library's category bars, the
+ * inspector's tabs, the Text tab's tiles. Re-points the chrome tokens inside
+ * it, so everything already written against them — buttons, borders, muted
+ * text, the accent — reads correctly on navy without a second set of classes.
+ */
+.brand-surface {
+  --c-panel: var(--c-brand);
+  --c-panel-alt: var(--c-brand-hover);
+  --c-edge: rgb(255 255 255 / 0.16);
+  --c-edge-strong: rgb(255 255 255 / 0.3);
+  --c-ink: var(--c-brand-ink);
+  --c-ink-muted: rgb(247 244 236 / 0.8);
+  --c-ink-faint: rgb(247 244 236 / 0.66);
+  --c-accent: #9fb5ff;
+  --c-accent-hover: #b7c7ff;
+  --c-accent-ink: #0d1b45;
+  --c-accent-soft: rgb(255 255 255 / 0.14);
+  --c-pro: #fbbf24;
+  --c-pro-soft: rgb(251 191 36 / 0.16);
+  background-color: var(--c-brand);
+  color: var(--c-brand-ink);
+}
+
 @layer base {
   html,
   body,

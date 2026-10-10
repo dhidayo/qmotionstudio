@@ -18,7 +18,7 @@ export function PhoneTopBar(): React.JSX.Element {
 
   return (
     <header
-      className="flex shrink-0 items-center gap-1.5 border-b border-edge bg-panel pl-1.5 pr-3"
+      className="brand-surface flex shrink-0 items-center gap-1.5 border-b border-edge bg-panel pl-1.5 pr-3"
       style={{ height: 52, paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       {/*

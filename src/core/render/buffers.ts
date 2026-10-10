@@ -1,6 +1,7 @@
 import type { Ctx2D, Size } from '@/core/types';
+import { makeCanvas, context2d, type AnyCanvas } from './surface';
 
-export type Buffer = { readonly canvas: OffscreenCanvas; readonly ctx: Ctx2D };
+export type Buffer = { readonly canvas: AnyCanvas; readonly ctx: Ctx2D };
 
 /**
  * §6.4 requires scene buffers to be reused, never allocated per frame.
@@ -24,8 +25,8 @@ export class BufferPool {
     this.#size = { w, h };
     this.#buffers.length = 0;
     for (let i = 0; i < POOL_SIZE; i++) {
-      const canvas = new OffscreenCanvas(w, h);
-      const ctx = canvas.getContext('2d', { alpha: true });
+      const canvas = makeCanvas(w, h);
+      const ctx = context2d(canvas, { alpha: true });
       if (!ctx) throw new Error('BufferPool: could not acquire a 2D context for a scene buffer.');
       this.#buffers.push({ canvas, ctx });
     }
@@ -49,7 +50,7 @@ export class BufferPool {
   }
 
   dispose(): void {
-    // OffscreenCanvas has no explicit free; dropping the references is the signal.
+    // A canvas has no explicit free; dropping the references is the signal.
     this.#buffers.length = 0;
     this.#size = { w: 0, h: 0 };
   }

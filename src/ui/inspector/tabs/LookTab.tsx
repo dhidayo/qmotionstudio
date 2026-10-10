@@ -13,12 +13,19 @@ import { ColorField, EmptyNote, Section, Segmented, Slider } from '../controls';
 import { SceneLayoutReset } from '../SlotPlacement';
 import { LogoSection } from '../LogoSection';
 
+/**
+ * What each colour paints, said plainly (D-126) — "please confirm that all the
+ * individual settings and labels are correct". Every design is held to these
+ * meanings by the library's tests: the ground is Background, words are Text,
+ * and lettering on accent shapes is worked out from the Accent, not borrowed
+ * from the Background.
+ */
 const ROLE_LABELS: Record<PaletteRole, string> = {
   bg: 'Background',
-  surface: 'Surface',
-  ink: 'Ink',
-  inkMuted: 'Muted ink',
-  accent: 'Accent',
+  surface: 'Cards and panels',
+  ink: 'Text',
+  inkMuted: 'Secondary text',
+  accent: 'Accent — buttons, highlights',
 };
 
 const BACKGROUND_LABELS: Record<BackgroundTreatment, string> = {
@@ -208,11 +215,14 @@ function BackgroundSection({ backgrounds }: { backgrounds: readonly BackgroundTr
           />
         )}
         {(look.background === 'gradient' || look.background === 'pattern') && (
-          <ColorField
-            label="Second colour"
-            value={look.palette.surface}
-            onChange={(color) => { dispatch(actions.setPaletteRole('surface', color)); }}
-          />
+          <>
+            <ColorField
+              label="Second colour"
+              value={look.palette.surface}
+              onChange={(color) => { dispatch(actions.setPaletteRole('surface', color)); }}
+            />
+            <p className="-mt-1 text-[10px] text-ink-faint">The gradient's other end — also the colour of cards and panels.</p>
+          </>
         )}
         {scenes > 1 && (
           <button

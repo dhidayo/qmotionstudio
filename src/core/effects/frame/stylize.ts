@@ -1,4 +1,5 @@
 import type { Ctx2D } from '@/core/types';
+import { makeCanvas, context2d, type AnyCanvas } from '@/core/render/surface';
 import { drawGrain } from '@/core/render/postFx';
 import { withAlpha } from '@/core/render/paint';
 import { choice, color, strength } from '../params';
@@ -64,7 +65,7 @@ export function rgbSplit(ctx: Ctx2D, io: FrameIO, dxPx: number, dyPx: number): v
 
   // Each channel straight from the frame — no intermediate copy, which was a
   // whole extra frame of drawing on every one of these effects.
-  const channel = (index: number, hex: string): OffscreenCanvas => {
+  const channel = (index: number, hex: string): AnyCanvas => {
     const out = io.scratch(index);
     out.ctx.drawImage(io.source, 0, 0, px.w, px.h, 0, 0, px.w, px.h);
     out.ctx.globalCompositeOperation = 'multiply';
@@ -229,12 +230,12 @@ const split: FrameEffectDef = {
   },
 };
 
-let scanlineTile: OffscreenCanvas | null = null;
+let scanlineTile: AnyCanvas | null = null;
 
 function scanlines(ctx: Ctx2D, io: FrameIO, alpha: number): void {
   if (!scanlineTile) {
-    scanlineTile = new OffscreenCanvas(1, 4);
-    const t = scanlineTile.getContext('2d');
+    scanlineTile = makeCanvas(1, 4);
+    const t = context2d(scanlineTile);
     if (!t) return;
     t.fillStyle = 'rgba(0,0,0,0.6)';
     t.fillRect(0, 2, 1, 2);

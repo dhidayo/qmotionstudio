@@ -146,8 +146,8 @@ function filmSummary(film: AdTemplate): TemplateSummary {
     durationMs: filmLengthMs(film),
     blurb: film.blurb ?? '',
     ...(film.paletteId === undefined ? {} : { look: film.paletteId }),
-    // Inside the first beat, its words in place — not between two beats.
-    posterAtMs: Math.round((film.scenes[0]?.durationMs ?? 3_000) * 0.6),
+    // Late in the first beat — its words fully in — before the next arrives.
+    posterAtMs: Math.max(0, (film.scenes[0]?.durationMs ?? 3_000) - (film.scenes[1]?.transitionIn?.durationMs ?? 0) - 200),
   };
 }
 
@@ -645,10 +645,18 @@ export function sceneTemplates(): readonly TemplateSummary[] {
   return TEMPLATE_MANIFEST.filter((t) => t.kind === 'scene');
 }
 
+/**
+ * Which set of thumbnails is current. Bump it whenever `npm run thumbs`
+ * rewrites them: the service worker keeps posters cache-first and browsers
+ * keep the loops, so an unchanged address goes on showing yesterday's picture
+ * — a dark card for a design that now opens in cream (D-121).
+ */
+export const THUMBS_REVISION = 2;
+
 export function posterUrl(id: string): string {
-  return `/thumbs/${id}.webp`;
+  return `/thumbs/${id}.webp?v=${THUMBS_REVISION}`;
 }
 
 export function previewUrl(id: string): string {
-  return `/thumbs/${id}.webm`;
+  return `/thumbs/${id}.webm?v=${THUMBS_REVISION}`;
 }

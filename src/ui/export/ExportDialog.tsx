@@ -16,7 +16,7 @@ import { Button, Section, Segmented } from '@/ui/inspector/controls';
 type Phase =
   | { kind: 'idle' }
   | { kind: 'running'; progress: ExportProgress }
-  | { kind: 'done'; fileName: string; bytes: number; seconds: number; file: File; toPhotos: boolean }
+  | { kind: 'done'; fileName: string; bytes: number; seconds: number; file: File; toPhotos: boolean; live: boolean }
   | { kind: 'error'; message: string };
 
 /** §11.8: real progress, a working cancel, and a clear error surface. */
@@ -72,6 +72,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
           seconds: result.durationMs / 1000,
           file,
           toPhotos,
+          live: result.path === 'realtime',
         });
       })
       .catch((error: unknown) => {
@@ -192,6 +193,14 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
 
         {phase.kind === 'done' && phase.toPhotos && (
           <SaveToPhotos file={phase.file} bytes={phase.bytes} />
+        )}
+
+        {/* Said, because it explains a jerky file: this browser could only film the preview as it played (D-127). */}
+        {phase.kind === 'done' && phase.live && (
+          <p className="mb-3 rounded-md border border-edge p-2 text-[11px] leading-relaxed text-ink-muted" data-export-live>
+            This browser could not render the video frame by frame, so it was recorded as it played — any stutter in the
+            preview is in the file. Chrome, Edge or an up-to-date Safari export frame by frame.
+          </p>
         )}
 
         {phase.kind === 'error' && (

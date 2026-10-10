@@ -19,7 +19,13 @@ import { defineScene, headlineSlot, kf, measureSlot, placeText, rect, sublineSlo
 
 type Layout = 'center' | 'lower' | 'stack' | 'third';
 type Accent = 'none' | 'rule' | 'underline' | 'bar' | 'brackets' | 'quote';
-type Backdrop = 'palette' | 'accent' | 'photo';
+/**
+ * The ground: the look's own, or a photograph. There was a third, the accent
+ * colour as the ground with words in the background colour — which turned
+ * the Style tab's colours inside out for those designs ("the background color
+ * is changing the text color"). A coloured ground is a look now (D-121).
+ */
+type Backdrop = 'palette' | 'photo';
 type Motion = KineticMotion | 'mask' | 'swap' | 'count' | 'fade' | 'punch' | 'tracking';
 
 const MOTIONS: readonly Motion[] = [
@@ -33,7 +39,7 @@ export function create(variant: SceneVariant): SceneTemplate {
   const unit = pick<KineticUnit>(p, 'unit', ['char', 'word', 'line'], 'word');
   const layout = pick<Layout>(p, 'layout', ['center', 'lower', 'stack', 'third'], 'center');
   const accent = pick<Accent>(p, 'accent', ['none', 'rule', 'underline', 'bar', 'brackets', 'quote'], 'none');
-  const backdrop = pick<Backdrop>(p, 'bg', ['palette', 'accent', 'photo'], 'palette');
+  const backdrop = pick<Backdrop>(p, 'bg', ['palette', 'photo'], 'palette');
   const order = pick<KineticOrder>(p, 'order', ['start', 'end', 'center', 'random'], 'start');
   const align = layout === 'lower' || layout === 'third' || text(p, 'align', 'center') === 'left' ? 'left' : 'center';
   const hasSub = flag(p, 'sub', true);
@@ -53,13 +59,10 @@ export function create(variant: SceneVariant): SceneTemplate {
     const dur = num(p, 'dur', 700);
     const stagger = num(p, 'stagger', unit === 'char' ? 38 : unit === 'word' ? 110 : 260);
     const start = num(p, 'start', 300);
-    const onAccent = backdrop === 'accent';
-    const ink = onAccent ? roleFill('bg') : roleFill('ink');
+    const ink = roleFill('ink');
 
     // The ground.
-    if (backdrop === 'accent') {
-      layers.push(rect(ctx, 'ground', { w: design.w, h: design.h, x: 0, y: 0, anchorX: 0, anchorY: 0, fill: roleFill('accent') }));
-    } else if (backdrop === 'photo') {
+    if (backdrop === 'photo') {
       const [photo] = fillSlots(inputs.photos, 1);
       if (photo) {
         const props = photoProps(photo, Math.max(design.w, design.h) * 1.18);
@@ -102,14 +105,14 @@ export function create(variant: SceneVariant): SceneTemplate {
       : {};
 
     // The accent, under the words.
-    const accentColour = onAccent ? roleFill('bg') : roleFill('accent');
+    const accentColour = roleFill('accent');
     const blockW = left ? Math.min(maxW, Math.max(head.width, sub.width)) : Math.max(head.width, sub.width);
     const blockLeft = left ? x : x - blockW / 2;
     if (accent === 'bar' || layout === 'third') {
       const barH = blockH + u * 0.06;
       layers.push(rect(ctx, 'bar', {
         w: blockW + u * 0.1, h: barH, x: blockLeft - u * 0.05, y: top - u * 0.03, anchorX: 0, anchorY: 0,
-        fill: roleFill(onAccent ? 'bg' : 'surface', 0.92), radius: u * 0.012,
+        fill: roleFill('surface', 0.92), radius: u * 0.012,
         tracks: { scaleX: [kf(start - 200, 0), kf(start + 350, 1, 'outExpo')] },
       }));
       layers.push(rect(ctx, 'barEdge', {
@@ -191,7 +194,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       // A second phrase that arrives under the first: a question, then its answer.
       const answerTop = top + head.height + gap;
       const second = placeText(ctx, alt, inputs, {
-        sizePx: size * 0.8, maxWidthPx: maxW, x, y: answerTop, anchorX: left ? 0 : 0.5, fill: roleFill(onAccent ? 'bg' : 'accent'),
+        sizePx: size * 0.8, maxWidthPx: maxW, x, y: answerTop, anchorX: left ? 0 : 0.5, fill: roleFill('accent'),
         reveal: { kind: 'kinetic', unit: 'word', motion: 'pop', startMs: Math.round(durationMs * 0.42), durationMs: 520, staggerMs: 90 },
       });
       layers.push(second.layer);
@@ -215,7 +218,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       const subTop = top + head.height + gap + (hasAlt && motion !== 'swap' && motion !== 'punch' ? head.height * 0.8 + gap : 0) + (accent === 'underline' ? u * 0.02 : 0);
       const subLayer = placeText(ctx, subline, inputs, {
         sizePx: subSize, maxWidthPx: maxW, x, y: subTop, anchorX: left ? 0 : 0.5,
-        fill: onAccent ? roleFill('bg', 0.8) : roleFill('inkMuted'), lineHeight: 1.3,
+        fill: roleFill('inkMuted'), lineHeight: 1.3,
         reveal: { kind: 'kinetic', unit: 'line', motion: 'rise', startMs: subStart, durationMs: 650, staggerMs: 120 },
       });
       layers.push(subLayer.layer);

@@ -110,7 +110,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           const bx = cx + size * 0.42;
           const by = stageCy - size * 0.48;
           layers.push(rect(ctx, 'badge', { w: r * 2, h: r * 2, x: bx, y: by, ellipse: true, fill: roleFill('accent'), tracks: { scaleX: [kf(1100, 2), kf(1450, 1, 'outBack')], scaleY: [kf(1100, 2), kf(1450, 1, 'outBack')], opacity: [kf(1100, 0), kf(1250, 1)], rotation: [kf(1100, -25), kf(1450, -12, 'outBack')] } }));
-          layers.push(placeText(ctx, slot('badge'), inputs, { sizePx: u * 0.05, maxWidthPx: r * 1.8, x: bx, y: by - u * 0.033, fill: roleFill('bg'), reveal: { kind: 'fade', startMs: 1300, durationMs: 200 }, tracks: { rotation: [kf(0, -12)] } }).layer);
+          layers.push(placeText(ctx, slot('badge'), inputs, { sizePx: u * 0.05, maxWidthPx: r * 1.8, x: bx, y: by - u * 0.033, fill: roleFill('onAccent'), reveal: { kind: 'fade', startMs: 1300, durationMs: 200 }, tracks: { rotation: [kf(0, -12)] } }).layer);
         }
         bottomSubline(1200);
         break;
@@ -232,8 +232,8 @@ export function create(variant: SceneVariant): SceneTemplate {
         });
         layers.push(rect(ctx, 'divider', { w: Math.max(4, u * 0.006), h: design.h, x: 0, y: design.h / 2, fill: roleFill('ink'), tracks: { x: progressKeys.map((key) => ({ ...key, v: key.v * design.w })) } }));
         layers.push(rect(ctx, 'knob', { w: u * 0.07, h: u * 0.07, x: 0, y: design.h / 2, ellipse: true, fill: roleFill('ink'), tracks: { x: progressKeys.map((key) => ({ ...key, v: key.v * design.w })) } }));
-        layers.push(placeText(ctx, slot('after'), inputs, { sizePx: u * 0.045, maxWidthPx: u * 0.4, x: safe.x, y: safe.y, anchorX: 0, reveal: LINE(300), pill: { x: u * 0.025, y: u * 0.012, radius: u * 0.02 }, fill: roleFill('bg') }).layer);
-        layers.push(placeText(ctx, slot('before'), inputs, { sizePx: u * 0.045, maxWidthPx: u * 0.4, x: safe.x + safe.w, y: safe.y, anchorX: 1, reveal: LINE(400), pill: { x: u * 0.025, y: u * 0.012, radius: u * 0.02 }, fill: roleFill('bg') }).layer);
+        layers.push(placeText(ctx, slot('after'), inputs, { sizePx: u * 0.045, maxWidthPx: u * 0.4, x: safe.x, y: safe.y, anchorX: 0, reveal: LINE(300), pill: { x: u * 0.025, y: u * 0.012, radius: u * 0.02 }, fill: roleFill('onAccent') }).layer);
+        layers.push(placeText(ctx, slot('before'), inputs, { sizePx: u * 0.045, maxWidthPx: u * 0.4, x: safe.x + safe.w, y: safe.y, anchorX: 1, reveal: LINE(400), pill: { x: u * 0.025, y: u * 0.012, radius: u * 0.02 }, fill: roleFill('onAccent') }).layer);
         break;
       }
 

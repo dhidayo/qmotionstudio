@@ -175,7 +175,7 @@ const PRODUCT_FILMS: readonly AdTemplate[] = [
       { scene: 'pd-price-reveal', ms: 3_600, via: FLASH, photos: 1, texts: { headline: 'Yours for less', price: '$129', was: '$159' } },
       END('Order today', 'Your Brand', 'Shop now', 'yourbrand.com'),
     ]),
-  film('film-product-range', 'Product Range', 'Product Films', 'linen',
+  film('film-product-range', 'Collection Film', 'Product Films', 'linen',
     'Everything you make, on a shelf, side by side, and before and after.', [
       { scene: 'pd-lineup', ms: 3_800, photos: 5, texts: { headline: 'The full collection', subline: 'Something for everyone' } },
       { scene: 'pd-compare', ms: 4_000, via: WIPE, photos: 2, texts: { before: 'Before', after: 'After' } },

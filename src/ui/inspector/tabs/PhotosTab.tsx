@@ -8,6 +8,11 @@ import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { Button, EmptyNote, Section, Segmented, Slider, Stepper } from '../controls';
 import { SlotPlacement } from '../SlotPlacement';
+import { useShallow } from 'zustand/react/shallow';
+import { useOverlays } from '@/ui/shell/overlays';
+import { addLayer } from '@/ui/editing/addLayer';
+import { undoHint } from '@/ui/editing/commands';
+import { Icon } from '@/ui/mobile/Icon';
 
 /** §8.1. Every control here goes through dispatch; none touches the document. */
 export function PhotosTab({ template }: { template: SceneTemplate | null }): React.JSX.Element {
@@ -45,19 +50,12 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
    * that is where this sends people (D-097).
    */
   if (template !== null && template.photoSlots.max === 0) {
-    return (
-      <Section title="Photos">
-        <EmptyNote>
-          This scene is a blank canvas, so its photos are layers you place yourself. Use
-          {' '}<strong>+ Photo</strong> under the preview to add one — then drag, resize and give it motion
-          like anything else on the timeline.
-        </EmptyNote>
-      </Section>
-    );
+    return <PhotoLayers blank />;
   }
 
   return (
     <div>
+      <PhotosHeader />
       <Section>
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
@@ -213,6 +211,8 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
         </Section>
         </>
       )}
+
+      <PhotoLayers blank={false} />
     </div>
   );
 }
@@ -283,6 +283,114 @@ function PhotoThumb({
       >
         ×
       </button>
+    </div>
+  );
+}
+
+/**
+ * Photos added on top of the design (D-124) — "Under text, I am able to add
+ * texts with + Add text button. Under Photos, no." A photo of the person's own
+ * goes onto the canvas as a layer of its own, to be moved, sized and animated
+ * like any other, and is listed here with its settings and a delete.
+ */
+function PhotoLayers({ blank }: { blank: boolean }): React.JSX.Element {
+  const store = useMediaStore();
+  useMediaRevision();
+  const dispatch = useEditor((s) => s.dispatch);
+  const selectOverlay = useEditor((s) => s.selectOverlay);
+  const showToast = useEditor((s) => s.showToast);
+  const layers = useEditor(useShallow((s) => s.project.overlays.filter((o) => o.content.kind === 'photo')));
+  const openPhotoPicker = useOverlays((o) => o.openPhotoPicker);
+  const add = useAddPhotoLayers();
+
+  return (
+    <Section title={blank ? 'Photos' : 'Extra photos'}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-[11px] text-ink-muted">{blank ? 'Place photos anywhere on this blank canvas.' : 'More photos on top of the design, placed anywhere.'}</p>
+        {add.button}
+      </div>
+      {add.error}
+      <div className="flex flex-col gap-1.5">
+        {layers.map((layer, i) => {
+          const mediaId = layer.content.kind === 'photo' ? layer.content.mediaId : '';
+          const url = store.previewUrl(mediaId);
+          return (
+            <div key={layer.id} data-photo-layer={layer.id} className="brand-surface flex items-center gap-2 rounded-[7px] p-1.5">
+              <span className="size-10 shrink-0 overflow-hidden rounded-md" style={{ background: 'rgb(255 255 255 / 0.12)' }}>
+                {url !== null && <img src={url} alt="" className="size-full object-cover" />}
+              </span>
+              <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">Added photo {i + 1}</span>
+              <button type="button" onClick={() => { openPhotoPicker({ kind: 'overlay', id: layer.id }); }} className="rounded-md px-2 py-1 text-[11px] hover:bg-panel-alt">Replace</button>
+              <button type="button" onClick={() => { selectOverlay(layer.id); }} className="rounded-md px-2 py-1 text-[11px] hover:bg-panel-alt" title="Placement, motion, entrance and exit, effects">Settings</button>
+              <button
+                type="button"
+                aria-label={`Delete added photo ${i + 1}`}
+                title="Delete"
+                onClick={() => { dispatch(actions.removeOverlay(layer.id)); showToast(`Photo deleted. ${undoHint()}`); }}
+                className="grid size-8 shrink-0 place-items-center rounded-md hover:bg-panel-alt"
+              >
+                <Icon name="trash" size={16} />
+              </button>
+            </div>
+          );
+        })}
+        {layers.length === 0 && blank && <EmptyNote>No photos yet.</EmptyNote>}
+      </div>
+    </Section>
+  );
+}
+
+/** "+ Add photo": picks photos and puts each on the canvas as a layer of its own (D-124). */
+function useAddPhotoLayers(): { button: React.JSX.Element; error: React.JSX.Element | null } {
+  const store = useMediaStore();
+  const showToast = useEditor((s) => s.showToast);
+  const input = useRef<HTMLInputElement>(null);
+  const onAdded = useCallback((ids: string[]) => {
+    // A little apart, so several added at once do not sit exactly on top of each other.
+    ids.forEach((mediaId, i) => { addLayer({ kind: 'photo', mediaId }, { x: 0.5 + i * 0.04, y: 0.5 + i * 0.04 }); });
+    showToast(ids.length === 1 ? 'Photo added to the canvas. Drag it where you want it.' : `${ids.length} photos added to the canvas.`);
+  }, [showToast]);
+  const { state: upload, addFiles } = useUpload(store, onAdded, { artboardLongestEdge: 1920 });
+  return {
+    button: (
+      <>
+        <button
+          type="button"
+          data-add-photo-layer
+          onClick={() => { input.current?.click(); }}
+          disabled={upload.busy}
+          className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-[12px] font-semibold text-accent-ink hover:bg-accent-hover"
+        >
+          {upload.busy ? 'Reading…' : '+ Add photo'}
+        </button>
+        <input
+          ref={input}
+          type="file"
+          accept={ACCEPT_ATTRIBUTE}
+          multiple
+          hidden
+          aria-label="Add a photo on top of the design"
+          onChange={(e) => {
+            void addFiles([...(e.target.files ?? [])]);
+            e.target.value = '';
+          }}
+        />
+      </>
+    ),
+    error: upload.error === null ? null : <p className="mb-2 text-[11px]" style={{ color: 'var(--c-danger)' }}>{upload.error}</p>,
+  };
+}
+
+/** The top of the Photos tab, as the Text tab's: what this is, and + Add photo. */
+function PhotosHeader(): React.JSX.Element {
+  const add = useAddPhotoLayers();
+  return (
+    <div className="mb-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Photos in this design</h3>
+        {add.button}
+      </div>
+      {add.error}
     </div>
   );
 }

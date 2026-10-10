@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as actions from '@/document/actions';
 import type { Overlay, TextStyle } from '@/document/types';
-import { DEFAULT_OVERLAY_MS, DEFAULT_OVERLAY_TEXT_STYLE } from '@/document/defaults';
-import { placeNew } from '@/document/select/tracks';
-import { timelineSpanMs } from '@/document/select/timeline';
+import { DEFAULT_OVERLAY_TEXT_STYLE } from '@/document/defaults';
+import { addLayer } from '@/ui/editing/addLayer';
 import { deleteSlot, undoHint } from '@/ui/editing/commands';
 import { Icon } from '@/ui/mobile/Icon';
 import { TextStyleControls } from '../OverlayPanel';
@@ -38,7 +37,8 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
   const overlays = useEditor((s) => s.project.overlays);
   const corporate = useEditor((s) => s.project.mode === 'motionAd');
   const [open, setOpen] = useState<string | null>(() => (selectedSlot?.startsWith('text:') === true ? selectedSlot : null));
-  const addText = useAddText();
+  // Low in the frame, where designs leave room, rather than over their headline.
+  const addText = (): string => addLayer({ kind: 'text', text: 'Your text', style: DEFAULT_OVERLAY_TEXT_STYLE }, { x: 0.5, y: 0.78 });
 
   // Text picked on the canvas opens here — decided while rendering, as the
   // selection changes, rather than a render later.
@@ -100,23 +100,6 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
   );
 }
 
-/** Adds a line of text to the canvas and returns its id (D-124). */
-function useAddText(): () => string {
-  const dispatch = useEditor((s) => s.dispatch);
-  return useCallback((): string => {
-    const { project, playheadMs, targetTrack } = useEditor.getState();
-    const span = timelineSpanMs(project);
-    // An ad's text is a clip on its timeline, at the playhead; a single
-    // design's lasts as long as the design does, since it has no timeline.
-    const spot = project.mode === 'motionAd'
-      ? placeNew(project.overlays, { atMs: playheadMs, lengthMs: DEFAULT_OVERLAY_MS, durationMs: span, preferTrack: targetTrack })
-      : placeNew(project.overlays, { atMs: 0, lengthMs: span, durationMs: span, preferTrack: null });
-    const overlay = actions.makeOverlay({ kind: 'text', text: 'Your text', style: DEFAULT_OVERLAY_TEXT_STYLE }, spot);
-    dispatch(actions.addOverlay(overlay));
-    return overlay.id;
-  }, [dispatch]);
-}
-
 /** The bar of a tile: what it is, what it says, and its one-tap actions. */
 function TileHead({
   open,
@@ -134,12 +117,12 @@ function TileHead({
   children?: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="flex items-center gap-1">
+    <div className={`brand-surface flex items-center gap-1 pr-1 ${open ? 'rounded-t-[7px]' : 'rounded-[7px]'}`}>
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left hover:bg-panel-alt"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-panel-alt"
       >
         <span aria-hidden className="inline-block w-3 shrink-0 text-center text-ink-faint transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
         <span className="min-w-0 flex-1">
@@ -307,7 +290,6 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
 
   return (
     <>
-    <SlotPlacement slotKey={`text:${slot.id}`} />
     <div>
       <div className="mb-2.5">
         <TextInput
@@ -364,7 +346,7 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
         <div className="flex flex-col gap-1.5">
           <ColorField
             label="Text colour"
-            value={style.color.length > 0 ? style.color : '#ffffff'}
+            value={style.color.length > 0 ? style.color : inputs.look.palette.ink}
             onChange={(color) => { patch({ color }, { label: 'Change colour', coalesceKey: `colour:${slot.id}` }); }}
           />
           {style.color.length > 0 && (
@@ -442,6 +424,10 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
           </Button>
         </div>
       )}
+    </div>
+    {/* Where it sits, its motion and its stacking: after what it says and how it looks. */}
+    <div className="mt-3">
+      <SlotPlacement slotKey={`text:${slot.id}`} />
     </div>
     </>
   );

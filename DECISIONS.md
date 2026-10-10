@@ -2865,3 +2865,114 @@ the public build; for the open test it is in, as a two-sided FREE | PRO switch
 in the top bar and in the phone's menu. One flag turns it off again:
 `OPEN_TEST_RELEASE` in `src/entitlements/testRelease.ts`. The production test
 that the public build offers no switch is skipped while the flag is on.
+
+## D-123 — the library folds, and its cards are the colour they open in
+
+With 240 designs and films the library is long. Each category's heading
+now folds it away, with a count of what it holds, and "Collapse all / Expand
+all" sits by the filters; what is folded is remembered on the device (browser
+storage — a convenience, so a private window simply forgets). A search shows
+everything it finds, folded or not.
+
+"I would love the templates to show with the background colors for users to
+see the exact look before clicking": every card is drawn on its design's own
+ground colour (D-121) before its poster arrives, and the posters were
+regenerated in each design's look. The poster and loop addresses now carry a
+revision (`THUMBS_REVISION` in the manifest, bumped whenever `npm run thumbs`
+rewrites them): the service worker serves posters cache-first, so an unchanged
+address kept showing a returning visitor yesterday's dark poster for a design
+that now opens in cream — the mismatch reported on Kinetic Type.
+
+## D-124 — the Text tab lists every text, and every text can go
+
+"Text on the canvas are hardcoded and they cannot be deleted." The Text tab is
+now a list: each text in the design — the design's own and any added — is a
+tile showing what it says, which opens to all its settings (words, font,
+weight, alignment, size, colour, wrap, shadow, outline, pill, spacing, then
+placement, motion and stacking). Each has a delete. A design's own text, once
+deleted, stays in the list as "Removed" with **Put back**, which restores it
+as the design wrote it; added text is a layer of its own and goes outright.
+**+ Add text** puts a new line low in the frame (clear of the headline) and
+opens its tile; in Lifestyle it lasts the whole design, in Corporate Ads it is
+a three-second clip at the playhead, as before. Text picked on the canvas
+opens its tile. The colour control shows the look's ink when the text has no
+colour of its own, not white.
+
+## D-125 — on a phone, a finished video goes to Photos
+
+"I exported on iPhone, I only have options to save in Files and Drive." A web
+page cannot write into the Photos app; a download on an iPhone goes to Files.
+The way into Photos is the share sheet, whose **Save Video** saves it there.
+So on a touch screen that can share files, the export no longer downloads on
+its own: it finishes with **Save to Photos** (iPhone, iPad) or **Save or
+share** (Android), which opens the sheet with the video, and **Save to Files
+instead** beneath it. The sheet only opens from a tap, so it is a button
+rather than automatic. A computer downloads as before.
+
+Photos too (D-124, continued): "Under text, I am able to add texts with + Add
+text button. Under Photos, no." The Photos tab now opens with **+ Add photo**,
+which puts the picked photos on the canvas as layers of their own, and lists
+them under **Extra photos** with Replace, Settings and Delete. The design's
+own photo spots are filled as before.
+
+## D-126 — every colour does what its name says
+
+"On the Looks, the background color is changing the text color, and accent is
+changing the background color." Two text designs (Scale Pop, Punch Swap) drew
+their ground in the accent and their words in the background colour, so in
+them each control moved the other thing; that inside-out mode is gone, and
+those two open in colour looks (Cobalt, Coral) instead. Separately, every
+button label, seal, badge, price burst and highlighted headline drew its
+lettering in the background colour, so changing Background recoloured them
+too. Lettering on the accent now has its own colour, `onAccent`: white or
+near-black, whichever reads on the accent, worked out from it — so Background
+changes only the ground. Text set to Pill takes it as well.
+
+The Colours section says what each one paints: Background, Cards and panels,
+Text, Secondary text, Accent — buttons, highlights. The gradient's second
+colour says that it is also the cards'. A library test holds every design to
+these meanings: no frame-filling layer in the accent or the text colour, and
+no words in the background colour.
+
+## D-127 — playback that keeps up, and an export that says how it was made
+
+"On mobile, when I switched to Corporate Ads, the canvas and animations…
+are dragging." What was measured, and what changed:
+
+- An exported film was checked frame by frame: 300 frames, none repeated,
+  evenly timed. Export renders every frame at its exact time, so a slow phone
+  makes it slower to export, never jerkier. The only way a file inherits the
+  preview's stutter is the live-recording fallback, used where the browser has
+  no frame-by-frame encoder; the export now says so when that happened.
+- **Music made playback judder.** While music plays the preview takes its
+  time from the audio device, whose clock on an iPhone moves in ~21ms steps
+  against a 16ms screen: some frames repeated the time, the next jumped. The
+  time is now carried forward between the audio's steps (never ahead by more
+  than 50ms, never backwards), so the picture moves every frame and stays on
+  the beat.
+- **Effects and transitions on Safari.** Their working surfaces were
+  OffscreenCanvases; on the page they are now ordinary canvases, which Safari
+  keeps on the GPU beside the visible one (copying to an OffscreenCanvas
+  measured three times the cost in WebKit). The export worker still uses
+  OffscreenCanvas.
+
+## D-128 — deep navy is the product's colour
+
+"A deep navy blue color for the background and offwhite color for the text…
+Make deep navy blue one of my main colors for this app." Deep navy (#0d1b45)
+with off-white (#f7f4ec) is now the brand surface: the top bar on every
+screen, the library's category bars (thick, opaque, with their counts), the
+inspector's tabs, the Text tab's tiles and the Extra photos list. One class,
+`brand-surface`, re-points the chrome's colour tokens inside it, so buttons,
+borders and muted text read correctly on navy without a second set of
+styles. The accent moved from violet to a clear blue of the same family; the
+phone's status bar and the installed app's theme colour are navy too.
+
+## D-129 — one design becomes the first scene of a longer video
+
+"Add a button somewhere to create multi-scene videos from Showcase and it will
+push the current design to Corporate Ads and continue with design as scene 1."
+**+ Scene** sits by the play controls in Lifestyle (computer and phone): the
+project becomes a Corporate Ads video with the design on screen as scene 1 —
+its photos, words and look kept — and the scene picker opens for scene 2.
+One undo goes back to the single design.

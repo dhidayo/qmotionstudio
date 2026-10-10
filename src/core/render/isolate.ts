@@ -1,4 +1,5 @@
 import type { Ctx2D } from '@/core/types';
+import { makeCanvas, context2d, type AnyCanvas } from './surface';
 import { withBlur } from './blur';
 
 /**
@@ -17,7 +18,7 @@ import { withBlur } from './blur';
  * whatever rotation and scale the layer is under.
  */
 
-type Surface = { canvas: OffscreenCanvas; ctx: Ctx2D };
+type Surface = { canvas: AnyCanvas; ctx: Ctx2D };
 
 const pool: Surface[] = [];
 
@@ -27,8 +28,8 @@ const MAX_PIXELS = 24_000_000;
 function surfaceAt(slot: number, w: number, h: number): Surface {
   let entry = pool[slot];
   if (!entry) {
-    const canvas = new OffscreenCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)));
-    const ctx = canvas.getContext('2d');
+    const canvas = makeCanvas(Math.max(1, Math.ceil(w)), Math.max(1, Math.ceil(h)));
+    const ctx = context2d(canvas);
     if (!ctx) throw new Error('isolate: could not acquire a 2D context for a scratch surface.');
     entry = { canvas, ctx };
     pool[slot] = entry;

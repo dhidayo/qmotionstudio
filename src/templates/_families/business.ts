@@ -163,7 +163,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           if (featured) {
             const pillW = Math.min(cardW * 0.7, u * 0.3);
             layers.push(rect(ctx, 'badge', { w: pillW, h: u * 0.05, x: tall ? x + cardW * 0.25 : x, y: top - (tall ? -u * 0.03 : 0), radius: u * 0.025, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 900, 0), kf(at + 1250, 1, 'outBack')], scaleY: [kf(at + 900, 0), kf(at + 1250, 1, 'outBack')] } }));
-            layers.push(labelLayer('badge', words('badge')[0] ?? '', { sizePx: u * 0.022, maxWidthPx: pillW, x: tall ? x + cardW * 0.25 : x, y: top - (tall ? -u * 0.03 : 0) - u * 0.015, fill: roleFill('bg'), reveal: LINE(at + 1150) }));
+            layers.push(labelLayer('badge', words('badge')[0] ?? '', { sizePx: u * 0.022, maxWidthPx: pillW, x: tall ? x + cardW * 0.25 : x, y: top - (tall ? -u * 0.03 : 0) - u * 0.015, fill: roleFill('onAccent'), reveal: LINE(at + 1150) }));
           }
         }
         break;
