@@ -292,7 +292,7 @@ test.describe('effects on the timeline (D-106)', () => {
   test('a scene’s own effect shows on the FX lane, with its menu', async ({ page }) => {
     await openAd(page);
     await page.getByRole('button', { name: /^2\. / }).click();
-    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByRole('tab', { name: 'Effects' }).click();
     await page.getByRole('button', { name: '+ Add effect' }).last().click();
     await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="snow"]').click();
 
@@ -360,7 +360,7 @@ test.describe('Lifestyle (D-106)', () => {
     await page.waitForTimeout(2_000);
     const scrub = page.locator('input[aria-label="Scrub"]');
     const before = Number(await scrub.getAttribute('max'));
-    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByRole('tab', { name: 'Effects' }).click();
     await page.getByLabel('Speed').fill('200');
     await page.waitForTimeout(300);
     expect(Number(await scrub.getAttribute('max'))).toBe(Math.round(before / 2));

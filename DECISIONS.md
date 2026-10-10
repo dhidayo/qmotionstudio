@@ -2976,3 +2976,74 @@ push the current design to Corporate Ads and continue with design as scene 1."
 project becomes a Corporate Ads video with the design on screen as scene 1 —
 its photos, words and look kept — and the scene picker opens for scene 2.
 One undo goes back to the single design.
+
+## D-130 — scenes are rearranged by dragging them
+
+"On the timeline, I should be able to move the scenes around to rearrange
+them. That is a natural behaviour." Press a scene on the timeline (or on the
+phone's scene strip) and move sideways: past a few pixels it lifts and follows
+the pointer, a marker shows where it will land, and letting go puts it there
+as one undoable step. A scene lands after every other scene whose middle it
+has passed. Less movement than that is still a click; a finger held still is
+still the long-press menu. "Move earlier / later" stay in the menu.
+
+## D-131 — every group of settings is a navy bar that folds
+
+"Under Look, Motion and Photos, sections should be having the navy blue deep
+bg for clear demarcation… settings should find a way to manage screen, where
+I can close item… and I can expand too." Every titled section in the
+inspector — Photos, Text, Effects, Style, a layer's or the music's panel — is a
+navy bar with a chevron and its name that opens and closes its settings, and
+can carry actions on the bar itself (effects carry their delete there). On a
+computer each folds on its own and is remembered on the device; in a phone's
+sheet they work as one accordion — opening one closes the others — replacing
+D-114's row of tabs, so a long panel is still never more than a screen.
+Sections inside a section fold on their own.
+
+Effects (the cards inside "Effects on this scene", an element's effects, and
+the panel for an effect picked on the timeline) have the same navy bar: name,
+type, fold, and a delete that is plain to see.
+
+## D-132 — "Motion" becomes Effects; "Look" becomes Style
+
+"I'm not sure what motion does on the app… if you have to rethink the concept,
+please do." The tab held three different things under one vague word. It is
+now **Effects** — the same word as the button under the picture — in the
+order people reach for them: effects on this scene; the photo or text picked
+on the canvas (its entrance, exit and emphasis, then how much it moves); and
+speed and movement for the whole scene. The controls are said plainly: "How
+much it moves" (was Motion strength), "Movement style" (was Feel), "Speed and
+movement" (was Whole scene — motion). The canvas toolbar's and phone's
+"Motion" button for a selected element is **Animate**. "Look" is **Style**,
+matching the button under the picture. On the timeline the rows read Path,
+Effects and Layer 1 rather than Motion, FX and L1.
+
+## D-133 — a phone can change a scene's length and transition
+
+The timeline's scene bar (length, transition, its speed and direction) had no
+phone equivalent: a phone could not change how a scene arrives at all. A
+selected scene's toolbar now has **Timing**, a sheet with the length, the
+transitions as buttons, how long the transition takes, and which side it
+comes from.
+
+## D-134 — My brand: colours and logo, saved once, used anywhere
+
+The local first step of the roadmap's Brand Kit. Style opens with **My
+brand**: save the current design's colours, ground and logo as your brand, and
+put them on any design — every scene of it — in one tap. Kept on this device
+as a few colours and the logo's media id (the picture itself is in the media
+store with every photo, never in browser storage); "Save this instead" and
+"Forget" manage it. Accounts can carry it between devices later.
+
+## D-135 — a video's scenes as pictures: the first Carousel Studio
+
+Export now asks what to make: **Video**, or **Images** — one picture per scene,
+taken once each scene has settled (fully arrived, clear of the transitions on
+either side). As PNGs they download as one ZIP of numbered slides on a
+computer and go straight to Photos through the share sheet on a phone; as a
+PDF, one page per scene, which LinkedIn shows as a swipeable document. A
+single design exports as one picture. The ZIP and PDF are written by small
+in-house writers (stored ZIP with CRC-32; a PDF of JPEG pages), not libraries,
+and the slides come from the same renderer as the video, watermark included
+on the free plan. This is the roadmap's Carousel Studio built from what
+exists: every Corporate Ads scene is already a designed slide.

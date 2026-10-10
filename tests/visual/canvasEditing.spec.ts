@@ -155,7 +155,7 @@ test.describe('photos on the canvas', () => {
     await page.mouse.click(at.x, at.y);
     const toolbar = page.locator(TOOLBAR);
     await expect(toolbar).toBeVisible();
-    for (const name of ['Replace', 'Effects', 'Motion', 'Delete', 'More']) {
+    for (const name of ['Replace', 'Effects', 'Animate', 'Delete', 'More']) {
       await expect(toolbar.getByRole('button', { name })).toBeVisible();
     }
 

@@ -9,7 +9,9 @@ import { PALETTE_ROLES, type PaletteRole } from '@/core/types';
 import type { BackgroundTreatment } from '@/document/types';
 import { useEditor } from '@/state/store';
 import type { SceneTemplate } from '@/templates/schema';
-import { ColorField, EmptyNote, Section, Segmented, Slider } from '../controls';
+import { Button, ColorField, EmptyNote, Section, Segmented, Slider } from '../controls';
+import { saveBrandKit, useBrandKit } from '@/ui/brand/brandKit';
+import { restoreMedia } from '@/persist/media';
 import { SceneLayoutReset } from '../SlotPlacement';
 import { LogoSection } from '../LogoSection';
 
@@ -66,6 +68,8 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
 
   return (
     <div>
+      <MyBrandSection />
+
       {looks.length > 0 && <LooksSection looks={looks} />}
 
       <BackgroundSection backgrounds={backgrounds} />
@@ -310,6 +314,79 @@ function LooksSection({ looks }: { looks: readonly LookPreset[] }): React.JSX.El
             );
           })}
         </div>
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * My brand (D-134): save this design's colours, ground and logo once; put
+ * them on any design — every scene of it — in one tap.
+ */
+function MyBrandSection(): React.JSX.Element | null {
+  const kit = useBrandKit();
+  const dispatch = useEditor((s) => s.dispatch);
+  const showToast = useEditor((s) => s.showToast);
+  const look = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.look);
+  const logo = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.logo);
+  const scenes = useEditor((s) => s.project.scenes.length);
+  const store = useMediaStore();
+  useMediaRevision();
+  if (!look || !logo) return null;
+
+  const save = (): void => {
+    saveBrandKit({
+      look: { palette: look.palette, background: look.background === 'picture' ? 'gradient' : look.background, vignette: look.vignette },
+      logo: logo.mediaId === null ? null : logo,
+      savedAt: Date.now(),
+    });
+    showToast(logo.mediaId === null ? 'Saved as your brand: these colours. Add a logo in Style and save again to include it.' : 'Saved as your brand: these colours and your logo.');
+  };
+
+  const use = (): void => {
+    if (!kit) return;
+    const id = kit.logo?.mediaId ?? null;
+    // The logo's picture is on this device; bring it in if this project has not used it yet.
+    void (id === null ? Promise.resolve({ missing: [] as readonly string[] }) : restoreMedia(store, [id]))
+      .then(({ missing }) => {
+        dispatch(actions.applyBrand(kit.look, missing.length > 0 ? null : kit.logo));
+        showToast(missing.length > 0
+          ? 'Your brand colours are on. The logo could not be found on this device — add it again in Style.'
+          : scenes > 1 ? `Your brand is on all ${scenes} scenes. Undo takes it off.` : 'Your brand is on. Undo takes it off.');
+      })
+      .catch((error: unknown) => {
+        console.error('Could not apply the brand.', error);
+        showToast('Could not apply your brand. Try again.');
+      });
+  };
+
+  const logoUrl = kit?.logo?.mediaId ? store.previewUrl(kit.logo.mediaId) : null;
+
+  return (
+    <Section title="My brand">
+      <div data-my-brand>
+        {kit === null ? (
+          <>
+            <p className="mb-2 text-[11px] leading-relaxed text-ink-muted">
+              Save your colours and logo once, then put them on any design in one tap.
+            </p>
+            <Button variant="accent" onClick={save}>Save this as my brand</Button>
+          </>
+        ) : (
+          <>
+            <div className="mb-2 flex items-center gap-2">
+              <span className="flex overflow-hidden rounded-md border border-edge" aria-label="Your brand colours">
+                {PALETTE_ROLES.map((role) => <span key={role} className="block size-6" style={{ background: kit.look.palette[role] }} />)}
+              </span>
+              {logoUrl !== null && <img src={logoUrl} alt="Your logo" className="size-8 rounded-md border border-edge object-contain" style={{ background: kit.look.palette.bg }} />}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <Button variant="accent" onClick={use}>{scenes > 1 ? 'Use my brand on every scene' : 'Use my brand'}</Button>
+              <Button onClick={save}>Save this instead</Button>
+              <Button onClick={() => { saveBrandKit(null); showToast('Your saved brand is gone from this device.'); }}>Forget</Button>
+            </div>
+          </>
+        )}
       </div>
     </Section>
   );

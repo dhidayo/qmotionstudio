@@ -347,7 +347,7 @@ test.describe('the sequence is editable', () => {
 
     // Change the look of beat *three* and confirm beat one is untouched.
     await page.getByRole('button', { name: /^3\./ }).click();
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await page.getByLabel('Grain').fill('1');
     await page.waitForTimeout(400);
 

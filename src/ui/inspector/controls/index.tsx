@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useId, useLayoutEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useId, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { useEditor } from '@/state/store';
 
 /**
@@ -22,50 +22,135 @@ export function Row({ label, children, hint }: { label: string; children: ReactN
 }
 
 /*
- * Sections as tabs, on a phone (D-114).
+ * Sections (D-131): every group of settings is a navy bar that folds.
  *
- * The inspector's panels are written as a column of titled sections, which is
- * right beside a canvas and wrong in a phone's bottom sheet: a caption's
- * settings ran to three screens, and the close button scrolled away with
- * them. Inside `SectionTabs` each titled section registers itself and only the
- * chosen one draws, under a row of tabs named after them — the same panels,
- * one screenful at a time. Outside it, nothing changes.
+ * "Under Look, Motion and Photos, sections should be having the navy blue deep
+ * bg for clear demarcation of features and functions… settings should find a
+ * way to manage screen, where I can close item… and I can expand too." Each
+ * titled section is a bar — its name, a chevron, and any actions it carries,
+ * such as delete — that opens and closes its settings. On a computer each folds
+ * on its own and stays as it was left. In a phone's sheet (`SectionTabs`, the
+ * name kept from D-114's tabs) they behave as one accordion: opening one closes
+ * the rest, so a long panel is never more than a screen.
  */
-type Registry = (title: string) => () => void;
-const SectionRegistry = createContext<Registry | null>(null);
-const ActiveSection = createContext<{ active: string | null; first: string | null } | null>(null);
+type Accordion = {
+  isOpen: (title: string) => boolean;
+  toggle: (title: string) => void;
+  register: (title: string) => () => void;
+};
+const AccordionContext = createContext<Accordion | null>(null);
 
 /**
- * Sections drawn one under another even inside `SectionTabs` — for a panel
- * that organises itself another way, such as the Text tab's list (D-124).
+ * Sections drawn on their own terms even inside a phone's accordion — for a
+ * panel that organises itself another way, such as the Text tab's list (D-124).
  */
 export function NoSectionTabs({ children }: { children: ReactNode }): React.JSX.Element {
+  return <AccordionContext.Provider value={null}>{children}</AccordionContext.Provider>;
+}
+
+const CLOSED_KEY = 'ms.sections.closed';
+
+/** A section's name without the count some carry, so "Photos (3)" is remembered as "Photos". */
+function sectionKey(title: string): string {
+  return title.replace(/\s*\(\d+\)$/, '');
+}
+
+function readClosed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(CLOSED_KEY);
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+    return new Set(Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** Remembered on this device: a viewer's convenience (browser storage), forgotten in a private window. */
+function useRememberedOpen(title: string): [boolean, () => void] {
+  const key = sectionKey(title);
+  const [open, setOpen] = useState(() => !readClosed().has(key));
+  const toggle = useCallback(() => {
+    setOpen((was) => {
+      const closed = readClosed();
+      if (was) closed.add(key);
+      else closed.delete(key);
+      try {
+        localStorage.setItem(CLOSED_KEY, JSON.stringify([...closed]));
+      } catch {
+        // Folding still works for this visit.
+      }
+      return !was;
+    });
+  }, [key]);
+  return [open, toggle];
+}
+
+export function Section({
+  title,
+  children,
+  actions,
+}: {
+  title?: string;
+  children: ReactNode;
+  /** Buttons on the bar itself, such as a delete — beside the name, always in reach. */
+  actions?: ReactNode;
+}): React.JSX.Element {
+  if (title === undefined) {
+    return <section className="mb-3">{children}</section>;
+  }
+  return <TitledSection title={title} actions={actions}>{children}</TitledSection>;
+}
+
+function TitledSection({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }): React.JSX.Element {
+  const accordion = useContext(AccordionContext);
+  const [freeOpen, freeToggle] = useRememberedOpen(title);
+  // Before paint, so a sheet never flashes every section open.
+  useLayoutEffect(() => (accordion === null ? undefined : accordion.register(title)), [accordion, title]);
+  const open = accordion === null ? freeOpen : accordion.isOpen(title);
+  const toggle = accordion === null ? freeToggle : () => { accordion.toggle(title); };
+  const id = useId();
+
   return (
-    <SectionRegistry.Provider value={null}>
-      <ActiveSection.Provider value={null}>{children}</ActiveSection.Provider>
-    </SectionRegistry.Provider>
+    <section className="mb-2" data-section={sectionKey(title)}>
+      <div className={`brand-surface flex items-center gap-1 pr-1 ${open ? 'rounded-t-[8px]' : 'rounded-[8px]'}`}>
+        <h3 className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={open}
+            aria-controls={id}
+            className="flex w-full items-center gap-2 px-2.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider"
+          >
+            <span aria-hidden className="inline-block w-3 text-center text-[13px] leading-none transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
+            <span className="min-w-0 flex-1 truncate">{title}</span>
+          </button>
+        </h3>
+        {actions}
+      </div>
+      {open && (
+        <div id={id} className="rounded-b-[8px] border border-t-0 border-edge px-2.5 pb-2.5 pt-3">
+          {/* A section inside this one folds on its own; it does not close this one. */}
+          <AccordionContext.Provider value={null}>{children}</AccordionContext.Provider>
+        </div>
+      )}
+    </section>
   );
 }
 
-export function Section({ title, children }: { title?: string; children: ReactNode }): React.JSX.Element | null {
-  const register = useContext(SectionRegistry);
-  const tabs = useContext(ActiveSection);
-  // Before paint, so a sheet never flashes every section before its tabs appear.
-  useLayoutEffect(() => {
-    if (register === null || title === undefined) return;
-    return register(title);
-  }, [register, title]);
-  if (tabs !== null && tabs.active !== null) {
-    // An untitled section (a row of buttons, a drop zone) goes with the first tab.
-    if (title === undefined ? tabs.active !== tabs.first : title !== tabs.active) return null;
-  }
+/** A delete on a section's bar (D-131): plain to see, one tap. */
+export function BarDelete({ label, onDelete }: { label: string; onDelete: () => void }): React.JSX.Element {
   return (
-    <section className="mb-4 border-b border-edge pb-4 last:mb-0 last:border-0 last:pb-0">
-      {title !== undefined && (
-        <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{title}</h3>
-      )}
-      {children}
-    </section>
+    <button
+      type="button"
+      onClick={onDelete}
+      aria-label={label}
+      title={label}
+      className="grid size-8 shrink-0 place-items-center rounded-md hover:bg-panel-alt"
+    >
+      <svg aria-hidden width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />
+      </svg>
+    </button>
   );
 }
 
@@ -360,58 +445,29 @@ export function EmptyNote({ children }: { children: ReactNode }): React.JSX.Elem
 }
 
 /**
- * Shows the sections inside it one at a time, chosen from a row of tabs
- * (D-114). `initial` picks the first tab to show by the start of its title —
- * "Photo 2" opens a photo's own settings rather than the list of photos.
+ * A phone sheet's sections as an accordion (D-131; D-114's tabs before it):
+ * one open at a time. `initial` opens a section by the start of its title —
+ * "Photo 2" opens that photo's own settings rather than the list of photos —
+ * and otherwise the first one is open.
  */
 export function SectionTabs({ initial, children }: { initial?: string | null; children: ReactNode }): React.JSX.Element {
   const [titles, setTitles] = useState<readonly string[]>([]);
-  const [chosen, setChosen] = useState<string | null>(null);
-  const register = useCallback<Registry>((title) => {
+  // `undefined`: nothing chosen yet, so the initial (or first) is open; `null`: all closed.
+  const [chosen, setChosen] = useState<string | null | undefined>(undefined);
+  const register = useCallback((title: string) => {
     setTitles((list) => (list.includes(title) ? list : [...list, title]));
     return () => { setTitles((list) => list.filter((t) => t !== title)); };
   }, []);
 
   const wanted = initial?.toLowerCase() ?? null;
   const fallback = (wanted === null ? undefined : titles.find((t) => t.toLowerCase().startsWith(wanted))) ?? titles[0] ?? null;
-  const active = chosen !== null && titles.includes(chosen) ? chosen : fallback;
-  const tabbed = titles.length > 1;
+  const openTitle = chosen === undefined ? fallback : chosen;
 
-  return (
-    <SectionRegistry.Provider value={register}>
-      <ActiveSection.Provider value={tabbed ? { active, first: titles[0] ?? null } : null}>
-        {tabbed && (
-          <div
-            role="tablist"
-            aria-label="Sections"
-            data-section-tabs
-            className="sticky top-0 z-10 -mx-3 mb-3 flex gap-1.5 overflow-x-auto border-b border-edge bg-panel px-3 pb-2"
-          >
-            {titles.map((title) => {
-              const on = title === active;
-              return (
-                <button
-                  key={title}
-                  type="button"
-                  role="tab"
-                  aria-selected={on}
-                  onClick={() => { setChosen(title); }}
-                  className="shrink-0 rounded-full border px-3 py-1.5 text-[13px]"
-                  style={{
-                    borderColor: on ? 'var(--c-accent)' : 'var(--c-edge)',
-                    background: on ? 'var(--c-accent-soft)' : 'transparent',
-                    color: on ? 'var(--c-accent)' : 'var(--c-ink-muted)',
-                    fontWeight: on ? 600 : 400,
-                  }}
-                >
-                  {title}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {children}
-      </ActiveSection.Provider>
-    </SectionRegistry.Provider>
-  );
+  const accordion = useMemo<Accordion>(() => ({
+    isOpen: (title) => title === openTitle,
+    toggle: (title) => { setChosen(title === openTitle ? null : title); },
+    register,
+  }), [openTitle, register]);
+
+  return <AccordionContext.Provider value={accordion}>{children}</AccordionContext.Provider>;
 }

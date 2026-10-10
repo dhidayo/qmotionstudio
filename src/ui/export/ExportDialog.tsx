@@ -11,6 +11,9 @@ import {
   type ExportFormat, type ExportSettings, type FormatAvailability, type QualityTier,
 } from '@/export/config';
 import { totalDurationMs } from '@/document/select/timeline';
+import { renderStills } from '@/export/stills';
+import { makeZip } from '@/export/zip';
+import { makePdf } from '@/export/pdf';
 import { Button, Section, Segmented } from '@/ui/inspector/controls';
 
 type Phase =
@@ -26,6 +29,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
   const { limits } = useEntitlements(project.mode);
 
   const [settings, setSettings] = useState<ExportSettings>(DEFAULT_EXPORT);
+  // A video, or its scenes as pictures — a carousel (D-135).
+  const [what, setWhat] = useState<'video' | 'images'>('video');
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [formats, setFormats] = useState<FormatAvailability[] | null>(null);
   const handle = useRef<ExportHandle | null>(null);
@@ -116,9 +121,25 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-[14px] font-semibold">Export</h2>
           <span className="tabular text-[11px] text-ink-faint">
-            {size.w}×{size.h} · {totalFrames} frames
+            {what === 'video' ? `${size.w}×${size.h} · ${totalFrames} frames` : `${size.w}×${size.h} · ${project.scenes.length} ${project.scenes.length === 1 ? 'picture' : 'pictures'}`}
           </span>
         </div>
+
+        {!running && (
+          <Segmented<'video' | 'images'>
+            label="Make"
+            value={what}
+            options={[
+              { value: 'video', label: 'Video' },
+              { value: 'images', label: project.scenes.length > 1 ? 'Images · carousel' : 'Image' },
+            ]}
+            onChange={setWhat}
+          />
+        )}
+
+        {what === 'images' ? (
+          <ImagesExport shortEdge={settings.shortEdge} onShortEdge={(shortEdge) => { setSettings((s) => ({ ...s, shortEdge })); }} onClose={onClose} />
+        ) : (<>
 
         {!offline && (
           <p className="mb-3 rounded-md border border-edge p-2 text-[11px] leading-relaxed text-ink-muted">
@@ -223,6 +244,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
             </>
           )}
         </div>
+        </>)}
       </div>
     </div>
   );
@@ -237,22 +259,154 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
  * they just made. Android phones share too, and their Gallery shows
  * downloads, so they get both. A computer just downloads.
  */
-function savesToPhotos(file: File): boolean {
+function savesToPhotos(file: File | readonly File[]): boolean {
   if (typeof navigator.canShare !== 'function') return false;
   const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
   if (!touch) return false;
   try {
-    return navigator.canShare({ files: [file] });
+    const files: File[] = file instanceof File ? [file] : [...file];
+    return navigator.canShare({ files });
   } catch {
     return false;
   }
+}
+
+const isApple = (): boolean =>
+  /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+
+/**
+ * The scenes as pictures (D-135): PNGs — one ZIP on a computer, straight to
+ * Photos on a phone — or a PDF, which LinkedIn shows as a swipeable document.
+ */
+function ImagesExport({
+  shortEdge,
+  onShortEdge,
+  onClose,
+}: {
+  shortEdge: 720 | 1080;
+  onShortEdge: (shortEdge: 720 | 1080) => void;
+  onClose: () => void;
+}): React.JSX.Element {
+  const project = useEditor((s) => s.project);
+  const media = useMediaStore();
+  const { limits } = useEntitlements(project.mode);
+  const [format, setFormat] = useState<'png' | 'pdf'>('png');
+  const [state, setState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'running'; done: number; total: number }
+    | { kind: 'done'; files: readonly File[]; share: boolean; note: string }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' });
+  const [shareError, setShareError] = useState<string | null>(null);
+  const size = exportSize(project.aspect, { ...DEFAULT_EXPORT, shortEdge });
+  const count = project.scenes.length;
+  const stem = (project.name.trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'motion-studio') + `-${shortEdge}p`;
+
+  const run = (): void => {
+    setState({ kind: 'running', done: 0, total: count });
+    void renderStills({
+      project,
+      media,
+      size,
+      watermark: limits.watermark,
+      type: format === 'pdf' ? 'image/jpeg' : 'image/png',
+      stem,
+      onProgress: (done, total) => { setState({ kind: 'running', done, total }); },
+    })
+      .then(async (stills) => {
+        if (format === 'pdf') {
+          const pages = await Promise.all(stills.map(async (still) => ({ jpeg: new Uint8Array(await still.blob.arrayBuffer()), width: still.width, height: still.height })));
+          const file = new File([makePdf(pages)], `${stem}.pdf`, { type: 'application/pdf' });
+          const share = savesToPhotos(file);
+          if (!share) downloadBlob(file, file.name);
+          setState({ kind: 'done', files: [file], share, note: `${file.name} — ${stills.length} ${stills.length === 1 ? 'page' : 'pages'}.` });
+          return;
+        }
+        const files = stills.map((still) => new File([still.blob], still.name, { type: 'image/png' }));
+        const share = savesToPhotos(files);
+        if (!share) {
+          if (files.length === 1 && files[0]) downloadBlob(files[0], files[0].name);
+          else {
+            const zip = makeZip(await Promise.all(files.map(async (file) => ({ name: file.name, data: new Uint8Array(await file.arrayBuffer()) }))));
+            downloadBlob(zip, `${stem}-slides.zip`);
+          }
+        }
+        setState({ kind: 'done', files, share, note: files.length === 1 ? `Saved ${files[0]?.name ?? 'the picture'}.` : `Saved ${files.length} slides, in order, as ${stem}-slides.zip.` });
+      })
+      .catch((error: unknown) => {
+        // §16: an export error is said, never swallowed.
+        console.error('Image export failed.', error);
+        setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
+      });
+  };
+
+  const share = (files: readonly File[]): void => {
+    setShareError(null);
+    navigator.share({ files: [...files], title: project.name }).catch((reason: unknown) => {
+      if (reason instanceof DOMException && reason.name === 'AbortError') return;
+      console.error('Sharing the images failed.', reason);
+      setShareError(reason instanceof Error ? reason.message : String(reason));
+    });
+  };
+
+  return (
+    <div data-export-images>
+      <p className="mb-3 text-[11px] leading-relaxed text-ink-muted">
+        {count > 1
+          ? 'One picture per scene, taken once each has settled — ready for an Instagram carousel or a LinkedIn document.'
+          : 'A still of this design, once it has settled.'}
+      </p>
+      <Section>
+        <Segmented<'png' | 'pdf'>
+          label="As"
+          value={format}
+          options={[
+            { value: 'png', label: count > 1 ? 'Pictures · PNG' : 'Picture · PNG' },
+            { value: 'pdf', label: 'PDF · LinkedIn' },
+          ]}
+          onChange={setFormat}
+        />
+        <Segmented<720 | 1080>
+          label="Size"
+          value={shortEdge}
+          options={[{ value: 720, label: '720p' }, { value: 1080, label: '1080p' }]}
+          onChange={onShortEdge}
+        />
+      </Section>
+      {limits.watermark && <p className="mb-3 text-[11px] text-ink-faint">Free pictures carry the small watermark.</p>}
+
+      {state.kind === 'running' && (
+        <p className="mb-3 text-[12px] text-ink-muted" role="status">Drawing picture {state.done + (state.done < state.total ? 1 : 0)} of {state.total}…</p>
+      )}
+      {state.kind === 'error' && <p className="mb-3 text-[11px]" style={{ color: 'var(--c-danger)' }}>{state.message}</p>}
+      {state.kind === 'done' && !state.share && <p className="mb-3 text-[11px] text-ink-muted" data-images-done>{state.note}</p>}
+      {state.kind === 'done' && state.share && (
+        <div className="mb-3" data-save-to-photos>
+          <p className="mb-2 text-[12px] text-ink-muted">
+            {format === 'pdf' ? 'Your PDF is ready. Send it to LinkedIn or save it to Files.' : isApple() ? <>Tap <strong style={{ color: 'var(--c-ink)' }}>Save to Photos</strong>, then <strong style={{ color: 'var(--c-ink)' }}>Save {state.files.length === 1 ? 'Image' : `${state.files.length} Images`}</strong>.</> : 'Save them to your gallery or send them straight to an app.'}
+          </p>
+          <button type="button" onClick={() => { share(state.files); }} className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink">
+            {format === 'pdf' ? 'Share the PDF' : isApple() ? 'Save to Photos' : 'Save or share'}
+          </button>
+          {shareError !== null && <p className="mt-2 text-[11px]" style={{ color: 'var(--c-danger)' }}>Could not open sharing: {shareError}</p>}
+        </div>
+      )}
+
+      <div className="flex gap-1">
+        <Button onClick={onClose}>Close</Button>
+        <Button variant="accent" onClick={run} disabled={state.kind === 'running'}>
+          {state.kind === 'done' ? 'Export again' : count > 1 ? `Export ${count} pictures` : 'Export picture'}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 /** The finished video, offered to Photos first and to Files second. */
 function SaveToPhotos({ file, bytes }: { file: File; bytes: number }): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   // An iPad asks for the desktop site, so it says "Macintosh" — with a touch screen.
-  const apple = /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const apple = isApple();
 
   const share = (): void => {
     setError(null);

@@ -57,7 +57,7 @@ export type PhotoTarget =
  */
 export type PhonePanel =
   | 'designs' | 'photos' | 'text' | 'motion' | 'effects' | 'style' | 'add'
-  | 'project' | 'aspect' | 'element' | 'timeline';
+  | 'project' | 'aspect' | 'element' | 'timeline' | 'scene';
 
 /** Zoom and pan of the preview on a phone, from a pinch. 1 is fitted to the screen. */
 export type ViewZoom = { readonly scale: number; readonly x: number; readonly y: number };

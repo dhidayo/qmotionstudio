@@ -132,7 +132,7 @@ test.describe('the phone layout', () => {
     await tap(page, await at(page, PHOTO.x, PHOTO.y));
     const tools = page.locator('[data-phone-toolbar="selection"]');
     await expect(tools).toBeVisible();
-    for (const name of ['Replace', 'Crop', 'Effects', 'Motion', 'Delete', 'Done']) {
+    for (const name of ['Replace', 'Crop', 'Effects', 'Animate', 'Delete', 'Done']) {
       await expect(tools.getByRole('button', { name, exact: true })).toBeVisible();
     }
     // No floating toolbar over the picture on a phone: the bottom bar is it.
@@ -223,7 +223,7 @@ test.describe('fingers on the canvas', () => {
     await page.waitForTimeout(600);
     await menu.getByRole('menuitem', { name: /^Change background/ }).click();
     // Style, on its Background tab.
-    await expect(page.getByRole('tab', { name: 'Background', selected: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Background', expanded: true })).toBeVisible();
   });
 
   test('pinch zooms the view, not the element, and Fit puts it back', async ({ page }) => {
@@ -252,7 +252,7 @@ test.describe('the background and the plan (D-120, D-122)', () => {
     const clipped = await toolbar.locator('button span').evaluateAll((spans) => spans.some((s) => s.scrollWidth > s.clientWidth + 1));
     expect(clipped).toBe(false);
     await background.click();
-    await expect(page.getByRole('tab', { name: 'Background', selected: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Background', expanded: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Your picture' })).toBeVisible();
   });
 
@@ -354,7 +354,7 @@ test.describe('second round (D-111 to D-115)', () => {
     await tap(page, await at(page, PHOTO.x, PHOTO.y));
     await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Crop' }).tap();
     const sheet = page.getByRole('dialog', { name: 'Settings' });
-    await expect(sheet.getByRole('tab', { selected: true })).toHaveText(/^Photo \d/);
+    await expect(sheet.locator('[data-section] button[aria-expanded="true"]').first()).toHaveText(/Photo \d/);
     const overflow = await sheet.evaluate((dialog) => {
       const body = [...dialog.querySelectorAll('div')].find((el) => getComputedStyle(el).overflowY === 'auto');
       return body ? body.scrollHeight - body.clientHeight : 0;

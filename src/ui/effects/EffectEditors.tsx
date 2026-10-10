@@ -7,7 +7,7 @@ import { sceneLengthMs, sceneSpans } from '@/document/select/timeline';
 import { useEditor } from '@/state/store';
 import { useOverlays } from '@/ui/shell/overlays';
 import { findEffect } from '@/ui/editing/commands';
-import { Button, ColorField, EmptyNote, Row, Segmented, Slider } from '@/ui/inspector/controls';
+import { BarDelete, Button, ColorField, EmptyNote, Row, Segmented, Slider } from '@/ui/inspector/controls';
 
 /**
  * Editing placed effects (D-100): how strong, when, and each one's own
@@ -113,7 +113,12 @@ export function ParamsEditor({
   );
 }
 
-/** The frame of an effect row: its name, a remove button, and a fold for the rest. */
+/**
+ * An effect, as a navy bar (D-131): tap it to fold its settings away or bring
+ * them back; delete sits on the bar, plain to see — "the header for it should
+ * have been navy blue… clearly shown that I can collapse the section and
+ * delete the section on the header".
+ */
 function EffectCard({
   name,
   badge,
@@ -129,32 +134,24 @@ function EffectCard({
 }): React.JSX.Element {
   const [open, setOpen] = useState(true);
   return (
-    <div className="mb-2 rounded-md border border-edge bg-panel-alt/40" data-effect-row={testId}>
-      <div className="flex items-center gap-1.5 px-2 py-1.5">
+    <div className="mb-2" data-effect-row={testId}>
+      <div className={`brand-surface flex items-center gap-1 pr-1 ${open ? 'rounded-t-[8px]' : 'rounded-[8px]'}`}>
         <button
           type="button"
           onClick={() => { setOpen(!open); }}
           aria-expanded={open}
           aria-label={`${open ? 'Fold' : 'Unfold'} ${name}`}
-          className="text-[10px] text-ink-faint"
+          className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left"
         >
-          {open ? '▾' : '▸'}
+          <span aria-hidden className="inline-block w-3 text-center text-[13px] leading-none transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</span>
+          <span className="shrink-0 rounded-full px-2 py-0.5 text-[9px] uppercase tracking-wide" style={{ background: 'rgb(255 255 255 / 0.14)' }}>
+            {badge}
+          </span>
         </button>
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{name}</span>
-        <span className="rounded-sm px-1 text-[9px] uppercase tracking-wide text-ink-faint" style={{ background: 'var(--c-panel)' }}>
-          {badge}
-        </span>
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={`Remove ${name}`}
-          title="Remove"
-          className="grid size-5 place-items-center rounded text-[13px] leading-none text-ink-faint hover:bg-panel hover:text-[var(--c-danger)]"
-        >
-          ×
-        </button>
+        <BarDelete label={`Remove ${name}`} onDelete={onRemove} />
       </div>
-      {open && <div className="border-t border-edge px-2 pb-1 pt-2">{children}</div>}
+      {open && <div className="rounded-b-[8px] border border-t-0 border-edge px-2.5 pb-1 pt-2.5">{children}</div>}
     </div>
   );
 }
@@ -274,18 +271,25 @@ export function TimelineEffectPanel(): React.JSX.Element {
     ? 'On the timeline · over every scene and layer'
     : `In scene ${sceneIndex + 1} · moves with the scene`;
 
+  const remove = (): void => {
+    dispatch(sceneIndex === null ? actions.removeTimelineEffect(clip.id) : actions.removeSceneEffect(clip.id));
+    selectEffect(null);
+  };
+
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <div>
-          <h2 className="text-[13px] font-semibold">{def?.name ?? clip.effectId}</h2>
-          <p className="text-[11px] text-ink-faint">
+      {/* The effect's own bar (D-131): its name and where it is, Done to put it down, delete beside it. */}
+      <div className="brand-surface mb-3 flex items-center gap-1 rounded-[8px] py-1.5 pl-3 pr-1" data-effect-panel-bar>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-[13px] font-semibold">{def?.name ?? clip.effectId}</h2>
+          <p className="truncate text-[11px] text-ink-muted">
             {where} · {seconds(origin + clip.startMs)} – {seconds(origin + endMs)}
           </p>
         </div>
-        <button type="button" onClick={() => { selectEffect(null); }} className="text-[11px] text-ink-faint hover:text-ink">
+        <button type="button" onClick={() => { selectEffect(null); }} className="rounded-md px-2.5 py-1.5 text-[12px] font-semibold hover:bg-panel-alt">
           Done
         </button>
+        <BarDelete label={`Delete ${def?.name ?? 'effect'}`} onDelete={remove} />
       </div>
       {def && <p className="mb-3 text-[11px] text-ink-muted">{def.blurb}</p>}
       <Slider label="Intensity" value={Math.round(clip.intensity * 100)} min={0} max={100} suffix="%"
@@ -312,10 +316,7 @@ export function TimelineEffectPanel(): React.JSX.Element {
         }}>
           Duplicate
         </Button>
-        <Button variant="danger" onClick={() => {
-          dispatch(sceneIndex === null ? actions.removeTimelineEffect(clip.id) : actions.removeSceneEffect(clip.id));
-          selectEffect(null);
-        }}>
+        <Button variant="danger" onClick={remove}>
           Delete
         </Button>
       </div>

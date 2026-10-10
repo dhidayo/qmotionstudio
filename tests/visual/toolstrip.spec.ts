@@ -61,7 +61,7 @@ test.describe('on a computer', () => {
     await strip.getByRole('button', { name: 'Text', exact: true }).click();
     await expect(page.getByRole('tab', { name: 'Text' })).toHaveAttribute('aria-selected', 'true');
     await strip.getByRole('button', { name: 'Style', exact: true }).click();
-    await expect(page.getByRole('tab', { name: 'Look' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Style' })).toHaveAttribute('aria-selected', 'true');
 
     // Designs opens as a window in the middle, not a sheet stuck to the bottom.
     await strip.getByRole('button', { name: 'Designs', exact: true }).click();

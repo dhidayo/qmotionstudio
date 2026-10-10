@@ -11,6 +11,7 @@ import type {
   AnimPreset,
   AudioClip,
   BackgroundTreatment,
+  LogoSettings,
   LookRestyle,
   EffectClip,
   EffectParams,
@@ -789,6 +790,27 @@ export function applyLook(restyle: LookRestyle): Action {
     label: 'Change look',
     apply: (project, scope) =>
       editInputs(project, scope, (inputs) => ({ ...inputs, look: restyleLook(inputs.look, restyle) })),
+  };
+}
+
+/**
+ * "My brand" on the whole project (D-134): every scene restyled in the brand's
+ * look and, when the brand has a logo, carrying it as the brand placed it.
+ */
+export function applyBrand(restyle: LookRestyle, logo: LogoSettings | null): Action {
+  return {
+    label: 'Use my brand',
+    apply: (project) => ({
+      ...project,
+      scenes: project.scenes.map((scene) => ({
+        ...scene,
+        inputs: {
+          ...scene.inputs,
+          look: restyleLook(scene.inputs.look, restyle),
+          ...(logo === null || logo.mediaId === null ? {} : { logo }),
+        },
+      })),
+    }),
   };
 }
 

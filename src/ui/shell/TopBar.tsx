@@ -218,7 +218,7 @@ function ModeSwitch(): React.JSX.Element {
             title={
               lossy
                 ? `Keeps the selected scene and drops the other ${sceneCount - 1}. Undoable.`
-                : m === 'showcase' ? 'One looping scene' : 'Several scenes, transitions and overlays'
+                : m === 'showcase' ? 'One design, looping — a post, a story, a reel' : 'A video of several scenes, with transitions, layers and music'
             }
             className="whitespace-nowrap rounded-sm px-2 py-0.5 text-[12px] transition-colors"
             style={

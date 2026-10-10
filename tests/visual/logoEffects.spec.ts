@@ -62,7 +62,7 @@ async function blob(page: Page, kind: 'magenta' | 'green'): Promise<{ x: number;
 }
 
 async function addLogo(page: Page): Promise<void> {
-  await page.getByRole('tab', { name: 'Look' }).click();
+  await page.getByRole('tab', { name: 'Style' }).click();
   await page.getByLabel('Add a logo').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: await logoPng(page) });
   await expect(page.locator('[data-logo-section] img[alt="Logo"]')).toBeVisible();
   await page.getByRole('group', { name: 'Position' }).getByRole('button', { name: 'Centre', exact: true }).click();
@@ -88,11 +88,11 @@ test.describe('the logo lives in Look (D-105)', () => {
     await page.goto('/');
     await page.waitForSelector('canvas');
     await expect(page.getByRole('tab', { name: 'Logo' })).toHaveCount(0);
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await expect(page.getByLabel('Add a logo')).toBeAttached();
 
     await page.getByRole('button', { name: 'Corporate Ads' }).click();
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await expect(page.getByLabel('Add a logo')).toBeAttached();
   });
 
@@ -212,7 +212,7 @@ test.describe('effects (D-100)', () => {
     await page.waitForTimeout(2_500);
     const plain = await fingerprint(page);
 
-    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByRole('tab', { name: 'Effects' }).click();
     await page.getByRole('button', { name: '+ Add effect' }).last().click();
     const library = page.getByRole('dialog', { name: 'Effects' });
     await library.getByRole('tab', { name: 'Stylize' }).click();
@@ -267,10 +267,11 @@ test.describe('effects (D-100)', () => {
     const canvas = await page.locator('canvas').boundingBox();
     if (!canvas) throw new Error('no canvas');
     await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
-    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByRole('tab', { name: 'Effects' }).click();
     const before = await fingerprint(page);
 
-    await page.getByRole('button', { name: '+ Add effect' }).first().click();
+    // The photo's own section (D-132), not the scene's above it.
+    await page.locator('[data-section^="Photo"]').getByRole('button', { name: '+ Add effect' }).click();
     const library = page.getByRole('dialog', { name: 'Effects' });
     await expect(library.getByRole('heading', { level: 2 })).toContainText(/Effects for photo/);
     await library.locator('[data-effect="glow-el"]').click();
@@ -285,8 +286,8 @@ test.describe('effects (D-100)', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(2_500);
     const moving = await fingerprint(page);
-    await page.getByRole('tab', { name: 'Motion' }).click();
-    await page.getByLabel('Motion strength').last().fill('0');
+    await page.getByRole('tab', { name: 'Effects' }).click();
+    await page.getByLabel('How much it moves').last().fill('0');
     await page.waitForTimeout(400);
     expect(difference(moving, await fingerprint(page))).toBeGreaterThan(0.5);
   });

@@ -133,7 +133,7 @@ test.describe('inspector', () => {
 
   test('a palette change repaints without rebuilding (D-006)', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only renderer handle, which the production build rightly omits.');
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await page.waitForTimeout(200);
 
     const before = await readStats(page);
@@ -186,7 +186,7 @@ test.describe('history', () => {
   });
 
   test('a slider drag is one undo step, not one per frame', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     const slider = page.getByRole('slider', { name: 'Vignette' });
 
     await slider.focus();
@@ -200,7 +200,7 @@ test.describe('history', () => {
   });
 
   test('⌘Z works from the keyboard', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await page.locator('[data-look="paper"]').click();
     await expect(page.getByRole('button', { name: /^Undo Change look/ })).toBeEnabled();
 

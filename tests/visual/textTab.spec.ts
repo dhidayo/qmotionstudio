@@ -43,7 +43,7 @@ test('every text in the design is a tile that opens to its settings', async ({ p
 
   const head = tile(page, 'text:headline').getByRole('button', { expanded: false });
   await head.click();
-  await expect(tile(page, 'text:headline').getByRole('button', { expanded: true })).toBeVisible();
+  await expect(tile(page, 'text:headline').getByRole('button', { name: /^Headline/, expanded: true })).toBeVisible();
   await expect(tile(page, 'text:headline').getByRole('button', { name: 'Delete this text' })).toBeVisible();
   // Opening a tile picks its text on the canvas: its toolbar appears there.
   await expect(page.locator('[data-selection-toolbar]')).toBeVisible();

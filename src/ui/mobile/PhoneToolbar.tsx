@@ -99,7 +99,7 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
           : { label: 'Edit text', icon: 'edit', onSelect: () => { o.openTextEdit(key); } },
         { label: photo ? 'Crop' : 'Style', icon: 'settings', onSelect: () => { o.openPhonePanel('element', sectionName); } },
         { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target }); } },
-        { label: 'Motion', icon: 'motion', onSelect: () => { o.openPhonePanel('effects', sectionName); } },
+        { label: 'Animate', icon: 'motion', onSelect: () => { o.openPhonePanel('effects', sectionName); } },
         { label: photo ? 'Delete' : 'Remove', icon: 'trash', danger: true, onSelect: () => { deleteSlot(key); } },
         done,
       ],
@@ -150,6 +150,8 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
       context: `Scene ${s.selectedScene + 1}`,
       tools: [
         { label: 'Design', icon: 'designs', onSelect: () => { o.openScenePicker('replace'); } },
+        // Its length and how it arrives (D-133): the timeline's scene bar, on a phone.
+        { label: 'Timing', icon: 'scene', onSelect: () => { o.openPhonePanel('scene'); } },
         { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target: { kind: 'scene' } }); } },
         { label: 'Copy', icon: 'copy', onSelect: () => { duplicateSelection(); } },
         del(),

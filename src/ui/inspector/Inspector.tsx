@@ -14,8 +14,8 @@ import { TimelineEffectPanel } from '@/ui/effects/EffectEditors';
 const TABS: readonly { id: InspectorTab; label: string }[] = [
   { id: 'photos', label: 'Photos' },
   { id: 'text', label: 'Text' },
-  { id: 'motion', label: 'Motion' },
-  { id: 'look', label: 'Look' },
+  { id: 'motion', label: 'Effects' },
+  { id: 'look', label: 'Style' },
 ];
 
 /**

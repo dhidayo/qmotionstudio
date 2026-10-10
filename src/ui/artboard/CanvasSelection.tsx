@@ -874,7 +874,7 @@ export function CanvasSelection({
       ...(isText ? [{ label: 'Edit text', icon: '✎', onSelect: () => { openTextEdit(target.key); } }] : []),
       ...(photo?.[1] !== undefined ? [{ label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'slot', index: Number(photo[1]) }); } }] : []),
       { label: 'Effects', icon: '✦', onSelect: () => { openPicker({ target: { kind: 'element', target: { kind: 'slot', key: target.key }, label } }); } },
-      { label: 'Motion', icon: '◐', onSelect: () => { selectSlotTab(target.key, 'motion'); } },
+      { label: 'Animate', icon: '◐', onSelect: () => { selectSlotTab(target.key, 'motion'); } },
       remove,
       more,
     ];

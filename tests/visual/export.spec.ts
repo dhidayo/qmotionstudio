@@ -114,7 +114,7 @@ test.describe('offline export', () => {
     await page.waitForTimeout(1200);
 
     // Black and white over the whole scene, added the way a person would.
-    await page.getByRole('tab', { name: 'Motion' }).click();
+    await page.getByRole('tab', { name: 'Effects' }).click();
     await page.getByRole('button', { name: '+ Add effect' }).last().click();
     const library = page.getByRole('dialog', { name: 'Effects' });
     await library.getByRole('tab', { name: 'Stylize' }).click();

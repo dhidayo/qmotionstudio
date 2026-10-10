@@ -306,7 +306,7 @@ function PhotoLayers({ blank }: { blank: boolean }): React.JSX.Element {
   return (
     <Section title={blank ? 'Photos' : 'Extra photos'}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[11px] text-ink-muted">{blank ? 'Place photos anywhere on this blank canvas.' : 'More photos on top of the design, placed anywhere.'}</p>
+        <p className="text-[11px] text-ink-muted">{blank ? 'This design has no photo spots of its own — add photos on top, anywhere.' : 'More photos on top of the design, placed anywhere.'}</p>
         {add.button}
       </div>
       {add.error}

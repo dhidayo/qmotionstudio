@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { RenderRig } from '@/core/render/rig';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Project } from '@/document/types';
@@ -16,6 +16,8 @@ import { PhonePanels } from './PhonePanels';
 import { PhoneToolbar } from './PhoneToolbar';
 import { PhoneTopBar } from './PhoneTopBar';
 import { continueAsVideo } from '@/ui/editing/commands';
+import { useSceneReorder } from '@/ui/timeline/useSceneReorder';
+import * as actions from '@/document/actions';
 
 /**
  * The editor on a phone (D-109): a layout of its own, not the desktop one
@@ -204,6 +206,19 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
 
   const fxCount = project.scenes.reduce((n, s) => n + (s.inputs.effects?.length ?? 0), 0) + (project.effects?.length ?? 0);
 
+  // Scenes rearranged by dragging along the strip (D-130).
+  const dispatch = useEditor((s) => s.dispatch);
+  const msAt = useCallback((clientX: number): number => {
+    const box = lane.current?.getBoundingClientRect();
+    if (!box || box.width <= 0) return 0;
+    return Math.max(0, Math.min(durationMs, ((clientX - box.left) / box.width) * durationMs));
+  }, [durationMs]);
+  const reorder = useSceneReorder({
+    spans,
+    msAt,
+    onMove: (from, to) => { dispatch(actions.moveScene(from, to)); selectSceneClip(to); },
+  });
+
   return (
     <div className="shrink-0 border-t border-edge bg-panel px-3 pb-1.5 pt-2" aria-label="Timeline summary" data-phone-timeline>
       <div
@@ -224,8 +239,12 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
               aria-label={`Scene ${span.index + 1}`}
               aria-pressed={on && sceneClip}
               data-phone-scene={span.index}
-              onPointerDown={(event) => { event.stopPropagation(); }}
+              onPointerDown={(event) => { event.stopPropagation(); reorder.handlers(span.index).onPointerDown(event); }}
+              onPointerMove={(event) => { event.stopPropagation(); reorder.handlers(span.index).onPointerMove(event); }}
+              onPointerUp={(event) => { reorder.handlers(span.index).onPointerUp(event); }}
+              onPointerCancel={() => { reorder.handlers(span.index).onPointerCancel(); }}
               onClick={() => {
+                if (reorder.wasDrag()) return;
                 clock.pause();
                 clock.seek(span.startMs);
                 setPlayhead(span.startMs);
@@ -236,6 +255,7 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
                 left: `calc(${(span.startMs / durationMs) * 100}% + 1px)`,
                 width: `calc(${((span.endMs - span.startMs) / durationMs) * 100}% - 2px)`,
                 borderColor: on && sceneClip ? 'var(--c-accent)' : on ? 'var(--c-edge-strong)' : 'transparent',
+                ...(reorder.drag?.from === span.index ? { transform: `translateX(${reorder.drag.dx}px)`, zIndex: 10, opacity: 0.9, boxShadow: 'var(--shadow-lg)' } : {}),
                 // Each scene's own design, so the strip reads as the ad at a glance.
                 backgroundColor: 'var(--c-edge)',
                 backgroundImage: `url("${posterUrl(span.scene.templateId)}")`,
@@ -252,6 +272,9 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
             </button>
           );
         })}
+        {reorder.drag && reorder.drag.to !== reorder.drag.from && (
+          <span aria-hidden className="pointer-events-none absolute -inset-y-1 z-20 w-1 -translate-x-1/2 rounded-full" style={{ left: `${(reorder.drag.markerMs / durationMs) * 100}%`, background: 'var(--c-accent)' }} />
+        )}
         <span
           ref={playhead}
           aria-hidden

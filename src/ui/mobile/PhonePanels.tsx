@@ -19,6 +19,9 @@ import { MAX_NAME, useProjectActions } from '@/ui/projects/useProjectActions';
 import { SectionTabs } from '@/ui/inspector/controls';
 import { BottomSheet } from './BottomSheet';
 import { TierSwitch } from '@/ui/shell/TierSwitch';
+import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
+import * as actions from '@/document/actions';
+import { TRANSITION_LABELS } from '@/ui/timeline/transitionLabels';
 import { Icon, type IconName } from './Icon';
 
 /**
@@ -70,7 +73,7 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
       return <BottomSheet title="Text" onClose={done} tall>{tabs(<TextTab template={template} />)}</BottomSheet>;
     case 'effects':
     case 'motion':
-      return <BottomSheet title="Motion and effects" onClose={done} tall>{tabs(<MotionTab template={template} />)}</BottomSheet>;
+      return <BottomSheet title="Effects" onClose={done} tall>{tabs(<MotionTab template={template} />)}</BottomSheet>;
     case 'style':
       return <BottomSheet title="Style" onClose={done} tall>{tabs(<LookTab template={template} />)}</BottomSheet>;
     case 'element':
@@ -81,6 +84,8 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
       return <AspectPanel onClose={done} />;
     case 'project':
       return <ProjectPanel onClose={done} />;
+    case 'scene':
+      return <SceneTimingPanel onClose={done} />;
     case 'timeline':
       return (
         <BottomSheet title="Timeline" onClose={done} tall>
@@ -256,6 +261,108 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
         <TierSwitch size="large" />
       </div>
       <p className="mt-3 text-[12px] text-ink-faint">Your photos stay on your device. Nothing is uploaded.</p>
+    </BottomSheet>
+  );
+}
+
+/**
+ * A scene's length and how it arrives, on a phone (D-133). The timeline's
+ * scene bar has these on a computer; a phone had no way to change a
+ * transition at all.
+ */
+function SceneTimingPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
+  const index = useEditor((s) => s.selectedScene);
+  const scene = useEditor((s) => s.project.scenes[s.selectedScene]);
+  const template = useEditor((s) => s.template);
+  const dispatch = useEditor((s) => s.dispatch);
+  const endInteraction = useEditor((s) => s.endInteraction);
+  if (!scene) return <BottomSheet title="Scene" onClose={onClose}><p className="text-[13px] text-ink-muted">No scene selected.</p></BottomSheet>;
+  const bounds = { min: template?.minDurationMs ?? 1_000, max: template?.maxDurationMs ?? 60_000 };
+  const transition = scene.transitionIn;
+  const chip = (on: boolean): React.CSSProperties => ({
+    borderColor: on ? 'var(--c-accent)' : 'var(--c-edge)',
+    background: on ? 'var(--c-accent-soft)' : 'transparent',
+    color: on ? 'var(--c-accent)' : 'var(--c-ink)',
+    fontWeight: on ? 600 : 400,
+  });
+
+  return (
+    <BottomSheet title={`Scene ${index + 1}`} onClose={onClose}>
+      <label className="block text-[13px]" htmlFor="phone-scene-length">
+        Length <span className="tabular text-ink-muted">· {(scene.durationMs / 1000).toFixed(1)}s</span>
+      </label>
+      <input
+        id="phone-scene-length"
+        type="range"
+        min={bounds.min}
+        max={bounds.max}
+        step={100}
+        value={scene.durationMs}
+        aria-label="Scene length"
+        onChange={(e) => { dispatch(actions.setSceneDurationAt(index, Number(e.target.value), bounds)); }}
+        onPointerUp={endInteraction}
+        className="mt-1 h-7 w-full accent-[var(--c-accent)]"
+      />
+
+      {index === 0 ? (
+        <p className="mt-4 text-[12px] text-ink-muted">The first scene is where the video starts, so it has no way in.</p>
+      ) : (
+        <>
+          <div className="mt-4 text-[13px]">How it arrives</div>
+          <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+            {TRANSITION_KINDS.map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                aria-pressed={(transition?.kind ?? 'crossFade') === kind}
+                onClick={() => { dispatch(actions.setSceneTransition(index, { kind })); endInteraction(); }}
+                className="rounded-lg border px-2 py-2 text-[13px]"
+                style={chip((transition?.kind ?? 'crossFade') === kind)}
+              >
+                {TRANSITION_LABELS[kind]}
+              </button>
+            ))}
+          </div>
+          {transition !== null && transition.kind !== 'cut' && (
+            <>
+              <label className="mt-4 block text-[13px]" htmlFor="phone-transition-length">
+                Over <span className="tabular text-ink-muted">· {(transition.durationMs / 1000).toFixed(2)}s</span>
+              </label>
+              <input
+                id="phone-transition-length"
+                type="range"
+                min={100}
+                max={1_500}
+                step={50}
+                value={transition.durationMs}
+                aria-label="Transition length"
+                onChange={(e) => { dispatch(actions.setSceneTransition(index, { durationMs: Number(e.target.value) })); }}
+                onPointerUp={endInteraction}
+                className="mt-1 h-7 w-full accent-[var(--c-accent)]"
+              />
+            </>
+          )}
+          {transition !== null && usesDirection(transition.kind) && (
+            <>
+              <div className="mt-4 text-[13px]">From</div>
+              <div className="mt-1.5 grid grid-cols-4 gap-1.5">
+                {(['left', 'right', 'up', 'down'] as const).map((direction) => (
+                  <button
+                    key={direction}
+                    type="button"
+                    aria-pressed={(transition.direction ?? 'left') === direction}
+                    onClick={() => { dispatch(actions.setSceneTransition(index, { direction })); endInteraction(); }}
+                    className="rounded-lg border px-2 py-2 text-[13px] capitalize"
+                    style={chip((transition.direction ?? 'left') === direction)}
+                  >
+                    {direction}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
     </BottomSheet>
   );
 }

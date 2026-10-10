@@ -24,6 +24,7 @@ import { SceneTools } from './SceneTools';
 import { useAddLayers } from './useAddLayers';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { MusicTrack } from './MusicTrack';
+import { useSceneReorder } from './useSceneReorder';
 import {
   dragResult, formatSeconds, msToPct, pxToMs, rowCount, snap, tickIntervalMs,
   type ClipDrag,
@@ -189,6 +190,17 @@ export function Timeline({
     const box = lane.getBoundingClientRect();
     return pxToMs(clientX - box.left, box.width, durationMs);
   }, [durationMs]);
+
+  // Scenes rearranged by dragging (D-130).
+  const reorder = useSceneReorder({
+    spans,
+    msAt: laneMs,
+    onLift: () => { sceneLongPress.current.cancel(); },
+    onMove: (from, to) => {
+      useEditor.getState().dispatch(actions.moveScene(from, to));
+      selectSceneClip(to);
+    },
+  });
 
   // ── Scrubbing ─────────────────────────────────────────────────────────────
 
@@ -599,7 +611,7 @@ export function Timeline({
                   type="button"
                   data-scene-clip={span.index}
                   onClick={(e) => {
-                    if (sceneLongPress.current.fired) return;
+                    if (sceneLongPress.current.fired || reorder.wasDrag()) return;
                     // Already selected? Then this click is about the moment,
                     // not the choice (D-087). Either way the scene is now the
                     // thing Delete would remove (D-104).
@@ -610,21 +622,26 @@ export function Timeline({
                   onContextMenu={(e) => { e.preventDefault(); openSceneMenu(span.index, e.clientX, e.clientY); }}
                   onPointerDown={(e) => {
                     sceneLongPress.current.start(e, (x, y) => { openSceneMenu(span.index, x, y); });
+                    reorder.handlers(span.index).onPointerDown(e);
                   }}
-                  onPointerMove={(e) => { sceneLongPress.current.move(e); }}
-                  onPointerUp={() => { sceneLongPress.current.cancel(); }}
-                  onPointerCancel={() => { sceneLongPress.current.cancel(); }}
+                  onPointerMove={(e) => { sceneLongPress.current.move(e); reorder.handlers(span.index).onPointerMove(e); }}
+                  onPointerUp={(e) => { sceneLongPress.current.cancel(); reorder.handlers(span.index).onPointerUp(e); }}
+                  onPointerCancel={() => { sceneLongPress.current.cancel(); reorder.handlers(span.index).onPointerCancel(); }}
                   aria-pressed={active}
-                  title={`${designName(span.scene.templateId)} · ${formatSeconds(span.endMs - span.startMs)}`}
+                  title={`${designName(span.scene.templateId)} · ${formatSeconds(span.endMs - span.startMs)} — drag to rearrange`}
                   className="absolute inset-y-1 overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
                   style={{
+                    // Lifted while dragged (D-130): it follows the pointer, over the others.
+                    ...(reorder.drag?.from === span.index
+                      ? { transform: `translateX(${reorder.drag.dx}px)`, zIndex: 10, opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' }
+                      : {}),
                     left: `${msToPct(span.startMs, durationMs)}%`,
                     width: `${msToPct(span.endMs, durationMs) - msToPct(span.startMs, durationMs)}%`,
                     borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
                     background: active ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
                     color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
                     fontWeight: active ? 600 : 400,
-                    boxShadow: active && sceneClipSelected ? '0 0 0 1px var(--c-accent)' : 'none',
+                    ...(reorder.drag?.from === span.index ? {} : { boxShadow: active && sceneClipSelected ? '0 0 0 1px var(--c-accent)' : 'none' }),
                     transitionDuration: 'var(--t-fast)',
                     WebkitTouchCallout: 'none',
                   }}
@@ -645,13 +662,21 @@ export function Timeline({
                 </button>
               );
             })}
+            {reorder.drag && reorder.drag.to !== reorder.drag.from && (
+              <span
+                aria-hidden
+                data-scene-drop
+                className="pointer-events-none absolute inset-y-0 z-20 w-1 -translate-x-1/2 rounded-full"
+                style={{ left: `${msToPct(reorder.drag.markerMs, durationMs)}%`, background: 'var(--c-accent)' }}
+              />
+            )}
           </Row>
 
           {/*
             * The selected element's motion, on a lane of its own: a motion is
             * a span of time, so it belongs on the same time axis as everything.
             */}
-          <Row label="Motion" height={28}>
+          <Row label="Path" height={28}>
             <MotionLane spans={spans} durationMs={durationMs} onSeek={seekTo} />
           </Row>
 
@@ -664,7 +689,7 @@ export function Timeline({
             {fxRows.map((row, r) => (
               <Row
                 key={`fx-${r}`}
-                label={r === 0 ? 'FX' : ''}
+                label={r === 0 ? 'Effects' : ''}
                 title="Effects — on the timeline (solid) and on scenes (dashed)"
                 height={ROW_PX}
                 laneProps={{ 'data-fx-lane': r }}
@@ -908,7 +933,7 @@ function TrackGutter({
         fontWeight: target ? 600 : 400,
       }}
     >
-      {`L${track + 1}`}
+      {`Layer ${track + 1}`}
       {target && <span className="ml-1 normal-case tracking-normal">· adding here</span>}
     </button>
   );
@@ -971,7 +996,7 @@ function MotionLane({
   if (selectedSlot !== null) {
     return <SlotMotion slotKey={selectedSlot} spans={spans} durationMs={durationMs} onSeek={onSeek} />;
   }
-  return <LaneNote>Select a photo, some text or an overlay to give it motion.</LaneNote>;
+  return <LaneNote>Select a photo, some text or a layer to make it travel along a path.</LaneNote>;
 }
 
 function LaneNote({ children }: { children: React.ReactNode }): React.JSX.Element {

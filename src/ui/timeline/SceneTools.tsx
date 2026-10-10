@@ -1,4 +1,5 @@
 import type { TransitionKind } from '@/document/types';
+import { TRANSITION_LABELS } from './transitionLabels';
 import * as actions from '@/document/actions';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import { useEditor } from '@/state/store';
@@ -18,15 +19,7 @@ import { useOverlays } from '@/ui/shell/overlays';
  * The transition control is hidden on scene one, because there is nothing to
  * transition from (D-004).
  */
-const LABELS: Record<TransitionKind, string> = {
-  cut: 'Cut',
-  crossFade: 'Fade',
-  push: 'Push',
-  wipe: 'Wipe',
-  zoomBlur: 'Zoom',
-  whiteFlash: 'Flash',
-  scale: 'Scale',
-};
+const LABELS = TRANSITION_LABELS;
 
 export function SceneTools(): React.JSX.Element | null {
   const project = useEditor((s) => s.project);

@@ -227,7 +227,7 @@ test.describe('the logo (§8.3)', () => {
     await openAd(page);
 
     // The logo lives in Look now (D-105).
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await page.getByLabel('Add a logo').setInputFiles({
       name: 'logo.png', mimeType: 'image/png', buffer: PNG,
     });

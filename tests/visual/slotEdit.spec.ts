@@ -239,7 +239,7 @@ test.describe('the whole-scene reset', () => {
     const headline = await selectHeadline(page);
     await drag(page, centreOf(headline), { x: centreOf(headline).x, y: centreOf(headline).y - 60 });
 
-    await page.getByRole('tab', { name: 'Look' }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await expect(page.getByText(/2 elements have been moved/)).toBeVisible();
 
     await page.getByRole('button', { name: 'Reset the whole layout' }).click();
