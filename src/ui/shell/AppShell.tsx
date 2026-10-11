@@ -27,6 +27,8 @@ import { useAutosave } from '@/ui/persist/useAutosave';
 import { useRestore } from '@/ui/persist/useRestore';
 import { Toast } from './Toast';
 import { QuickStart } from '@/ui/onboarding/QuickStart';
+import { WorkspaceQuestion } from '@/ui/onboarding/WorkspaceQuestion';
+import { markRestoreReady } from '@/ui/onboarding/workspaceQuestionState';
 import { ContextMenu } from './ContextMenu';
 import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
@@ -351,6 +353,8 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
   const restore = useRestore(media);
   useAutosave(project, media, restore.phase === 'ready');
+  // "What will you make most?" waits for the last project to reopen (D-149).
+  useEffect(() => { if (restore.phase === 'ready') markRestoreReady(); }, [restore.phase]);
 
   const layout = useLayout();
   /** The inspector as a sheet, below desktop width. */
@@ -410,6 +414,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
         {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </Suspense>
+      <WorkspaceQuestion />
       <QuickStart />
       <Toast />
       <ContextMenu />

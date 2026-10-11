@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useEditor } from '@/state/store';
 import { projectPhotos } from '@/document/select/media';
 import { useLayout } from '@/ui/shell/useLayout';
+import { useWorkspace } from '@/state/workspace';
+import { WORKSPACES } from '@/templates/workspaces';
 import { closeQuickStart, useQuickStartOpen } from './quickStartState';
+import { useStarterVersion, useTourWaiting } from './workspaceQuestionState';
 
 /**
  * The quick start, as a guided tour (D-148, replacing D-142's card).
@@ -18,8 +21,12 @@ import { closeQuickStart, useQuickStartOpen } from './quickStartState';
  */
 export function QuickStart(): React.JSX.Element | null {
   const open = useQuickStartOpen();
-  if (!open) return null;
-  return <Tour />;
+  // After "What will you make most?" (D-149): the tour points at the design that answer opens.
+  const waiting = useTourWaiting();
+  // A design swapped in by that answer, or by a later switch, is not one the person chose.
+  const starterVersion = useStarterVersion();
+  if (!open || waiting) return null;
+  return <Tour key={starterVersion} />;
 }
 
 type Step = { readonly target: string; readonly title: string; readonly body: string; readonly done: boolean };
@@ -34,9 +41,11 @@ function Tour(): React.JSX.Element | null {
   const [exported, setExported] = useState(false);
   if (exporting && !exported) setExported(true);
 
+  // The words follow what the person said they make most (D-149).
+  const { tour } = WORKSPACES[useWorkspace()];
   const steps: readonly Step[] = [
-    { target: 'design', title: 'Choose a design', body: `${phone ? 'Tap' : 'Click'} here and pick a look — a post, a product, a story told in words…`, done: designChosen },
-    { target: 'photos', title: 'Add your photos', body: 'Choose photos or take one. They fill the design, and stay in Your photos for later.', done: photosAdded },
+    { target: 'design', title: 'Choose a design', body: tour.design === null ? `${phone ? 'Tap' : 'Click'} here and pick a look — a post, a product, a story told in words…` : phone ? tour.design.phone : tour.design.wide, done: designChosen },
+    ...(tour.skipPhotos ? [] : [{ target: 'photos', title: 'Add your photos', body: tour.photos ?? 'Choose photos or take one. They fill the design, and stay in Your photos for later.', done: photosAdded }]),
     { target: 'export', title: 'Export your video', body: `${phone ? 'Tap' : 'Click'} any words on the picture to make them yours, then export here.`, done: exported },
   ];
   const index = steps.findIndex((step) => !step.done);

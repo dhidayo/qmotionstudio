@@ -3,8 +3,10 @@ import type { Aspect } from '@/core/types';
 import type { Project, ProjectMode, SlotKey } from '@/document/types';
 import type { SaveState } from '@/ui/persist/saveState';
 import {
-  createProject, DEFAULT_PHOTO_COUNT, DEFAULT_TEMPLATE_ID, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID,
+  createProject, DEFAULT_PHOTO_COUNT, DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID,
 } from '@/document/defaults';
+import { starterProject } from './starter';
+import { readWorkspace } from './workspace';
 import { totalDurationMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
 import { loadTemplate } from '@/templates/registry';
@@ -273,10 +275,12 @@ function initialProject(): Project {
     ? Math.max(slots.min, Math.min(DEFAULT_PHOTO_COUNT, slots.max))
     : undefined;
 
-  const opening = templateId ?? DEFAULT_TEMPLATE_ID;
+  // A plain visit opens on the design picked for this person's workspace (D-149).
+  if (templateId === undefined) return starterProject(readWorkspace(), { aspect: params.aspect ?? undefined });
+
   const project = createProject({
-    ...(templateId === undefined ? {} : { templateId }),
-    look: designLook(opening),
+    templateId,
+    look: designLook(templateId),
     ...(params.aspect === null ? {} : { aspect: params.aspect }),
     ...(photoCount === undefined ? {} : { photoCount }),
   });

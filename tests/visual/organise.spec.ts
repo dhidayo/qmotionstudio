@@ -1,3 +1,4 @@
+import { answerWelcome } from '../support/workspace';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -153,6 +154,9 @@ test.describe('a first visit', () => {
   test('the quick start points at each step in turn, and stays closed once skipped (D-148)', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('canvas');
+    // The question comes first (D-149); the tour waits for it.
+    await expect(page.locator('[data-quick-start]')).toHaveCount(0);
+    await answerWelcome(page, 'A bit of everything');
     const tour = page.locator('[data-quick-start]');
     await expect(tour).toBeVisible();
     await expect(tour).toHaveAttribute('data-quick-step', '1');
@@ -166,6 +170,7 @@ test.describe('a first visit', () => {
     await page.reload();
     await page.waitForSelector('canvas');
     await expect(page.locator('[data-quick-start]')).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'What will you make most?' }), 'asked once').toHaveCount(0);
 
     // And back from the menu.
     await page.locator('[data-app-menu]').click();

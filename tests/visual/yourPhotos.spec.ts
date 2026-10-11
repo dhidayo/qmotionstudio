@@ -1,3 +1,4 @@
+import { answerWelcome } from '../support/workspace';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -105,6 +106,7 @@ test.describe('the quick start', () => {
 
   test('points at one button at a time and moves on when it is pressed', async ({ page }) => {
     await open(page, '/');
+    await answerWelcome(page, 'A bit of everything');
     const tour = page.locator('[data-quick-start]');
     await expect(tour).toBeVisible();
     await expect(tour).toHaveAttribute('data-quick-step', '1');

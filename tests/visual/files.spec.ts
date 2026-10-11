@@ -1,3 +1,4 @@
+import { SEEDED_STORAGE, seededState } from '../support/storage';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -74,7 +75,7 @@ test('a project saved as a file opens on another device with its photos', async 
   // Another device: nothing of the first one's storage.
   const other = await browser.newContext({
     viewport: { width: 1500, height: 940 },
-    storageState: { cookies: [], origins: [{ origin: new URL(page.url()).origin, localStorage: [{ name: 'ms.quickstart', value: 'done' }] }] },
+    storageState: seededState(SEEDED_STORAGE, new URL(page.url()).origin),
   });
   const there = await other.newPage();
   await there.goto('/');

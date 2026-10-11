@@ -40,7 +40,9 @@ export const VIDEO_PURPOSES = [
   'Thanks & celebrations',
 ] as const;
 
-export type Purpose = (typeof DESIGN_PURPOSES)[number] | (typeof VIDEO_PURPOSES)[number];
+export type DesignPurpose = (typeof DESIGN_PURPOSES)[number];
+export type VideoPurpose = (typeof VIDEO_PURPOSES)[number];
+export type Purpose = DesignPurpose | VideoPurpose;
 
 /** Particular designs whose purpose is not their family's. */
 const BY_ID: Readonly<Record<string, Purpose>> = {

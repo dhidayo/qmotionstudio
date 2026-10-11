@@ -17,6 +17,11 @@ text, logo and look, and gets a short looping motion clip (default ~10s, max 60s
 which they export as MP4 or WebM.
 
 - Template library grouped by category, with search, a free/pro filter and favourites.
+- "Set up for" (D-149): a first visit asks "What will you make most?" — social
+  posts, business ads, news and events, or a bit of everything. The answer sets
+  which groups come first, a short "Start here" pick, which groups start open,
+  and the design a fresh project opens on. Nothing is hidden; it can be changed
+  any time from the top of the library or the menu.
 - Single scene. Loops. Scrubbable via a simple slider, not a track timeline.
 - Variable photo count per template, within the template's declared min/max.
 - Per-photo controls: frame ratio, size mode, crop mode.
@@ -429,6 +434,8 @@ free exports carry a small watermark.
 - Project list on load, with rename, duplicate and delete.
 - PWA via `vite-plugin-pwa`, installable, offline-capable.
 - Light/dark theme toggle persisted to `localStorage`.
+- "Set up for" choice (`ms.workspace`) and the library's folds, one set per choice,
+  in `localStorage` — a device preference, never part of a project or project file.
 - Keyboard: space = play/pause, ⌘Z/⌘⇧Z = undo/redo, arrows = step one frame,
   ⌘E = export, ⌘S is a no-op with a "saves automatically" toast.
 - `prefers-reduced-motion` suppresses editor chrome animation only, never the artboard.

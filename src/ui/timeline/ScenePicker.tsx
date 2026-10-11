@@ -10,7 +10,9 @@ import { referencedMedia, userPhotoIds } from '@/document/select/media';
 import { PlayingPreview, noHover } from '@/ui/library/PlayingPreview';
 import { useEntitlements } from '@/entitlements';
 import { posterUrl, previewUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
-import { DESIGN_PURPOSES, purposeOf } from '@/templates/purpose';
+import { purposeOf } from '@/templates/purpose';
+import { groupOrder, orderWithin } from '@/templates/workspaces';
+import { useWorkspace } from '@/state/workspace';
 import { loadSceneTemplate } from '@/templates/registry';
 import { useEditor } from '@/state/store';
 
@@ -74,6 +76,7 @@ export function ScenePicker({
   }, [onClose]);
 
   const all = useMemo(() => sceneTemplates(), []);
+  const workspace = useWorkspace();
   const blank = all.find((t) => t.id === 'blank');
 
   const groups = useMemo(() => {
@@ -84,14 +87,14 @@ export function ScenePicker({
       || t.category.toLowerCase().includes(wanted)
       || purposeOf(t).toLowerCase().includes(wanted)
       || t.blurb.toLowerCase().includes(wanted);
-    // By purpose, as the library opens (D-143).
-    return DESIGN_PURPOSES
+    // By purpose, in the order the library opens for this person (D-143, D-149).
+    return groupOrder(workspace, 'scene')
       .map((category) => ({
         category,
-        templates: all.filter((t) => purposeOf(t) === category && t.listed !== false && matches(t)),
+        templates: orderWithin(workspace, category, all.filter((t) => purposeOf(t) === category && t.listed !== false && matches(t))),
       }))
       .filter((group) => group.templates.length > 0);
-  }, [all, query]);
+  }, [all, query, workspace]);
 
   const choose = async (summary: TemplateSummary): Promise<void> => {
     if (busy !== null || !current) return;

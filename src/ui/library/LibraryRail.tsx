@@ -1,8 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { CATEGORIES, posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
+import { posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
 import { lookPreset } from '@/templates/_shared/look';
-import { purposeOf, purposesFor } from '@/templates/purpose';
+import { purposeOf } from '@/templates/purpose';
+import { START_HERE, WORKSPACES, effectiveFolded, libraryGroups } from '@/templates/workspaces';
 import { useEditor } from '@/state/store';
+import { useWorkspace } from '@/state/workspace';
+import { useStoredFolds, writeFolds } from './libraryFolds';
+import { WorkspaceSwitch } from './WorkspaceSwitch';
 import { useEntitlements } from '@/entitlements';
 import { PlayingPreview, noHover } from './PlayingPreview';
 
@@ -61,14 +65,31 @@ export function LibraryRail({
 
   // By purpose — what it is for — unless the person chose to browse by look (D-143).
   const [groupBy, setGroupBy] = useGroupBy();
-  const groupOf = (t: TemplateSummary): string => (groupBy === 'purpose' ? purposeOf(t) : t.category);
-  const order: readonly string[] = groupBy === 'purpose' ? purposesFor(mode === 'motionAd' ? 'ad' : 'scene') : CATEGORIES;
-  const categories = order.filter((c) => visible.some((t) => groupOf(t) === c));
-  const { collapsed, toggle, setAll } = useCollapsedCategories();
+  // Set out for the person (D-149): their groups first, a few picks above them.
+  const workspace = useWorkspace();
+  const narrowed = search.trim().length > 0 || tierFilter !== 'all' || showFavourites;
+  const layout = useMemo(
+    () => libraryGroups({ templates: visible, workspace, kind: mode === 'motionAd' ? 'ad' : 'scene', groupBy, narrowed }),
+    [visible, workspace, mode, groupBy, narrowed],
+  );
+  const sections: readonly { readonly name: string; readonly templates: readonly TemplateSummary[]; readonly featured: boolean }[] = [
+    ...(layout.startHere.length > 0 ? [{ name: START_HERE, templates: layout.startHere, featured: true }] : []),
+    ...layout.groups.map((group) => ({ ...group, featured: false })),
+  ];
+  const stored = useStoredFolds(workspace);
+  const collapsed = effectiveFolded(stored, workspace);
+  const setAll = (names: readonly string[]): void => { writeFolds(workspace, names); };
+  const toggle = (name: string): void => {
+    const next = new Set(collapsed);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    writeFolds(workspace, [...next]);
+  };
+  const names = sections.map((section) => section.name);
   // A search shows everything it found: a match hidden in a folded group is a match missed.
   const searching = search.trim().length > 0;
-  const folded = (category: string): boolean => !searching && collapsed.has(category);
-  const allFolded = categories.length > 0 && categories.every((c) => collapsed.has(c));
+  const folded = (name: string): boolean => !searching && collapsed.has(name);
+  const allFolded = names.length > 0 && names.every((name) => collapsed.has(name));
 
   return (
     <aside
@@ -84,6 +105,20 @@ export function LibraryRail({
         />
       )}
       <div className={sheet ? 'pb-2' : 'border-b border-edge p-3'}>
+        <WorkspaceSwitch
+          size={sheet ? 'sheet' : 'rail'}
+          aside={(
+            <button
+              type="button"
+              data-group-by
+              onClick={() => { setGroupBy(groupBy === 'purpose' ? 'style' : 'purpose'); }}
+              title={groupBy === 'purpose' ? 'Grouped by what each design is for. Click to group by how it looks.' : 'Grouped by how each design looks. Click to group by what it is for.'}
+              className={`rounded-md border border-edge px-1.5 text-ink-muted hover:bg-panel-alt ${sheet ? 'py-1 text-[12px]' : 'text-[10px]'}`}
+            >
+              By {groupBy === 'purpose' ? 'purpose' : 'style'}
+            </button>
+          )}
+        />
         <input
           type="search"
           value={search}
@@ -106,20 +141,11 @@ export function LibraryRail({
             onClick={toggleFavouritesFilter}
             label={`★ ${favourites.length}`}
           />
-          <button
-            type="button"
-            data-group-by
-            onClick={() => { setGroupBy(groupBy === 'purpose' ? 'style' : 'purpose'); }}
-            title={groupBy === 'purpose' ? 'Grouped by what each design is for. Click to group by how it looks.' : 'Grouped by how each design looks. Click to group by what it is for.'}
-            className={`rounded-md border border-edge px-1.5 text-ink-muted hover:bg-panel-alt ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
-          >
-            By {groupBy === 'purpose' ? 'purpose' : 'style'}
-          </button>
-          {!searching && categories.length > 1 && (
+          {!searching && names.length > 1 && (
             <button
               type="button"
               data-fold-all
-              onClick={() => { setAll(allFolded ? [] : categories); }}
+              onClick={() => { setAll(allFolded ? [] : names); }}
               className={`ml-auto rounded-md px-1.5 text-ink-faint hover:text-ink ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
             >
               {allFolded ? 'Expand all' : 'Collapse all'}
@@ -136,33 +162,41 @@ export function LibraryRail({
               : 'Nothing matches that search.'}
           </p>
         ) : (
-          categories.map((category) => {
-            const inCategory = visible.filter((t) => groupOf(t) === category);
-            const open = !folded(category);
-            const id = `library-${category.toLowerCase().replace(/\s+/g, '-')}`;
+          sections.map((section) => {
+            const open = !folded(section.name);
+            const id = `library-${section.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+            const caption = section.featured ? WORKSPACES[workspace].startHereCaption : null;
             return (
-            <section key={category} className={open ? 'mb-4 last:mb-0' : 'mb-1.5'} data-library-category={category}>
-              {/* A category folds away (D-123): the library is long, and most visits want one corner of it. */}
+            <section
+              key={section.name}
+              className={open ? 'mb-4 last:mb-0' : 'mb-1.5'}
+              {...(section.featured ? { 'data-library-featured': '' } : { 'data-library-category': section.name })}
+            >
+              {/* A group folds away (D-123): the library is long, and most visits want one corner of it. */}
               <h3>
                 <button
                   type="button"
-                  onClick={() => { toggle(category); }}
+                  onClick={() => { toggle(section.name); }}
                   aria-expanded={open}
                   aria-controls={id}
                   className={`brand-surface flex w-full items-center gap-2 rounded-lg px-3 text-left font-semibold uppercase tracking-wider hover:bg-[var(--c-brand-hover)] ${sheet ? 'py-3 text-[13px]' : 'py-2.5 text-[11px]'}`}
                 >
                   <span aria-hidden className="inline-block w-3 text-center transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
-                  <span className="min-w-0 flex-1 truncate">{category}</span>
-                  <span className="tabular rounded-full px-2 py-0.5 font-normal normal-case tracking-normal" style={{ background: 'rgb(255 255 255 / 0.14)' }}>{inCategory.length}</span>
+                  <span className="min-w-0 flex-1 truncate">{section.name}</span>
+                  <span className="tabular rounded-full px-2 py-0.5 font-normal normal-case tracking-normal" style={{ background: 'rgb(255 255 255 / 0.14)' }}>{section.templates.length}</span>
                 </button>
               </h3>
+              {open && caption !== null && (
+                <p className={`mt-1.5 px-1 text-ink-faint ${sheet ? 'text-[12px]' : 'text-[10px]'}`}>{caption} · every design is still below</p>
+              )}
               {open && (
               <div id={id} className={`mt-2 ${sheet ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-2 gap-2'}`}>
-                {inCategory
+                {section.templates
                   .map((template) => (
                     <TemplateCard
                       key={template.id}
                       template={template}
+                      featured={section.featured}
                       active={template.id === currentId}
                       favourite={favourites.includes(template.id)}
                       autoplay={sheet}
@@ -185,12 +219,11 @@ export function LibraryRail({
 }
 
 /** The background colour a design opens in, from its look. */
-function groundOf(template: TemplateSummary): string {
+export function groundOf(template: TemplateSummary): string {
   const look = template.look === undefined ? undefined : lookPreset(template.look);
   return look?.palette.bg ?? 'var(--c-panel-alt)';
 }
 
-const FOLDED_KEY = 'ms.library.folded';
 const GROUP_KEY = 'ms.library.groupBy';
 
 /** Purpose or style, remembered on this device (D-143). */
@@ -207,43 +240,6 @@ function useGroupBy(): ['purpose' | 'style', (next: 'purpose' | 'style') => void
     try { localStorage.setItem(GROUP_KEY, next); } catch { /* for this visit */ }
   }, []);
   return [groupBy, choose];
-}
-
-/**
- * Which categories are folded, remembered on this device (a viewer's
- * convenience, so browser storage, D-123). Storage can be missing or refuse —
- * a private window — and then folding simply lasts for the visit.
- */
-function useCollapsedCategories(): {
-  collapsed: ReadonlySet<string>;
-  toggle: (category: string) => void;
-  setAll: (categories: readonly string[]) => void;
-} {
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => {
-    try {
-      const raw = localStorage.getItem(FOLDED_KEY);
-      const parsed: unknown = raw === null ? [] : JSON.parse(raw);
-      return new Set(Array.isArray(parsed) ? parsed.filter((c): c is string => typeof c === 'string') : []);
-    } catch {
-      return new Set();
-    }
-  });
-  const remember = useCallback((next: ReadonlySet<string>): void => {
-    setCollapsed(next);
-    try {
-      localStorage.setItem(FOLDED_KEY, JSON.stringify([...next]));
-    } catch {
-      // Not remembered between visits; folding still works now.
-    }
-  }, []);
-  const toggle = useCallback((category: string): void => {
-    const next = new Set(collapsed);
-    if (next.has(category)) next.delete(category);
-    else next.add(category);
-    remember(next);
-  }, [collapsed, remember]);
-  const setAll = useCallback((categories: readonly string[]): void => { remember(new Set(categories)); }, [remember]);
-  return { collapsed, toggle, setAll };
 }
 
 function FilterChip({
@@ -276,6 +272,7 @@ function FilterChip({
 
 function TemplateCard({
   template,
+  featured = false,
   active,
   favourite,
   autoplay,
@@ -283,6 +280,8 @@ function TemplateCard({
   onToggleFavourite,
 }: {
   template: TemplateSummary;
+  /** A copy in Start here (D-149): its own marker, and no second favourite star. */
+  featured?: boolean;
   active: boolean;
   favourite: boolean;
   autoplay: boolean;
@@ -302,7 +301,7 @@ function TemplateCard({
         type="button"
         onClick={onSelect}
         aria-pressed={active}
-        data-design-card={template.id}
+        {...(featured ? { 'data-featured-card': template.id } : { 'data-design-card': template.id })}
         title={template.blurb}
         className="block w-full overflow-hidden rounded-md border text-left transition-colors"
         style={{
@@ -365,7 +364,7 @@ function TemplateCard({
         </span>
       )}
 
-      <button
+      {!featured && <button
         type="button"
         onClick={onToggleFavourite}
         aria-pressed={favourite}
@@ -379,7 +378,7 @@ function TemplateCard({
         }}
       >
         {favourite ? '★' : '☆'}
-      </button>
+      </button>}
     </div>
   );
 }

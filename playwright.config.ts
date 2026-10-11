@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { SEEDED_STORAGE, seededState } from './tests/support/storage';
 
 /*
  * `PW_PROD=1` runs the suite against the production build instead of the dev
@@ -22,11 +23,13 @@ export default defineConfig({
   use: {
     baseURL: BASE_URL,
     /*
-     * The quick start (D-142) is a first visit's card; the suite is not about
-     * it, and a card over the picture would sit under clicks meant for the
-     * canvas. Marked as seen everywhere; its own test starts from nothing.
+     * The quick start (D-142) and "What will you make most?" (D-149) belong
+     * to a first visit; the suite is not about them, and either would sit
+     * under clicks meant for the canvas. Marked as seen everywhere, set up for
+     * everything — the library as it always was. Their own tests start from
+     * nothing.
      */
-    storageState: { cookies: [], origins: [{ origin: BASE_URL, localStorage: [{ name: 'ms.quickstart', value: 'done' }] }] },
+    storageState: seededState(SEEDED_STORAGE, BASE_URL),
     trace: 'on-first-retry',
   },
   /*

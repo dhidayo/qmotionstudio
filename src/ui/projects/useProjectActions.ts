@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import * as actions from '@/document/actions';
-import { createProject, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
-import { designLook } from '@/templates/looks';
+import { createProject } from '@/document/defaults';
+import { starterProject } from '@/state/starter';
+import { readWorkspace } from '@/state/workspace';
 import { SCHEMA_VERSION, type Project } from '@/document/types';
 import { writeLastOpened, writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
@@ -107,7 +108,8 @@ export function useProjectActions(): {
       // A new video starts empty: scenes come from the library or from your
       // saved designs (D-140), layers from the timeline's own tools.
       ? createProject({ name: 'Untitled video', aspect, mode: 'motionAd', templateId: 'blank', photoCount: 0 })
-      : createProject({ aspect, look: designLook(DEFAULT_TEMPLATE_ID) });
+      // A new design opens on this person's starting design (D-149), in the frame in use.
+      : starterProject(readWorkspace(), { aspect });
     try {
       await flush();
       await write(project);

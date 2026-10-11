@@ -3196,3 +3196,45 @@ beside the real button — Choose a design, then Add your photos, then Export
 on once the step is done, however it was done. Nothing is dimmed or covered,
 it steps aside while a sheet or dialog is open, and **Skip tour** closes it
 for good (the menu brings it back).
+
+## D-149 — Set up for: social posts, business ads, or news and events
+
+"There would be two types of users for the product; 1. Social users who would
+use more of gallery for social posts to linkedin, instagram, etc. … 2. business
+users who would use it for ads and business posts … ask users one simple
+question on visit on what they would do most with Q Motion, this will shape how
+the environment would be setup; user would be able to switch mode anyway."
+
+A first visit now asks **What will you make most?**, once per device, after
+any saved project has reopened and before the quick start:
+
+- **Social posts** — photo galleries first (the coverflows leading), then
+  stacks, moodboards, photo stories; opens on Polaroid Pass at 4:5.
+- **Business ads** — products, prices, headlines, calls to action, reviews,
+  results; advert films led by launches and offers; opens on New Arrival at
+  4:5. The tour points to Video for advert films.
+- **News & events** — dates, headlines, quotes, numbers; films led by
+  announcements; opens on Eyebrow Title at 4:5 with no photos, and its tour
+  skips the photo step. Added because 45 designs and every story film need no
+  photos, which suits schools, churches, charities and teams.
+- **A bit of everything** — the library exactly as before. Skipping the
+  question (✕, Escape, a tap outside, a swipe) means this.
+
+Each choice puts its groups first, opens a **Start here** row of six designs
+(four films under Video) above them, and folds the rest — headings and counts
+still showing. Nothing is hidden; a search or a Free/Pro or favourites filter
+sets the picks aside and shows everything that matches. The "+ Scene" picker
+follows the same order.
+
+It is changed from **Set up for** at the top of the library (desktop rail,
+the phone's Choose a design sheet, the tablet window) or **Set up for…** in
+the menu. A change never touches anyone's work: only a project that is still
+exactly the untouched starter (restore finished, nothing to undo or redo,
+same content) is swapped for the new choice's opening design, keeping its id
+and name. Links that name a design, thumbnails and frozen frames are never
+interrupted, and a device whose storage is blocked is never asked.
+
+The choice is a device preference in `localStorage` (`ms.workspace`), never in
+a project. Folds are remembered per choice, so one choice's defaults never
+leak into another; "everything" keeps the library's old key. On screen the
+word is always "Set up for" — "mode" stays with Design and Video.

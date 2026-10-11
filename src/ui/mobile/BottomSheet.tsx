@@ -16,6 +16,7 @@ export function BottomSheet({
   tall = false,
   action,
   label,
+  closeLabel,
 }: {
   title: string;
   onClose: () => void;
@@ -26,6 +27,8 @@ export function BottomSheet({
   action?: ReactNode;
   /** The dialog's accessible name, when it should differ from the title. */
   label?: string;
+  /** The ✕'s accessible name, when "Close …" would not say what it does. */
+  closeLabel?: string;
 }): React.JSX.Element {
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -98,7 +101,7 @@ export function BottomSheet({
               type="button"
               onClick={onClose}
               onPointerDown={(event) => { event.stopPropagation(); }}
-              aria-label={`Close ${title.toLowerCase()}`}
+              aria-label={closeLabel ?? `Close ${title.toLowerCase()}`}
               className="grid size-9 place-items-center rounded-full text-[18px] leading-none text-ink-muted hover:bg-panel-alt"
               style={{ background: 'var(--c-panel-alt)' }}
             >
