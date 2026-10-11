@@ -9,7 +9,7 @@ import { useMediaStore } from '@/ui/media/MediaProvider';
 import { referencedMedia, userPhotoIds } from '@/document/select/media';
 import { PlayingPreview, noHover } from '@/ui/library/PlayingPreview';
 import { useEntitlements } from '@/entitlements';
-import { posterUrl, previewUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
+import { aspectPosterUrl, posterUrl, previewUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
 import { purposeOf } from '@/templates/purpose';
 import { groupOrder, orderWithin } from '@/templates/workspaces';
 import { useWorkspace } from '@/state/workspace';
@@ -357,6 +357,8 @@ function PickerCard({
   disabled: boolean;
   onChoose: () => void;
 }): React.JSX.Element {
+  const shape = useEditor((s) => s.project.aspect);
+  const loopFit = shape === (template.supportedAspects[0] ?? '9:16') ? 'cover' : 'contain';
   return (
     <button
       type="button"
@@ -367,12 +369,14 @@ function PickerCard({
       className="group relative block overflow-hidden rounded-md border text-left disabled:cursor-wait"
       style={{ borderColor: current ? 'var(--c-accent)' : 'var(--c-edge)' }}
     >
-      <span className="relative block aspect-square w-full" style={{ background: 'var(--c-panel-alt)' }}>
-        {noHover() ? <PlayingPreview id={template.id} /> : <>
+      {/* In the frame shape of the video it joins (D-150). */}
+      <span className="relative block w-full" data-card-shape={shape} style={{ background: 'var(--c-panel-alt)', aspectRatio: shape.replace(':', ' / ') }}>
+        {noHover() ? <PlayingPreview id={template.id} still={aspectPosterUrl(template.id, shape)} fit={loopFit} /> : <>
         <img
-          src={posterUrl(template.id)}
+          src={aspectPosterUrl(template.id, shape)}
           alt=""
           loading="lazy"
+          onError={(e) => { if (!e.currentTarget.src.includes(`/thumbs/${template.id}.webp`)) e.currentTarget.src = posterUrl(template.id); }}
           className="absolute inset-0 size-full object-cover group-hover:opacity-0"
         />
         <video
@@ -382,7 +386,7 @@ function PickerCard({
           playsInline
           preload="none"
           aria-hidden
-          className="absolute inset-0 size-full object-cover opacity-0 group-hover:opacity-100"
+          className={`absolute inset-0 size-full opacity-0 group-hover:opacity-100 ${loopFit === 'contain' ? 'object-contain' : 'object-cover'}`}
           onMouseEnter={(e) => { void e.currentTarget.play().catch(() => undefined); }}
           onMouseLeave={(e) => { e.currentTarget.pause(); }}
         />
