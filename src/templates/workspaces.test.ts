@@ -34,10 +34,10 @@ describe('workspaces (D-149)', () => {
     expect(both.opener).toEqual({ templateId: 'depth-parallax', aspect: '9:16', photoCount: 4, durationMs: 10_000 });
   });
 
-  it('social opens on photo galleries, business on products, news on dates', () => {
+  it('social opens on photo galleries, business on business posts, news on dates', () => {
     expect(groupOrder('social', 'scene')[0]).toBe('Photo galleries');
     expect(groupOrder('social', 'ad')[0]).toBe('Thanks & celebrations');
-    expect(groupOrder('business', 'scene')[0]).toBe('Products');
+    expect(groupOrder('business', 'scene')[0]).toBe('Business posts');
     expect(groupOrder('business', 'ad')[0]).toBe('Product launches & offers');
     expect(groupOrder('news', 'scene')[0]).toBe('Events & dates');
     expect(groupOrder('news', 'ad')[0]).toBe('Announcements');
@@ -152,8 +152,8 @@ describe('workspaces (D-149)', () => {
     expect(effectiveFolded(null, 'social').has('Photo galleries')).toBe(false);
     expect(effectiveFolded(null, 'social').has(START_HERE)).toBe(false);
     expect(effectiveFolded([], 'social').size, 'an empty stored list wins').toBe(0);
-    expect(topGroups('business')).toEqual([START_HERE, 'Products', 'Product launches & offers']);
-    expect(foldedAfterSwitch([START_HERE, 'Products', 'Moodboards', 'Product launches & offers'], 'business')).toEqual(['Moodboards']);
+    expect(topGroups('business')).toEqual([START_HERE, 'Business posts', 'Product launches & offers']);
+    expect(foldedAfterSwitch([START_HERE, 'Business posts', 'Moodboards', 'Product launches & offers'], 'business')).toEqual(['Moodboards']);
     expect(foldedAfterSwitch(['Headlines & hooks'], 'both')).toEqual(['Headlines & hooks']);
   });
 

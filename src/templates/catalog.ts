@@ -3,6 +3,7 @@ import { TEXT_STORY_SCENES } from './_catalog/text';
 import { PRODUCT_SCENES } from './_catalog/product';
 import { SHOWCASE_SCENES } from './_catalog/showcase';
 import { BUSINESS_SCENES } from './_catalog/business';
+import { COVER_SCENES } from './_catalog/covers';
 import { AD_FILMS } from './_catalog/films';
 
 /**
@@ -22,7 +23,7 @@ import { AD_FILMS } from './_catalog/films';
 export type FamilyId =
   | 'type' | 'element' | 'product'
   | 'orbit' | 'flow' | 'depth' | 'marquee' | 'tiles' | 'deck'
-  | 'hero' | 'cuts' | 'halo' | 'timeline' | 'business';
+  | 'hero' | 'cuts' | 'halo' | 'timeline' | 'business' | 'cover';
 
 export type VariantParams = Readonly<Record<string, string | number | boolean>>;
 
@@ -47,6 +48,7 @@ export const SCENE_VARIANTS: readonly SceneVariant[] = [
   ...TEXT_STORY_SCENES,
   ...PRODUCT_SCENES,
   ...BUSINESS_SCENES,
+  ...COVER_SCENES,
   ...SHOWCASE_SCENES,
 ];
 
