@@ -51,6 +51,8 @@ export function WorkspaceSwitch({ size, aside }: { size: 'rail' | 'sheet'; aside
               data-workspace={id}
               onClick={() => { chooseWorkspace(id, 'switch'); }}
               onKeyDown={(event) => {
+                // Space chooses, as on any button — not play or pause in the preview behind.
+                if (event.key === ' ') { event.stopPropagation(); return; }
                 const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1
                   : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1
                   : event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : null;

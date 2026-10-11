@@ -41,18 +41,16 @@ function Question({ asking }: { asking: boolean }): React.JSX.Element {
   const focusFirst = (id: WorkspaceId): boolean => (asking ? id === WORKSPACE_IDS[0] : id === current);
 
   return (
+    // Space presses the answer or ✕ in focus, and the arrows stay here, rather than
+    // playing or stepping the preview behind the window. The sheet is fixed, so this wrapper takes no room.
+    <div onKeyDown={(event) => { if (event.key === ' ' || event.key.startsWith('Arrow')) event.stopPropagation(); }}>
     <BottomSheet
       title="What will you make most?"
       onClose={close}
       closeLabel={asking ? 'Skip and show all designs' : 'Close without changing'}
       tall={phone}
     >
-      <div
-        data-workspace-question={asking ? 'ask' : 'change'}
-        // Space presses the answer in focus, and the arrows stay here, rather than
-        // playing or stepping the preview behind the window.
-        onKeyDown={(event) => { if (event.key === ' ' || event.key.startsWith('Arrow')) event.stopPropagation(); }}
-      >
+      <div data-workspace-question={asking ? 'ask' : 'change'}>
         <p className="mb-3 text-[13px] leading-snug text-ink-muted">
           {asking
             ? 'We’ll put the right designs first. Nothing is hidden, and you can change this at any time.'
@@ -96,6 +94,7 @@ function Question({ asking }: { asking: boolean }): React.JSX.Element {
         })}
       </div>
     </BottomSheet>
+    </div>
   );
 }
 

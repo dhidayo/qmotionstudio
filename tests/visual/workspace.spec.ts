@@ -223,6 +223,17 @@ test.describe('set up for everything', () => {
     await expect(page.getByRole('button', { name: /^Undo/ })).toBeEnabled();
   });
 
+  test('on the switch, the arrows move along and Space chooses', async ({ page }) => {
+    await open(page);
+    await rail(page).locator('[data-workspace="both"]').focus();
+    await page.keyboard.press('Home');
+    await expect(rail(page).locator('[data-workspace="social"]')).toBeFocused();
+    await expect(rail(page).locator('[data-workspace="both"]'), 'moving is not choosing').toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Space');
+    await expect(rail(page).locator('[data-workspace="social"]')).toHaveAttribute('aria-checked', 'true');
+    expect(await stored(page)).toBe('social');
+  });
+
   test('"everything" keeps the library exactly as it was', async ({ page }) => {
     await open(page);
     await expect(rail(page).locator('[data-library-featured]')).toHaveCount(0);

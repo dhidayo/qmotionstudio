@@ -78,12 +78,6 @@ export function LibraryRail({
   ];
   const stored = useStoredFolds(workspace);
   const collapsed = effectiveFolded(stored, workspace);
-  const toggle = (name: string): void => {
-    const next = new Set(collapsed);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
-    writeFolds(workspace, [...next]);
-  };
   const names = sections.map((section) => section.name);
   /*
    * A search shows everything it found: a match hidden in a folded group is a
@@ -94,6 +88,14 @@ export function LibraryRail({
   const unfolded = searching || (narrowed && WORKSPACES[workspace].foldOthers);
   const folded = (name: string): boolean => !unfolded && collapsed.has(name);
   const allFolded = names.length > 0 && names.every((name) => collapsed.has(name));
+  // While a search or filter holds every group open, a heading has nothing to fold.
+  const toggle = (name: string): void => {
+    if (unfolded) return;
+    const next = new Set(collapsed);
+    if (next.has(name)) next.delete(name);
+    else next.add(name);
+    writeFolds(workspace, [...next]);
+  };
   // Collapse all and Expand all change the groups in view and keep every other fold,
   // so folding the Design list never opens the Video one (D-149). Everything keeps its old behaviour.
   const setAll = (fold: boolean): void => {
@@ -189,6 +191,7 @@ export function LibraryRail({
                 <button
                   type="button"
                   onClick={() => { toggle(section.name); }}
+                  disabled={unfolded}
                   aria-expanded={open}
                   aria-controls={id}
                   className={`brand-surface flex w-full items-center gap-2 rounded-lg px-3 text-left font-semibold uppercase tracking-wider hover:bg-[var(--c-brand-hover)] ${sheet ? 'py-3 text-[13px]' : 'py-2.5 text-[11px]'}`}
