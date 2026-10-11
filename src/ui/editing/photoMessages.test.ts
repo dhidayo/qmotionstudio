@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addedPhotosMessage, onTopMessage } from './photoMessages';
 
-/** The words after adding photos (D-150): exactly what happened, one for one. */
+/** The words after adding photos (D-152): exactly what happened, one for one. */
 describe('what adding photos says', () => {
   it('counts the samples replaced', () => {
     expect(addedPhotosMessage({ replaced: 1, added: 0, waiting: [] }, null)).toBe('Your photo replaced a sample.');

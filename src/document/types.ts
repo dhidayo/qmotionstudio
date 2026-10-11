@@ -368,7 +368,7 @@ export type Project = {
    * "Your photos" (D-147): every photograph the person has added to this
    * project, in the order they arrived, whether or not a scene shows it yet.
    * Scenes pick from it; adding takes the place of samples only, never of a
-   * photo of theirs (D-150). Absent on projects saved before it existed,
+   * photo of theirs (D-152). Absent on projects saved before it existed,
    * which read it from their scenes.
    */
   readonly photoLibrary?: readonly string[];

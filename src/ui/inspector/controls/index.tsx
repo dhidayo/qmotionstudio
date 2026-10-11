@@ -484,7 +484,7 @@ export function SectionTabs({ initial, children }: { initial?: string | null; ch
   const fallback = (wanted === null ? undefined : titles.find((t) => t.toLowerCase().startsWith(wanted))) ?? titles[0] ?? null;
   /*
    * A section that has gone — Photos' "Your photos" once the last of them is
-   * used (D-150) — hands back to the default rather than leaving every section
+   * used (D-152) — hands back to the default rather than leaving every section
    * closed, and does not snatch the sheet back if it reappears later.
    */
   const gone = typeof chosen === 'string' && titles.length > 0 && !titles.includes(chosen);

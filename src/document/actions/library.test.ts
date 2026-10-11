@@ -5,7 +5,7 @@ import { projectPhotos, referencedMedia } from '@/document/select/media';
 import * as actions from './index';
 
 /**
- * A design's photo spots and "Your photos" (D-147, D-150).
+ * A design's photo spots and "Your photos" (D-147, D-152).
  *
  * "When users add their photos, please remove a sample photo for each
  * uploaded photos … When user do plus to make design accommodate 6 photos,
@@ -30,7 +30,7 @@ const shown = (project: Project): string[] => project.scenes[0]?.inputs.photos.m
 const spotAt = (project: Project, index: number): PhotoInput | undefined => project.scenes[0]?.inputs.photos[index];
 const spot = (mediaId: string): PhotoInput => ({ mediaId, frame: '3:4', sizeMode: 'template', sizePct: 100, cropMode: 'template' });
 
-describe('adding photos takes the place of samples (D-150)', () => {
+describe('adding photos takes the place of samples (D-152)', () => {
   it('four spots and three photos: three of yours, then one sample', () => {
     const project = actions.addYourPhotos(['a', 'b', 'c'], { maxPhotos: 6 }).apply(design(4), here);
     expect(shown(project)).toEqual(['a', 'b', 'c', 'sample:ember']);
@@ -86,7 +86,7 @@ describe('adding photos takes the place of samples (D-150)', () => {
   });
 });
 
-describe('the Photo spots stepper (D-150)', () => {
+describe('the Photo spots stepper (D-152)', () => {
   it('adds spots showing samples not yet shown, never repeats of your photos', () => {
     let project = actions.addYourPhotos(['a', 'b', 'c'], { maxPhotos: 6 }).apply(design(4), here);
     project = actions.setPhotoCount(6, BOUNDS).apply(project, here);
@@ -113,7 +113,7 @@ describe('the Photo spots stepper (D-150)', () => {
   });
 });
 
-describe('taking your photos out of the design (D-150)', () => {
+describe('taking your photos out of the design (D-152)', () => {
   it('the × on a spot shows a sample there again; the photo stays in Your photos', () => {
     let project = actions.addYourPhotos(['a', 'b'], { maxPhotos: 6 }).apply(design(4), here);
     project = actions.sampleAt(0).apply(project, here);

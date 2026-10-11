@@ -1,7 +1,7 @@
 import type { PhotoPlacement } from '@/document/actions';
 
 /**
- * What became of the photos just added, said plainly (D-150).
+ * What became of the photos just added, said plainly (D-152).
  *
  * The owner asked for on-screen words that are "very clear, professional, easy
  * to understand", and the rule they describe is one-for-one — "remove a

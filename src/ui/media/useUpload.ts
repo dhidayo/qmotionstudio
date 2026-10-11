@@ -34,7 +34,7 @@ function nextMediaId(): string {
 
 /*
  * §8.1: paste works anywhere in the editor, not just over a drop zone — but it
- * goes to one place (D-150). Every upload used to listen for it, so one pasted
+ * goes to one place (D-152). Every upload used to listen for it, so one pasted
  * photo was added twice — by the button under the picture and again by the
  * Photos panel — and put on top as a layer, and in a video added to the
  * timeline as a clip too. Now only an upload that asks for paste listens, and
@@ -73,7 +73,7 @@ export function useUpload(
     video?: boolean;
     /** Accept music (§10). The timeline's "+ Music" picker turns this on. */
     audio?: boolean;
-    /** Take pasted pictures too — "Add your photos" and Replace photo only (D-150). */
+    /** Take pasted pictures too — "Add your photos" and Replace photo only (D-152). */
     paste?: boolean;
   },
 ): {

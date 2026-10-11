@@ -69,7 +69,7 @@ export async function expandAdTemplate(
 
     /*
      * The person's photos once each per beat, samples in the spots left over
-     * (D-150) — repeats filled every spot, leaving "Add photo" nowhere to go.
+     * (D-152) — repeats filled every spot, leaving "Add photo" nowhere to go.
      * The next beat opens on the next photograph, never the same first one.
      */
     let photos;

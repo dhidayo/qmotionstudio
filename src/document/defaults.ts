@@ -136,7 +136,7 @@ export function createScene(
  * wrong slot is worse than none.
  */
 /**
- * A scene's spots from the person's photos (D-150): each photograph once, from
+ * A scene's spots from the person's photos (D-152): each photograph once, from
  * `start` in the pool, and samples in any spots left over — never repeats of
  * their photo, so a later "Add photo" has a sample to take the place of.
  * Samples only when the pool is empty.

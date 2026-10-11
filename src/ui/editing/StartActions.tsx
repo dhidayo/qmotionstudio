@@ -17,7 +17,7 @@ import { addedPhotosMessage, onTopMessage } from './photoMessages';
  * to be able to replace all photos on template instead of only replace when
  * specific items are selected, same for choose template". Adding photos puts
  * each in place of one sample photo in the scene being worked on (D-137,
- * D-150) — the whole design when it is one scene — in one step that one undo
+ * D-152) — the whole design when it is one scene — in one step that one undo
  * takes back.
  */
 export function StartActions({
@@ -61,7 +61,7 @@ export function StartActions({
 /**
  * Picks photographs — or takes one with the camera — adds them to "Your
  * photos", and puts each in place of one sample in the scene being worked on
- * (D-116, D-147, D-150). A design with no photo spots takes them on top
+ * (D-116, D-147, D-152). A design with no photo spots takes them on top
  * instead, as extra photos. Either way the toast says exactly what happened.
  *
  * Every instance takes pasted pictures too; only the one opened last answers

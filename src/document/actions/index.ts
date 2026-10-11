@@ -152,7 +152,7 @@ const clamp = (value: number, low: number, high: number): number =>
 
 /*
  * A design's photo spots, each showing one of the person's photographs or a
- * sample (D-150).
+ * sample (D-152).
  *
  * "When users add their photos, please remove a sample photo for each
  * uploaded photos. E.g. if a template has 4 photos and a user uploads 3
@@ -197,7 +197,7 @@ function newSpot(photos: readonly PhotoInput[], at: number, mediaId: string): Ph
 }
 
 /**
- * Fewer spots (D-150): samples go first, from the end, so a photograph of the
+ * Fewer spots (D-152): samples go first, from the end, so a photograph of the
  * person's own is dropped only when there are no samples left to drop.
  */
 function shrunk(photos: readonly PhotoInput[], count: number): readonly PhotoInput[] {
@@ -232,7 +232,7 @@ function backToSamples(
   return photos.map((spot, i) => (turning(spot, i) ? withPicture(spot, samples[next++] ?? '') : spot));
 }
 
-/** Where newly added photographs went (D-150). */
+/** Where newly added photographs went (D-152). */
 export type PhotoPlacement = {
   readonly photos: readonly PhotoInput[];
   /** Samples that gave way to a photograph of the person's own. */
@@ -317,7 +317,7 @@ export function replacePhoto(index: number, mediaId: string): Action {
 }
 
 /**
- * Photographs into a design's photo spots, in order (D-116, D-137, D-150).
+ * Photographs into a design's photo spots, in order (D-116, D-137, D-152).
  *
  * By default only the scene being worked on: "when I clicked on a scene and
  * add your photos, the photos is applied to all scenes. I expected … only the
@@ -327,7 +327,7 @@ export function replacePhoto(index: number, mediaId: string): Action {
  * neighbouring scenes do not open on the same picture.
  *
  * A scene shows each photograph once: with more spots than photographs, the
- * rest show samples rather than repeats (D-150). The scene worked on takes
+ * rest show samples rather than repeats (D-152). The scene worked on takes
  * any photographs left over as new spots, up to `maxPhotos` — its design's
  * limit. One undo step, however many scenes it touches.
  */
@@ -378,7 +378,7 @@ export function placeOwnPhotos(
 // project." A phone's camera hands over one picture at a time; replacing the
 // scene's photos with each one lost the picture before. Every photograph
 // added stays in the project's list until the person deletes it, and adding
-// only ever takes the place of samples (D-150) — never of a photo of theirs.
+// only ever takes the place of samples (D-152) — never of a photo of theirs.
 
 function withLibrary(project: Project, mediaIds: readonly string[]): Project {
   const current = project.photoLibrary ?? projectPhotos(project);
@@ -398,7 +398,7 @@ export function alsoInLibrary(action: Action, mediaIds: readonly string[]): Acti
 }
 
 /**
- * Photographs already in Your photos into the scene being worked on (D-150):
+ * Photographs already in Your photos into the scene being worked on (D-152):
  * each takes the place of a sample, first spot first, or a new spot while the
  * design has room. Nothing of the person's own is replaced; with no room left
  * it changes nothing, and the panel says the design is full.
@@ -412,7 +412,7 @@ export function placePhotos(mediaIds: readonly string[], options: { readonly max
 }
 
 /**
- * "Add your photos" (D-147, D-150) — from either button, the camera, a drop
+ * "Add your photos" (D-147, D-152) — from either button, the camera, a drop
  * or a paste: new photographs join "Your photos", and each takes the place of
  * one sample in the scene being worked on, first spot first. More than the
  * scene has samples add spots up to its design's limit; any beyond that wait
@@ -432,7 +432,7 @@ export function addYourPhotos(mediaIds: readonly string[], options: { readonly m
 /**
  * Photographs on top of the design, anywhere (D-124), kept in Your photos too
  * (D-147) — in one undo step however many there are. What a design with no
- * photo spots does with the photos added to it (D-150).
+ * photo spots does with the photos added to it (D-152).
  */
 export function addPhotoLayers(overlays: readonly Overlay[]): Action {
   return {
@@ -446,7 +446,7 @@ export function addPhotoLayers(overlays: readonly Overlay[]): Action {
 }
 
 /**
- * The × on a spot (D-150): the spot shows a sample again — one the scene is
+ * The × on a spot (D-152): the spot shows a sample again — one the scene is
  * not already showing. The photograph stays in Your photos.
  */
 export function sampleAt(index: number): Action {
@@ -466,7 +466,7 @@ function keepInLibrary(before: Project, after: Project): Project {
   return { ...after, photoLibrary: [...new Set([...projectPhotos(before), ...projectPhotos(after)])] };
 }
 
-/** Every spot in the scene back to samples (D-150). The photographs stay in Your photos. */
+/** Every spot in the scene back to samples (D-152). The photographs stay in Your photos. */
 export function restoreSamples(): Action {
   return {
     label: 'Use samples again',
@@ -476,7 +476,7 @@ export function restoreSamples(): Action {
 
 /**
  * Takes a photograph out of the project (D-147): out of "Your photos", off
- * every spot that showed it — each shows a sample instead (D-150) — and off
+ * every spot that showed it — each shows a sample instead (D-152) — and off
  * the canvas where it was added on top, or behind as the background.
  */
 export function removeFromLibrary(mediaId: string): Action {
@@ -529,7 +529,7 @@ export function reorderPhoto(from: number, to: number): Action {
  * photos but different counts render differently.
  *
  * A new spot shows the next sample the scene is not already showing, never a
- * repeat of the person's photo (D-150): "when user do plus to make design
+ * repeat of the person's photo (D-152): "when user do plus to make design
  * accommodate 6 photos, you use sample photos for those until the number of
  * picture uploaded match the design." Fewer spots drop the last ones.
  */
@@ -1146,7 +1146,7 @@ export function setTemplate(
  * Brings a photo list inside a template's declared slot range.
  *
  * Spots the new design needs beyond the ones the scene had show samples it is
- * not already showing, as the stepper's do (D-150) — never repeats of the
+ * not already showing, as the stepper's do (D-152) — never repeats of the
  * person's photo. A scene with no spots at all, such as one moving off a
  * design of words alone, starts on the new design's own number of samples
  * (`default`) rather than drawing empty frames: samples are fetched when a

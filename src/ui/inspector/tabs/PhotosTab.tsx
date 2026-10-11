@@ -18,7 +18,7 @@ import { Button, Section, Segmented, Slider, Stepper } from '../controls';
 import { SlotPlacement } from '../SlotPlacement';
 
 /**
- * §8.1, rebuilt for D-150. Every control here goes through dispatch; none
+ * §8.1, rebuilt for D-152. Every control here goes through dispatch; none
  * touches the document.
  *
  * "On the top of the Photo pane, Photo in this design section should represent
@@ -71,7 +71,7 @@ const useDesignWord = (): 'design' | 'scene' => useEditor((s) => (s.project.scen
 const carriesFiles = (event: React.DragEvent): boolean => [...event.dataTransfer.types].includes('Files');
 
 /**
- * "Photos in this design" (D-150): the template's own photo spots, in order.
+ * "Photos in this design" (D-152): the template's own photo spots, in order.
  * Each shows one of the person's photos or a sample; + Add photo, Take photo,
  * a drop or a paste put new photos in place of the samples, first spot first.
  */
@@ -364,7 +364,7 @@ function SpotSettings(): React.JSX.Element | null {
 }
 
 /**
- * "Extra photos" (D-124, D-150) — photos on top of the design, anywhere, not
+ * "Extra photos" (D-124, D-152) — photos on top of the design, anywhere, not
  * part of the template: "Under text, I am able to add texts with + Add text
  * button. Under Photos, no." Each is a layer of its own, to be moved, sized
  * and animated like any other, listed here with Replace, Settings and Delete.
@@ -468,7 +468,7 @@ function useAddPhotoLayers(primary: boolean): { button: React.JSX.Element; error
 /**
  * "Your photos" (D-147): every photograph added to the project, kept until
  * the person deletes it — shown here only while some are not in this design,
- * small, so it never competes with the design's own photos above (D-150).
+ * small, so it never competes with the design's own photos above (D-152).
  *
  * A tap puts one in the design in place of the first sample, or in a new spot
  * while the design has room; on a design with no photo spots it goes on top

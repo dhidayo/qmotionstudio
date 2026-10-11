@@ -102,7 +102,7 @@ describe('photo distribution', () => {
     expect(second).not.toBe('a');
   });
 
-  it('with fewer photos than spots, each beat shows them once and samples in the rest (D-150)', async () => {
+  it('with fewer photos than spots, each beat shows them once and samples in the rest (D-152)', async () => {
     const scenes = await expandAdTemplate(await ad('launch-story'), { photoIds: ['only'] });
     for (const scene of scenes) {
       const ids = scene.inputs.photos.map((p) => p.mediaId);
@@ -120,7 +120,7 @@ describe('applying an ad over existing work (D-098)', () => {
     const used = scenes.flatMap((scene) => scene.inputs.photos.map((p) => p.mediaId));
     expect(used.length).toBeGreaterThan(0);
     expect(used.filter((id) => id === 'm:one' || id === 'm:two').length).toBeGreaterThan(0);
-    // Once each per beat, never a repeat to fill a spot (D-150); neighbouring beats open on different photos.
+    // Once each per beat, never a repeat to fill a spot (D-152); neighbouring beats open on different photos.
     for (const scene of scenes) {
       const own = scene.inputs.photos.map((p) => p.mediaId).filter((id) => id.startsWith('m:'));
       expect(new Set(own).size).toBe(own.length);

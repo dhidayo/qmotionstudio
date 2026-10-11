@@ -220,7 +220,7 @@ describe('switching template reconciles the photo count', () => {
     expect(next.scenes[0]?.inputs.photos).toHaveLength(1);
   });
 
-  it('grows to the new template’s minimum with a sample the scene is not showing (D-150)', () => {
+  it('grows to the new template’s minimum with a sample the scene is not showing (D-152)', () => {
     const next = actions
       .setTemplate('angle-fan', { photoSlots: { min: 3, max: 8 } })
       .apply(withPhotos(2), scope(0));
@@ -229,7 +229,7 @@ describe('switching template reconciles the photo count', () => {
     expect(photos.map((p) => p.mediaId)).toEqual(['sample:dune', 'sample:tide', 'sample:canopy']);
   });
 
-  it('never grows by repeating the person’s own photo (D-150)', () => {
+  it('never grows by repeating the person’s own photo (D-152)', () => {
     const own = actions.addYourPhotos(['mine'], { maxPhotos: 2 }).apply(withPhotos(2), scope(0));
     const next = actions.setTemplate('angle-fan', { photoSlots: { min: 4, max: 8 } }).apply(own, scope(0));
     expect(next.scenes[0]?.inputs.photos.map((p) => p.mediaId)).toEqual(['mine', 'sample:tide', 'sample:dune', 'sample:canopy']);
@@ -288,7 +288,7 @@ describe('placeOwnPhotos (D-116, D-137)', () => {
     expect(next.scenes.map((s) => s.inputs.photos.map((p) => p.mediaId))).toEqual([['sample:dune', 'sample:tide'], ['u1']]);
   });
 
-  it('fills every scene in turn from this one, each photo once per scene, samples for the rest (D-150)', async () => {
+  it('fills every scene in turn from this one, each photo once per scene, samples for the rest (D-152)', async () => {
     const { placeOwnPhotos } = await import('./index');
     const photo = (mediaId: string) => ({ mediaId, frame: '3:4' as const, sizeMode: 'template' as const, sizePct: 100, cropMode: 'original' as const, cropRect: { x: 0, y: 0, w: 0.5, h: 0.5 } });
     const base = createProject();

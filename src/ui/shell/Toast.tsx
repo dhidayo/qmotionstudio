@@ -37,7 +37,7 @@ export function Toast(): React.JSX.Element | null {
    * Centred by the `toast-in-out` animation's own translate(-50%). A
    * `-translate-x-1/2` here as well moved it half its width again, so a long
    * notice on a phone — "Your 3 photos replaced 3 samples." — started off the
-   * left edge of the screen (D-150).
+   * left edge of the screen (D-152).
    */
   return (
     <div

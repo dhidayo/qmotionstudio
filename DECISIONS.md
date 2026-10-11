@@ -3266,3 +3266,61 @@ same.
 The library and settings panels resize by dragging their inner edge or with
 the arrow keys, are remembered on this device, and return to the usual width
 on a double-click; the picture always keeps at least 420px.
+
+## D-151 — Covers & Thumbnails: business post covers and video thumbnails
+
+"If you see the templates in my design, it looks like thumbnail that one can
+use for social media posts, or youtube thumbnails … maybe you'd create another
+category under Socials & Business."
+
+A new family, `cover`, makes sixteen designs in a new category, Covers &
+Thumbnails. Eight are business posts — Corporate Update, Brand Guidelines,
+Q3 Report Highlights, Product Launch Info, Weekly Agenda, Milestone
+Celebrations, Marketing Strategy, Annual Pitch Deck — and eight are
+thumbnails — YouTube Bold, Podcast Episode, How-To Tutorial, Top 5 List, This
+vs That, Day in the Life, Course Cover, Live Now. They share one composition:
+a bold ground, a brand mark and name top left, a heavy headline, and a
+photograph in a rounded panel, arch, circle, taped print or full bleed with an
+accent shape behind it. Under the headline sits what the design is about: a
+figure that counts up, an agenda that ticks itself off, numbered pillars,
+steps, a button, a guest with a moving sound wave, a LIVE badge. Landscape and
+square frames put the words left and the photograph right, as a video
+thumbnail reads; portrait frames put the photograph above the words. The words
+shrink together to fit their column, and a test holds every line inside the
+frame and above the watermark band in every shape, with the longest copy
+allowed. Every colour is a palette role, so a look restyles the whole cover.
+The mark is the company name's first letter, since the person's own logo is
+drawn where they place it (D-101).
+
+They are two purposes of their own: Business posts (first for Business,
+second for News) and Thumbnails & covers (second for Social, after Photo
+galleries), with Start here picks from each.
+
+## D-152 — your photos replace the samples, one for one
+
+"When I add photos, the sample photos still stays there … please remove a
+sample photo for each uploaded photos … When user do plus to make design
+accommodate 6 photos, you use sample photos for those until the number of
+picture uploaded match the design … Photo in this design section should
+represent photos for the design template … Extra Photos will add additional
+photos that are not part of the template."
+
+A design's photo spot shows one of the person's photos or a sample. Adding
+photos — + Add photo, Add your photos, the camera, a drop or a paste — takes
+the sample spots first to last, keeping each spot's frame and size. More
+photos than samples add spots up to the design's maximum; any beyond wait in
+Your photos. A photo of theirs is never replaced by adding, so camera shots
+build up (D-147). New spots — the Photo spots stepper, a new scene, a film
+applied over their work — show samples the scene is not already showing,
+never repeats of their photo; fewer spots drop samples before their photos.
+The × on a spot, Use samples again, and deleting a photo from the project put
+samples back; on a project saved before Your photos existed, nothing taken
+off a spot leaves the list.
+
+Photos reads, top to bottom: Photos in this design (the spots, each tagged
+Sample or with an × on the person's own; + Add photo, and Take photo on a
+phone); Your photos, only while some are not in the design, where a tap puts
+one in the first sample spot; the chosen spot's settings with Replace; then
+Extra photos — photos on top, anywhere. A design with no spots shows Extra
+photos first, and photos added to it go on top. A paste now lands in one
+place (it used to be added more than once), and toasts are centred again.
