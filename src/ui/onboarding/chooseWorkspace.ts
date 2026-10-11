@@ -4,29 +4,33 @@ import { starterProject, untouchedStarterOf } from '@/state/starter';
 import { readWorkspace, setWorkspace, storedWorkspace } from '@/state/workspace';
 import { WORKSPACES, type WorkspaceId } from '@/templates/workspaces';
 import { openTopGroups } from '@/ui/library/libraryFolds';
-import { bumpStarterVersion, closeWorkspaceWindow, restoreSettled } from './workspaceQuestionState';
+import { bumpStarterVersion, restoreSettled } from './purposeState';
 
 /**
- * Sets the device up for a workspace (D-149), from the first-visit question,
- * the library's switch or the menu.
+ * Sets the purpose (D-149, D-150), from the Purpose bar above the picture.
  *
  * What the person has made is never touched. Only a project that is still
- * exactly the starter — reopened or not, nothing undoable done to it — is
+ * exactly the starter — reopened or not, apart from its frame shape — is
  * swapped for the new workspace's opener, keeping its id and name so no
  * second "Untitled project" appears. The frame shape comes with the opener
  * unless a link chose one, or the person already changed it.
  */
-export function chooseWorkspace(next: WorkspaceId, source: 'question' | 'switch' | 'menu'): void {
+export function chooseWorkspace(next: WorkspaceId): void {
   const editor = useEditor.getState();
 
   if (next === readWorkspace()) {
+    // Choosing the one already on still counts as choosing it (the quick start's first step).
     if (storedWorkspace() === null) setWorkspace(next);
-    closeWorkspaceWindow();
     return;
   }
 
   let swapped = false;
-  if (restoreSettled() && !editor.canUndo() && !editor.canRedo()) {
+  /*
+   * Swapped only while the project is still exactly a starting design. A
+   * changed frame shape does not count as work (D-150) — the frame is kept —
+   * but anything that could be redone does, so nothing undone is lost.
+   */
+  if (restoreSettled() && !editor.canRedo()) {
     const project = editor.project;
     const from = untouchedStarterOf(project);
     if (from !== null && from !== next) {
@@ -40,8 +44,5 @@ export function chooseWorkspace(next: WorkspaceId, source: 'question' | 'switch'
 
   setWorkspace(next);
   openTopGroups(next);
-  closeWorkspaceWindow();
-  if (source !== 'question') {
-    editor.showToast(`${WORKSPACES[next].toast} ${swapped ? 'A matching design is now open.' : 'Your project has not changed.'}`);
-  }
+  editor.showToast(`${WORKSPACES[next].toast} ${swapped ? 'A matching design is now open.' : 'Your project has not changed.'}`);
 }

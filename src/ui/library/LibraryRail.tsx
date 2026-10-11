@@ -1,12 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
-import { posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
+import { aspectPosterUrl, posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
 import { lookPreset } from '@/templates/_shared/look';
 import { purposeOf } from '@/templates/purpose';
 import { START_HERE, WORKSPACES, effectiveFolded, libraryGroups } from '@/templates/workspaces';
 import { useEditor } from '@/state/store';
 import { useWorkspace } from '@/state/workspace';
 import { useStoredFolds, writeFolds } from './libraryFolds';
-import { WorkspaceSwitch } from './WorkspaceSwitch';
 import { useEntitlements } from '@/entitlements';
 import { PlayingPreview, noHover } from './PlayingPreview';
 
@@ -118,53 +117,69 @@ export function LibraryRail({
           onUse={() => { setTemplate(previewing.id); setPreviewing(null); onPicked?.(); }}
         />
       )}
-      <div className={sheet ? 'pb-2' : 'border-b border-edge p-3'}>
-        <WorkspaceSwitch
-          size={sheet ? 'sheet' : 'rail'}
-          aside={(
-            <button
-              type="button"
-              data-group-by
-              onClick={() => { setGroupBy(groupBy === 'purpose' ? 'style' : 'purpose'); }}
-              title={groupBy === 'purpose' ? 'Grouped by what each design is for. Click to group by how it looks.' : 'Grouped by how each design looks. Click to group by what it is for.'}
-              className={`rounded-md border border-edge px-1.5 text-ink-muted hover:bg-panel-alt ${sheet ? 'py-1 text-[12px]' : 'text-[10px]'}`}
-            >
-              By {groupBy === 'purpose' ? 'purpose' : 'style'}
-            </button>
-          )}
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); }}
-          placeholder="Search templates"
-          aria-label="Search templates"
-          className={`w-full rounded-md border border-edge bg-panel-alt px-2 ${sheet ? 'py-2 text-[15px]' : 'py-1.5 text-[12px]'} placeholder:text-ink-faint focus:border-accent focus:outline-none`}
-        />
-        <div className="mt-2 flex gap-1">
-          {(['all', 'free', 'pro'] as const).map((tier) => (
-            <FilterChip
-              key={tier}
-              active={tierFilter === tier}
-              onClick={() => { setTierFilter(tier); }}
-              label={tier === 'all' ? 'All' : tier === 'free' ? 'Free' : 'Pro'}
-            />
-          ))}
-          <FilterChip
-            active={showFavourites}
-            onClick={toggleFavouritesFilter}
-            label={`★ ${favourites.length}`}
+      {/*
+        * The header in two rows (D-150): search with the favourites star beside
+        * it, then the Free/Pro filter, the grouping and one icon to fold or open
+        * every group — nothing cut short at the rail's narrowest.
+        */}
+      <div className={sheet ? 'pb-2' : 'border-b border-edge p-3'} data-library-header>
+        <div className="flex items-center gap-1.5">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); }}
+            placeholder="Search designs"
+            aria-label="Search templates"
+            className={`min-w-0 flex-1 rounded-md border border-edge bg-panel-alt px-2 ${sheet ? 'h-10 text-[15px]' : 'h-8 text-[12px]'} placeholder:text-ink-faint focus:border-accent focus:outline-none`}
           />
+          <button
+            type="button"
+            data-favourites-filter
+            onClick={toggleFavouritesFilter}
+            aria-pressed={showFavourites}
+            aria-label={`Show favourites only (${favourites.length})`}
+            title={showFavourites ? 'Showing your favourites. Click to show every design.' : `Show only your favourites (${favourites.length})`}
+            className={`relative grid shrink-0 place-items-center rounded-md border ${showFavourites ? 'chip-on' : 'border-edge text-ink-muted hover:bg-panel-alt'} ${sheet ? 'size-10' : 'size-8'}`}
+          >
+            <span aria-hidden className={sheet ? 'text-[17px]' : 'text-[14px]'}>{showFavourites || favourites.length > 0 ? '★' : '☆'}</span>
+            {favourites.length > 0 && (
+              <span aria-hidden className="tabular absolute -right-1 -top-1 min-w-4 rounded-full px-1 text-center text-[9px] font-semibold leading-4" style={{ background: 'var(--c-pro)', color: '#1a1300' }}>{favourites.length}</span>
+            )}
+          </button>
           {!unfolded && names.length > 1 && (
             <button
               type="button"
               data-fold-all
               onClick={() => { setAll(!allFolded); }}
-              className={`ml-auto rounded-md px-1.5 text-ink-faint hover:text-ink ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
+              aria-label={allFolded ? 'Expand all groups' : 'Collapse all groups'}
+              title={allFolded ? 'Expand all groups' : 'Collapse all groups'}
+              className={`brand-surface grid shrink-0 place-items-center rounded-md hover:bg-[var(--c-brand-hover)] ${sheet ? 'size-10' : 'size-8'}`}
             >
-              {allFolded ? 'Expand all' : 'Collapse all'}
+              <FoldIcon open={allFolded} />
             </button>
           )}
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          <div role="group" aria-label="Free or Pro" className="flex gap-1">
+            {(['all', 'free', 'pro'] as const).map((tier) => (
+              <FilterChip
+                key={tier}
+                active={tierFilter === tier}
+                onClick={() => { setTierFilter(tier); }}
+                label={tier === 'all' ? 'All' : tier === 'free' ? 'Free' : 'Pro'}
+                large={sheet}
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            data-group-by
+            onClick={() => { setGroupBy(groupBy === 'purpose' ? 'style' : 'purpose'); }}
+            title={groupBy === 'purpose' ? 'Grouped by what each design is for. Click to group by how it looks.' : 'Grouped by how each design looks. Click to group by what it is for.'}
+            className={`whitespace-nowrap rounded-md border border-edge px-2 text-ink-muted hover:bg-panel-alt ${sheet ? 'h-9 text-[13px]' : 'h-7 text-[11px]'}`}
+          >
+            By {groupBy === 'purpose' ? 'purpose' : 'style'}
+          </button>
         </div>
       </div>
 
@@ -261,27 +276,35 @@ function FilterChip({
   active,
   onClick,
   label,
+  large,
 }: {
   active: boolean;
   onClick: () => void;
   label: string;
+  large: boolean;
 }): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className="rounded-md border px-2 py-0.5 text-[10px] transition-colors"
-      style={{
-        borderColor: active ? 'var(--c-accent)' : 'var(--c-edge)',
-        background: active ? 'var(--c-accent-soft)' : 'transparent',
-        color: active ? 'var(--c-accent)' : 'var(--c-ink-faint)',
-        fontWeight: active ? 600 : 400,
-        transitionDuration: 'var(--t-fast)',
-      }}
+      // The chosen one in deep navy (D-150), so what is filtered reads at a glance.
+      className={`whitespace-nowrap rounded-md border px-2.5 transition-colors ${large ? 'h-9 text-[13px]' : 'h-7 text-[11px]'} ${active ? 'chip-on' : 'border-edge text-ink-muted hover:bg-panel-alt'}`}
+      style={{ transitionDuration: 'var(--t-fast)' }}
     >
       {label}
     </button>
+  );
+}
+
+/** Two chevrons: apart to open every group, together to fold them. */
+function FoldIcon({ open }: { open: boolean }): React.JSX.Element {
+  return (
+    <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      {open
+        ? <path d="M7 9l5-5 5 5M7 15l5 5 5-5" />
+        : <path d="M7 4l5 5 5-5M7 20l5-5 5 5" />}
+    </svg>
   );
 }
 
@@ -305,6 +328,13 @@ function TemplateCard({
 }): React.JSX.Element {
   // A screen with no hover has no other way to see a design move (point 4).
   const playsItself = autoplay || noHover();
+  // The card takes the frame shape chosen above the picture (D-150): landscape
+  // for 16:9, tall for 9:16, with the design's still in that shape.
+  const shape = useEditor((s) => s.project.aspect);
+  const still = aspectPosterUrl(template.id, shape);
+  const fallback = posterUrl(template.id);
+  // The moving loop was made in the design's first shape; in another it is shown whole, not cropped.
+  const loopFit = shape === (template.supportedAspects[0] ?? '9:16') ? 'cover' : 'contain';
   const { limits } = useEntitlements();
   // §12: Pro templates are badged and selectable; the gate is on export, not
   // on looking. Locking the card would make the library feel smaller than it is.
@@ -325,12 +355,14 @@ function TemplateCard({
         }}
       >
         {/* The design's own ground behind its picture (D-121), so even before the poster loads the card is the colour the design opens in. */}
-        <span className="relative block aspect-square w-full" style={{ background: groundOf(template) }}>
-          {playsItself ? <PlayingPreview id={template.id} /> : <>
+        <span className="relative block w-full" data-card-shape={shape} style={{ background: groundOf(template), aspectRatio: shape.replace(':', ' / ') }}>
+          {playsItself ? <PlayingPreview id={template.id} still={still} fit={loopFit} /> : <>
           <img
-            src={posterUrl(template.id)}
+            src={still}
             alt=""
             loading="lazy"
+            decoding="async"
+            onError={(e) => { if (!e.currentTarget.src.includes(`/thumbs/${template.id}.webp`)) e.currentTarget.src = fallback; }}
             className="absolute inset-0 size-full object-cover group-hover:opacity-0"
           />
           {/* The loop only loads on hover, so the library costs one poster per card. */}
@@ -341,7 +373,7 @@ function TemplateCard({
             playsInline
             preload="none"
             aria-hidden
-            className="absolute inset-0 size-full object-cover opacity-0 group-hover:opacity-100"
+            className={`absolute inset-0 size-full opacity-0 group-hover:opacity-100 ${loopFit === 'contain' ? 'object-contain' : 'object-cover'}`}
             onMouseEnter={(e) => { void e.currentTarget.play().catch(() => undefined); }}
             onMouseLeave={(e) => { e.currentTarget.pause(); }}
           />

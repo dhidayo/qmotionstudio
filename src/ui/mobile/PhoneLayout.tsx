@@ -11,6 +11,7 @@ import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { StartActions } from '@/ui/editing/StartActions';
+import { PurposeBar } from '@/ui/shell/PurposeBar';
 import { Icon } from './Icon';
 import { PhonePanels } from './PhonePanels';
 import { PhoneToolbar } from './PhoneToolbar';
@@ -53,6 +54,7 @@ export function PhoneLayout({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col" data-layout="phone">
       <PhoneTopBar />
+      <PurposeBar variant="phone" />
       <main className="relative min-h-0 flex-1" style={{ background: 'var(--c-stage)' }}>
         <Artboard project={project} clock={clock} rig={rig} media={media} padding={12} />
         {/* A test release is open to anyone with the link, so it says what it is — on one line. */}

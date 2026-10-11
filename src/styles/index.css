@@ -50,6 +50,17 @@
   color: var(--c-brand-ink);
 }
 
+/*
+ * A chosen chip or segment (D-150): deep navy with light words, the same navy
+ * as the top bar, so what is picked reads at a glance in light and dark.
+ */
+.chip-on {
+  background-color: var(--c-brand);
+  border-color: var(--c-brand);
+  color: var(--c-brand-ink);
+  font-weight: 600;
+}
+
 @layer base {
   html,
   body,

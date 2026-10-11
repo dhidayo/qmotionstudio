@@ -27,8 +27,9 @@ import { useAutosave } from '@/ui/persist/useAutosave';
 import { useRestore } from '@/ui/persist/useRestore';
 import { Toast } from './Toast';
 import { QuickStart } from '@/ui/onboarding/QuickStart';
-import { WorkspaceQuestion } from '@/ui/onboarding/WorkspaceQuestion';
-import { markRestoreReady } from '@/ui/onboarding/workspaceQuestionState';
+import { markRestoreReady } from '@/ui/onboarding/purposeState';
+import { PurposeBar } from './PurposeBar';
+import { PaneResizer, restorePaneWidths } from './PaneResizer';
 import { ContextMenu } from './ContextMenu';
 import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
@@ -353,10 +354,12 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
   const restore = useRestore(media);
   useAutosave(project, media, restore.phase === 'ready');
-  // "What will you make most?" waits for the last project to reopen (D-149).
+  // Choosing a purpose never swaps the design until the last project has reopened (D-150).
   useEffect(() => { if (restore.phase === 'ready') markRestoreReady(); }, [restore.phase]);
 
   const layout = useLayout();
+  // The panel widths chosen on an earlier visit (D-150).
+  useEffect(() => { if (layout === 'desktop') restorePaneWidths(); }, [layout]);
   /** The inspector as a sheet, below desktop width. */
   const sheet = useOverlays((o) => o.inspectorSheet);
   const setSheet = useOverlays((o) => o.setInspectorSheet);
@@ -381,9 +384,10 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
           * 520px, which is the point the preview stops being the biggest
           * thing on screen. They become sheets you open when you need them.
           */}
-        {layout === 'desktop' && <LibraryRail />}
+        {layout === 'desktop' && <><LibraryRail /><PaneResizer pane="library" /></>}
 
         <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
+          <PurposeBar variant="wide" />
           <div className="relative min-h-0 flex-1">
             <Artboard project={project} clock={clock} rig={rig} media={media} />
             <PerfOverlay rig={rig} />
@@ -392,7 +396,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
           {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}
         </main>
 
-        {layout === 'desktop' && <Inspector />}
+        {layout === 'desktop' && <><PaneResizer pane="inspector" /><Inspector /></>}
       </div>
 
       {layout !== 'desktop' && (
@@ -414,7 +418,6 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
         {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </Suspense>
-      <WorkspaceQuestion />
       <QuickStart />
       <Toast />
       <ContextMenu />

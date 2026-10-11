@@ -9,9 +9,6 @@ import { useLayout } from './useLayout';
 import { useProjectActions } from '@/ui/projects/useProjectActions';
 import { useProjectFile } from '@/ui/projects/useProjectFile';
 import { showQuickStart } from '@/ui/onboarding/quickStartState';
-import { openWorkspaceWindow } from '@/ui/onboarding/workspaceQuestionState';
-import { readWorkspace } from '@/state/workspace';
-import { WORKSPACES } from '@/templates/workspaces';
 
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
@@ -328,7 +325,6 @@ function AppMenu(): React.JSX.Element {
         { label: 'Save as…', hint: 'A new copy you keep working on', onSelect: () => { useOverlays.getState().setSaveAsOpen(true); } },
         { label: 'Make a copy', hint: 'A copy in your list; you stay here', onSelect: () => { void makeCopy(); } },
         { kind: 'separator' },
-        { label: 'Set up for…', hint: WORKSPACES[readWorkspace()].short, onSelect: () => { openWorkspaceWindow(); } },
         { label: 'Show the quick start', onSelect: () => { showQuickStart(); } },
         { label: 'Keyboard shortcuts', hint: '?', onSelect: () => { useOverlays.getState().setShortcutsOpen(true); } },
         { label: theme === 'dark' ? 'Light theme' : 'Dark theme', onSelect: () => { setTheme(theme === 'dark' ? 'light' : 'dark'); } },

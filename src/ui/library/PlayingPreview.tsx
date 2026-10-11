@@ -43,7 +43,17 @@ export function shouldStream(): boolean {
  * scrolled away before its loop arrived stops fetching it, so a long library
  * never downloads more than what is on the screen.
  */
-export function PlayingPreview({ id }: { id: string }): React.JSX.Element {
+export function PlayingPreview({
+  id,
+  still,
+  fit = 'cover',
+}: {
+  id: string;
+  /** The still to show, when it is not the design's own poster — its frame shape's (D-150). */
+  still?: string;
+  /** `contain` when the loop is a different shape from the card: shown whole, never cropped. */
+  fit?: 'cover' | 'contain';
+}): React.JSX.Element {
   const box = useRef<HTMLSpanElement>(null);
   const video = useRef<HTMLVideoElement>(null);
   const [posterReady, setPosterReady] = useState(false);
@@ -96,13 +106,15 @@ export function PlayingPreview({ id }: { id: string }): React.JSX.Element {
       className="absolute inset-0 block"
     >
       <img
-        src={posterUrl(id)}
+        src={still ?? posterUrl(id)}
         alt=""
         loading="lazy"
         decoding="async"
         onLoad={() => { setPosterReady(true); }}
+        onError={(e) => { if (still !== undefined && e.currentTarget.src !== new URL(posterUrl(id), location.href).href) e.currentTarget.src = posterUrl(id); }}
         className="absolute inset-0 size-full object-cover"
-        style={{ opacity: posterReady ? 1 : 0, transition: 'opacity 160ms ease-out' }}
+        // A loop of another shape is shown whole on the design's ground, so the still steps away under it.
+        style={{ opacity: posterReady && !(moving && fit === 'contain') ? 1 : 0, transition: 'opacity 160ms ease-out' }}
       />
       <video
         ref={video}
@@ -113,7 +125,7 @@ export function PlayingPreview({ id }: { id: string }): React.JSX.Element {
         aria-hidden
         data-autoplay-preview
         onPlaying={() => { setMoving(true); }}
-        className="absolute inset-0 size-full object-cover"
+        className={`absolute inset-0 size-full ${fit === 'contain' ? 'object-contain' : 'object-cover'}`}
         style={{ opacity: moving ? 1 : 0, transition: 'opacity 160ms ease-out' }}
       />
     </span>

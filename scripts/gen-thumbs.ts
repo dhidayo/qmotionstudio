@@ -1,4 +1,5 @@
 import { chromium, type Page } from '@playwright/test';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { TEMPLATE_MANIFEST, type TemplateSummary } from '../src/templates/manifest';
@@ -40,6 +41,7 @@ const LOOP_MS = 2_000;
 /** The library card's still in each frame shape: small, since cards are. */
 const ASPECT_POSTER_SHORT_EDGE = 360;
 const POSTERS_ONLY = process.argv.includes('--posters');
+const MISSING_ONLY = process.argv.includes('--missing');
 const LOOP_FPS = 24;
 
 /**
@@ -150,12 +152,16 @@ function selected(): readonly TemplateSummary[] {
   // Unlisted templates never appear on a library card, so they have no
   // thumbnail to make — Blank's would be an empty frame (D-097).
   const listed = TEMPLATE_MANIFEST.filter((t) => t.listed !== false);
-  if (filters.length === 0) return listed;
+  // `--missing`: only designs still lacking a frame-shape still, so a long run can resume.
+  const pending = MISSING_ONLY
+    ? listed.filter((t) => t.supportedAspects.some((aspect) => !existsSync(resolve(OUT_DIR, `${t.id}.${aspect.replace(':', 'x')}.webp`))))
+    : listed;
+  if (filters.length === 0) return pending;
 
-  const matched = listed.filter((t) =>
+  const matched = pending.filter((t) =>
     filters.some((f) => t.id.toLowerCase().includes(f) || t.category.toLowerCase().includes(f)),
   );
-  if (matched.length === 0) {
+  if (matched.length === 0 && !MISSING_ONLY) {
     throw new Error(`Nothing matches ${filters.join(', ')}. Known ids: ${TEMPLATE_MANIFEST.map((t) => t.id).join(', ')}`);
   }
   return matched;

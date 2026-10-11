@@ -21,9 +21,6 @@ import { BottomSheet } from './BottomSheet';
 import { TierSwitch } from '@/ui/shell/TierSwitch';
 import { useProjectFile } from '@/ui/projects/useProjectFile';
 import { showQuickStart } from '@/ui/onboarding/quickStartState';
-import { openWorkspaceWindow } from '@/ui/onboarding/workspaceQuestionState';
-import { useWorkspace } from '@/state/workspace';
-import { WORKSPACES } from '@/templates/workspaces';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import * as actions from '@/document/actions';
 import { TRANSITION_LABELS } from '@/ui/timeline/transitionLabels';
@@ -205,7 +202,6 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const theme = useEditor((s) => s.theme);
   const setTheme = useEditor((s) => s.setTheme);
   const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
-  const workspace = useWorkspace();
   const { rename, saveAs, makeCopy, startNew } = useProjectActions();
   const file = useProjectFile();
   const [draft, setDraft] = useState(name);
@@ -260,7 +256,6 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
         {row('Open project file…', () => { file.open(); })}
         {row('Save as a copy and keep working on it', () => { void saveAs(`${name} copy`); onClose(); })}
         {row('Make a copy', () => { void makeCopy(); onClose(); })}
-        {row('Set up for…', () => { onClose(); openWorkspaceWindow(); }, WORKSPACES[workspace].short)}
         {row('Show the quick start', () => { showQuickStart(); onClose(); })}
         {row(theme === 'dark' ? 'Light theme' : 'Dark theme', () => { setTheme(theme === 'dark' ? 'light' : 'dark'); })}
       </div>

@@ -1,4 +1,4 @@
-import { answerWelcome } from '../support/workspace';
+import { choosePurpose } from '../support/workspace';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -106,10 +106,12 @@ test.describe('the quick start', () => {
 
   test('points at one button at a time and moves on when it is pressed', async ({ page }) => {
     await open(page, '/');
-    await answerWelcome(page, 'A bit of everything');
     const tour = page.locator('[data-quick-start]');
-    await expect(tour).toBeVisible();
+    // First the purpose (D-150), on the bar above the picture.
     await expect(tour).toHaveAttribute('data-quick-step', '1');
+    await expect(tour).toContainText('Pick your purpose');
+    await choosePurpose(page, 'both');
+    await expect(tour).toHaveAttribute('data-quick-step', '2');
     await expect(tour).toContainText('Choose a design');
 
     // The popup sits beside the button it names, and does not cover it.
@@ -128,11 +130,11 @@ test.describe('the quick start', () => {
     await page.locator('[data-design-card="type-typewriter"]').click();
     await page.getByRole('button', { name: 'Use this design' }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(tour).toHaveAttribute('data-quick-step', '2');
+    await expect(tour).toHaveAttribute('data-quick-step', '3');
     await expect(tour).toContainText('Add your photos');
 
     await page.getByLabel('Add your photos').first().setInputFiles(await picture(page, '#ff2d55'));
-    await expect(tour).toHaveAttribute('data-quick-step', '3');
+    await expect(tour).toHaveAttribute('data-quick-step', '4');
     await expect(tour).toContainText('Export');
 
     await tour.getByRole('button', { name: 'Skip tour' }).click();

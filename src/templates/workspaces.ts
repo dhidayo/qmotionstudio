@@ -26,7 +26,8 @@ import {
 
 export const WORKSPACE_IDS = ['social', 'business', 'news', 'both'] as const;
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number];
-export const DEFAULT_WORKSPACE: WorkspaceId = 'both';
+/** Social until the person picks another purpose (D-150). */
+export const DEFAULT_WORKSPACE: WorkspaceId = 'social';
 
 /** The heading of the picked designs above the groups. Never a purpose or a category. */
 export const START_HERE = 'Start here';
@@ -103,7 +104,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
       photos: null,
       skipPhotos: false,
     },
-    toast: 'Set up for social posts. Photo designs now come first.',
+    toast: 'Purpose: Social. Photo galleries and thumbnails now come first.',
   },
   business: {
     id: 'business',
@@ -137,7 +138,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
       photos: 'Add a photo of your product or team. It fills the design, and stays in Your photos for later.',
       skipPhotos: false,
     },
-    toast: 'Set up for business ads. Products and offers now come first.',
+    toast: 'Purpose: Business. Business posts, products and offers now come first.',
   },
   news: {
     id: 'news',
@@ -171,11 +172,11 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
       photos: null,
       skipPhotos: true,
     },
-    toast: 'Set up for news and events. Announcements and dates now come first.',
+    toast: 'Purpose: News. Announcements, dates and agendas now come first.',
   },
   both: {
     id: 'both',
-    name: 'A bit of everything',
+    name: 'All designs',
     short: 'All',
     line: 'Every design, in the usual order.',
     poster: null,
@@ -187,7 +188,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     foldOthers: false,
     opener: { templateId: DEFAULT_TEMPLATE_ID, aspect: '9:16', photoCount: DEFAULT_PHOTO_COUNT, durationMs: DEFAULT_SCENE_MS },
     tour: { design: null, photos: null, skipPhotos: false },
-    toast: 'Set up for everything. All designs are in the usual order.',
+    toast: 'Purpose: All. Every design, in the usual order.',
   },
 };
 

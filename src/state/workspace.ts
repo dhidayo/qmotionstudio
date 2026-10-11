@@ -1,9 +1,8 @@
 import { useSyncExternalStore } from 'react';
-import type { RenderParams } from '@/dev/renderParams';
 import { DEFAULT_WORKSPACE, isWorkspaceId, type WorkspaceId } from '@/templates/workspaces';
 
 /**
- * Which workspace this device is set up for (D-149).
+ * Which purpose this device is set up for (D-149, D-150).
  *
  * A viewer's preference, not part of any project: it lives in localStorage,
  * never in a saved project or a .qmotion file. Storage can be missing or
@@ -23,24 +22,6 @@ export function readStoredWorkspace(storage: Pick<Storage, 'getItem'> | undefine
   } catch {
     return { workspace: null, storageOk: false };
   }
-}
-
-/**
- * Whether to ask "What will you make most?" on this load.
- *
- * Asked once per device, returning visitors included. Never over a link that
- * names what to show, nor over a frozen frame or thumbnail being captured by
- * the build scripts, and never when storage cannot remember the answer —
- * asking on every visit would be worse than not asking.
- */
-export function questionDue(input: {
-  readonly stored: WorkspaceId | null;
-  readonly storageOk: boolean;
-  readonly params: Pick<RenderParams, 'template' | 'scene' | 'frozenMs' | 'thumbShortEdge'>;
-}): boolean {
-  const { stored, storageOk, params } = input;
-  if (!storageOk || stored !== null) return false;
-  return params.template === null && params.scene === null && params.frozenMs === null && params.thumbShortEdge === null;
 }
 
 function browserStorage(): Storage | undefined {
@@ -64,11 +45,7 @@ export function storedWorkspace(): WorkspaceId | null {
   return state().workspace;
 }
 
-export function storageReadable(): boolean {
-  return state().storageOk;
-}
-
-/** The workspace in use: the stored choice, or everything in the usual order. */
+/** The workspace in use: the stored choice, or Social until one is made (D-150). */
 export function readWorkspace(): WorkspaceId {
   return state().workspace ?? DEFAULT_WORKSPACE;
 }
@@ -87,6 +64,11 @@ function subscribe(listener: () => void): () => void {
 
 export function useWorkspace(): WorkspaceId {
   return useSyncExternalStore(subscribe, readWorkspace, () => DEFAULT_WORKSPACE);
+}
+
+/** Whether the person has chosen a purpose on this device yet. */
+export function useStoredWorkspace(): WorkspaceId | null {
+  return useSyncExternalStore(subscribe, storedWorkspace, () => null);
 }
 
 /** Tests only: forget the cached read, so the next one goes back to storage. */
