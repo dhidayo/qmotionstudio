@@ -37,6 +37,9 @@ const BASE_URL = process.env['THUMBS_URL'] ?? 'http://127.0.0.1:5173';
 const THUMB_SHORT_EDGE = 540;
 const DEFAULT_POSTER_AT_MS = 3_200;
 const LOOP_MS = 2_000;
+/** The library card's still in each frame shape: small, since cards are. */
+const ASPECT_POSTER_SHORT_EDGE = 360;
+const POSTERS_ONLY = process.argv.includes('--posters');
 const LOOP_FPS = 24;
 
 /**
@@ -85,6 +88,21 @@ window.__thumb = {
     return canvas.toDataURL('image/webp', quality);
   },
 
+  // A smaller still for the library card in one frame shape (D-150).
+  posterAt: function (quality, shortEdge) {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) throw new Error('no canvas');
+    const scale = Math.min(1, shortEdge / Math.min(canvas.width, canvas.height));
+    const out = document.createElement('canvas');
+    out.width = Math.round(canvas.width * scale);
+    out.height = Math.round(canvas.height * scale);
+    const ctx = out.getContext('2d');
+    if (!ctx) throw new Error('no context');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, 0, out.width, out.height);
+    return out.toDataURL('image/webp', quality);
+  },
+
   record: function (ms, fps, bitrate) {
     const canvas = document.querySelector('canvas');
     if (!canvas) throw new Error('no canvas');
@@ -128,7 +146,7 @@ type Result = { id: string; posterKB: number; loopKB: number; aspectsChecked: nu
  * case-insensitive substring of the id or the category.
  */
 function selected(): readonly TemplateSummary[] {
-  const filters = process.argv.slice(2).map((arg) => arg.toLowerCase());
+  const filters = process.argv.slice(2).filter((arg) => !arg.startsWith('--')).map((arg) => arg.toLowerCase());
   // Unlisted templates never appear on a library card, so they have no
   // thumbnail to make — Blank's would be an empty frame (D-097).
   const listed = TEMPLATE_MANIFEST.filter((t) => t.listed !== false);
@@ -148,6 +166,8 @@ async function main(): Promise<void> {
   const wanted = selected();
 
   const browser = await chromium.launch({
+    // A machine whose installed Chromium is not the one this Playwright expects names it here.
+    ...(process.env['THUMBS_CHROMIUM'] ? { executablePath: process.env['THUMBS_CHROMIUM'] } : {}),
     args: ['--autoplay-policy=no-user-gesture-required'],
   });
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
@@ -209,7 +229,20 @@ async function renderTemplate(page: Page, summary: TemplateSummary): Promise<Res
       throw new Error(`renders blank at ${aspect} (coverage ${(coverage * 100).toFixed(1)}%)`);
     }
     aspectsChecked++;
+    /*
+     * The library shows each design in the frame shape chosen (D-150): a
+     * landscape card for 16:9, a tall one for 9:16. The frame is already on
+     * screen for the check above, so its still costs one encode.
+     */
+    const still = await page.evaluate(
+      (o: { q: number; edge: number }) => (globalThis as unknown as { __thumb: { posterAt: (q: number, e: number) => string } }).__thumb.posterAt(o.q, o.edge),
+      { q: 0.82, edge: ASPECT_POSTER_SHORT_EDGE },
+    );
+    await writeFile(resolve(OUT_DIR, `${summary.id}.${aspect.replace(':', 'x')}.webp`), decodeDataUrl(still));
   }
+
+  // `--posters`: the frame-shape stills only, leaving the main poster and loop as they are.
+  if (POSTERS_ONLY) return { id: summary.id, posterKB: 0, loopKB: 0, aspectsChecked };
 
   // Poster is taken at the template's own first supported aspect, which is the
   // shape it was designed against.

@@ -657,6 +657,11 @@ export function posterUrl(id: string): string {
   return `/thumbs/${id}.webp?v=${THUMBS_REVISION}`;
 }
 
+/** The design's still in one frame shape (D-150), for a library card of that shape. */
+export function aspectPosterUrl(id: string, aspect: Aspect): string {
+  return `/thumbs/${id}.${aspect.replace(':', 'x')}.webp?v=${THUMBS_REVISION}`;
+}
+
 export function previewUrl(id: string): string {
   return `/thumbs/${id}.webm?v=${THUMBS_REVISION}`;
 }
