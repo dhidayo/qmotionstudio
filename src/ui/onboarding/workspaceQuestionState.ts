@@ -38,7 +38,8 @@ function subscribe(listener: () => void): () => void {
 export function markRestoreReady(): void {
   if (settled) return;
   settled = true;
-  if (askState() === 'pending') ask = 'open';
+  // A choice made while the last project was reopening — from the library or the menu — is the answer.
+  if (askState() === 'pending') ask = storedWorkspace() === null ? 'open' : 'done';
   emit();
 }
 

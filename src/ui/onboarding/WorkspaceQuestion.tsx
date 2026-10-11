@@ -47,11 +47,16 @@ function Question({ asking }: { asking: boolean }): React.JSX.Element {
       closeLabel={asking ? 'Skip and show all designs' : 'Close without changing'}
       tall={phone}
     >
-      <div data-workspace-question={asking ? 'ask' : 'change'}>
+      <div
+        data-workspace-question={asking ? 'ask' : 'change'}
+        // Space presses the answer in focus, and the arrows stay here, rather than
+        // playing or stepping the preview behind the window.
+        onKeyDown={(event) => { if (event.key === ' ' || event.key.startsWith('Arrow')) event.stopPropagation(); }}
+      >
         <p className="mb-3 text-[13px] leading-snug text-ink-muted">
           {asking
             ? 'We’ll put the right designs first. Nothing is hidden, and you can change this at any time.'
-            : 'We’ll put the right designs first. Nothing is hidden, and your project stays as it is.'}
+            : 'We’ll put the right designs first. Nothing is hidden, and nothing you’ve made will change.'}
         </p>
         <div className={phone ? 'flex flex-col gap-2' : 'grid grid-cols-3 gap-2.5'}>
           {PICTURED.map((id) => (
@@ -76,7 +81,7 @@ function Question({ asking }: { asking: boolean }): React.JSX.Element {
               data-workspace-option={id}
               aria-current={isCurrent ? 'true' : undefined}
               onClick={() => { choose(id); }}
-              className={`mt-2 flex min-h-12 w-full items-center gap-3 rounded-2xl border ${isCurrent ? 'border-accent' : 'border-edge'} px-3 py-2 text-left hover:border-accent hover:bg-accent-soft focus-visible:border-accent focus-visible:bg-accent-soft focus-visible:outline-none`}
+              className={`mt-2 flex min-h-12 w-full items-center gap-3 rounded-2xl border ${isCurrent ? 'border-accent' : 'border-edge'} px-3 py-2 text-left hover:border-accent hover:bg-accent-soft`}
             >
               <span className="grid size-8 shrink-0 place-items-center rounded-lg" style={{ background: 'var(--c-accent-soft)', color: 'var(--c-accent)' }}>
                 <Icon name="designs" size={16} />
@@ -130,11 +135,11 @@ function PictureOption({
       data-workspace-option={workspace.id}
       aria-current={current ? 'true' : undefined}
       onClick={onChoose}
-      className={`overflow-hidden rounded-2xl border text-left ${current ? 'border-accent' : 'border-edge'} hover:border-accent hover:bg-accent-soft focus-visible:border-accent focus-visible:bg-accent-soft focus-visible:outline-none ${phone ? 'flex min-h-[76px] items-center gap-3 px-3 py-2' : 'flex flex-col'}`}
+      className={`overflow-hidden rounded-2xl border text-left ${current ? 'border-accent' : 'border-edge'} hover:border-accent hover:bg-accent-soft ${phone ? 'flex min-h-[76px] items-center gap-3 px-3 py-2' : 'flex flex-col'}`}
     >
       {picture}
       <span className={phone ? 'min-w-0 flex-1' : 'block px-3 pb-3 pt-2'}>
-        <span className="flex items-center gap-2">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="text-[15px] font-semibold">{workspace.name}</span>
           {current && <CurrentMark />}
         </span>

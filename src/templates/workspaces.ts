@@ -1,5 +1,5 @@
 import type { Aspect } from '@/core/types';
-import { DEFAULT_PHOTO_COUNT, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
+import { DEFAULT_PHOTO_COUNT, DEFAULT_SCENE_MS, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
 import { CATEGORIES, type TemplateSummary } from './manifest';
 import {
   DESIGN_PURPOSES, VIDEO_PURPOSES, purposeOf,
@@ -53,8 +53,8 @@ export type Workspace = {
   readonly startHereCaption: string | null;
   /** Whether groups past the first start folded, so the first screen is the picked corner. */
   readonly foldOthers: boolean;
-  /** What a fresh, untouched project opens on. */
-  readonly opener: { readonly templateId: string; readonly aspect: Aspect; readonly photoCount: number };
+  /** What a fresh, untouched project opens on — the design at its own length, as picking it gives. */
+  readonly opener: { readonly templateId: string; readonly aspect: Aspect; readonly photoCount: number; readonly durationMs: number };
   /** The quick start's words where this workspace says something different (null: the usual). */
   readonly tour: {
     readonly design: { readonly wide: string; readonly phone: string } | null;
@@ -94,7 +94,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     },
     startHereCaption: 'Picked for social posts',
     foldOthers: true,
-    opener: { templateId: 'flow-polaroid-pass', aspect: '4:5', photoCount: 7 },
+    opener: { templateId: 'flow-polaroid-pass', aspect: '4:5', photoCount: 7, durationMs: 12_000 },
     tour: {
       design: {
         wide: 'Click here and pick a look — a gallery, a moodboard, a story in photos…',
@@ -128,7 +128,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     },
     startHereCaption: 'Picked for business ads',
     foldOthers: true,
-    opener: { templateId: 'pd-new-arrival', aspect: '4:5', photoCount: 1 },
+    opener: { templateId: 'pd-new-arrival', aspect: '4:5', photoCount: 1, durationMs: 5_000 },
     tour: {
       design: {
         wide: 'Click here and pick a look — a product, an offer, a headline… For an advert film, switch to Video at the top.',
@@ -162,7 +162,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     },
     startHereCaption: 'Picked for news and events',
     foldOthers: true,
-    opener: { templateId: 'el-eyebrow-title', aspect: '4:5', photoCount: 0 },
+    opener: { templateId: 'el-eyebrow-title', aspect: '4:5', photoCount: 0, durationMs: 4_500 },
     tour: {
       design: {
         wide: 'Click here and pick a look — an announcement, a date, a quote…',
@@ -185,7 +185,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     startHere: { scene: [], ad: [] },
     startHereCaption: null,
     foldOthers: false,
-    opener: { templateId: DEFAULT_TEMPLATE_ID, aspect: '9:16', photoCount: DEFAULT_PHOTO_COUNT },
+    opener: { templateId: DEFAULT_TEMPLATE_ID, aspect: '9:16', photoCount: DEFAULT_PHOTO_COUNT, durationMs: DEFAULT_SCENE_MS },
     tour: { design: null, photos: null, skipPhotos: false },
     toast: 'Set up for everything. All designs are in the usual order.',
   },

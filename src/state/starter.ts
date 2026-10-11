@@ -11,13 +11,14 @@ import { WORKSPACE_IDS, WORKSPACES, type WorkspaceId } from '@/templates/workspa
  */
 
 export function starterProject(id: WorkspaceId, options: { readonly aspect?: Aspect | undefined } = {}): Project {
-  const { templateId, aspect, photoCount } = WORKSPACES[id].opener;
-  return createProject({
+  const { templateId, aspect, photoCount, durationMs } = WORKSPACES[id].opener;
+  const project = createProject({
     templateId,
     aspect: options.aspect ?? aspect,
     photoCount,
     look: designLook(templateId),
   });
+  return { ...project, scenes: project.scenes.map((scene) => ({ ...scene, durationMs })) };
 }
 
 /** JSON with keys in a fixed order, so two equal documents compare equal however they were built. */

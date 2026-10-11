@@ -4,7 +4,8 @@ import { createProject, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
 import { migrate } from '@/document/migrate';
 import * as actions from '@/document/actions';
 import { designLook } from '@/templates/looks';
-import { WORKSPACE_IDS } from '@/templates/workspaces';
+import { WORKSPACE_IDS, WORKSPACES } from '@/templates/workspaces';
+import { loadSceneTemplate } from '@/templates/registry';
 import { sameContent, starterProject, untouchedStarterOf } from './starter';
 
 /** D-149: only a project nobody has touched is ever swapped for a workspace's opener. */
@@ -32,6 +33,14 @@ describe('starter projects (D-149)', () => {
     expect(social.scenes[0]?.inputs.photos).toHaveLength(7);
     expect(starterProject('social', { aspect: '1:1' }).aspect).toBe('1:1');
     expect(starterProject('news').scenes[0]?.inputs.photos).toHaveLength(0);
+  });
+
+  it('each starter plays its design for the design\'s own length, as picking it does', async () => {
+    for (const id of WORKSPACE_IDS) {
+      const { templateId } = WORKSPACES[id].opener;
+      const template = await loadSceneTemplate(templateId);
+      expect(starterProject(id).scenes[0]?.durationMs, `${id}: ${templateId}`).toBe(template.defaultDurationMs);
+    }
   });
 
   it('recognises each starter, in any frame, after a save and reopen', () => {

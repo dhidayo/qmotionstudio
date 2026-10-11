@@ -124,6 +124,17 @@ test.describe('a first visit', () => {
     await expect(page.locator('[data-quick-start]')).toHaveAttribute('data-quick-step', '1');
   });
 
+  test('Space chooses the answer in focus, not play or pause behind it', async ({ page }) => {
+    await open(page);
+    const question = page.getByRole('dialog', { name: QUESTION });
+    await expect(question.locator('[data-workspace-option="social"]')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(question.locator('[data-workspace-option="business"]')).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(question).toHaveCount(0);
+    expect(await stored(page)).toBe('business');
+  });
+
   for (const url of ['/?template=type-typewriter', '/?frozen=1000']) {
     test(`a link that names what to show is never interrupted: ${url}`, async ({ page }) => {
       await open(page, url);
@@ -162,6 +173,20 @@ test.describe('set up for social', () => {
 
     await rail(page).locator('[data-fold-all]').click();
     await expect(rail(page).locator('[data-design-card], [data-featured-card]')).toHaveCount(0);
+  });
+
+  test('a Free, Pro or favourites filter never leaves only closed headings', async ({ page }) => {
+    await open(page);
+    await rail(page).getByRole('button', { name: 'Pro', exact: true }).click();
+    await expect(rail(page).locator('[data-design-card]').first()).toBeVisible();
+  });
+
+  test('Collapse all folds the groups in view and leaves the Video list as it was', async ({ page }) => {
+    await open(page);
+    await rail(page).locator('[data-fold-all]').click();
+    await page.getByRole('group', { name: 'Mode' }).getByRole('button', { name: 'Video', exact: true }).click();
+    await expect(groupHeader(page, 'Thanks & celebrations')).toHaveAttribute('aria-expanded', 'true');
+    await expect(groupHeader(page, 'Hiring')).toHaveAttribute('aria-expanded', 'false');
   });
 
   test('folds are remembered per workspace, and a switch opens the new one\'s first groups', async ({ page }) => {
@@ -249,6 +274,12 @@ test.describe('set up for everything', () => {
     const sw = await rail(page).locator('[data-workspace-switch]').boundingBox();
     expect((fold?.x ?? 0) + (fold?.width ?? 0)).toBeLessThanOrEqual((box?.x ?? 0) + (box?.width ?? 0));
     expect(sw?.height ?? 99).toBeLessThanOrEqual(30);
+    // Every word whole, the chosen (bold) one included.
+    for (const id of ['business', 'social', 'news', 'both']) {
+      await rail(page).locator(`[data-workspace="${id}"]`).click();
+      const clipped = await rail(page).locator('[data-workspace]').evaluateAll((parts) => parts.filter((p) => p.scrollWidth > p.clientWidth).map((p) => p.textContent));
+      expect(clipped, `with ${id} chosen`).toEqual([]);
+    }
   });
 });
 

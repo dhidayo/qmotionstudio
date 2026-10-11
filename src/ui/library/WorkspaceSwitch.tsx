@@ -17,12 +17,11 @@ export function WorkspaceSwitch({ size, aside }: { size: 'rail' | 'sheet'; aside
   const parts = useRef<(HTMLButtonElement | null)[]>([]);
   const sheet = size === 'sheet';
 
+  // The arrow keys move along; Enter, Space or a click chooses. Choosing can open a
+  // different starting design, so passing over a choice must not apply it.
   const move = (from: number, step: number | 'first' | 'last'): void => {
     const count = WORKSPACE_IDS.length;
     const to = step === 'first' ? 0 : step === 'last' ? count - 1 : (from + step + count) % count;
-    const id = WORKSPACE_IDS[to];
-    if (id === undefined) return;
-    chooseWorkspace(id, 'switch');
     parts.current[to]?.focus();
   };
 
@@ -37,7 +36,7 @@ export function WorkspaceSwitch({ size, aside }: { size: 'rail' | 'sheet'; aside
         aria-labelledby={labelId}
         data-workspace-switch
         title="Which designs come first. Nothing is hidden."
-        className="grid grid-cols-4 gap-1"
+        className="flex gap-1"
       >
         {WORKSPACE_IDS.map((id: WorkspaceId, index) => {
           const on = id === current;
@@ -59,7 +58,8 @@ export function WorkspaceSwitch({ size, aside }: { size: 'rail' | 'sheet'; aside
                 event.preventDefault();
                 move(index, step);
               }}
-              className={`truncate rounded-md border px-1 transition-colors ${sheet ? 'h-10 text-[13px]' : 'h-[26px] text-[11px]'}`}
+              // Sized by its word, so "Business" is never cut short in the narrow rail.
+              className={`flex-auto whitespace-nowrap rounded-md border transition-colors ${sheet ? 'h-10 px-1 text-[13px]' : 'h-[26px] px-0.5 text-[11px]'}`}
               style={{
                 borderColor: on ? 'var(--c-accent)' : 'var(--c-edge)',
                 background: on ? 'var(--c-accent-soft)' : 'transparent',

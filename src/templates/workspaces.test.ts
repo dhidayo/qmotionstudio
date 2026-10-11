@@ -31,7 +31,7 @@ describe('workspaces (D-149)', () => {
     expect(both.startHere).toEqual({ scene: [], ad: [] });
     expect(both.leadIn).toEqual({});
     expect(defaultFolded('both')).toEqual([]);
-    expect(both.opener).toEqual({ templateId: 'depth-parallax', aspect: '9:16', photoCount: 4 });
+    expect(both.opener).toEqual({ templateId: 'depth-parallax', aspect: '9:16', photoCount: 4, durationMs: 10_000 });
   });
 
   it('social opens on photo galleries, business on products, news on dates', () => {

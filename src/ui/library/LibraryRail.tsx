@@ -78,7 +78,6 @@ export function LibraryRail({
   ];
   const stored = useStoredFolds(workspace);
   const collapsed = effectiveFolded(stored, workspace);
-  const setAll = (names: readonly string[]): void => { writeFolds(workspace, names); };
   const toggle = (name: string): void => {
     const next = new Set(collapsed);
     if (next.has(name)) next.delete(name);
@@ -86,10 +85,23 @@ export function LibraryRail({
     writeFolds(workspace, [...next]);
   };
   const names = sections.map((section) => section.name);
-  // A search shows everything it found: a match hidden in a folded group is a match missed.
+  /*
+   * A search shows everything it found: a match hidden in a folded group is a
+   * match missed. So does a Free/Pro or favourites filter where groups start
+   * folded (D-149) — otherwise "Pro" in Social could leave only closed headings.
+   */
   const searching = search.trim().length > 0;
-  const folded = (name: string): boolean => !searching && collapsed.has(name);
+  const unfolded = searching || (narrowed && WORKSPACES[workspace].foldOthers);
+  const folded = (name: string): boolean => !unfolded && collapsed.has(name);
   const allFolded = names.length > 0 && names.every((name) => collapsed.has(name));
+  // Collapse all and Expand all change the groups in view and keep every other fold,
+  // so folding the Design list never opens the Video one (D-149). Everything keeps its old behaviour.
+  const setAll = (fold: boolean): void => {
+    if (!WORKSPACES[workspace].foldOthers) { writeFolds(workspace, fold ? names : []); return; }
+    const next = new Set(collapsed);
+    for (const name of names) { if (fold) next.add(name); else next.delete(name); }
+    writeFolds(workspace, [...next]);
+  };
 
   return (
     <aside
@@ -141,11 +153,11 @@ export function LibraryRail({
             onClick={toggleFavouritesFilter}
             label={`★ ${favourites.length}`}
           />
-          {!searching && names.length > 1 && (
+          {!unfolded && names.length > 1 && (
             <button
               type="button"
               data-fold-all
-              onClick={() => { setAll(allFolded ? [] : names); }}
+              onClick={() => { setAll(!allFolded); }}
               className={`ml-auto rounded-md px-1.5 text-ink-faint hover:text-ink ${sheet ? 'text-[12px]' : 'text-[10px]'}`}
             >
               {allFolded ? 'Expand all' : 'Collapse all'}
