@@ -93,8 +93,20 @@ test.describe('autosave', () => {
     // Blobs are stored separately and re-decoded on restore, so this checks
     // the other half of the save: the thumbnail is drawn from a real bitmap.
     await openEditor(page);
-    await page.getByRole('button', { name: 'Try sample photos' }).click();
-    await page.waitForTimeout(2_000);
+    // One of "yours", in place of the first sample (D-150).
+    const png = await page.evaluate(() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 200;
+      canvas.height = 200;
+      const cx = canvas.getContext('2d');
+      if (!cx) throw new Error('no context');
+      cx.fillStyle = '#c0392b';
+      cx.fillRect(0, 0, 200, 200);
+      return canvas.toDataURL('image/png').split(',')[1] ?? '';
+    });
+    await page.getByLabel('Add photos to this scene').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    const mine = page.locator('[data-design-photos] [data-media-id]:not([data-media-id^="sample:"])');
+    await expect(mine).toHaveCount(1, { timeout: 10_000 });
     await settled(page);
 
     await page.reload();
@@ -103,15 +115,8 @@ test.describe('autosave', () => {
 
     // Blob-backed, i.e. the tile is showing a bitmap this session decoded
     // from the stored file — not a placeholder and not a stale reference.
-    const tiles = page.locator('[aria-label^="Photo "] span');
-    await expect(tiles.first()).toBeVisible();
-    await expect
-      .poll(async () =>
-        tiles.evaluateAll((nodes) =>
-          nodes.filter((node) => getComputedStyle(node).backgroundImage.includes('blob:')).length,
-        ),
-      )
-      .toBeGreaterThan(0);
+    await expect(mine).toHaveCount(1);
+    await expect.poll(async () => mine.locator('img').getAttribute('src')).toMatch(/^blob:/);
   });
 });
 

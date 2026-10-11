@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { decodeImage, UnsupportedImageError, ACCEPTED_TYPES } from '@/media/image/decode';
 import { decodeVideo, isVideoFile, UnsupportedVideoError, ACCEPTED_VIDEO_TYPES } from '@/media/video/decode';
 import { decodeAudio, isAudioFile, UnsupportedAudioError, ACCEPTED_AUDIO_TYPES } from '@/media/audio/decode';
@@ -32,6 +32,32 @@ function nextMediaId(): string {
   return `upload:${Date.now().toString(36)}:${counter}`;
 }
 
+/*
+ * §8.1: paste works anywhere in the editor, not just over a drop zone — but it
+ * goes to one place (D-150). Every upload used to listen for it, so one pasted
+ * photo was added twice — by the button under the picture and again by the
+ * Photos panel — and put on top as a layer, and in a video added to the
+ * timeline as a clip too. Now only an upload that asks for paste listens, and
+ * of those only the one opened last answers: the Replace photo dialog while it
+ * is open, otherwise "Add your photos".
+ */
+type PasteTarget = { current: (files: readonly File[]) => Promise<void> };
+const pasteTargets: PasteTarget[] = [];
+
+function onPaste(event: ClipboardEvent): void {
+  const target = event.target;
+  const typing =
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName));
+  if (typing) return;
+
+  const files = [...(event.clipboardData?.files ?? [])];
+  const answer = pasteTargets[pasteTargets.length - 1];
+  if (files.length === 0 || answer === undefined) return;
+  event.preventDefault();
+  void answer.current(files);
+}
+
 export function useUpload(
   store: MediaStore,
   onAdded: (mediaIds: string[]) => void,
@@ -47,6 +73,8 @@ export function useUpload(
     video?: boolean;
     /** Accept music (§10). The timeline's "+ Music" picker turns this on. */
     audio?: boolean;
+    /** Take pasted pictures too — "Add your photos" and Replace photo only (D-150). */
+    paste?: boolean;
   },
 ): {
   state: UploadState;
@@ -121,24 +149,21 @@ export function useUpload(
 
   const clearError = useCallback(() => { setState((s) => ({ ...s, error: null })); }, []);
 
-  // §8.1: paste works anywhere in the editor, not just over a drop zone.
+  // Registered once per mount, so the latest `addFiles` answers without
+  // moving this upload's place in the queue.
+  const latest = useRef<PasteTarget['current']>(addFiles);
+  useEffect(() => { latest.current = addFiles; }, [addFiles]);
+  const paste = options.paste === true;
   useEffect(() => {
-    const onPaste = (event: ClipboardEvent): void => {
-      const target = event.target;
-      const typing =
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ['INPUT', 'TEXTAREA'].includes(target.tagName));
-      if (typing) return;
-
-      const files = [...(event.clipboardData?.files ?? [])];
-      if (files.length === 0) return;
-      event.preventDefault();
-      void addFiles(files);
+    if (!paste) return undefined;
+    if (pasteTargets.length === 0) addEventListener('paste', onPaste);
+    pasteTargets.push(latest);
+    return () => {
+      const index = pasteTargets.indexOf(latest);
+      if (index >= 0) pasteTargets.splice(index, 1);
+      if (pasteTargets.length === 0) removeEventListener('paste', onPaste);
     };
-
-    addEventListener('paste', onPaste);
-    return () => { removeEventListener('paste', onPaste); };
-  }, [addFiles]);
+  }, [paste]);
 
   return { state, addFiles, clearError };
 }

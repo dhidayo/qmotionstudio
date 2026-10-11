@@ -135,7 +135,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
         wide: 'Click here and pick a look — a product, an offer, a headline… For an advert film, switch to Video at the top.',
         phone: 'Tap here and pick a look — a product, an offer, a headline… For an advert film, choose Video in the menu.',
       },
-      photos: 'Add a photo of your product or team. It fills the design, and stays in Your photos for later.',
+      photos: 'Add a photo of your product or team. It takes the place of a sample photo, and stays in Your photos for later.',
       skipPhotos: false,
     },
     toast: 'Purpose: Business. Business posts, products and offers now come first.',

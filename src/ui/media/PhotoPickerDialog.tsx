@@ -47,7 +47,8 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
     if (target.kind !== 'logo') dispatch(actions.addToLibrary([first]));
     apply(first);
   }, [apply, dispatch, target.kind]);
-  const { state: uploadState, addFiles } = useUpload(store, onAdded, { artboardLongestEdge: 1920 });
+  // While this is open, a pasted picture replaces this one rather than being added (D-150).
+  const { state: uploadState, addFiles } = useUpload(store, onAdded, { artboardLongestEdge: 1920, paste: true });
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {

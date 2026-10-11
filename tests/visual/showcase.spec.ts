@@ -156,7 +156,7 @@ test.describe('inspector', () => {
   test('photo controls are bounded by the template’s own slots', async ({ page }) => {
     // Parallax Depth declares min 2, max 6.
     await expect(page.getByText('of 6')).toBeVisible();
-    const increase = page.getByRole('button', { name: 'Increase Photo count' });
+    const increase = page.getByRole('button', { name: 'Increase Photo spots' });
     // Click up to the ceiling; the control disables itself once there.
     for (let i = 0; i < 8; i++) {
       if (await increase.isDisabled()) break;

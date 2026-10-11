@@ -220,14 +220,19 @@ describe('switching template reconciles the photo count', () => {
     expect(next.scenes[0]?.inputs.photos).toHaveLength(1);
   });
 
-  it('grows to the new template’s minimum, reusing earlier photos (§8.1)', () => {
+  it('grows to the new template’s minimum with a sample the scene is not showing (D-150)', () => {
     const next = actions
       .setTemplate('angle-fan', { photoSlots: { min: 3, max: 8 } })
       .apply(withPhotos(2), scope(0));
 
     const photos = next.scenes[0]?.inputs.photos ?? [];
-    expect(photos).toHaveLength(3);
-    expect(photos[2]?.mediaId).toBe(photos[0]?.mediaId);
+    expect(photos.map((p) => p.mediaId)).toEqual(['sample:dune', 'sample:tide', 'sample:canopy']);
+  });
+
+  it('never grows by repeating the person’s own photo (D-150)', () => {
+    const own = actions.addYourPhotos(['mine'], { maxPhotos: 2 }).apply(withPhotos(2), scope(0));
+    const next = actions.setTemplate('angle-fan', { photoSlots: { min: 4, max: 8 } }).apply(own, scope(0));
+    expect(next.scenes[0]?.inputs.photos.map((p) => p.mediaId)).toEqual(['mine', 'sample:tide', 'sample:dune', 'sample:canopy']);
   });
 
   it('leaves a count that already fits alone', () => {
@@ -239,9 +244,19 @@ describe('switching template reconciles the photo count', () => {
     expect(next.scenes[0]?.inputs.photos).toEqual(before.scenes[0]?.inputs.photos);
   });
 
-  it('does not invent photos for an empty scene', () => {
+  it('gives a scene with no spots the new design’s own number of samples, not empty frames', () => {
     const next = actions
-      .setTemplate('angle-fan', { photoSlots: { min: 3, max: 8 } })
+      .setTemplate('angle-fan', { photoSlots: { min: 3, max: 8, default: 5 } })
+      .apply(withPhotos(0), scope(0));
+
+    expect(next.scenes[0]?.inputs.photos.map((p) => p.mediaId)).toEqual(
+      ['sample:dune', 'sample:tide', 'sample:canopy', 'sample:ember', 'sample:slate'],
+    );
+  });
+
+  it('keeps a design of words alone free of photos', () => {
+    const next = actions
+      .setTemplate('blank', { photoSlots: { min: 0, max: 0, default: 0 } })
       .apply(withPhotos(0), scope(0));
 
     expect(next.scenes[0]?.inputs.photos).toEqual([]);
@@ -273,7 +288,7 @@ describe('placeOwnPhotos (D-116, D-137)', () => {
     expect(next.scenes.map((s) => s.inputs.photos.map((p) => p.mediaId))).toEqual([['sample:dune', 'sample:tide'], ['u1']]);
   });
 
-  it('fills every photo slot in every scene, in order, repeating a short set', async () => {
+  it('fills every scene in turn from this one, each photo once per scene, samples for the rest (D-150)', async () => {
     const { placeOwnPhotos } = await import('./index');
     const photo = (mediaId: string) => ({ mediaId, frame: '3:4' as const, sizeMode: 'template' as const, sizePct: 100, cropMode: 'original' as const, cropRect: { x: 0, y: 0, w: 0.5, h: 0.5 } });
     const base = createProject();
@@ -287,11 +302,20 @@ describe('placeOwnPhotos (D-116, D-137)', () => {
         { ...scene, id: 'c', inputs: { ...scene.inputs, photos: [photo('sample:ember'), photo('sample:reef'), photo('sample:bloom')] } },
       ],
     };
+    // Scene 2 has no spots; scene 3 carries on from it, then scene 1 from there.
     const next = placeOwnPhotos(['u1', 'u2', 'u3', 'u4'], { everyScene: true }).apply(project, { sceneIndex: 1 });
-    expect(next.scenes.map((s) => s.inputs.photos.map((p) => p.mediaId))).toEqual([['u1', 'u2'], [], ['u3', 'u4', 'u1']]);
+    expect(next.scenes.map((s) => s.inputs.photos.map((p) => p.mediaId))).toEqual([['u4', 'u1'], [], ['u1', 'u2', 'u3']]);
     // Frames stay; the old crops go with the old pictures.
     expect(next.scenes[2]?.inputs.photos[0]).toMatchObject({ frame: '3:4', sizeMode: 'template' });
     expect(next.scenes[2]?.inputs.photos[0]?.cropRect).toBeUndefined();
+
+    // One photo across three-spot scenes: once in each, never repeated to fill one.
+    const single = placeOwnPhotos(['u1'], { everyScene: true }).apply(project, { sceneIndex: 0 });
+    expect(single.scenes.map((s) => s.inputs.photos.map((p) => p.mediaId))).toEqual([
+      ['u1', 'sample:tide'],
+      [],
+      ['u1', 'sample:reef', 'sample:bloom'],
+    ]);
   });
 
   it('a one-scene design takes the extra photos as new slots', async () => {

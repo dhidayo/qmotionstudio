@@ -85,16 +85,19 @@ test.describe('on a computer', () => {
     await expect(page.getByRole('menu')).toBeVisible();
   });
 
-  test('Add your photos puts them in every photo of the design, and stays', async ({ page }) => {
+  test('Add your photos replaces the samples one for one, and stays (D-150)', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, LIFESTYLE);
     await page.getByLabel('Add your photos').setInputFiles([
       { name: 'red.png', mimeType: 'image/png', buffer: (await pictures(page))[0] ?? Buffer.alloc(0) },
       { name: 'blue.png', mimeType: 'image/png', buffer: (await pictures(page))[1] ?? Buffer.alloc(0) },
     ]);
-    await expect.poll(async () => (await photoIds(page))[0]?.every((id) => id.startsWith('upload:'))).toBe(true);
+    // Four spots, two photos: the first two samples give way, the other two stay.
+    await expect.poll(async () => (await photoIds(page))[0]?.filter((id) => id.startsWith('upload:')).length).toBe(2);
     const ids = (await photoIds(page))[0] ?? [];
-    expect(new Set(ids).size, 'both photos, repeating in order').toBe(2);
+    expect(ids.slice(0, 2).every((id) => id.startsWith('upload:')), 'yours first, in order').toBe(true);
+    expect(ids.slice(2).every((id) => id.startsWith('sample:')), 'samples in the rest, not repeats').toBe(true);
+    await expect(page.locator('[data-toast]')).toContainText('Your 2 photos replaced 2 samples.');
     await expect(page.locator('[data-start-actions]').getByRole('button', { name: 'Add your photos' })).toBeVisible();
     // One undo takes them all back out.
     await page.keyboard.press('ControlOrMeta+z');
@@ -115,7 +118,10 @@ test.describe('on a computer', () => {
 
     await page.getByRole('tab', { name: 'Photos' }).click();
     await page.getByRole('button', { name: 'Use on every scene' }).click();
-    await expect.poll(async () => (await photoIds(page)).flat().every((id) => id.startsWith('upload:'))).toBe(true);
+    // Every scene shows it, once: in its first spot, with samples in the rest (D-150).
+    await expect.poll(async () => (await photoIds(page)).every((ids) => ids.length === 0 || ids[0]?.startsWith('upload:') === true)).toBe(true);
+    const scenes = await photoIds(page);
+    expect(scenes.every((ids) => ids.filter((id) => id.startsWith('upload:')).length <= 1), 'never repeated within a scene').toBe(true);
   });
 });
 
