@@ -56,7 +56,7 @@ const THUMBNAILS: readonly SceneVariant[] = [
   cover('tn-versus', 'This vs That', 'Two photos face to face, VS stamped between them and the question above.', 'navy',
     { kind: 'versus', headline: 'Which One Wins?', first: 'Freelance', second: 'Agency', brand: 'Your Channel', footer: 'Watch the full comparison' }, TWO_PHOTOS),
   cover('tn-day-in-life', 'Day in the Life', 'A vlog cover: a print taped down at an angle and the day in big type.', 'linen',
-    { kind: 'vlog', frame: 'tilt', backing: 'disc', dots: true, eyebrow: 'A DAY IN THE LIFE', headline: 'of a Startup Founder', subline: 'Real routines and honest moments', brand: 'Your Channel', footer: 'New video every Sunday' }),
+    { kind: 'vlog', frame: 'tilt', backing: 'disc', dots: true, eyebrow: 'NEW VLOG', headline: 'A Day in the Life of a Founder', subline: 'Real routines and honest moments', brand: 'Your Channel', footer: 'New video every Sunday' }),
   cover('tn-course-cover', 'Course Cover', 'An online course cover: the title, what it includes and an enrol button.', 'emerald',
     { kind: 'course', frame: 'arch', backing: 'block', dots: true, eyebrow: 'ONLINE COURSE', headline: 'Master Digital Marketing', details: '12 lessons, 4 hours, Certificate', button: 'Enrol now', footer: 'yourcompany.com/courses' }),
   cover('tn-live-now', 'Live Now', 'A live-stream cover: a pulsing LIVE badge, the topic, the time and rings round the host.', 'midnight',

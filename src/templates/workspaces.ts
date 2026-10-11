@@ -144,7 +144,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     id: 'news',
     name: 'News & events',
     short: 'News',
-    line: 'Announcements, dates, quotes and milestones. No photos needed.',
+    line: 'Announcements, agendas, dates, quotes and milestones.',
     poster: 'el-eyebrow-title',
     designOrder: [
       'Events & dates', 'Business posts', 'Headlines & hooks', 'Quotes & reviews', 'Numbers & results',
