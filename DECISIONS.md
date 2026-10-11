@@ -3238,3 +3238,31 @@ The choice is a device preference in `localStorage` (`ms.workspace`), never in
 a project. Folds are remembered per choice, so one choice's defaults never
 leak into another; "everything" keeps the library's old key. On screen the
 word is always "Set up for" — "mode" stays with Design and Video.
+
+## D-150 — Purpose above the picture; Social by default; panels that resize
+
+"The purpose did not work at all … Purpose should take small space at the top
+of canvas; and selected item should also be deep blue; and only one row … The
+default mode should be Social and user would be able to switch."
+
+D-149's first-visit question, the switch at the top of the library and the
+menu's "Set up for…" are replaced by one slim row above the picture on every
+screen: **Purpose: Social · Business · News · All**, the chosen one in the top
+bar's deep navy. Social is on until another is chosen. The quick start's first
+step points at it ("Pick your purpose"), which keeps "ask one simple question
+on visit" without a window in the way. Everything else of D-149 stands: the
+order, Start here, per-purpose folds, and the rule that only an untouched
+starting design is ever swapped — now with a changed frame shape no longer
+counting as work, and the frame kept.
+
+The library's header is two rows that never clip: search with a favourites
+star and a navy fold-all icon, then All / Free / Pro (deep navy when chosen)
+and the grouping. Cards take the frame shape chosen in the top bar — a
+landscape card for 16:9 — showing the design's own still in that shape, made
+by `npm run thumbs` at 360px for every shape it checks; a moving loop of
+another shape plays whole rather than cropped. The "+ Scene" picker does the
+same.
+
+The library and settings panels resize by dragging their inner edge or with
+the arrow keys, are remembered on this device, and return to the usual width
+on a double-click; the picture always keeps at least 420px.
