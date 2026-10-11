@@ -135,6 +135,19 @@ export function createScene(
  * slots differ from template to template and a headline carried into the
  * wrong slot is worse than none.
  */
+/**
+ * A scene's spots from the person's photos (D-150): each photograph once, from
+ * `start` in the pool, and samples in any spots left over — never repeats of
+ * their photo, so a later "Add photo" has a sample to take the place of.
+ * Samples only when the pool is empty.
+ */
+export function dealPhotos(pool: readonly string[], count: number, start = 0): PhotoInput[] {
+  const own = pool.length === 0 ? [] : Array.from({ length: Math.min(count, pool.length) }, (_, i) => pool[(start + i) % pool.length] ?? '');
+  const samples = STARTER_PHOTO_IDS.filter((id) => !own.includes(id));
+  const ids = [...own, ...Array.from({ length: count - own.length }, (_, i) => samples[i % Math.max(1, samples.length)] ?? STARTER_PHOTO_IDS[0] ?? '')];
+  return ids.map((mediaId) => ({ mediaId, frame: '3:4' as const, sizeMode: 'template' as const, sizePct: 100, cropMode: 'template' as const }));
+}
+
 export function createSceneFrom(
   templateId: string,
   options: {
@@ -150,15 +163,7 @@ export function createSceneFrom(
   const fresh = pool.filter((id) => !already.has(id));
   const ordered = fresh.length > 0 ? [...fresh, ...pool.filter((id) => already.has(id))] : pool;
 
-  const photos: PhotoInput[] = ordered.length === 0
-    ? starterPhotos(count)
-    : Array.from({ length: count }, (_, i) => ({
-        mediaId: ordered[i % ordered.length] ?? '',
-        frame: '3:4' as const,
-        sizeMode: 'template' as const,
-        sizePct: 100,
-        cropMode: 'template' as const,
-      }));
+  const photos: PhotoInput[] = ordered.length === 0 ? starterPhotos(count) : dealPhotos(ordered, count);
 
   const from = options.from;
   return {

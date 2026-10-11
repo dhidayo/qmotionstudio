@@ -196,6 +196,21 @@ function newSpot(photos: readonly PhotoInput[], at: number, mediaId: string): Ph
   return { mediaId, frame: like?.frame ?? '3:4', sizeMode: 'template', sizePct: 100, cropMode: 'template' };
 }
 
+/**
+ * Fewer spots (D-150): samples go first, from the end, so a photograph of the
+ * person's own is dropped only when there are no samples left to drop.
+ */
+function shrunk(photos: readonly PhotoInput[], count: number): readonly PhotoInput[] {
+  if (count >= photos.length) return photos;
+  let surplus = photos.length - count;
+  const drop = new Set<number>();
+  for (let i = photos.length - 1; i >= 0 && surplus > 0; i--) {
+    if (isSampleSpot(photos[i]?.mediaId ?? '')) { drop.add(i); surplus -= 1; }
+  }
+  const kept = photos.filter((_, i) => !drop.has(i));
+  return kept.slice(0, count);
+}
+
 /** Spots added at the end, up to `count`, each showing a sample the scene is not already showing. */
 function grownWithSamples(photos: readonly PhotoInput[], count: number): readonly PhotoInput[] {
   if (count <= photos.length) return photos;
@@ -345,13 +360,14 @@ export function placeOwnPhotos(
           const spot = photos[i];
           chosen.push(spot === undefined ? newSpot(photos, i, id) : withPicture(spot, id));
         }
-        cursor += take;
+        // All of them shown here: the next scene opens on the next one, not the same first picture.
+        cursor += take === ids.length ? 1 : take;
         const next = backToSamples([...chosen, ...photos.slice(take)], (_, i) => i >= take);
         if (next.length === photos.length && next.every((spot, i) => spot === photos[i])) continue;
         scenes[index] = { ...scene, inputs: { ...scene.inputs, photos: next } };
         changed = true;
       }
-      return changed ? { ...project, scenes, updatedAt: Date.now() } : project;
+      return changed ? keepInLibrary(project, { ...project, scenes, updatedAt: Date.now() }) : project;
     },
   };
 }
@@ -436,15 +452,25 @@ export function addPhotoLayers(overlays: readonly Overlay[]): Action {
 export function sampleAt(index: number): Action {
   return {
     label: 'Use a sample again',
-    apply: (project, scope) => editPhotos(project, scope, (photos) => backToSamples(photos, (_, i) => i === index)),
+    apply: (project, scope) => keepInLibrary(project, editPhotos(project, scope, (photos) => backToSamples(photos, (_, i) => i === index))),
   };
+}
+
+/**
+ * A project saved before Your photos existed reads its list from its scenes
+ * (D-147); taking a photograph out of a spot must not take it out of the list
+ * too. Writes the list down first whenever an edit drops a photo from view.
+ */
+function keepInLibrary(before: Project, after: Project): Project {
+  if (after === before || after.photoLibrary !== undefined) return after;
+  return { ...after, photoLibrary: [...new Set([...projectPhotos(before), ...projectPhotos(after)])] };
 }
 
 /** Every spot in the scene back to samples (D-150). The photographs stay in Your photos. */
 export function restoreSamples(): Action {
   return {
     label: 'Use samples again',
-    apply: (project, scope) => editPhotos(project, scope, (photos) => backToSamples(photos, () => true)),
+    apply: (project, scope) => keepInLibrary(project, editPhotos(project, scope, (photos) => backToSamples(photos, () => true))),
   };
 }
 
@@ -512,12 +538,12 @@ export function setPhotoCount(count: number, bounds: { min: number; max: number 
     label: 'Change photo count',
     coalesceKey: 'photoCount',
     apply: (project, scope) =>
-      editPhotos(project, scope, (photos) => {
+      keepInLibrary(project, editPhotos(project, scope, (photos) => {
         const target = Math.round(clamp(count, bounds.min, bounds.max));
         if (target === photos.length) return photos;
-        if (target < photos.length) return photos.slice(0, target);
+        if (target < photos.length) return shrunk(photos, target);
         return grownWithSamples(photos, target);
-      }),
+      })),
   };
 }
 
@@ -1133,7 +1159,7 @@ export function fitPhotos(
   const wanted = photos.length === 0 ? (slots.default ?? slots.min) : photos.length;
   const target = Math.round(clamp(wanted, slots.min, slots.max));
   if (target === photos.length) return photos;
-  if (target < photos.length) return photos.slice(0, target);
+  if (target < photos.length) return shrunk(photos, target);
   return grownWithSamples(photos, target);
 }
 

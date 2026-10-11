@@ -28,6 +28,7 @@ function design(spots: number): Project {
 
 const shown = (project: Project): string[] => project.scenes[0]?.inputs.photos.map((p) => p.mediaId) ?? [];
 const spotAt = (project: Project, index: number): PhotoInput | undefined => project.scenes[0]?.inputs.photos[index];
+const spot = (mediaId: string): PhotoInput => ({ mediaId, frame: '3:4', sizeMode: 'template', sizePct: 100, cropMode: 'template' });
 
 describe('adding photos takes the place of samples (D-150)', () => {
   it('four spots and three photos: three of yours, then one sample', () => {
@@ -174,11 +175,27 @@ describe('Your photos (D-147)', () => {
   });
 
   it('a project saved before Your photos existed lists the photos its scenes show', () => {
-    const project = actions.placeOwnPhotos(['old1', 'old2']).apply(design(3), here);
-    expect(shown(project)).toEqual(['old1', 'old2', 'sample:canopy']);
-    expect(project.photoLibrary).toBeUndefined();
-    expect(projectPhotos(project)).toEqual(['old1', 'old2']);
-    const next = actions.addToLibrary(['new']).apply(project, here);
+    const base = design(3);
+    // As saved before D-147: photos in the scene, no list of its own.
+    const old: Project = { ...base, scenes: base.scenes.map((s) => ({ ...s, inputs: { ...s.inputs, photos: ['old1', 'old2', 'sample:canopy'].map(spot) } })) };
+    expect(old.photoLibrary).toBeUndefined();
+    expect(projectPhotos(old)).toEqual(['old1', 'old2']);
+    const next = actions.addToLibrary(['new']).apply(old, here);
     expect(next.photoLibrary).toEqual(['old1', 'old2', 'new']);
+  });
+
+  it('on such a project, taking a photo off a spot keeps it in Your photos', () => {
+    const base = design(3);
+    const old: Project = { ...base, scenes: base.scenes.map((s) => ({ ...s, inputs: { ...s.inputs, photos: ['old1', 'old2', 'sample:canopy'].map(spot) } })) };
+    expect(projectPhotos(actions.sampleAt(0).apply(old, here))).toEqual(['old1', 'old2']);
+    expect(projectPhotos(actions.restoreSamples().apply(old, here))).toEqual(['old1', 'old2']);
+    expect(projectPhotos(actions.setPhotoCount(1, { min: 1, max: 8 }).apply(old, here))).toEqual(['old1', 'old2']);
+  });
+
+  it('fewer spots drop samples before the person\'s photos', () => {
+    const base = design(4);
+    const mixed: Project = { ...base, scenes: base.scenes.map((s) => ({ ...s, inputs: { ...s.inputs, photos: ['a', 'sample:tide', 'b', 'sample:canopy'].map(spot) } })) };
+    expect(shown(actions.setPhotoCount(2, { min: 1, max: 8 }).apply(mixed, here))).toEqual(['a', 'b']);
+    expect(shown(actions.setPhotoCount(3, { min: 1, max: 8 }).apply(mixed, here))).toEqual(['a', 'sample:tide', 'b']);
   });
 });

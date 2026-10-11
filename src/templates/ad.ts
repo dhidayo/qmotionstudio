@@ -4,6 +4,7 @@ import {
   emptySceneInputs,
   newId,
   STARTER_PHOTO_IDS,
+  dealPhotos,
 } from '@/document/defaults';
 import { lookPreset, withLookPreset } from './_shared/look';
 import { loadSceneTemplate } from './registry';
@@ -37,7 +38,8 @@ export async function expandAdTemplate(
   template: AdTemplate,
   options: ExpandOptions = {},
 ): Promise<Scene[]> {
-  const photoIds = options.photoIds?.length ? options.photoIds : STARTER_PHOTO_IDS;
+  const own = options.photoIds?.length ? options.photoIds : null;
+  const photoIds = own ?? STARTER_PHOTO_IDS;
 
   // Sub-templates are loaded here rather than during the render: the expansion
   // needs each one's photo slot defaults, and the renderer is about to need
@@ -65,17 +67,23 @@ export async function expandAdTemplate(
       Math.min(ref.photoCount ?? sub.photoSlots.default, sub.photoSlots.max),
     );
 
-    const photos = Array.from({ length: count }, () => {
-      const mediaId = photoIds[cursor % photoIds.length] ?? photoIds[0] ?? '';
-      cursor += 1;
-      return {
-        mediaId,
-        frame: '3:4' as const,
-        sizeMode: 'template' as const,
-        sizePct: 100,
-        cropMode: 'template' as const,
-      };
-    });
+    /*
+     * The person's photos once each per beat, samples in the spots left over
+     * (D-150) — repeats filled every spot, leaving "Add photo" nowhere to go.
+     * The next beat opens on the next photograph, never the same first one.
+     */
+    let photos;
+    if (own !== null) {
+      photos = dealPhotos(own, count, cursor);
+      const used = Math.min(count, own.length);
+      cursor += used === own.length ? 1 : used;
+    } else {
+      photos = Array.from({ length: count }, () => {
+        const mediaId = photoIds[cursor % photoIds.length] ?? photoIds[0] ?? '';
+        cursor += 1;
+        return { mediaId, frame: '3:4' as const, sizeMode: 'template' as const, sizePct: 100, cropMode: 'template' as const };
+      });
+    }
 
     const scene: Scene = {
       id: newId('scn'),

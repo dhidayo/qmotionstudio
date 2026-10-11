@@ -102,9 +102,14 @@ describe('photo distribution', () => {
     expect(second).not.toBe('a');
   });
 
-  it('wraps rather than running out when there are fewer photos than slots', async () => {
+  it('with fewer photos than spots, each beat shows them once and samples in the rest (D-150)', async () => {
     const scenes = await expandAdTemplate(await ad('launch-story'), { photoIds: ['only'] });
-    expect(scenes.every((s) => s.inputs.photos.every((p) => p.mediaId === 'only'))).toBe(true);
+    for (const scene of scenes) {
+      const ids = scene.inputs.photos.map((p) => p.mediaId);
+      if (ids.length === 0) continue;
+      expect(ids.filter((id) => id === 'only')).toHaveLength(1);
+      expect(ids.filter((id) => id !== 'only').every((id) => id.startsWith('sample:'))).toBe(true);
+    }
   });
 });
 
@@ -114,7 +119,14 @@ describe('applying an ad over existing work (D-098)', () => {
     const scenes = await expandAdTemplate(template, { photoIds: ['m:one', 'm:two'] });
     const used = scenes.flatMap((scene) => scene.inputs.photos.map((p) => p.mediaId));
     expect(used.length).toBeGreaterThan(0);
-    expect(used.every((id) => id === 'm:one' || id === 'm:two')).toBe(true);
+    expect(used.filter((id) => id === 'm:one' || id === 'm:two').length).toBeGreaterThan(0);
+    // Once each per beat, never a repeat to fill a spot (D-150); neighbouring beats open on different photos.
+    for (const scene of scenes) {
+      const own = scene.inputs.photos.map((p) => p.mediaId).filter((id) => id.startsWith('m:'));
+      expect(new Set(own).size).toBe(own.length);
+    }
+    const firsts = scenes.map((s) => s.inputs.photos[0]?.mediaId).filter((id): id is string => id?.startsWith('m:') === true);
+    for (let i = 1; i < firsts.length; i++) expect(firsts[i], `beat ${i + 1}`).not.toBe(firsts[i - 1]);
   });
 
   it('puts the person’s logo on every beat', async () => {
