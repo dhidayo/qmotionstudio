@@ -1307,12 +1307,36 @@ function resizeAction(
   // `target.box` rather than the destructured `box`: only the overlay variant
   // carries an anchor offset, and this branch is the one that has narrowed.
   const { anchorOffset } = target.box;
-  const grown = { x: anchorOffset.x * fx, y: anchorOffset.y * fy };
-  const position = shiftBy(newCentre, negate(grown), box.rotation);
+  const placed = (gx: number, gy: number): Point => shiftBy(
+    addRotated(anchorFrame, { x: (d.x * box.w * gx) / 2, y: (d.y * box.h * gy) / 2 }, box.rotation),
+    negate({ x: anchorOffset.x * gx, y: anchorOffset.y * gy }),
+    box.rotation,
+  );
+  /*
+   * A layer's position stays on the picture. Clamping the position after the
+   * fact moved the corner being held still once a big drag pushed the layer's
+   * middle past the edge; instead the layer stops growing there, the held
+   * corner exactly where it was.
+   */
+  const inside = (point: Point): boolean => point.x >= 0 && point.x <= design.w && point.y >= 0 && point.y <= design.h;
+  let gx = fx;
+  let gy = fy;
+  if (!inside(placed(gx, gy)) && inside(placed(1, 1))) {
+    let low = 0;
+    let high = 1;
+    for (let i = 0; i < 18; i++) {
+      const mid = (low + high) / 2;
+      if (inside(placed(1 + (fx - 1) * mid, 1 + (fy - 1) * mid))) low = mid;
+      else high = mid;
+    }
+    gx = 1 + (fx - 1) * low;
+    gy = 1 + (fy - 1) * low;
+  }
+  const position = placed(gx, gy);
 
   const sized = {
-    scaleX: clamp(scaleX * fx, MIN_SCALE, MAX_SCALE),
-    scaleY: clamp(scaleY * fy, MIN_SCALE, MAX_SCALE),
+    scaleX: clamp(scaleX * gx, MIN_SCALE, MAX_SCALE),
+    scaleY: clamp(scaleY * gy, MIN_SCALE, MAX_SCALE),
     x: clamp01(position.x / design.w),
     y: clamp01(position.y / design.h),
   };

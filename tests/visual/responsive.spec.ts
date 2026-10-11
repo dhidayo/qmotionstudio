@@ -103,6 +103,6 @@ test.describe('at phone width', () => {
     await page.locator('[data-phone-toolbar]').getByRole('button', { name: 'Designs' }).click();
     const sheet = page.getByRole('dialog', { name: 'Choose a design' });
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByPlaceholder('Search templates')).toBeVisible();
+    await expect(sheet.getByRole('searchbox', { name: 'Search templates' })).toBeVisible();
   });
 });

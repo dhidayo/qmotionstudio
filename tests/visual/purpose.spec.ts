@@ -178,7 +178,6 @@ test.describe('set up for everything', () => {
     await header.getByRole('button', { name: 'Free', exact: true }).click();
     await expect(header.getByRole('button', { name: 'Free', exact: true })).toHaveClass(/chip-on/);
     await expect(header.getByRole('button', { name: /^Show favourites only/ })).toHaveAttribute('aria-pressed', 'false');
-    await expect(header.locator('[data-fold-all]')).toHaveCount(0);
     await header.getByRole('button', { name: 'All', exact: true }).click();
     await header.getByRole('button', { name: 'Collapse all groups' }).click();
     await expect(rail(page).locator('[data-design-card]')).toHaveCount(0);

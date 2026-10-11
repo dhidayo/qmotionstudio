@@ -63,7 +63,7 @@ test.describe('library', () => {
 
   test('favourites persist across a reload', async ({ page }) => {
     await page.getByRole('button', { name: 'Favourite Fan Out' }).click();
-    await page.getByRole('button', { name: /^★/ }).click();
+    await page.getByRole('button', { name: /^Show favourites only/ }).click();
     await expect(page.getByTitle(/fanned across an arc/)).toBeVisible();
 
     await page.reload();
@@ -94,22 +94,19 @@ test.describe('inspector', () => {
      * unmissable the moment it became real photography (D-049) — the decode
      * simply started losing the race. The store has notified since.
      */
-    const tiles = page.locator('[aria-label^="Photo "] span');
+    // A spot's picture is drawn only once its decode has landed (D-150's tiles are <img>s).
+    const tiles = page.locator('[data-design-photos] [data-media-id]');
     await expect(tiles.first()).toBeVisible();
 
-    await expect
-      .poll(async () =>
-        tiles.evaluateAll((nodes) =>
-          nodes.filter((node) => getComputedStyle(node).backgroundImage.includes('blob:')).length,
-        ),
-      )
-      .toBeGreaterThan(0);
+    const withPicture = (): Promise<number> => tiles.evaluateAll((nodes) =>
+      nodes.filter((node) => node.querySelector('img')?.getAttribute('src')?.startsWith('blob:') === true).length,
+    );
+    await expect.poll(withPicture).toBeGreaterThan(0);
 
     // Every tile, not just the first: a partially-loaded set is the same bug.
     const total = await tiles.count();
-    const filled = await tiles.evaluateAll((nodes) =>
-      nodes.filter((node) => getComputedStyle(node).backgroundImage.includes('blob:')).length,
-    );
+    await expect.poll(withPicture).toBe(total);
+    const filled = await withPicture();
     expect(filled, `${filled} of ${total} photo tiles have an image`).toBe(total);
   });
 
