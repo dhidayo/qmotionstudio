@@ -11,6 +11,8 @@ import type { TemplateSummary } from './manifest';
  */
 export const DESIGN_PURPOSES = [
   'Headlines & hooks',
+  'Business posts',
+  'Thumbnails & covers',
   'Products',
   'Sales & prices',
   'Calls to action',
@@ -112,6 +114,9 @@ const BY_PREFIX: readonly (readonly [string, Purpose])[] = [
   ['kinetic-', 'Headlines & hooks'],
   ['pd-', 'Products'],
   ['biz-', 'Business & apps'],
+  // Covers & Thumbnails (D-151): business post covers and video thumbnails, each a group of its own.
+  ['bp-', 'Business posts'],
+  ['tn-', 'Thumbnails & covers'],
   ['split-', 'Before & after'],
   ['ring-', 'Photo galleries'],
   ['flow-', 'Photo galleries'],

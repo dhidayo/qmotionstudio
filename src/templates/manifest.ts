@@ -67,7 +67,7 @@ export const CATEGORIES: readonly string[] = [
   // Corporate Ads: whole films.
   'Story Ads', 'Text Stories', 'Product Films', 'Business Promos',
   // Scenes: words first, then products, then photographs in motion.
-  'Text Motion', 'Elements', 'Kinetic Type', 'Product Display', 'Business',
+  'Text Motion', 'Elements', 'Kinetic Type', 'Product Display', 'Business', 'Covers & Thumbnails',
   'Ring Path', 'Flow Track', 'Depth Stage', 'Angle Stage', 'Tile Field', 'Deck Motion',
   'Hero Stage', 'Photo Reveal', 'Scene Cuts', 'Photo Collage', 'Timeline',
   'Soft Pop', 'Split Frame', 'Basics',
@@ -86,6 +86,8 @@ const CATEGORY_LOOKS: Readonly<Record<string, readonly string[]>> = {
   Elements: ['linen', 'sky', 'sunshine', 'navy', 'lilac', 'coral', 'cream', 'cobalt', 'mint', 'midnight', 'blush', 'emerald', 'paper', 'orchid', 'terracotta'],
   'Product Display': ['linen', 'midnight', 'cream', 'sky', 'blush', 'navy', 'mint', 'bone', 'lilac', 'sunshine', 'paper', 'tide'],
   Business: ['sky', 'navy', 'linen', 'lilac', 'cobalt', 'cream', 'mint', 'midnight', 'paper', 'emerald', 'blush', 'sunshine'],
+  // Bold grounds, as a marketing team's covers are: deep navy, royal blue, sunshine, red, cream and white.
+  'Covers & Thumbnails': ['navy', 'cobalt', 'sunshine', 'coral', 'emerald', 'cream', 'paper', 'midnight'],
   'Depth Stage': ['midnight', 'navy', 'orchid', 'tide', 'ember', 'cobalt', 'forest', 'emerald'],
 };
 const PHOTO_LOOKS = ['midnight', 'cream', 'navy', 'linen', 'orchid', 'sky', 'ember', 'blush', 'tide', 'paper', 'emerald', 'lilac', 'forest', 'sunshine', 'cobalt', 'terracotta'];

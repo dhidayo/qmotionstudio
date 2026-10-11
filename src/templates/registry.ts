@@ -71,6 +71,7 @@ const FAMILIES: Record<FamilyId, () => Promise<FamilyModule>> = {
   halo: () => import('./_families/halo'),
   timeline: () => import('./_families/timeline'),
   business: () => import('./_families/business'),
+  cover: () => import('./_families/cover'),
 };
 
 /** A template from the catalogue rather than from a file of its own, or undefined. */

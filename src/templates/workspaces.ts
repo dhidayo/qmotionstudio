@@ -74,10 +74,10 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     line: 'Photo galleries and stories for Instagram, LinkedIn and TikTok.',
     poster: 'flow-polaroid-pass',
     designOrder: [
-      'Photo galleries', 'Photo stacks', 'Moodboards', 'Photo stories', 'Hero photos', '3D & depth',
-      'Timelines & journeys', 'Before & after', 'Headlines & hooks', 'Quotes & reviews', 'Events & dates',
-      'People & teams', 'Lists & how it works', 'Numbers & results', 'Calls to action', 'Products',
-      'Sales & prices', 'Business & apps',
+      'Photo galleries', 'Thumbnails & covers', 'Photo stacks', 'Moodboards', 'Photo stories', 'Hero photos',
+      '3D & depth', 'Timelines & journeys', 'Before & after', 'Headlines & hooks', 'Quotes & reviews',
+      'Events & dates', 'People & teams', 'Lists & how it works', 'Numbers & results', 'Calls to action',
+      'Business posts', 'Products', 'Sales & prices', 'Business & apps',
     ],
     videoOrder: [
       'Thanks & celebrations', 'Announcements', 'Events & webinars', 'Product launches & offers',
@@ -89,7 +89,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
       '3D & depth': ['depth-parallax'],
     },
     startHere: {
-      scene: ['flow-polaroid-pass', 'flow-coverflow', 'deck-scrapbook', 'pop-dream', 'ring-wide', 'kinetic-statement'],
+      scene: ['flow-polaroid-pass', 'tn-youtube-bold', 'flow-coverflow', 'deck-scrapbook', 'pop-dream', 'tn-podcast-episode'],
       ad: ['film-lookbook', 'quick-pitch', 'story-thank-you', 'story-big-news'],
     },
     startHereCaption: 'Picked for social posts',
@@ -112,10 +112,10 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     line: 'Products, offers, news and hiring for your business or clients.',
     poster: 'pd-new-arrival',
     designOrder: [
-      'Products', 'Sales & prices', 'Headlines & hooks', 'Calls to action', 'Quotes & reviews',
-      'Numbers & results', 'People & teams', 'Business & apps', 'Events & dates', 'Lists & how it works',
-      'Before & after', 'Hero photos', '3D & depth', 'Timelines & journeys', 'Photo galleries',
-      'Photo stacks', 'Photo stories', 'Moodboards',
+      'Business posts', 'Products', 'Sales & prices', 'Headlines & hooks', 'Calls to action',
+      'Thumbnails & covers', 'Quotes & reviews', 'Numbers & results', 'People & teams', 'Business & apps',
+      'Events & dates', 'Lists & how it works', 'Before & after', 'Hero photos', '3D & depth',
+      'Timelines & journeys', 'Photo galleries', 'Photo stacks', 'Photo stories', 'Moodboards',
     ],
     videoOrder: [
       'Product launches & offers', 'Brand & company', 'Customer stories & results', 'Announcements',
@@ -123,7 +123,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     ],
     leadIn: {},
     startHere: {
-      scene: ['pd-new-arrival', 'pd-price-reveal', 'split-band', 'type-question-answer', 'el-cta-button', 'biz-testimonials'],
+      scene: ['bp-corporate-update', 'bp-quarter-results', 'pd-new-arrival', 'bp-product-launch', 'pd-price-reveal', 'biz-testimonials'],
       ad: ['social-post', 'story-sale', 'story-customer', 'promo-hiring'],
     },
     startHereCaption: 'Picked for business ads',
@@ -146,10 +146,10 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     line: 'Announcements, dates, quotes and milestones. No photos needed.',
     poster: 'el-eyebrow-title',
     designOrder: [
-      'Events & dates', 'Headlines & hooks', 'Quotes & reviews', 'Numbers & results', 'Lists & how it works',
-      'People & teams', 'Calls to action', 'Timelines & journeys', 'Sales & prices', 'Business & apps',
-      'Products', 'Hero photos', 'Photo stories', 'Before & after', 'Photo galleries', 'Photo stacks',
-      'Moodboards', '3D & depth',
+      'Events & dates', 'Business posts', 'Headlines & hooks', 'Quotes & reviews', 'Numbers & results',
+      'Lists & how it works', 'People & teams', 'Calls to action', 'Timelines & journeys', 'Thumbnails & covers',
+      'Sales & prices', 'Business & apps', 'Products', 'Hero photos', 'Photo stories', 'Before & after',
+      'Photo galleries', 'Photo stacks', 'Moodboards', '3D & depth',
     ],
     videoOrder: [
       'Announcements', 'Events & webinars', 'Thanks & celebrations', 'Customer stories & results',
@@ -157,7 +157,7 @@ export const WORKSPACES: Readonly<Record<WorkspaceId, Workspace>> = {
     ],
     leadIn: {},
     startHere: {
-      scene: ['el-eyebrow-title', 'el-date-card', 'type-quote', 'type-big-number', 'el-countdown', 'el-checklist'],
+      scene: ['bp-weekly-agenda', 'el-eyebrow-title', 'bp-milestone', 'el-date-card', 'type-quote', 'el-countdown'],
       ad: ['story-big-news', 'story-event', 'story-thank-you', 'story-impact'],
     },
     startHereCaption: 'Picked for news and events',

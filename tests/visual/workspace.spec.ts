@@ -68,11 +68,11 @@ test.describe('a first visit', () => {
     await expect(tour).toContainText('a gallery, a moodboard');
   });
 
-  test('Business puts products first, and advert films first under Video', async ({ page }) => {
+  test('Business puts business posts first, and advert films first under Video', async ({ page }) => {
     await open(page);
     await answerWelcome(page, 'Business ads');
     await expect(rail(page).locator('[data-design-card="pd-new-arrival"]')).toHaveAttribute('aria-pressed', 'true');
-    await expect(firstGroup(page)).toHaveAttribute('data-library-category', 'Products');
+    await expect(firstGroup(page)).toHaveAttribute('data-library-category', 'Business posts');
     await expect(page.locator('[data-quick-start]')).toContainText('switch to Video at the top');
 
     await page.getByRole('group', { name: 'Mode' }).getByRole('button', { name: 'Video', exact: true }).click();
@@ -198,7 +198,7 @@ test.describe('set up for social', () => {
     await expect(groupHeader(page, 'Moodboards')).toHaveAttribute('aria-expanded', 'true');
 
     await rail(page).locator('[data-workspace="business"]').click();
-    await expect(groupHeader(page, 'Products')).toHaveAttribute('aria-expanded', 'true');
+    await expect(groupHeader(page, 'Business posts')).toHaveAttribute('aria-expanded', 'true');
     await expect(rail(page).locator('[data-library-featured] h3 button')).toHaveAttribute('aria-expanded', 'true');
     await expect(groupHeader(page, 'Moodboards')).toHaveAttribute('aria-expanded', 'false');
 
@@ -215,7 +215,7 @@ test.describe('set up for everything', () => {
     await open(page);
     await page.getByRole('group', { name: 'Aspect ratio' }).getByRole('button', { name: '1:1', exact: true }).click();
     await rail(page).locator('[data-workspace="business"]').click();
-    await expect(firstGroup(page)).toHaveAttribute('data-library-category', 'Products');
+    await expect(firstGroup(page)).toHaveAttribute('data-library-category', 'Business posts');
     await expect(page.locator('[data-toast]')).toContainText('Your project has not changed.');
     // The design is still the one worked on; its group starts folded here.
     await groupHeader(page, '3D & depth').click();
@@ -309,6 +309,6 @@ test.describe('on a tablet', () => {
     const sheet = page.getByRole('dialog', { name: 'Choose a design' });
     await expect(sheet.locator('[data-workspace-switch]')).toBeVisible();
     await expect(sheet.locator('[data-library-featured]')).toBeVisible();
-    await expect(sheet.locator('[data-library-category]').first()).toHaveAttribute('data-library-category', 'Products');
+    await expect(sheet.locator('[data-library-category]').first()).toHaveAttribute('data-library-category', 'Business posts');
   });
 });
