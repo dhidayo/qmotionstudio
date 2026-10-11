@@ -118,7 +118,7 @@ test.describe('photos on top of the design', () => {
     await expect(listed).toHaveCount(1);
     await expect.poll(async () => changed(before, await fingerprint(page))).toBeGreaterThan(0.5);
 
-    await listed.getByRole('button', { name: 'Delete added photo 1' }).click();
+    await listed.getByRole('button', { name: 'Delete extra photo 1' }).click();
     await expect(listed).toHaveCount(0);
   });
 });

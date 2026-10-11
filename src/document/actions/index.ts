@@ -1,5 +1,5 @@
 import type { Palette, PaletteRole, PropValues } from '@/core/types';
-import { DEFAULT_LOGO, newId, restyleLook } from '../defaults';
+import { DEFAULT_LOGO, newId, restyleLook, STARTER_PHOTO_IDS } from '../defaults';
 import { NO_SLOT_TRANSFORM } from '../types';
 import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
 import { nudgeAt, nudgePoses } from '@/core/render/slots';
@@ -150,21 +150,115 @@ const clamp = (value: number, low: number, high: number): number =>
 
 // ── Photos (§8.1) ───────────────────────────────────────────────────────────
 
-export function addPhotos(mediaIds: readonly string[]): Action {
-  return {
-    label: mediaIds.length === 1 ? 'Add photo' : `Add ${mediaIds.length} photos`,
-    apply: (project, scope) =>
-      editPhotos(project, scope, (photos) => [
-        ...photos,
-        ...mediaIds.map((mediaId): PhotoInput => ({
-          mediaId,
-          frame: '3:4',
-          sizeMode: 'template',
-          sizePct: 100,
-          cropMode: 'template',
-        })),
-      ]),
-  };
+/*
+ * A design's photo spots, each showing one of the person's photographs or a
+ * sample (D-150).
+ *
+ * "When users add their photos, please remove a sample photo for each
+ * uploaded photos. E.g. if a template has 4 photos and a user uploads 3
+ * photos, remove the first three sample photos and replace with the three
+ * uploaded photos. When user do plus to make design accommodate 6 photos, you
+ * use sample photos for those until the number of picture uploaded match the
+ * design." So nothing here repeats their photo just to fill a spot: a
+ * photograph takes the place of one sample, and a spot with nothing of theirs
+ * in it shows a sample — one this scene is not already showing.
+ */
+
+/** A spot showing one of the bundled samples (or the template's empty stand-in), free for a photo of the person's own. */
+export function isSampleSpot(mediaId: string): boolean {
+  return mediaId.startsWith('sample:') || mediaId.startsWith('__empty_');
+}
+
+/**
+ * The next `count` samples a scene is not already showing, in the set's own
+ * order. Only once all eight are on screen does one appear twice — a design
+ * can have nine spots.
+ */
+function unusedSamples(shown: readonly string[], count: number): string[] {
+  const taken = new Set(shown);
+  const out = STARTER_PHOTO_IDS.filter((id) => !taken.has(id)).slice(0, count);
+  for (let i = 0; out.length < count && STARTER_PHOTO_IDS.length > 0; i++) {
+    out.push(STARTER_PHOTO_IDS[i % STARTER_PHOTO_IDS.length] ?? '');
+  }
+  return out;
+}
+
+/** The same spot showing another picture: its frame and size stay; a crop belonged to the old picture and goes. */
+function withPicture(spot: PhotoInput, mediaId: string): PhotoInput {
+  if (spot.mediaId === mediaId) return spot;
+  const { cropRect: _crop, ...rest } = spot;
+  return { ...rest, mediaId };
+}
+
+/** A new spot, framed like the one the template would otherwise have repeated there. */
+function newSpot(photos: readonly PhotoInput[], at: number, mediaId: string): PhotoInput {
+  const like = photos.length === 0 ? undefined : photos[at % photos.length];
+  return { mediaId, frame: like?.frame ?? '3:4', sizeMode: 'template', sizePct: 100, cropMode: 'template' };
+}
+
+/** Spots added at the end, up to `count`, each showing a sample the scene is not already showing. */
+function grownWithSamples(photos: readonly PhotoInput[], count: number): readonly PhotoInput[] {
+  if (count <= photos.length) return photos;
+  const samples = unusedSamples(photos.map((p) => p.mediaId), count - photos.length);
+  return [...photos, ...samples.map((id, i) => newSpot(photos, photos.length + i, id))];
+}
+
+/** The chosen spots back to samples, each a sample the scene is not already showing. Spots already showing one are left as they are. */
+function backToSamples(
+  photos: readonly PhotoInput[],
+  which: (spot: PhotoInput, index: number) => boolean,
+): readonly PhotoInput[] {
+  const turning = (spot: PhotoInput, index: number): boolean => !isSampleSpot(spot.mediaId) && which(spot, index);
+  const count = photos.filter(turning).length;
+  if (count === 0) return photos;
+  const staying = photos.filter((spot, i) => !turning(spot, i)).map((p) => p.mediaId);
+  const samples = unusedSamples(staying, count);
+  let next = 0;
+  return photos.map((spot, i) => (turning(spot, i) ? withPicture(spot, samples[next++] ?? '') : spot));
+}
+
+/** Where newly added photographs went (D-150). */
+export type PhotoPlacement = {
+  readonly photos: readonly PhotoInput[];
+  /** Samples that gave way to a photograph of the person's own. */
+  readonly replaced: number;
+  /** Spots added for the rest, within the design's limit. */
+  readonly added: number;
+  /** Photographs with no spot left for them: they wait in Your photos. */
+  readonly waiting: readonly string[];
+};
+
+/**
+ * Photographs into a scene's spots: the sample spots first, in order, then
+ * new spots up to `maxPhotos` — the design's limit, 0 for a design with no
+ * photo spots. A spot already showing a photograph of the person's own is
+ * never taken; one already in the scene is not placed twice.
+ */
+export function placeInSpots(
+  photos: readonly PhotoInput[],
+  mediaIds: readonly string[],
+  maxPhotos: number,
+): PhotoPlacement {
+  const shown = new Set(photos.map((p) => p.mediaId));
+  const fresh = [...new Set(mediaIds)].filter((id) => !shown.has(id) && !isSampleSpot(id));
+  const out = [...photos];
+  let next = 0;
+  let replaced = 0;
+  for (let i = 0; i < out.length && next < fresh.length; i++) {
+    const spot = out[i];
+    const id = fresh[next];
+    if (spot === undefined || id === undefined || !isSampleSpot(spot.mediaId)) continue;
+    out[i] = withPicture(spot, id);
+    next += 1;
+    replaced += 1;
+  }
+  let added = 0;
+  for (let id = fresh[next]; id !== undefined && out.length < maxPhotos; id = fresh[next]) {
+    out.push(newSpot(photos, out.length, id));
+    next += 1;
+    added += 1;
+  }
+  return { photos: replaced + added === 0 ? photos : out, replaced, added, waiting: fresh.slice(next) };
 }
 
 export function removePhoto(index: number): Action {
@@ -208,61 +302,56 @@ export function replacePhoto(index: number, mediaId: string): Action {
 }
 
 /**
- * "Add your photos": the person's photographs take every photo slot in the
- * design, in order, across all of its scenes (D-116).
- *
- * Each slot keeps its frame and size — only the picture changes — so the
- * design still looks like itself, now with their pictures. Fewer photographs
- * than slots repeat in order rather than leaving samples mixed in; more than a
- * one-scene design holds are added to it, up to `maxExtra`. One undo step,
- * however many scenes it touches.
- */
-/**
- * Your photos into a design's photo spots, in order (D-116, D-137).
+ * Photographs into a design's photo spots, in order (D-116, D-137, D-150).
  *
  * By default only the scene being worked on: "when I clicked on a scene and
  * add your photos, the photos is applied to all scenes. I expected … only the
  * current scene so that I can design the next screen separately." With
- * `everyScene`, every scene's spots are filled in turn, carrying on through
- * the list rather than restarting, so neighbouring scenes do not open on the
- * same picture. The scene worked on takes any photos left over as new spots,
- * up to `maxPhotos` — its design's limit.
+ * `everyScene` — Photos → Use on every scene — every scene in turn, starting
+ * with this one and carrying on through the list rather than restarting, so
+ * neighbouring scenes do not open on the same picture.
+ *
+ * A scene shows each photograph once: with more spots than photographs, the
+ * rest show samples rather than repeats (D-150). The scene worked on takes
+ * any photographs left over as new spots, up to `maxPhotos` — its design's
+ * limit. One undo step, however many scenes it touches.
  */
 export function placeOwnPhotos(
   mediaIds: readonly string[],
   options: { readonly everyScene?: boolean; readonly maxPhotos?: number } = {},
 ): Action {
   return {
-    label: mediaIds.length === 1 ? 'Use your photo' : `Use ${mediaIds.length} photos`,
+    label: options.everyScene === true ? 'Use photos on every scene' : mediaIds.length === 1 ? 'Use your photo' : `Use ${mediaIds.length} photos`,
     apply: (project, scope) => {
-      if (mediaIds.length === 0) return project;
+      const ids = [...new Set(mediaIds)].filter((id) => !isSampleSpot(id));
+      if (ids.length === 0 || project.scenes[scope.sceneIndex] === undefined) return project;
+      const count = project.scenes.length;
+      const order = options.everyScene === true
+        ? Array.from({ length: count }, (_, i) => (scope.sceneIndex + i) % count)
+        : [scope.sceneIndex];
+      const scenes = [...project.scenes];
       let cursor = 0;
-      const next = (): string => {
-        const id = mediaIds[cursor % mediaIds.length] ?? '';
-        cursor += 1;
-        return id;
-      };
-      const scenes = project.scenes.map((scene, index) => {
-        const here = index === scope.sceneIndex;
-        if (!here && options.everyScene !== true) return scene;
+      let changed = false;
+      for (const index of order) {
+        const scene = scenes[index];
+        if (scene === undefined) continue;
         const photos = scene.inputs.photos;
-        // The old crop belonged to the old picture, as in `replacePhoto`.
-        const replaced = photos.map((photo): PhotoInput => {
-          const { cropRect: _crop, ...rest } = photo;
-          return { ...rest, mediaId: next() };
-        });
-        const room = here ? Math.max(0, (options.maxPhotos ?? photos.length) - photos.length) : 0;
-        const extra = mediaIds.slice(photos.length, photos.length + room).map((mediaId): PhotoInput => ({
-          mediaId,
-          frame: photos[0]?.frame ?? '3:4',
-          sizeMode: 'template',
-          sizePct: 100,
-          cropMode: 'template',
-        }));
-        if (replaced.length === 0 && extra.length === 0) return scene;
-        return { ...scene, inputs: { ...scene.inputs, photos: [...replaced, ...extra] } };
-      });
-      return { ...project, scenes };
+        const here = index === scope.sceneIndex;
+        const spots = here ? Math.max(photos.length, Math.min(options.maxPhotos ?? photos.length, ids.length)) : photos.length;
+        const take = Math.min(spots, ids.length);
+        const chosen: PhotoInput[] = [];
+        for (let i = 0; i < take; i++) {
+          const id = ids[(cursor + i) % ids.length] ?? '';
+          const spot = photos[i];
+          chosen.push(spot === undefined ? newSpot(photos, i, id) : withPicture(spot, id));
+        }
+        cursor += take;
+        const next = backToSamples([...chosen, ...photos.slice(take)], (_, i) => i >= take);
+        if (next.length === photos.length && next.every((spot, i) => spot === photos[i])) continue;
+        scenes[index] = { ...scene, inputs: { ...scene.inputs, photos: next } };
+        changed = true;
+      }
+      return changed ? { ...project, scenes, updatedAt: Date.now() } : project;
     },
   };
 }
@@ -271,9 +360,9 @@ export function placeOwnPhotos(
 //
 // "When I click add, you simply add to list of photos that can be used in the
 // project." A phone's camera hands over one picture at a time; replacing the
-// scene's photos with each one lost the picture before. Adding now only ever
-// adds — to the project's list, and to the scene's own photos while it has
-// spots free — and each scene picks which of the list it shows.
+// scene's photos with each one lost the picture before. Every photograph
+// added stays in the project's list until the person deletes it, and adding
+// only ever takes the place of samples (D-150) — never of a photo of theirs.
 
 function withLibrary(project: Project, mediaIds: readonly string[]): Project {
   const current = project.photoLibrary ?? projectPhotos(project);
@@ -293,88 +382,86 @@ export function alsoInLibrary(action: Action, mediaIds: readonly string[]): Acti
 }
 
 /**
- * A scene's spots, showing `active` in order and repeating it when there are
- * more spots than photographs (§8.1). Each spot keeps its frame and size; a
- * crop belonged to the old picture and goes with it. Spots are added, up to
- * `maxPhotos`, when there are more chosen photographs than spots.
+ * Photographs already in Your photos into the scene being worked on (D-150):
+ * each takes the place of a sample, first spot first, or a new spot while the
+ * design has room. Nothing of the person's own is replaced; with no room left
+ * it changes nothing, and the panel says the design is full.
  */
-function fillSpots(photos: readonly PhotoInput[], active: readonly string[], maxPhotos: number): readonly PhotoInput[] {
-  if (active.length === 0) return photos;
-  const limit = maxPhotos > 0 ? maxPhotos : Number.POSITIVE_INFINITY;
-  const count = Math.max(1, Math.min(limit, Math.max(photos.length, active.length)));
-  const out: PhotoInput[] = [];
-  for (let i = 0; i < count; i++) {
-    const mediaId = active[i % active.length] ?? '';
-    const slot = photos[i];
-    if (slot === undefined) {
-      out.push({ mediaId, frame: photos[0]?.frame ?? '3:4', sizeMode: 'template', sizePct: 100, cropMode: 'template' });
-    } else if (slot.mediaId === mediaId) {
-      out.push(slot);
-    } else {
-      const { cropRect: _crop, ...rest } = slot;
-      out.push({ ...rest, mediaId });
-    }
-  }
-  return out;
+export function placePhotos(mediaIds: readonly string[], options: { readonly maxPhotos: number }): Action {
+  return {
+    label: mediaIds.length === 1 ? 'Use your photo' : `Use ${mediaIds.length} photos`,
+    apply: (project, scope) =>
+      editPhotos(project, scope, (photos) => placeInSpots(photos, mediaIds, options.maxPhotos).photos),
+  };
 }
 
 /**
- * "Add your photos" (D-147): new photographs join "Your photos", and the scene
- * being worked on takes them after the ones it already shows, while it has
- * room. A scene already full keeps what it has; the new ones wait in the list.
+ * "Add your photos" (D-147, D-150) — from either button, the camera, a drop
+ * or a paste: new photographs join "Your photos", and each takes the place of
+ * one sample in the scene being worked on, first spot first. More than the
+ * scene has samples add spots up to its design's limit; any beyond that wait
+ * in Your photos. So camera shots taken one at a time fill the spots in turn,
+ * and none replaces another.
  */
 export function addYourPhotos(mediaIds: readonly string[], options: { readonly maxPhotos: number }): Action {
   return {
     label: mediaIds.length === 1 ? 'Add your photo' : `Add ${mediaIds.length} photos`,
     apply: (project, scope) => {
       if (mediaIds.length === 0) return project;
-      const placed = editPhotos(project, scope, (photos) => {
-        const shown = [...new Set(photos.map((p) => p.mediaId).filter((id) => !id.startsWith('sample:') && !id.startsWith('__empty_')))];
-        const room = options.maxPhotos > 0 ? options.maxPhotos - shown.length : mediaIds.length;
-        const fresh = mediaIds.filter((id) => !shown.includes(id)).slice(0, Math.max(0, room));
-        if (fresh.length === 0) return photos;
-        return fillSpots(photos, [...shown, ...fresh], options.maxPhotos);
-      });
-      return withLibrary(placed, mediaIds);
+      return withLibrary(placePhotos(mediaIds, options).apply(project, scope), mediaIds);
     },
   };
 }
 
 /**
- * Which of "Your photos" this scene shows (D-147), in order. With none chosen
- * the scene goes back to `fallback` — the sample pictures — rather than
- * drawing empty spots.
+ * Photographs on top of the design, anywhere (D-124), kept in Your photos too
+ * (D-147) — in one undo step however many there are. What a design with no
+ * photo spots does with the photos added to it (D-150).
  */
-export function setScenePhotos(
-  active: readonly string[],
-  options: { readonly maxPhotos: number; readonly fallback: readonly string[] },
-): Action {
+export function addPhotoLayers(overlays: readonly Overlay[]): Action {
   return {
-    label: 'Choose photos for this scene',
-    apply: (project, scope) =>
-      editPhotos(project, scope, (photos) => fillSpots(photos, active.length > 0 ? active : options.fallback, options.maxPhotos)),
+    label: overlays.length === 1 ? 'Add photo on top' : `Add ${overlays.length} photos on top`,
+    apply: (project) => {
+      if (overlays.length === 0) return project;
+      const ids = overlays.flatMap((o) => (o.content.kind === 'photo' ? [o.content.mediaId] : []));
+      return withLibrary({ ...project, overlays: [...project.overlays, ...overlays], updatedAt: Date.now() }, ids);
+    },
   };
 }
 
 /**
- * Takes a photograph out of the project (D-147): out of "Your photos", out of
- * every scene that shows it — those scenes carry on with the rest of their
- * photographs, or the samples when it was their only one — and off the canvas
- * where it was added on top, or behind as the background.
+ * The × on a spot (D-150): the spot shows a sample again — one the scene is
+ * not already showing. The photograph stays in Your photos.
  */
-export function removeFromLibrary(mediaId: string, fallback: readonly string[]): Action {
+export function sampleAt(index: number): Action {
+  return {
+    label: 'Use a sample again',
+    apply: (project, scope) => editPhotos(project, scope, (photos) => backToSamples(photos, (_, i) => i === index)),
+  };
+}
+
+/** Every spot in the scene back to samples (D-150). The photographs stay in Your photos. */
+export function restoreSamples(): Action {
+  return {
+    label: 'Use samples again',
+    apply: (project, scope) => editPhotos(project, scope, (photos) => backToSamples(photos, () => true)),
+  };
+}
+
+/**
+ * Takes a photograph out of the project (D-147): out of "Your photos", off
+ * every spot that showed it — each shows a sample instead (D-150) — and off
+ * the canvas where it was added on top, or behind as the background.
+ */
+export function removeFromLibrary(mediaId: string): Action {
   return {
     label: 'Delete photo',
     apply: (project) => {
       const scenes = project.scenes.map((scene): Scene => {
         const { photos, look } = scene.inputs;
         let inputs = scene.inputs;
-        if (photos.some((p) => p.mediaId === mediaId)) {
-          const rest = [...new Set(photos.map((p) => p.mediaId).filter((id) => id !== mediaId && !id.startsWith('__empty_')))];
-          const own = rest.filter((id) => !id.startsWith('sample:'));
-          const keep = own.length > 0 ? own : fallback;
-          inputs = { ...inputs, photos: keep.length > 0 ? fillSpots(photos, keep, photos.length) : [] };
-        }
+        const freed = backToSamples(photos, (spot) => spot.mediaId === mediaId);
+        if (freed !== photos) inputs = { ...inputs, photos: freed };
         if (look.backgroundMediaId === mediaId) {
           const { backgroundMediaId: _gone, ...keep } = look;
           inputs = { ...inputs, look: { ...keep, background: look.background === 'picture' ? 'solid' : look.background } };
@@ -390,13 +477,6 @@ export function removeFromLibrary(mediaId: string, fallback: readonly string[]):
         updatedAt: Date.now(),
       };
     },
-  };
-}
-
-export function removeAllPhotos(): Action {
-  return {
-    label: 'Remove all photos',
-    apply: (project, scope) => editPhotos(project, scope, (photos) => (photos.length === 0 ? photos : [])),
   };
 }
 
@@ -418,11 +498,14 @@ export function reorderPhoto(from: number, to: number): Action {
 }
 
 /**
- * §8.1: "increasing beyond the supplied photos reuses earlier ones".
+ * The "Photo spots" stepper: how many spots the design fills, which is a
+ * document edit rather than a view setting — two projects with the same
+ * photos but different counts render differently.
  *
- * The stepper changes how many slots the template fills, which is a document
- * edit rather than a view setting — two projects with the same photos but
- * different counts render differently.
+ * A new spot shows the next sample the scene is not already showing, never a
+ * repeat of the person's photo (D-150): "when user do plus to make design
+ * accommodate 6 photos, you use sample photos for those until the number of
+ * picture uploaded match the design." Fewer spots drop the last ones.
  */
 export function setPhotoCount(count: number, bounds: { min: number; max: number }): Action {
   return {
@@ -433,15 +516,7 @@ export function setPhotoCount(count: number, bounds: { min: number; max: number 
         const target = Math.round(clamp(count, bounds.min, bounds.max));
         if (target === photos.length) return photos;
         if (target < photos.length) return photos.slice(0, target);
-        if (photos.length === 0) return photos;
-
-        const grown = [...photos];
-        while (grown.length < target) {
-          const source = photos[grown.length % photos.length];
-          if (!source) break;
-          grown.push(source);
-        }
-        return grown;
+        return grownWithSamples(photos, target);
       }),
   };
 }
@@ -1013,7 +1088,7 @@ export function setCornerRadius(cornerRadius: number): Action {
  */
 export function setTemplate(
   templateId: string,
-  options?: { durationMs?: number; photoSlots?: { min: number; max: number }; look?: LookRestyle },
+  options?: { durationMs?: number; photoSlots?: { min: number; max: number; default?: number }; look?: LookRestyle },
 ): Action {
   return {
     label: 'Change template',
@@ -1044,27 +1119,22 @@ export function setTemplate(
 /**
  * Brings a photo list inside a template's declared slot range.
  *
- * §8.1: "increasing beyond the supplied photos reuses earlier ones". An empty
- * list stays empty — there is nothing to reuse, and inventing entries would
- * put ids in the document that the media store has never heard of.
+ * Spots the new design needs beyond the ones the scene had show samples it is
+ * not already showing, as the stepper's do (D-150) — never repeats of the
+ * person's photo. A scene with no spots at all, such as one moving off a
+ * design of words alone, starts on the new design's own number of samples
+ * (`default`) rather than drawing empty frames: samples are fetched when a
+ * scene names them, so these ids are never strangers to the media store.
  */
 export function fitPhotos(
   photos: readonly PhotoInput[],
-  slots: { min: number; max: number },
+  slots: { min: number; max: number; default?: number },
 ): readonly PhotoInput[] {
-  if (photos.length === 0) return photos;
-
-  const target = Math.round(clamp(photos.length, slots.min, slots.max));
+  const wanted = photos.length === 0 ? (slots.default ?? slots.min) : photos.length;
+  const target = Math.round(clamp(wanted, slots.min, slots.max));
   if (target === photos.length) return photos;
   if (target < photos.length) return photos.slice(0, target);
-
-  const grown = [...photos];
-  while (grown.length < target) {
-    const source = photos[grown.length % photos.length];
-    if (!source) break;
-    grown.push(source);
-  }
-  return grown;
+  return grownWithSamples(photos, target);
 }
 
 export function setDuration(durationMs: number, bounds: { min: number; max: number }): Action {

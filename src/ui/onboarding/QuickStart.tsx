@@ -45,7 +45,7 @@ function Tour(): React.JSX.Element | null {
   const { tour } = WORKSPACES[useWorkspace()];
   const steps: readonly Step[] = [
     { target: 'design', title: 'Choose a design', body: tour.design === null ? `${phone ? 'Tap' : 'Click'} here and pick a look — a post, a product, a story told in words…` : phone ? tour.design.phone : tour.design.wide, done: designChosen },
-    ...(tour.skipPhotos ? [] : [{ target: 'photos', title: 'Add your photos', body: tour.photos ?? 'Choose photos or take one. They fill the design, and stay in Your photos for later.', done: photosAdded }]),
+    ...(tour.skipPhotos ? [] : [{ target: 'photos', title: 'Add your photos', body: tour.photos ?? 'Choose photos or take one. Each takes the place of a sample photo, and they stay in Your photos for later.', done: photosAdded }]),
     { target: 'export', title: 'Export your video', body: `${phone ? 'Tap' : 'Click'} any words on the picture to make them yours, then export here.`, done: exported },
   ];
   const index = steps.findIndex((step) => !step.done);

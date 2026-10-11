@@ -33,12 +33,18 @@ export function Toast(): React.JSX.Element | null {
 
   if (toast === null) return null;
 
+  /*
+   * Centred by the `toast-in-out` animation's own translate(-50%). A
+   * `-translate-x-1/2` here as well moved it half its width again, so a long
+   * notice on a phone — "Your 3 photos replaced 3 samples." — started off the
+   * left edge of the screen (D-150).
+   */
   return (
     <div
       key={toast.id}
       role="status"
       data-toast
-      className="toast pointer-events-none fixed left-1/2 z-[60] flex w-max max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2 rounded-md px-3 py-2 text-[12px]"
+      className="toast pointer-events-none fixed left-1/2 z-[60] flex w-max max-w-[calc(100vw-32px)] items-center gap-2 rounded-md px-3 py-2 text-[12px]"
       style={{
         // On a phone, under the top bar: the bottom of the screen is the toolbar.
         ...(phone ? { top: 'calc(env(safe-area-inset-top, 0px) + 60px)' } : { bottom: 64 }),
