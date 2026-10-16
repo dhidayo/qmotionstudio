@@ -195,6 +195,8 @@ export type Pose = {
   readonly turnY?: number;
   readonly turnX?: number;
   readonly blur?: number;
+  /** How dark the card is drawn, 0 to 1 (D-157): out of focus, it steps back. */
+  readonly shade?: number;
 };
 
 /**
@@ -220,8 +222,8 @@ export function sampled(
 ): Tracks {
   const steps = Math.max(1, Math.ceil((toMs - fromMs) / stepMs));
   let previous: { x: number; y: number } | null = null;
-  const keys = { x: [] as Keyframe[], y: [] as Keyframe[], scaleX: [] as Keyframe[], scaleY: [] as Keyframe[], rotation: [] as Keyframe[], opacity: [] as Keyframe[], z: [] as Keyframe[], turnY: [] as Keyframe[], turnX: [] as Keyframe[], blur: [] as Keyframe[] };
-  const used = { scaleX: false, scaleY: false, rotation: false, opacity: false, z: false, turnY: false, turnX: false, blur: false };
+  const keys = { x: [] as Keyframe[], y: [] as Keyframe[], scaleX: [] as Keyframe[], scaleY: [] as Keyframe[], rotation: [] as Keyframe[], opacity: [] as Keyframe[], z: [] as Keyframe[], turnY: [] as Keyframe[], turnX: [] as Keyframe[], blur: [] as Keyframe[], shade: [] as Keyframe[] };
+  const used = { scaleX: false, scaleY: false, rotation: false, opacity: false, z: false, turnY: false, turnX: false, blur: false, shade: false };
   for (let i = 0; i <= steps; i++) {
     const ms = Math.min(toMs, fromMs + i * stepMs);
     const t = ms - fromMs;
@@ -247,6 +249,7 @@ export function sampled(
     keys.turnY.push(kf(t, pose.turnY ?? 0, 'linear'));
     keys.turnX.push(kf(t, pose.turnX ?? 0, 'linear'));
     keys.blur.push(kf(t, pose.blur ?? 0, 'linear'));
+    keys.shade.push(kf(t, pose.shade ?? 0, 'linear'));
     if (sx !== 1) used.scaleX = true;
     if (sy !== 1) used.scaleY = true;
     if ((pose.rotation ?? 0) !== 0) used.rotation = true;
@@ -255,6 +258,7 @@ export function sampled(
     if ((pose.turnY ?? 0) !== 0) used.turnY = true;
     if ((pose.turnX ?? 0) !== 0) used.turnX = true;
     if ((pose.blur ?? 0) > 0.01) used.blur = true;
+    if ((pose.shade ?? 0) > 0.005) used.shade = true;
   }
   return {
     x: keys.x,
@@ -267,6 +271,7 @@ export function sampled(
     ...(used.turnY ? { turnY: keys.turnY } : {}),
     ...(used.turnX ? { turnX: keys.turnX } : {}),
     ...(used.blur ? { blur: keys.blur } : {}),
+    ...(used.shade ? { shade: keys.shade } : {}),
   };
 }
 
@@ -377,4 +382,133 @@ export function cardCount(inputs: SceneInputs, variant: SceneVariant, floor = 3)
 /** A stage much taller than it is wide — a story frame — where arrangements grow to use the height. */
 export function isTall(stage: Stage): boolean {
   return stage.h > stage.w * 1.3;
+}
+
+// ── Emphasis (D-157) ────────────────────────────────────────────────────────
+//
+// Every design has a subject. Where several photos share the frame, one is in
+// focus at every moment: as a photo reaches the focus point — the front of a
+// ring, the middle of a coverflow, its turn in a grid — it grows to fill it,
+// turns to face you and comes in front, while the others step back and
+// darken. It lingers there, then gives way to the next. One curve, one size
+// and one darkening, shared by every family, so the library speaks one
+// emphasis language.
+
+/**
+ * The shared numbers. `peak` is the focused card's size against its own base
+ * size (always clamped with `roomFor`, so it never leaves the stage); `rest`
+ * is what the others shrink to; `dim` how dark they are drawn; `lift` how far
+ * forward the focused card comes in a depth group; `reach` how many card
+ * spacings either side of the focus point a card still feels it; `hold` how
+ * much a moving arrangement slows at each focus (0 never, 1 stops).
+ */
+export const FOCUS = { peak: 1.45, rest: 0.86, dim: 0.4, lift: 4, reach: 0.75, hold: 0.65 } as const;
+
+/** Ken Perlin's smootherstep: flat at both ends, so a card arrives at full focus without a kink. */
+const smoother = (x: number): number => {
+  const u = clamp01(x);
+  return u * u * u * (u * (u * 6 - 15) + 10);
+};
+
+/** How in focus a card is, `distance` card spacings from the focus point: 1 there, 0 at `reach` and beyond. */
+export function focusCurve(distance: number, reach: number = FOCUS.reach): number {
+  return smoother(1 - Math.min(1, Math.abs(distance) / reach));
+}
+
+/**
+ * A clock in card steps that glides but lingers at every whole step:
+ * `linger(k) === k` for whole k, `linger(p + 1) === linger(p) + 1`, and at a
+ * whole step it moves at `1 - hold` of its average speed. Never runs
+ * backwards for `hold <= 1`.
+ */
+export function linger(position: number, hold: number = FOCUS.hold): number {
+  return position - (hold * Math.sin(2 * Math.PI * position)) / (2 * Math.PI);
+}
+
+/** A step offset wrapped into [-n/2, n/2): how far card `i` is from the focus on a loop of `n`. */
+export function wrapSteps(d: number, n: number): number {
+  if (n <= 0) return d;
+  let x = d % n;
+  if (x < -n / 2) x += n;
+  if (x >= n / 2) x -= n;
+  return x;
+}
+
+/**
+ * Focus by turns, for arrangements that hold still: card `index` of `count`
+ * owns turn `index` of `[fromMs, toMs)`, with smooth shoulders `edge` turns
+ * wide that cross at 0.5, so exactly one card is in focus at every moment
+ * inside the window. Outside it nobody is (an entrance or an exit is its own
+ * show), unless `wrap`, when the window is the whole loop and the last turn
+ * hands back to the first.
+ */
+export function turnFocus(
+  ms: number,
+  index: number,
+  count: number,
+  fromMs: number,
+  toMs: number,
+  edge = 0.22,
+  wrap = false,
+): number {
+  if (count <= 1) return 1;
+  const span = toMs - fromMs;
+  if (span <= 0) return 0;
+  if (!wrap && (ms < fromMs || ms > toMs)) return 0;
+  const local = ((ms - fromMs) / span) * count;
+  let d = local - (index + 0.5);
+  if (wrap) d = wrapSteps(d, count);
+  return smoother((0.5 + edge / 2 - Math.abs(d)) / edge);
+}
+
+/**
+ * The largest size, up to `wanted`, a card of `box` (its own unscaled w/h)
+ * can take centred at `at` and still lie inside `stage` — so the focused card
+ * never crosses the headline or the content floor. Never below 1.
+ */
+export function roomFor(stage: Stage, at: { x: number; y: number }, box: { w: number; h: number }, wanted: number = FOCUS.peak): number {
+  const fx = box.w > 0 ? Math.min(at.x - (stage.cx - stage.w / 2), stage.cx + stage.w / 2 - at.x) / (box.w / 2) : wanted;
+  const fy = box.h > 0 ? Math.min(at.y - (stage.cy - stage.h / 2), stage.cy + stage.h / 2 - at.y) / (box.h / 2) : wanted;
+  return Math.max(1, Math.min(wanted, fx, fy));
+}
+
+/**
+ * A pose with emphasis applied. In focus (`f` = 1): `peak` size, facing the
+ * viewer, unblurred, unshaded and lifted forward. Out of focus (`f` = 0): its
+ * own size × `FOCUS.rest`, darkened by `FOCUS.dim`. `straighten` (0 to 1)
+ * also turns a tilted card upright as it comes into focus.
+ */
+export function emphasise(pose: Pose, f: number, peak: number = FOCUS.peak, options: { readonly straighten?: number } = {}): Pose {
+  const k = clamp01(f);
+  const sx = pose.scaleX ?? pose.scale ?? 1;
+  const sy = pose.scaleY ?? pose.scale ?? 1;
+  return {
+    x: pose.x,
+    y: pose.y,
+    scaleX: lerp(sx * FOCUS.rest, peak * (sx / Math.max(sx, sy)), k),
+    scaleY: lerp(sy * FOCUS.rest, peak * (sy / Math.max(sx, sy)), k),
+    rotation: lerp(pose.rotation ?? 0, 0, k * (options.straighten ?? 0)),
+    opacity: lerp(pose.opacity ?? 1, 1, k),
+    z: (pose.z ?? 0) + k * FOCUS.lift,
+    turnY: lerp(pose.turnY ?? 0, 0, k),
+    turnX: lerp(pose.turnX ?? 0, 0, k),
+    blur: lerp(pose.blur ?? 0, 0, k),
+    shade: Math.max(pose.shade ?? 0, (1 - k) * FOCUS.dim),
+  };
+}
+
+/** A grid visited in reading order that snakes — left to right, then right to left — so a moving focus never jumps across the sheet. */
+export function serpentine(col: number, row: number, cols: number): number {
+  return row * cols + (row % 2 === 0 ? col : cols - 1 - col);
+}
+
+/**
+ * For hand-keyframed templates: a track kept as written up to `afterMs` (an
+ * entrance), held there, then continued with `keys` — the focus beats.
+ */
+export function appendAfter(track: readonly Keyframe[], afterMs: number, keys: readonly Keyframe[]): Keyframe[] {
+  const kept = track.filter((k) => k.t <= afterMs);
+  const last = kept[kept.length - 1];
+  if (last && last.t < afterMs) kept.push(kf(afterMs, last.v, 'linear'));
+  return [...kept, ...keys.filter((k) => k.t > afterMs)];
 }

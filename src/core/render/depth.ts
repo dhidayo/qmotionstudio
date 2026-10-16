@@ -34,6 +34,18 @@ const EDGE = 0.02;
 
 export type Turn = { readonly a: number; readonly b: number; readonly c: number; readonly d: number; readonly shade: number };
 
+/**
+ * How dark to draw a layer that is both turned away (D-117) and stepped back
+ * out of focus (D-157). Two darkenings combine the way two tinted glasses do —
+ * each lets through a share of what the other left — so the result never
+ * passes 1 and never doubles up on a card that is both.
+ */
+export function combinedShade(turnShade: number, shade: number): number {
+  const a = turnShade < 0 ? 0 : turnShade > 1 ? 1 : turnShade;
+  const b = shade < 0 ? 0 : shade > 1 ? 1 : shade;
+  return 1 - (1 - a) * (1 - b);
+}
+
 /** The transform and shading for a layer turned `turnY`° about its vertical axis and `turnX`° about its horizontal. */
 export function turnOf(turnY: number, turnX: number): Turn | null {
   if (turnY === 0 && turnX === 0) return null;

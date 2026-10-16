@@ -4,7 +4,7 @@ import { ellipsePath, roundedRectPath } from '@/core/math/geometry';
 import { activeElementFx, applyElementMotion, type ActiveElementFx } from '@/core/effects/run';
 import type { ElementBox } from '@/core/effects/types';
 import { withBlur } from './blur';
-import { depthOrdered, turnOf } from './depth';
+import { combinedShade, depthOrdered, turnOf } from './depth';
 import { withIsolation, type Glow } from './isolate';
 import { drawShape } from './layers/shape';
 import { drawGradient } from './layers/gradient';
@@ -80,14 +80,16 @@ export function drawLayer(dc: DrawContext, layer: Layer, sceneTimeMs: number): v
   const anchorY = layer.anchorY ?? 0.5;
   const originX = -box.w * anchorX;
   const originY = -box.h * anchorY;
+  // Turned away (D-117) and stepped back out of focus (D-157), as one darkening.
+  const dark = combinedShade(turn?.shade ?? 0, props.shade);
 
   const paint = (): void => {
     paintLayer(dc, layer, originX, originY, localMs, props);
-    if (turn && turn.shade > 0.01) shadeTurned(dc, layer, originX, originY, box, turn.shade);
+    if (dark > 0.01) darken(dc, layer, originX, originY, box, dark);
   };
 
   if (fx) {
-    drawWithEffects(dc, layer, fx, originX, originY, localMs, props, box);
+    drawWithEffects(dc, layer, fx, originX, originY, localMs, props, box, dark);
     ctx.restore();
     return;
   }
@@ -95,7 +97,7 @@ export function drawLayer(dc: DrawContext, layer: Layer, sceneTimeMs: number): v
   if (props.blur > 0.001) {
     withBlur(ctx, props.blur, { x: originX, y: originY, w: box.w, h: box.h }, dc.depth, (target) => {
       paintLayer({ ...dc, ctx: target }, layer, originX, originY, localMs, props);
-      if (turn && turn.shade > 0.01) shadeTurned({ ...dc, ctx: target }, layer, originX, originY, box, turn.shade);
+      if (dark > 0.01) darken({ ...dc, ctx: target }, layer, originX, originY, box, dark);
     });
   } else {
     paint();
@@ -251,6 +253,7 @@ function drawWithEffects(
   localMs: number,
   props: MutableProps,
   box: { w: number; h: number },
+  dark: number,
 ): void {
   const { ctx } = dc;
   const ebox = elementBox(dc, layer, originX, originY, localMs);
@@ -274,9 +277,11 @@ function drawWithEffects(
     if (props.blur > 0.001) {
       withBlur(target, props.blur, { x: originX, y: originY, w: box.w, h: box.h }, dc.depth, (blurred) => {
         paintLayer({ ...dc, ctx: blurred }, layer, originX, originY, localMs, props);
+        if (dark > 0.01) darken({ ...dc, ctx: blurred }, layer, originX, originY, box, dark);
       });
     } else {
       paintLayer(into, layer, originX, originY, localMs, props);
+      if (dark > 0.01) darken(into, layer, originX, originY, box, dark);
     }
   };
 
@@ -299,12 +304,13 @@ function drawWithEffects(
   }
 }
 
-/** Children of a group are drawn with time relative to the group, not the scene. */
 /**
- * Darkens a turned picture or panel by how far it faces away (D-117), clipped
- * to its own shape so rounded corners stay rounded.
+ * Darkens a picture or panel — by how far it faces away (D-117) and how far it
+ * has stepped back out of focus (D-157) — clipped to its own shape so rounded
+ * corners stay rounded. Text and groups are left as they are: a darkened
+ * caption reads as a mistake, not as distance.
  */
-function shadeTurned(
+function darken(
   dc: DrawContext,
   layer: Layer,
   x: number,

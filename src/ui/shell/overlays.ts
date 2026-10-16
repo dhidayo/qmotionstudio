@@ -59,6 +59,18 @@ export type PhonePanel =
   | 'designs' | 'photos' | 'text' | 'motion' | 'effects' | 'style' | 'add'
   | 'project' | 'aspect' | 'element' | 'timeline' | 'scene';
 
+/**
+ * The elements picker (D-158): shapes, stickers and numbers. Opens on a
+ * category — "+ Shape" in the add bar opens on shapes — or, with `replace`,
+ * swaps the content of an element already on the picture.
+ */
+export type ElementPickerCategory = 'Shapes' | 'Stickers' | 'Numbers';
+export type ElementPickerState = {
+  readonly category?: ElementPickerCategory;
+  /** The overlay whose content a pick replaces (Change sticker…), instead of adding one. */
+  readonly replace?: string;
+};
+
 /** Zoom and pan of the preview on a phone, from a pinch. 1 is fitted to the screen. */
 export type ViewZoom = { readonly scale: number; readonly x: number; readonly y: number };
 
@@ -103,6 +115,12 @@ type OverlayState = {
   closeMenu: () => void;
   openPicker: (picker: PickerState) => void;
   closePicker: () => void;
+  /** The sound library (D-156): background sounds and effects. */
+  soundPicker: boolean;
+  openSoundPicker: (open: boolean) => void;
+  /** The elements picker (D-158). */
+  elementPicker: ElementPickerState | null;
+  openElementPicker: (state: ElementPickerState | null) => void;
 };
 
 export const useOverlays = create<OverlayState>((set) => ({
@@ -133,4 +151,8 @@ export const useOverlays = create<OverlayState>((set) => ({
   closeMenu: () => { set({ menu: null }); },
   openPicker: (picker) => { set({ picker, menu: null }); },
   closePicker: () => { set({ picker: null }); },
+  soundPicker: false,
+  openSoundPicker: (soundPicker) => { set({ soundPicker, menu: null }); },
+  elementPicker: null,
+  openElementPicker: (elementPicker) => { set({ elementPicker, menu: null }); },
 }));

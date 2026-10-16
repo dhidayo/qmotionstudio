@@ -87,7 +87,14 @@ export type AnimatedProp =
    * about its vertical and horizontal axes, in degrees: foreshortened and
    * shaded, the way a card on a carousel faces away from the camera.
    */
-  | 'z' | 'turnX' | 'turnY';
+  | 'z' | 'turnX' | 'turnY'
+  /*
+   * Emphasis (D-157). How dark a picture or panel is drawn, 0 to 1: the photos
+   * out of focus step back by darkening rather than fading, so a light look
+   * does not wash them out and overlapping cards never show through each
+   * other. Combined with the turn shading, never added to it.
+   */
+  | 'shade';
 
 /**
  * Resolved animated values at an instant. Named PropValues rather than
