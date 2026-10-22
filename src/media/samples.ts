@@ -1,3 +1,4 @@
+import type { Project } from '@/document/types';
 import { decodeImage } from './image/decode';
 import type { MediaStore } from './store';
 
@@ -55,6 +56,28 @@ export function sampleNameOf(mediaId: string): SampleName | null {
   if (!isSampleId(mediaId)) return null;
   const name = mediaId.slice('sample:'.length);
   return (SAMPLE_NAMES as readonly string[]).includes(name) ? (name as SampleName) : null;
+}
+
+/**
+ * The samples a project shows — on its scenes' photo spots and as photos on
+ * top — once each, sorted. What the editor fetches for the document it is
+ * showing, and what a live library preview fetches for its trial copy (D-160).
+ */
+export function sampleNamesIn(project: Project): readonly SampleName[] {
+  const names = new Set<SampleName>();
+  for (const scene of project.scenes) {
+    for (const photo of scene.inputs.photos) {
+      const name = sampleNameOf(photo.mediaId);
+      if (name) names.add(name);
+    }
+  }
+  for (const overlay of project.overlays) {
+    // Text, and anything else drawn without a picture, has no media to fetch.
+    if (!('mediaId' in overlay.content)) continue;
+    const name = sampleNameOf(overlay.content.mediaId);
+    if (name) names.add(name);
+  }
+  return [...names].sort();
 }
 
 /**

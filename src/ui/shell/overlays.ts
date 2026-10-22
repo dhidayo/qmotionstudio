@@ -15,8 +15,14 @@ export type MenuItem =
   | {
       readonly kind?: 'item';
       readonly label: string;
-      /** A short line under the label: what it does, or the shortcut. */
+      /** A short line under the label: what it does. */
       readonly hint?: string;
+      /**
+       * The key or gesture that does the same, device-neutral ("mod+D",
+       * "Enter", "double-click"): shown as this device writes it, and not at
+       * all on one with no keyboard (D-161). A `hint` wins over it.
+       */
+      readonly keys?: string;
       readonly danger?: boolean;
       readonly disabled?: boolean;
       readonly onSelect: () => void;

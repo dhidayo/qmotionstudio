@@ -100,7 +100,8 @@ test.describe('the phone layout', () => {
 
   test('"Choose a design": designs play by themselves, and a tap previews before it changes anything', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
-    await open(page, LIFESTYLE);
+    // Tall, the shape most loops were recorded in: a card only plays its loop in its own shape (D-160).
+    await open(page, LIFESTYLE.replace('aspect=1:1', 'aspect=9:16'));
     const before = await page.evaluate(() =>
       (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { scenes: { templateId: string }[] } } } } })
         .__motionStudio.editor.getState().project.scenes[0]?.templateId);
@@ -123,6 +124,46 @@ test.describe('the phone layout', () => {
     await expect.poll(() => page.evaluate(() =>
       (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { scenes: { templateId: string }[] } } } } })
         .__motionStudio.editor.getState().project.scenes[0]?.templateId)).not.toBe(before);
+  });
+
+  /*
+   * "When I click choose a design, it should take the aspect ratio when it is
+   * telling me to select it" (D-160). At 4:5 — where every purpose opens —
+   * cards show their still in that shape rather than a tall loop boxed in it,
+   * and the large preview draws the design live in the 4:5 frame.
+   */
+  test('"Choose a design" at 4:5: cards and the large preview take the project\'s frame shape (D-160)', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
+    await open(page, LIFESTYLE.replace('aspect=1:1', 'aspect=4:5'));
+    await page.locator('[data-start-actions]').getByRole('button', { name: 'Choose a design' }).tap();
+    const sheet = page.getByRole('dialog', { name: 'Choose a design' });
+    await expect(sheet).toBeVisible();
+
+    const card = sheet.locator('[data-design-card][aria-pressed="false"]').first();
+    await expect(card.locator('[data-card-shape="4:5"]')).toHaveCount(1);
+    await expect(card.locator('img').first()).toHaveAttribute('src', /\.4x5\.webp/);
+    // No loop of another shape plays boxed inside a 4:5 card.
+    const boxed = await sheet.evaluate((root) => [...root.querySelectorAll<HTMLVideoElement>('video')]
+      .filter((video) => !video.paused && video.closest('[data-card-shape="4:5"]') !== null)
+      .filter((video) => Math.abs(video.videoWidth / Math.max(1, video.videoHeight) - 0.8) > 0.02).length);
+    expect(boxed).toBe(0);
+
+    await card.tap();
+    const preview = page.getByRole('dialog', { name: /^Preview of / });
+    await expect(preview).toBeVisible();
+    await expect(preview.locator('[data-design-preview-shape="4:5"]')).toBeVisible();
+    const live = preview.locator('canvas[data-live-preview="4:5"]');
+    await expect(live).toBeVisible({ timeout: 15_000 });
+    await expect.poll(async () => {
+      const box = await live.boundingBox();
+      return box ? box.width / box.height : 0;
+    }).toBeCloseTo(0.8, 1);
+    // Drawn, not a blank canvas: the still steps away once the first frame lands.
+    await expect.poll(() => live.evaluate((canvas) => getComputedStyle(canvas).opacity)).toBe('1');
+
+    await preview.getByRole('button', { name: 'Use this design' }).tap();
+    await expect(sheet).toHaveCount(0);
+    await expect(page.locator('[data-phone-aspect]')).toContainText('4:5');
   });
 
   test('the toolbar becomes the selection\'s tools, and Done puts it down', async ({ page }) => {
@@ -277,11 +318,20 @@ test.describe('nothing pushed off a short phone screen (D-136)', () => {
       await page.waitForTimeout(800);
       await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Designs' }).click();
       await page.locator(`[data-design-card="${card}"]`).click();
-      const use = page.getByRole('button', { name: 'Use this design' });
+      // A film's button says what it is (D-160): a whole video template, not one design.
+      const use = page.getByRole('button', { name: mode === 'Video' ? 'Use this video template' : 'Use this design' });
       await expect(use).toBeVisible();
       const box = await use.boundingBox();
       expect(box).not.toBeNull();
       expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(600);
+      // A film says what it replaces, under its button and on screen too (D-160).
+      const replaces = page.locator('[data-design-preview-replaces]');
+      if (mode === 'Video') {
+        await expect(replaces).toHaveText(/^Replaces your \d+ scenes$/);
+        await expect(replaces).toBeInViewport({ ratio: 1 });
+      } else {
+        await expect(replaces).toHaveCount(0);
+      }
       // And the picture never covers it.
       const picture = await page.locator('[data-design-preview-actions]').evaluate((el) => {
         const r = el.getBoundingClientRect();

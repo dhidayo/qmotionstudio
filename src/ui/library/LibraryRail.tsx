@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { Aspect } from '@/core/types';
 import { aspectPosterUrl, posterUrl, previewUrl, templatesForMode, type TemplateSummary } from '@/templates/manifest';
 import { lookPreset } from '@/templates/_shared/look';
 import { purposeOf } from '@/templates/purpose';
@@ -7,14 +8,20 @@ import { useEditor } from '@/state/store';
 import { useWorkspace } from '@/state/workspace';
 import { useStoredFolds, writeFolds } from './libraryFolds';
 import { useEntitlements } from '@/entitlements';
-import { PlayingPreview, noHover } from './PlayingPreview';
+import { usePreviewClock } from '@/ui/shell/ClockProvider';
+import { useLayout } from '@/ui/shell/useLayout';
+import { noHover } from './PlayingPreview';
+import { CardPicture, useHoverIntent } from './CardPicture';
+import { LivePreview } from './LivePreview';
+import { libraryTrial, useTrialProject } from './useTrialProject';
 
 /**
- * The template library (§1.1): grouped by category, with search, a free/pro
- * filter and favourites.
+ * The template library (§1.1): grouped by purpose (D-143, D-160), with search,
+ * a free/pro filter and favourites.
  *
- * Cards show the generated poster and swap to the looping preview on hover,
- * which is what `npm run thumbs` produces both of for.
+ * Cards show the generated still in the project's frame shape, and move only
+ * in that shape (D-160): the recorded loop where it was made in it, or, with a
+ * mouse resting on a card, the design drawn live with the person's own work.
  */
 export function LibraryRail({
   variant = 'rail',
@@ -50,6 +57,7 @@ export function LibraryRail({
    * whose meaning depends on a switch elsewhere in the chrome.
    */
   const mode = useEditor((s) => s.project.mode);
+  const shape = useEditor((s) => s.project.aspect);
 
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -62,14 +70,13 @@ export function LibraryRail({
     });
   }, [mode, search, tierFilter, showFavourites, favourites]);
 
-  // By purpose — what it is for — unless the person chose to browse by look (D-143).
-  const [groupBy, setGroupBy] = useGroupBy();
-  // Set out for the person (D-149): their groups first, a few picks above them.
+  // By purpose — what it is for (D-143), on every device (D-160) — set out for
+  // the person (D-149): their groups first, a few picks above them.
   const workspace = useWorkspace();
   const narrowed = search.trim().length > 0 || tierFilter !== 'all' || showFavourites;
   const layout = useMemo(
-    () => libraryGroups({ templates: visible, workspace, kind: mode === 'motionAd' ? 'ad' : 'scene', groupBy, narrowed }),
-    [visible, workspace, mode, groupBy, narrowed],
+    () => libraryGroups({ templates: visible, workspace, kind: mode === 'motionAd' ? 'ad' : 'scene', narrowed }),
+    [visible, workspace, mode, narrowed],
   );
   const sections: readonly { readonly name: string; readonly templates: readonly TemplateSummary[]; readonly featured: boolean }[] = [
     ...(layout.startHere.length > 0 ? [{ name: START_HERE, templates: layout.startHere, featured: true }] : []),
@@ -118,9 +125,10 @@ export function LibraryRail({
         />
       )}
       {/*
-        * The header in two rows (D-150): search with the favourites star beside
-        * it, then the Free/Pro filter, the grouping and one icon to fold or open
-        * every group — nothing cut short at the rail's narrowest.
+        * The header in two rows (D-150): search with the favourites star and
+        * one icon to fold or open every group beside it, then the Free/Pro
+        * filter — nothing cut short at the rail's narrowest. The groups are
+        * always by purpose (D-160), so there is no grouping switch.
         */}
       <div className={sheet ? 'pb-2' : 'border-b border-edge p-3'} data-library-header>
         <div className="flex items-center gap-1.5">
@@ -171,16 +179,17 @@ export function LibraryRail({
               />
             ))}
           </div>
-          <button
-            type="button"
-            data-group-by
-            onClick={() => { setGroupBy(groupBy === 'purpose' ? 'style' : 'purpose'); }}
-            title={groupBy === 'purpose' ? 'Grouped by what each design is for. Click to group by how it looks.' : 'Grouped by how each design looks. Click to group by what it is for.'}
-            className={`whitespace-nowrap rounded-md border border-edge px-2 text-ink-muted hover:bg-panel-alt ${sheet ? 'h-9 text-[13px]' : 'h-7 text-[11px]'}`}
-          >
-            By {groupBy === 'purpose' ? 'purpose' : 'style'}
-          </button>
         </div>
+        {/*
+          * A video template is a whole film, not a scene (D-160). In Video,
+          * choosing one was read as adding a scene, and it replaced every
+          * scene the person had made; this says so before anything is picked.
+          */}
+        {mode === 'motionAd' && (
+          <p data-library-note className={`mt-2 leading-snug text-ink-muted ${sheet ? 'text-[13px]' : 'text-[11px]'}`}>
+            A video template is a whole video — several scenes. Using one replaces your scenes. To add one scene, use Add a scene.
+          </p>
+        )}
       </div>
 
       <div className={sheet ? 'pt-1' : 'flex-1 overflow-y-auto p-3'}>
@@ -220,23 +229,42 @@ export function LibraryRail({
                 <p className={`mt-1.5 px-1 text-ink-faint ${sheet ? 'text-[12px]' : 'text-[10px]'}`}>{caption} · every design is still below</p>
               )}
               {open && (
-              <div id={id} className={`mt-2 ${sheet ? 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4' : 'grid grid-cols-2 gap-2'}`}>
+              <div
+                id={id}
+                /*
+                 * In the sheet, Start here is one row that scrolls sideways
+                 * (D-160): as a grid it filled the phone's first screen, so the
+                 * purpose groups — the part that changes with the purpose — were
+                 * out of sight below it. The next card peeks in at the edge.
+                 */
+                {...(sheet && section.featured ? { 'data-start-here-row': '' } : {})}
+                className={`mt-2 ${sheet
+                  ? section.featured
+                    ? 'flex snap-x snap-mandatory gap-2.5 overflow-x-auto overscroll-x-contain pb-1'
+                    : 'grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4'
+                  : 'grid grid-cols-2 gap-2'}`}
+              >
                 {section.templates
-                  .map((template) => (
-                    <TemplateCard
-                      key={template.id}
-                      template={template}
-                      featured={section.featured}
-                      active={template.id === currentId}
-                      favourite={favourites.includes(template.id)}
-                      autoplay={sheet}
-                      onSelect={() => {
-                        if (sheet) setPreviewing(template);
-                        else { setTemplate(template.id); onPicked?.(); }
-                      }}
-                      onToggleFavourite={() => { toggleFavourite(template.id); }}
-                    />
-                  ))}
+                  .map((template) => {
+                    const card = (
+                      <TemplateCard
+                        key={template.id}
+                        template={template}
+                        featured={section.featured}
+                        active={template.id === currentId}
+                        favourite={favourites.includes(template.id)}
+                        autoplay={sheet}
+                        onSelect={() => {
+                          if (sheet) setPreviewing(template);
+                          else { setTemplate(template.id); onPicked?.(); }
+                        }}
+                        onToggleFavourite={() => { toggleFavourite(template.id); }}
+                      />
+                    );
+                    return sheet && section.featured
+                      ? <div key={template.id} className={`shrink-0 snap-start ${startHereWidth(shape)}`}>{card}</div>
+                      : card;
+                  })}
               </div>
               )}
             </section>
@@ -248,28 +276,15 @@ export function LibraryRail({
   );
 }
 
+/** A card's width in the sheet's sideways Start here row: narrower for a tall frame, so the row stays short. */
+function startHereWidth(shape: Aspect): string {
+  return shape === '9:16' ? 'w-[36%] sm:w-[24%] lg:w-[18%]' : 'w-[44%] sm:w-[30%] lg:w-[23%]';
+}
+
 /** The background colour a design opens in, from its look. */
 export function groundOf(template: TemplateSummary): string {
   const look = template.look === undefined ? undefined : lookPreset(template.look);
   return look?.palette.bg ?? 'var(--c-panel-alt)';
-}
-
-const GROUP_KEY = 'ms.library.groupBy';
-
-/** Purpose or style, remembered on this device (D-143). */
-function useGroupBy(): ['purpose' | 'style', (next: 'purpose' | 'style') => void] {
-  const [groupBy, set] = useState<'purpose' | 'style'>(() => {
-    try {
-      return localStorage.getItem(GROUP_KEY) === 'style' ? 'style' : 'purpose';
-    } catch {
-      return 'purpose';
-    }
-  });
-  const choose = useCallback((next: 'purpose' | 'style'): void => {
-    set(next);
-    try { localStorage.setItem(GROUP_KEY, next); } catch { /* for this visit */ }
-  }, []);
-  return [groupBy, choose];
 }
 
 function FilterChip({
@@ -329,12 +344,10 @@ function TemplateCard({
   // A screen with no hover has no other way to see a design move (point 4).
   const playsItself = autoplay || noHover();
   // The card takes the frame shape chosen above the picture (D-150): landscape
-  // for 16:9, tall for 9:16, with the design's still in that shape.
+  // for 16:9, tall for 9:16, with the design's still in that shape — and it
+  // only ever moves in that shape (D-160).
   const shape = useEditor((s) => s.project.aspect);
-  const still = aspectPosterUrl(template.id, shape);
-  const fallback = posterUrl(template.id);
-  // The moving loop was made in the design's first shape; in another it is shown whole, not cropped.
-  const loopFit = shape === (template.supportedAspects[0] ?? '9:16') ? 'cover' : 'contain';
+  const hover = useHoverIntent();
   const { limits } = useEntitlements();
   // §12: Pro templates are badged and selectable; the gate is on export, not
   // on looking. Locking the card would make the library feel smaller than it is.
@@ -347,6 +360,7 @@ function TemplateCard({
         onClick={onSelect}
         aria-pressed={active}
         {...(featured ? { 'data-featured-card': template.id } : { 'data-design-card': template.id })}
+        {...hover.bind}
         title={template.blurb}
         className="block w-full overflow-hidden rounded-md border text-left transition-colors"
         style={{
@@ -356,28 +370,7 @@ function TemplateCard({
       >
         {/* The design's own ground behind its picture (D-121), so even before the poster loads the card is the colour the design opens in. */}
         <span className="relative block w-full" data-card-shape={shape} style={{ background: groundOf(template), aspectRatio: shape.replace(':', ' / ') }}>
-          {playsItself ? <PlayingPreview id={template.id} still={still} fit={loopFit} /> : <>
-          <img
-            src={still}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            onError={(e) => { if (!e.currentTarget.src.includes(`/thumbs/${template.id}.webp`)) e.currentTarget.src = fallback; }}
-            className="absolute inset-0 size-full object-cover group-hover:opacity-0"
-          />
-          {/* The loop only loads on hover, so the library costs one poster per card. */}
-          <video
-            src={previewUrl(template.id)}
-            muted
-            loop
-            playsInline
-            preload="none"
-            aria-hidden
-            className={`absolute inset-0 size-full opacity-0 group-hover:opacity-100 ${loopFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-            onMouseEnter={(e) => { void e.currentTarget.play().catch(() => undefined); }}
-            onMouseLeave={(e) => { e.currentTarget.pause(); }}
-          />
-          </>}
+          <CardPicture template={template} shape={shape} playsItself={playsItself} resting={hover.resting} trial={libraryTrial} />
         </span>
         <span className="block px-1.5 py-1">
           <span
@@ -430,7 +423,14 @@ function TemplateCard({
   );
 }
 
-/** A design large enough to judge, before it replaces anything. */
+/**
+ * A design large enough to judge, before it replaces anything.
+ *
+ * Drawn live in the project's own frame shape, with the person's photos,
+ * words, look and logo (D-160): the change worked out here is the very one
+ * "Use this design" then makes. The design's still in that shape shows at
+ * once; the recorded loop stands in only if the design cannot be drawn.
+ */
 function DesignPreview({
   template,
   onBack,
@@ -442,6 +442,14 @@ function DesignPreview({
 }): React.JSX.Element {
   const { limits } = useEntitlements();
   const locked = template.tier === 'pro' && !limits.proTemplates;
+  const mode = useEditor((s) => s.project.mode);
+  const shape = useEditor((s) => s.project.aspect);
+  const sceneCount = useEditor((s) => s.project.scenes.length);
+  const phone = useLayout() === 'phone';
+  const trial = useTrialProject(template.id, libraryTrial);
+  useEditorHeld();
+  // A film replaces every scene (D-160); said here, before it does.
+  const replaces = template.kind === 'ad' && sceneCount > 1;
   return (
     <div
       role="dialog"
@@ -455,21 +463,37 @@ function DesignPreview({
         <button type="button" onClick={onBack} className="rounded-lg px-2 py-1.5 text-[14px] font-medium text-accent">
           ‹ Back
         </button>
-        <span className="min-w-0 flex-1 truncate text-center text-[15px] font-semibold">{template.name}</span>
+        <span className="min-w-0 flex-1 text-center">
+          <span className="block truncate text-[15px] font-semibold">{template.name}</span>
+          <span className="tabular block text-[11px] text-ink-faint">In your {shape} frame</span>
+        </span>
         <span className="w-14" />
       </div>
       {/* The picture takes whatever room is left and fits inside it; it never
           sets the height itself, so the button below can never be pushed off. */}
-      <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: 'var(--c-stage)' }}>
-        <video
-          src={previewUrl(template.id)}
-          poster={posterUrl(template.id)}
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-3 h-[calc(100%-24px)] w-[calc(100%-24px)] object-contain"
-        />
+      <div className="relative min-h-0 flex-1 overflow-hidden" style={{ background: 'var(--c-stage)' }} data-design-preview-shape={shape}>
+        <div className="absolute inset-3">
+          {trial.status === 'failed' ? (
+            // The design could not be drawn: its recorded loop, so the preview is never empty.
+            <video
+              src={previewUrl(template.id)}
+              poster={posterUrl(template.id)}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="size-full object-contain"
+            />
+          ) : (
+            <LivePreview
+              project={trial.status === 'ready' ? trial.project : null}
+              aspect={shape}
+              still={aspectPosterUrl(template.id, shape)}
+              maxShortEdge={phone ? PHONE_PREVIEW_EDGE : WINDOW_PREVIEW_EDGE}
+              rounded
+            />
+          )}
+        </div>
       </div>
       <div className="shrink-0 px-4 pb-3 pt-3" data-design-preview-actions>
         <p className="text-[13px] text-ink-muted">{template.blurb}</p>
@@ -484,9 +508,34 @@ function DesignPreview({
           onClick={onUse}
           className="mt-3 w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink"
         >
-          Use this design
+          {mode === 'motionAd' ? 'Use this video template' : 'Use this design'}
         </button>
+        {replaces && (
+          <p className="tabular mt-1.5 text-center text-[12px] text-ink-faint" data-design-preview-replaces>
+            Replaces your {sceneCount} scenes
+          </p>
+        )}
       </div>
     </div>
   );
+}
+
+/** The large preview's sharpest picture on a phone: the thumbnails' size, so it costs half the editor's (D-160). */
+const PHONE_PREVIEW_EDGE = 540;
+/** And in the tablet window, which is larger and further from the eye. */
+const WINDOW_PREVIEW_EDGE = 720;
+
+/**
+ * Holds the editor's playback still while the large preview is open (D-160)
+ * — one picture moving, not two, and no music under a silent preview — and
+ * lets it carry on afterwards if it was playing.
+ */
+function useEditorHeld(): void {
+  const clock = usePreviewClock();
+  useEffect(() => {
+    if (!clock) return;
+    const was = clock.playing;
+    clock.pause();
+    return () => { if (was) clock.play(); };
+  }, [clock]);
 }

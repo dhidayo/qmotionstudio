@@ -7,9 +7,11 @@ import { listProjects } from '@/persist/db';
 import { restoreMedia } from '@/persist/media';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { referencedMedia, userPhotoIds } from '@/document/select/media';
-import { PlayingPreview, noHover } from '@/ui/library/PlayingPreview';
+import { noHover } from '@/ui/library/PlayingPreview';
+import { CardPicture, useHoverIntent } from '@/ui/library/CardPicture';
+import { sceneAddTrial, sceneReplaceTrial } from '@/ui/library/useTrialProject';
 import { useEntitlements } from '@/entitlements';
-import { aspectPosterUrl, posterUrl, previewUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
+import { posterUrl, sceneTemplates, type TemplateSummary } from '@/templates/manifest';
 import { purposeOf } from '@/templates/purpose';
 import { groupOrder, orderWithin } from '@/templates/workspaces';
 import { useWorkspace } from '@/state/workspace';
@@ -240,6 +242,7 @@ export function ScenePicker({
                     loading={busy === template.id}
                     disabled={busy !== null}
                     onChoose={() => { void choose(template); }}
+                    trial={mode === 'add' ? sceneAddTrial : sceneReplaceTrial}
                   />
                 ))}
               </div>
@@ -349,6 +352,7 @@ function PickerCard({
   loading,
   disabled,
   onChoose,
+  trial,
 }: {
   template: TemplateSummary;
   current: boolean;
@@ -356,41 +360,29 @@ function PickerCard({
   loading: boolean;
   disabled: boolean;
   onChoose: () => void;
+  /** What a hovered card plays: the scene as adding or changing to this design would make it. */
+  trial: (templateId: string) => Promise<Project>;
 }): React.JSX.Element {
   const shape = useEditor((s) => s.project.aspect);
-  const loopFit = shape === (template.supportedAspects[0] ?? '9:16') ? 'cover' : 'contain';
+  const hover = useHoverIntent();
   return (
     <button
       type="button"
       onClick={onChoose}
       disabled={disabled}
+      {...hover.bind}
       title={template.blurb}
       aria-label={`${template.name}${pro ? ', Pro' : ''}${current ? ', current design' : ''}`}
       className="group relative block overflow-hidden rounded-md border text-left disabled:cursor-wait"
       style={{ borderColor: current ? 'var(--c-accent)' : 'var(--c-edge)' }}
     >
-      {/* In the frame shape of the video it joins (D-150). */}
+      {/*
+        * In the frame shape of the video it joins (D-150), and moving only in
+        * that shape: live with this scene's own work when a mouse rests on it
+        * (D-160).
+        */}
       <span className="relative block w-full" data-card-shape={shape} style={{ background: 'var(--c-panel-alt)', aspectRatio: shape.replace(':', ' / ') }}>
-        {noHover() ? <PlayingPreview id={template.id} still={aspectPosterUrl(template.id, shape)} fit={loopFit} /> : <>
-        <img
-          src={aspectPosterUrl(template.id, shape)}
-          alt=""
-          loading="lazy"
-          onError={(e) => { if (!e.currentTarget.src.includes(`/thumbs/${template.id}.webp`)) e.currentTarget.src = posterUrl(template.id); }}
-          className="absolute inset-0 size-full object-cover group-hover:opacity-0"
-        />
-        <video
-          src={previewUrl(template.id)}
-          muted
-          loop
-          playsInline
-          preload="none"
-          aria-hidden
-          className={`absolute inset-0 size-full opacity-0 group-hover:opacity-100 ${loopFit === 'contain' ? 'object-contain' : 'object-cover'}`}
-          onMouseEnter={(e) => { void e.currentTarget.play().catch(() => undefined); }}
-          onMouseLeave={(e) => { e.currentTarget.pause(); }}
-        />
-        </>}
+        <CardPicture template={template} shape={shape} playsItself={noHover()} resting={hover.resting} trial={trial} />
         {loading && (
           <span
             className="absolute inset-0 grid place-items-center text-[11px] font-semibold"

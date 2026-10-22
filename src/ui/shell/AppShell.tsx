@@ -17,7 +17,7 @@ import { Sheet } from './Sheet';
 import { useOverlays } from './overlays';
 import { useLayout } from './useLayout';
 import type { MediaStore } from '@/media/store';
-import { loadSamples, sampleNameOf, type SampleName } from '@/media/samples';
+import { loadSamples, sampleNamesIn, type SampleName } from '@/media/samples';
 import { loadTemplate } from '@/templates/registry';
 import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { renderParams } from '@/dev/renderParams';
@@ -253,21 +253,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
    * megabyte on photographs nobody has asked to see. The effect re-runs when
    * the reference set changes, and loadSamples skips what is already in.
    */
-  const neededSamples = useMemo(() => {
-    const names = new Set<SampleName>();
-    for (const scene of project.scenes) {
-      for (const photo of scene.inputs.photos) {
-        const name = sampleNameOf(photo.mediaId);
-        if (name) names.add(name);
-      }
-    }
-    for (const overlay of project.overlays) {
-      if (overlay.content.kind === 'text') continue;
-      const name = sampleNameOf(overlay.content.mediaId);
-      if (name) names.add(name);
-    }
-    return [...names].sort();
-  }, [project]);
+  const neededSamples = useMemo(() => sampleNamesIn(project), [project]);
 
   // Joined, so the effect compares by value rather than by array identity.
   const neededKey = neededSamples.join(',');

@@ -21,6 +21,7 @@ import { BottomSheet } from './BottomSheet';
 import { TierSwitch } from '@/ui/shell/TierSwitch';
 import { useProjectFile } from '@/ui/projects/useProjectFile';
 import { showQuickStart } from '@/ui/onboarding/quickStartState';
+import { readInputCaps } from '@/ui/shell/platform';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import * as actions from '@/document/actions';
 import { TRANSITION_LABELS } from '@/ui/timeline/transitionLabels';
@@ -257,6 +258,8 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
         {row('Save as a copy and keep working on it', () => { void saveAs(`${name} copy`); onClose(); })}
         {row('Make a copy', () => { void makeCopy(); onClose(); })}
         {row('Show the quick start', () => { showQuickStart(); onClose(); })}
+        {/* Help in the device's own terms (D-161): its gestures, or its keys once a keyboard is attached. */}
+        {row(readInputCaps().keyboard ? 'Keyboard shortcuts' : 'Touch gestures', () => { onClose(); useOverlays.getState().setShortcutsOpen(true); })}
         {row(theme === 'dark' ? 'Light theme' : 'Dark theme', () => { setTheme(theme === 'dark' ? 'light' : 'dark'); })}
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">

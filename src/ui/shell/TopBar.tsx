@@ -5,6 +5,7 @@ import type { SaveState } from '@/ui/persist/saveState';
 import { ProjectTitle } from '@/ui/projects/ProjectTitle';
 import { MODE_LABEL } from './modeLabels';
 import { useOverlays } from './overlays';
+import { chord, readInputCaps, useInputCaps } from './platform';
 import { useLayout } from './useLayout';
 import { useProjectActions } from '@/ui/projects/useProjectActions';
 import { useProjectFile } from '@/ui/projects/useProjectFile';
@@ -17,6 +18,7 @@ export function TopBar(): React.JSX.Element {
   const setTheme = useEditor((s) => s.setTheme);
   const save = useEditor((s) => s.saveState);
   const compact = useLayout() !== 'desktop';
+  const caps = useInputCaps();
 
   return (
     <header
@@ -96,15 +98,18 @@ export function TopBar(): React.JSX.Element {
         >
           {theme === 'dark' ? 'Light' : 'Dark'}
         </button>
-        <button
-          type="button"
-          onClick={() => { useOverlays.getState().setShortcutsOpen(true); }}
-          title="Keyboard shortcuts (?)"
-          aria-label="Keyboard shortcuts"
-          className="grid size-7 place-items-center rounded-md border border-edge text-[12px] font-semibold text-ink-muted hover:bg-panel-alt"
-        >
-          ?
-        </button>
+        {/* Only where there is a keyboard (D-161); a touch screen finds its gestures in the menu. */}
+        {caps.keyboard && (
+          <button
+            type="button"
+            onClick={() => { useOverlays.getState().setShortcutsOpen(true); }}
+            title="Keyboard shortcuts (?)"
+            aria-label="Keyboard shortcuts"
+            className="grid size-7 place-items-center rounded-md border border-edge text-[12px] font-semibold text-ink-muted hover:bg-panel-alt"
+          >
+            ?
+          </button>
+        )}
         <ExportButton />
       </div>
     </header>
@@ -113,12 +118,14 @@ export function TopBar(): React.JSX.Element {
 
 function ExportButton(): React.JSX.Element {
   const setExporting = useEditor((s) => s.setExporting);
+  // Its shortcut as this device writes it, and only where there is a keyboard (D-161).
+  const { keyboard } = useInputCaps();
   return (
     <button
       type="button"
       onClick={() => { setExporting(true); }}
       data-tour="export"
-      title="Export (⌘E)"
+      title={keyboard ? `Export (${chord('mod+E')})` : 'Export'}
       className="rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-accent-ink hover:bg-accent-hover"
     >
       Export
@@ -326,7 +333,10 @@ function AppMenu(): React.JSX.Element {
         { label: 'Make a copy', hint: 'A copy in your list; you stay here', onSelect: () => { void makeCopy(); } },
         { kind: 'separator' },
         { label: 'Show the quick start', onSelect: () => { showQuickStart(); } },
-        { label: 'Keyboard shortcuts', hint: '?', onSelect: () => { useOverlays.getState().setShortcutsOpen(true); } },
+        // The help that fits the device (D-161): its keys, or its gestures on a touch screen alone.
+        readInputCaps().keyboard
+          ? { label: 'Keyboard shortcuts', hint: '?', onSelect: () => { useOverlays.getState().setShortcutsOpen(true); } }
+          : { label: 'Touch gestures', onSelect: () => { useOverlays.getState().setShortcutsOpen(true); } },
         { label: theme === 'dark' ? 'Light theme' : 'Dark theme', onSelect: () => { setTheme(theme === 'dark' ? 'light' : 'dark'); } },
       ],
     });

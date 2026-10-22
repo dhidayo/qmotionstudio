@@ -667,3 +667,12 @@ export function aspectPosterUrl(id: string, aspect: Aspect): string {
 export function previewUrl(id: string): string {
   return `/thumbs/${id}.webm?v=${THUMBS_REVISION}`;
 }
+
+/**
+ * The frame shape a design's moving loop was recorded in: its first supported
+ * shape, as `npm run thumbs` records it. A card of any other shape shows its
+ * still in that shape rather than the loop boxed inside it (D-160).
+ */
+export function loopAspect(template: TemplateSummary): Aspect {
+  return template.supportedAspects[0] ?? '9:16';
+}

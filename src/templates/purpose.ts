@@ -6,8 +6,8 @@ import type { TemplateSummary } from './manifest';
  *
  * The categories say what a design looks like — a ring, a deck, a kinetic
  * line. An organisation arrives knowing what it needs to say: news, a price,
- * a hire, an event, a product. These are the groups the library opens on; the
- * old ones are a switch away for anyone browsing by look.
+ * a hire, an event, a product. These are the library's groups, always
+ * (D-160); a search still finds a design by its category.
  */
 export const DESIGN_PURPOSES = [
   'Headlines & hooks',

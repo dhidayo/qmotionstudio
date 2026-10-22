@@ -5,6 +5,7 @@ import { sceneLengthMs, sceneSpans, totalDurationMs } from '@/document/select/ti
 import { summaryFor } from '@/templates/manifest';
 import { useEditor } from '@/state/store';
 import { useOverlays, type MenuItem } from '@/ui/shell/overlays';
+import { undoSentence } from '@/ui/shell/platform';
 import type { Layout } from '@/ui/shell/useLayout';
 
 /**
@@ -16,9 +17,9 @@ import type { Layout } from '@/ui/shell/useLayout';
  * how to get it back.
  */
 
+/** "Press ⌘Z to undo." on a Mac, Ctrl+Z elsewhere, "Tap ↶" with no keyboard (D-161). */
 export function undoHint(): string {
-  const mac = typeof navigator !== 'undefined' && /mac|iphone|ipad/i.test(navigator.userAgent);
-  return mac ? 'Press ⌘Z to undo.' : 'Press Ctrl+Z to undo.';
+  return undoSentence();
 }
 
 export function overlayLabel(overlay: Overlay): string {
@@ -166,9 +167,9 @@ export function overlayMenu(overlay: Overlay, seek: Seek | null, atMs: number): 
   const target = { kind: 'overlay' as const, id: overlay.id };
   const name = overlay.kind === 'text' ? 'this caption' : 'this layer';
   const edit: MenuItem[] = overlay.content.kind === 'text'
-    ? [{ label: 'Edit text', hint: 'Enter', onSelect: () => { s.selectOverlay(overlay.id); o.openTextEdit(overlay.id); } }]
+    ? [{ label: 'Edit text', keys: 'Enter', onSelect: () => { s.selectOverlay(overlay.id); o.openTextEdit(overlay.id); } }]
     : overlay.content.kind === 'photo'
-      ? [{ label: 'Replace photo…', hint: 'Double-click', onSelect: () => { s.selectOverlay(overlay.id); o.openPhotoPicker({ kind: 'overlay', id: overlay.id }); } }]
+      ? [{ label: 'Replace photo…', keys: 'double-click', onSelect: () => { s.selectOverlay(overlay.id); o.openPhotoPicker({ kind: 'overlay', id: overlay.id }); } }]
       : [];
   return [
     ...edit,
@@ -177,13 +178,13 @@ export function overlayMenu(overlay: Overlay, seek: Seek | null, atMs: number): 
     { label: 'Exit effect…', onSelect: () => { s.selectOverlay(overlay.id); o.openPicker({ target: { kind: 'element', target, label: name }, category: 'Exit' }); } },
     { kind: 'separator' },
     ...(seek ? [{ label: 'Move playhead here', onSelect: () => { seek(atMs); } }] : []),
-    { label: 'Duplicate', hint: '⌘D', onSelect: () => { s.dispatch(actions.duplicateOverlay(overlay.id, totalDurationMs(s.project))); s.showToast(`Duplicated ${label}.`); } },
-    { label: 'Bring to front', hint: ']', onSelect: () => { s.dispatch(actions.arrangeOverlay(overlay.id, 'front')); } },
-    { label: 'Send to back', hint: '[', onSelect: () => { s.dispatch(actions.arrangeOverlay(overlay.id, 'back')); } },
+    { label: 'Duplicate', keys: 'mod+D', onSelect: () => { s.dispatch(actions.duplicateOverlay(overlay.id, totalDurationMs(s.project))); s.showToast(`Duplicated ${label}.`); } },
+    { label: 'Bring to front', keys: ']', onSelect: () => { s.dispatch(actions.arrangeOverlay(overlay.id, 'front')); } },
+    { label: 'Send to back', keys: '[', onSelect: () => { s.dispatch(actions.arrangeOverlay(overlay.id, 'back')); } },
     { label: 'Up a layer', hint: `now L${overlay.track + 1}`, onSelect: () => { s.dispatch(actions.moveOverlayLayer(overlay.id, 1)); } },
     { label: 'Down a layer', disabled: overlay.track === 0, onSelect: () => { s.dispatch(actions.moveOverlayLayer(overlay.id, -1)); } },
     { kind: 'separator' },
-    { label: 'Delete', hint: 'Delete', danger: true, onSelect: () => { s.selectOverlay(overlay.id); deleteSelection(); } },
+    { label: 'Delete', keys: 'Delete', danger: true, onSelect: () => { s.selectOverlay(overlay.id); deleteSelection(); } },
   ];
 }
 
@@ -202,7 +203,7 @@ export function sceneMenu(index: number, seek: Seek, atMs: number, openDesigns: 
     { label: 'Move earlier', disabled: index === 0, onSelect: () => { s.dispatch(actions.moveScene(index, index - 1)); s.selectSceneClip(index - 1); } },
     { label: 'Move later', disabled: index >= count - 1, onSelect: () => { s.dispatch(actions.moveScene(index, index + 1)); s.selectSceneClip(index + 1); } },
     { kind: 'separator' },
-    { label: 'Delete scene', hint: 'Delete', danger: true, disabled: count <= 1, onSelect: () => { s.selectSceneClip(index); deleteSelection(); } },
+    { label: 'Delete scene', keys: 'Delete', danger: true, disabled: count <= 1, onSelect: () => { s.selectSceneClip(index); deleteSelection(); } },
   ];
 }
 
@@ -214,7 +215,7 @@ export function audioMenu(clipId: string, seek: Seek, atMs: number): readonly Me
     { label: 'Move playhead here', onSelect: () => { seek(atMs); } },
     { label: 'Split at playhead', disabled: !inside, onSelect: () => { s.dispatch(actions.splitAudio(clipId, s.playheadMs)); } },
     { kind: 'separator' },
-    { label: 'Delete music clip', hint: 'Delete', danger: true, onSelect: () => { s.selectAudio(clipId); deleteSelection(); } },
+    { label: 'Delete music clip', keys: 'Delete', danger: true, onSelect: () => { s.selectAudio(clipId); deleteSelection(); } },
   ];
 }
 
@@ -255,7 +256,7 @@ export function effectMenu(clipId: string, seek: Seek, atMs: number): readonly M
       ? [{ label: 'Attach to its scene', hint: 'moves with it', onSelect: () => { s.dispatch(actions.timelineEffectToScene(clipId)); } }]
       : []),
     { kind: 'separator' },
-    { label: 'Delete effect', hint: 'Delete', danger: true, onSelect: () => { s.selectEffect(clipId); deleteSelection(); } },
+    { label: 'Delete effect', keys: 'Delete', danger: true, onSelect: () => { s.selectEffect(clipId); deleteSelection(); } },
   ];
 }
 
@@ -272,9 +273,9 @@ export function slotMenu(key: string, label: string): readonly MenuItem[] {
   const photo = /^photo:(\d+)$/.exec(key);
   const isText = key.startsWith('text:');
   return [
-    ...(isText ? [{ label: 'Edit text', hint: 'Enter', onSelect: () => { o.openTextEdit(key); } }] : []),
+    ...(isText ? [{ label: 'Edit text', keys: 'Enter', onSelect: () => { o.openTextEdit(key); } }] : []),
     ...(photo?.[1] !== undefined
-      ? [{ label: 'Replace photo…', hint: 'Double-click', onSelect: () => { o.openPhotoPicker({ kind: 'slot', index: Number(photo[1]) }); } }]
+      ? [{ label: 'Replace photo…', keys: 'double-click', onSelect: () => { o.openPhotoPicker({ kind: 'slot', index: Number(photo[1]) }); } }]
       : []),
     ...(isText ? [{ label: 'Text style…', onSelect: () => { s.selectSlot(key, 'text'); } }] : []),
     ...(photo ? [{ label: 'Frame and crop…', onSelect: () => { s.selectSlot(key, 'photos', Number(photo[1])); } }] : []),
@@ -284,11 +285,11 @@ export function slotMenu(key: string, label: string): readonly MenuItem[] {
     { label: 'Exit effect…', onSelect: () => { o.openPicker({ target: { kind: 'element', target, label }, category: 'Exit' }); } },
     { label: 'Motion properties', onSelect: () => { s.selectSlot(key, 'motion'); } },
     { kind: 'separator' },
-    { label: 'Bring to front', hint: ']', onSelect: () => { s.dispatch(actions.arrangeSlot(key, 'front')); } },
-    { label: 'Send to back', hint: '[', onSelect: () => { s.dispatch(actions.arrangeSlot(key, 'back')); } },
+    { label: 'Bring to front', keys: ']', onSelect: () => { s.dispatch(actions.arrangeSlot(key, 'front')); } },
+    { label: 'Send to back', keys: '[', onSelect: () => { s.dispatch(actions.arrangeSlot(key, 'back')); } },
     { label: 'Reset to the design', onSelect: () => { s.dispatch(actions.resetSlot(key)); } },
     { kind: 'separator' },
-    { label: isText ? 'Remove text' : 'Delete photo', hint: 'Delete', danger: true, onSelect: () => { deleteSlot(key); } },
+    { label: isText ? 'Remove text' : 'Delete photo', keys: 'Delete', danger: true, onSelect: () => { deleteSlot(key); } },
   ];
 }
 
@@ -297,11 +298,11 @@ export function logoMenu(): readonly MenuItem[] {
   const o = useOverlays.getState();
   const target = { kind: 'logo' as const };
   return [
-    { label: 'Replace logo…', hint: 'Double-click', onSelect: () => { o.openPhotoPicker({ kind: 'logo' }); } },
+    { label: 'Replace logo…', keys: 'double-click', onSelect: () => { o.openPhotoPicker({ kind: 'logo' }); } },
     { label: 'Logo effects…', hint: 'Shine, glow…', onSelect: () => { o.openPicker({ target: { kind: 'element', target, label: 'the logo' } }); } },
     { label: 'Logo settings', onSelect: () => { s.selectLogo(true); } },
     { kind: 'separator' },
-    { label: 'Remove logo', hint: 'Delete', danger: true, onSelect: () => { s.selectLogo(true); deleteSelection(); } },
+    { label: 'Remove logo', keys: 'Delete', danger: true, onSelect: () => { s.selectLogo(true); deleteSelection(); } },
   ];
 }
 

@@ -9,14 +9,13 @@ import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { useProjectActions } from './useProjectActions';
 import { adoptFonts } from '@/fonts/userFonts';
+import { isAppleTouch } from '@/ui/shell/platform';
 
 /**
  * Save project file / Open project file (D-141), for the menu on a computer
  * and on a phone. The file input it needs is returned as `input`, to be
  * rendered once by whoever uses it.
  */
-const isAppleTouch = (): boolean =>
-  /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
 export function useProjectFile(): { save: () => void; open: () => void; busy: boolean; input: React.JSX.Element } {
   const media = useMediaStore();

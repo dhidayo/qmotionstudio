@@ -27,14 +27,27 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('library', () => {
-  test('groups designs by what they are for, or by style on request (D-143)', async ({ page }) => {
+  /*
+   * D-143's switch to group by style is gone (D-160): style grouping ignored
+   * the purpose, so on a device where it had once been tapped only Start here
+   * changed with it. A grouping saved on such a device is retired, not obeyed.
+   */
+  test('groups designs by what they are for, with no switch, whatever was saved (D-143, D-160)', async ({ page }) => {
+    await page.addInitScript(() => { localStorage.setItem('ms.library.groupBy', 'style'); });
+    await page.reload();
+    await page.waitForSelector('canvas');
     for (const purpose of ['Headlines & hooks', 'Sales & prices', '3D & depth']) {
       await expect(page.getByRole('heading', { name: purpose })).toBeVisible();
     }
-    await page.locator('[data-group-by]').click();
+    await expect(page.locator('[data-group-by]')).toHaveCount(0);
     for (const category of ['Depth Stage', 'Angle Stage', 'Kinetic Type']) {
-      await expect(page.getByRole('heading', { name: category })).toBeVisible();
+      await expect(page.getByRole('heading', { name: category })).toHaveCount(0);
     }
+    // The old choice is deleted once, so it can never come back.
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('ms.library.groupBy'))).toBeNull();
+    // A design's style still finds it.
+    await page.getByRole('searchbox', { name: 'Search templates' }).fill('kinetic');
+    await expect(page.locator('[data-design-card]').first()).toBeVisible();
   });
 
   test('search narrows to matching templates and clears again', async ({ page }) => {

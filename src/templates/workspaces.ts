@@ -1,6 +1,6 @@
 import type { Aspect } from '@/core/types';
 import { DEFAULT_PHOTO_COUNT, DEFAULT_SCENE_MS, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
-import { CATEGORIES, type TemplateSummary } from './manifest';
+import type { TemplateSummary } from './manifest';
 import {
   DESIGN_PURPOSES, VIDEO_PURPOSES, purposeOf,
   type DesignPurpose, type Purpose, type VideoPurpose,
@@ -262,31 +262,38 @@ export type LibraryGroup = { readonly name: string; readonly templates: readonly
 export type LibraryLayout = { readonly startHere: readonly TemplateSummary[]; readonly groups: readonly LibraryGroup[] };
 
 /**
- * The library's sections for a workspace (D-149).
+ * The library's sections for a workspace (D-149), always by purpose (D-160).
  *
  * `templates` are those already left by the search, the Free/Pro filter and
  * favourites. `narrowed` says one of those is in use: then the picks step
  * aside, because a search shows what it found and nothing else.
+ *
+ * D-143's switch to group by style is gone. A style grouping ignored the
+ * workspace, so on a device where it had once been tapped only Start here
+ * changed with the purpose. A search still matches a design's category.
  */
 export function libraryGroups(input: {
   readonly templates: readonly TemplateSummary[];
   readonly workspace: WorkspaceId;
   readonly kind: 'scene' | 'ad';
-  readonly groupBy: 'purpose' | 'style';
   readonly narrowed: boolean;
 }): LibraryLayout {
-  const { templates, workspace, kind, groupBy, narrowed } = input;
+  const { templates, workspace, kind, narrowed } = input;
   const groups: LibraryGroup[] = [];
-  if (groupBy === 'purpose') {
-    for (const purpose of groupOrder(workspace, kind)) {
-      const inGroup = templates.filter((t) => purposeOf(t) === purpose);
-      if (inGroup.length > 0) groups.push({ name: purpose, templates: orderWithin(workspace, purpose, inGroup) });
-    }
-  } else {
-    for (const category of CATEGORIES) {
-      const inGroup = templates.filter((t) => t.category === category);
-      if (inGroup.length > 0) groups.push({ name: category, templates: inGroup });
-    }
+  for (const purpose of groupOrder(workspace, kind)) {
+    const inGroup = templates.filter((t) => purposeOf(t) === purpose);
+    if (inGroup.length > 0) groups.push({ name: purpose, templates: orderWithin(workspace, purpose, inGroup) });
   }
   return { startHere: narrowed ? [] : startHereFor(workspace, kind, templates), groups };
+}
+
+/**
+ * The fold names a library can still show: Start here and the purposes
+ * (D-160). Drops the category names folded while the library could group by
+ * style, so an old fold never sits in storage matching nothing. The person's
+ * purpose folds stay: folding by style always started from those.
+ */
+export function knownFolds(names: readonly string[]): readonly string[] {
+  const known = new Set<string>([START_HERE, ...DESIGN_PURPOSES, ...VIDEO_PURPOSES]);
+  return names.filter((name) => known.has(name));
 }

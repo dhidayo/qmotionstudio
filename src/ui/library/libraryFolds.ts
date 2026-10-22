@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { foldedAfterSwitch, type WorkspaceId } from '@/templates/workspaces';
+import { foldedAfterSwitch, knownFolds, type WorkspaceId } from '@/templates/workspaces';
 
 /**
  * Which library groups are folded, per workspace (D-123, D-149).
@@ -31,12 +31,24 @@ function parse(raw: string | null): readonly string[] | null {
   }
 }
 
-/** The folds stored for a workspace, or null when the person has not folded anything there. */
+/** Where D-143 remembered "by purpose" or "by style"; the library is always by purpose now (D-160). */
+export const RETIRED_GROUP_KEY = 'ms.library.groupBy';
+let retired = false;
+
+/**
+ * The folds stored for a workspace, or null when the person has not folded
+ * anything there. Style-era category names are dropped as they are read, and
+ * the first read deletes the retired grouping choice once (D-160).
+ */
 export function readFolds(id: WorkspaceId): readonly string[] | null {
+  if (!retired) {
+    retired = true;
+    try { localStorage.removeItem(RETIRED_GROUP_KEY); } catch { /* nothing to tidy */ }
+  }
   if (!cache.has(id)) {
     let stored: readonly string[] | null;
     try { stored = parse(localStorage.getItem(foldKey(id))); } catch { stored = null; }
-    cache.set(id, stored);
+    cache.set(id, stored === null ? null : knownFolds(stored));
   }
   return cache.get(id) ?? null;
 }

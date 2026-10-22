@@ -36,7 +36,7 @@ async function openImages(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await page.waitForSelector('canvas');
   await page.waitForTimeout(2_000);
-  await page.getByTitle('Export (⌘E)').click();
+  await page.getByTitle(/^Export \(/).click();
   await page.getByRole('button', { name: /^Images? / }).or(page.getByRole('button', { name: 'Image', exact: true })).click();
   await page.getByRole('button', { name: '720p' }).click();
 }

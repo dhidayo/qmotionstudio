@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useOverlays, type MenuItem } from './overlays';
+import { keyLabel, useInputCaps } from './platform';
 
 /**
  * The right-click menu — and the long-press menu on a touch screen (D-104).
@@ -28,6 +29,8 @@ export function ContextMenu(): React.JSX.Element | null {
   /** Whether a finger (or pen) was the last thing to press — only then is there a lift to ignore. */
   const lastPointer = useRef<string>('mouse');
   const openedByTouch = useRef(false);
+  // Shortcut hints as this device writes them, and none where there is no keyboard (D-161).
+  const caps = useInputCaps();
 
   useEffect(() => {
     const note = (event: PointerEvent): void => { lastPointer.current = event.pointerType; };
@@ -101,10 +104,10 @@ export function ContextMenu(): React.JSX.Element | null {
       <div className="truncate px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
         {menu.title}
       </div>
-      {menu.items.map((item, i) =>
-        item.kind === 'separator' ? (
-          <div key={`sep-${i}`} role="separator" className="my-1 border-t border-edge" />
-        ) : (
+      {menu.items.map((item, i) => {
+        if (item.kind === 'separator') return <div key={`sep-${i}`} role="separator" className="my-1 border-t border-edge" />;
+        const hint = item.hint ?? (item.keys === undefined ? undefined : keyLabel(item.keys, caps));
+        return (
           <button
             key={item.label}
             type="button"
@@ -115,10 +118,10 @@ export function ContextMenu(): React.JSX.Element | null {
             style={item.danger === true ? { color: 'var(--c-danger)' } : undefined}
           >
             <span className="truncate">{item.label}</span>
-            {item.hint !== undefined && <span className="shrink-0 text-[10px] text-ink-faint">{item.hint}</span>}
+            {hint !== undefined && <span className="shrink-0 text-[10px] text-ink-faint">{hint}</span>}
           </button>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }

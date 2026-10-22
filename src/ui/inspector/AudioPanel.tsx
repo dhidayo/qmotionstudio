@@ -4,6 +4,7 @@ import { totalDurationMs } from '@/document/select/timeline';
 import { useEditor, useSelectedAudio } from '@/state/store';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, EmptyNote, Row, Section, Slider } from './controls';
+import { isApplePlatform, keysFor, useInputCaps } from '@/ui/shell/platform';
 
 /**
  * The music clip editor (§10's per-clip trim, gain and fades).
@@ -93,8 +94,7 @@ export function AudioPanel(): React.JSX.Element {
         </div>
 
         <EmptyNote>
-          Drag the clip to move it, its edges to trim. Hold ⌥ and drag to slip. ⇧ turns off
-          snapping.
+          <DragHint />
         </EmptyNote>
       </Section>
 
@@ -219,4 +219,15 @@ function clock(ms: number): string {
   const minutes = Math.floor(total / 60);
   const seconds = total % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+/**
+ * How to work the clip on the timeline, in this device's keys (D-161): ⌥ and
+ * ⇧ on a Mac, Alt and Shift elsewhere, and no keys at all on a touch screen.
+ */
+function DragHint(): React.JSX.Element {
+  const caps = useInputCaps();
+  if (!caps.keyboard) return <>Drag the clip to move it, its edges to trim.</>;
+  const keys = keysFor(isApplePlatform());
+  return <>Drag the clip to move it, its edges to trim. Hold {keys.alt} and drag to slip. {keys.shift} turns off snapping.</>;
 }

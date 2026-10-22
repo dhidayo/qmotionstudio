@@ -9,11 +9,10 @@ import { starterProject } from './starter';
 import { readWorkspace } from './workspace';
 import { totalDurationMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
-import { loadTemplate } from '@/templates/registry';
-import { expandAdTemplate } from '@/templates/ad';
-import { userPhotoIds } from '@/document/select/media';
+import { prepareTemplateChange } from './templateChange';
+import { undoKeys } from '@/ui/shell/platform';
 import { summaryFor } from '@/templates/manifest';
-import { designLook, designLookPreset } from '@/templates/looks';
+import { designLook } from '@/templates/looks';
 import { renderParams } from '@/dev/renderParams';
 import * as actions from '@/document/actions';
 import {
@@ -492,33 +491,22 @@ export const useEditor = create<EditorState>((set, get) => ({
     // against the new one's document while the fetch is in flight.
     set({ selectedPhoto: 0, template: null, selectedOverlay: null });
 
-    void loadTemplate(templateId)
-      .then(async (template) => {
+    // The same change the library's preview showed (D-160).
+    void prepareTemplateChange(() => get().project, templateId)
+      .then(({ template, action }) => {
+        const before = get().project.scenes.length;
+        get().dispatch(action);
         if (template.kind === 'ad') {
-          /*
-           * Continuity (D-098): the ad is filled with the person's own photos
-           * and logo when they have any, rather than starting over on the
-           * samples. Undo still restores the scenes it replaces.
-           */
-          const current = get().project;
-          const logo = current.scenes.find((scene) => scene.inputs.logo.mediaId !== null)?.inputs.logo;
-          const scenes = await expandAdTemplate(template, {
-            photoIds: userPhotoIds(current),
-            ...(logo ? { logo } : {}),
-          });
-          get().dispatch(actions.applyAdTemplate(scenes, template.id));
           set({ selectedScene: 0 });
-          if (options?.asBaseline === true) get().sealHistory();
-          return;
+          /*
+           * A film replaces every scene (D-160). Said once it has, with the
+           * way back, so a person who expected one more scene is not left
+           * wondering where their work went.
+           */
+          if (options?.asBaseline !== true && before > 1) {
+            get().showToast(`“${template.name}” is your video now — ${undoKeys()} brings back your ${before} scenes.`);
+          }
         }
-        // What the card showed is what picking it gives (D-121): the
-        // design arrives in its own look. Undo puts the old one back.
-        const look = designLookPreset(templateId);
-        get().dispatch(actions.setTemplate(templateId, {
-          durationMs: template.defaultDurationMs,
-          photoSlots: template.photoSlots,
-          ...(look ? { look } : {}),
-        }));
         if (options?.asBaseline === true) get().sealHistory();
       })
       .catch((error: unknown) => {

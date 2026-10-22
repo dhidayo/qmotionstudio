@@ -5,7 +5,7 @@ import { CATEGORIES, summaryFor, templatesForMode } from './manifest';
 import { DESIGN_PURPOSES, VIDEO_PURPOSES, purposeOf } from './purpose';
 import {
   START_HERE, WORKSPACE_IDS, WORKSPACES, defaultFolded, effectiveFolded, foldedAfterSwitch,
-  groupOrder, isWorkspaceId, libraryGroups, orderWithin, startHereFor, topGroups,
+  groupOrder, isWorkspaceId, knownFolds, libraryGroups, orderWithin, startHereFor, topGroups,
 } from './workspaces';
 
 /**
@@ -108,32 +108,50 @@ describe('workspaces (D-149)', () => {
     for (const id of ['business', 'news', 'both'] as const) expect(orderWithin(id, 'Photo galleries', galleries)).toBe(galleries);
   });
 
-  it('every design appears in exactly one group, whatever the workspace, grouping or filter', () => {
+  it('every design appears in exactly one group, whatever the workspace or filter', () => {
     for (const id of WORKSPACE_IDS) {
       for (const kind of KINDS) {
         const all = templatesForMode(kind === 'ad' ? 'motionAd' : 'showcase');
         const inputs = [all, all.filter((t) => t.tier === 'free')];
         for (const templates of inputs) {
-          for (const groupBy of ['purpose', 'style'] as const) {
-            for (const narrowed of [false, true]) {
-              const layout = libraryGroups({ templates, workspace: id, kind, groupBy, narrowed });
-              const listed = layout.groups.flatMap((g) => g.templates.map((t) => t.id));
-              expect(sorted(listed), `${id} ${kind} ${groupBy}`).toEqual(sorted(templates.map((t) => t.id)));
-              expect(layout.groups.every((g) => g.templates.length > 0)).toBe(true);
-              const picks = layout.startHere.map((t) => t.id);
-              expect(new Set(picks).size).toBe(picks.length);
-              for (const pick of picks) expect(templates.map((t) => t.id)).toContain(pick);
-              if (narrowed || id === 'both') expect(picks).toEqual([]);
-            }
+          for (const narrowed of [false, true]) {
+            const layout = libraryGroups({ templates, workspace: id, kind, narrowed });
+            const listed = layout.groups.flatMap((g) => g.templates.map((t) => t.id));
+            expect(sorted(listed), `${id} ${kind}`).toEqual(sorted(templates.map((t) => t.id)));
+            expect(layout.groups.every((g) => g.templates.length > 0)).toBe(true);
+            const picks = layout.startHere.map((t) => t.id);
+            expect(new Set(picks).size).toBe(picks.length);
+            for (const pick of picks) expect(templates.map((t) => t.id)).toContain(pick);
+            if (narrowed || id === 'both') expect(picks).toEqual([]);
           }
         }
       }
     }
   });
 
+  it('below Start here, the groups change with the purpose (D-160)', () => {
+    const all = templatesForMode('showcase');
+    const first = (id: (typeof WORKSPACE_IDS)[number]): string | undefined =>
+      libraryGroups({ templates: all, workspace: id, kind: 'scene', narrowed: false }).groups[0]?.name;
+    expect(first('social')).toBe('Photo galleries');
+    expect(first('business')).toBe('Business posts');
+    expect(first('news')).toBe('Events & dates');
+    // Every group is a purpose: no category heading can come back.
+    const names = libraryGroups({ templates: all, workspace: 'social', kind: 'scene', narrowed: false }).groups.map((g) => g.name);
+    for (const name of names) expect(DESIGN_PURPOSES as readonly string[], name).toContain(name);
+  });
+
+  it('old folds: category names are dropped, Start here and purposes kept in order (D-160)', () => {
+    // Also proves no category shares a name with a purpose, or dropping one would drop the other.
+    expect(knownFolds(CATEGORIES)).toEqual([]);
+    const mixed = ['Moodboards', CATEGORIES[0] ?? '', START_HERE, 'Hiring', CATEGORIES[1] ?? '', 'Photo galleries'];
+    expect(knownFolds(mixed)).toEqual(['Moodboards', START_HERE, 'Hiring', 'Photo galleries']);
+    expect(knownFolds([])).toEqual([]);
+  });
+
   it('"everything" by purpose groups exactly as the library always has', () => {
     const all = templatesForMode('showcase');
-    const layout = libraryGroups({ templates: all, workspace: 'both', kind: 'scene', groupBy: 'purpose', narrowed: false });
+    const layout = libraryGroups({ templates: all, workspace: 'both', kind: 'scene', narrowed: false });
     const before = DESIGN_PURPOSES
       .map((purpose) => ({ name: purpose, ids: all.filter((t) => purposeOf(t) === purpose).map((t) => t.id) }))
       .filter((g) => g.ids.length > 0);

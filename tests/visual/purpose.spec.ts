@@ -12,8 +12,16 @@ test.use({ viewport: { width: 1500, height: 1003 } });
 
 const ORIGIN = process.env['PW_PROD'] === '1' ? 'http://localhost:4173' : 'http://localhost:5173';
 const EMPTY = { cookies: [], origins: [] };
-const seeded = (workspace: string | null): ReturnType<typeof seededState> =>
-  seededState([{ name: 'ms.quickstart', value: 'done' }, ...(workspace === null ? [] : [{ name: 'ms.workspace', value: workspace }])], ORIGIN);
+/** The quick start seen and, unless null, a purpose chosen — on whichever server this run uses. */
+const seeded = (workspace: string | null) => async (
+  { baseURL }: { baseURL: string | undefined },
+  use: (state: ReturnType<typeof seededState>) => Promise<void>,
+): Promise<void> => {
+  await use(seededState(
+    [{ name: 'ms.quickstart', value: 'done' }, ...(workspace === null ? [] : [{ name: 'ms.workspace', value: workspace }])],
+    baseURL ?? ORIGIN,
+  ));
+};
 
 async function open(page: Page, url = '/'): Promise<void> {
   await page.goto(url);
