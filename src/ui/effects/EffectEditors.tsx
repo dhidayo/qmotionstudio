@@ -200,11 +200,15 @@ export function SceneEffectsEditor(): React.JSX.Element {
 
 function SceneEffectRow({ clip, sceneMs }: { clip: EffectClip; sceneMs: number }): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
-  const playheadMs = useEditor((s) => s.playheadMs);
   const spanStart = useEditor((s) => sceneSpans(s.project.scenes)[s.selectedScene]?.startMs ?? 0);
   const def = frameEffect(clip.effectId);
   const whole = clip.startMs <= 0 && clip.endMs >= sceneMs;
-  const local = Math.max(0, Math.min(playheadMs - spanStart, sceneMs));
+  /*
+   * The playhead is read when a button is pressed, not subscribed to: only
+   * the buttons use it, and a subscription redrew this card every frame while
+   * the picture played (D-154).
+   */
+  const local = (): number => Math.max(0, Math.min(useEditor.getState().playheadMs - spanStart, sceneMs));
   const update = (patch: actions.EffectPatch): void => { dispatch(actions.updateSceneEffect(clip.id, patch)); };
 
   return (
@@ -224,7 +228,7 @@ function SceneEffectRow({ clip, sceneMs }: { clip: EffectClip; sceneMs: number }
           if (v === 'whole') update({ startMs: 0, endMs: sceneMs });
           else {
             const length = Math.min(def?.defaultMs ?? 2_000, sceneMs);
-            const startMs = Math.max(0, Math.min(local, sceneMs - length));
+            const startMs = Math.max(0, Math.min(local(), sceneMs - length));
             update({ startMs, endMs: startMs + length });
           }
         }}
@@ -232,8 +236,8 @@ function SceneEffectRow({ clip, sceneMs }: { clip: EffectClip; sceneMs: number }
       {!whole && (
         <Row label="From – to" hint={`${seconds(clip.startMs)} – ${seconds(Math.min(clip.endMs, sceneMs))}`}>
           <div className="flex gap-1">
-            <Button onClick={() => { update({ startMs: Math.min(local, clip.endMs - 100) }); }}>Start at playhead</Button>
-            <Button onClick={() => { update({ endMs: Math.max(local, clip.startMs + 100) }); }}>End at playhead</Button>
+            <Button onClick={() => { update({ startMs: Math.min(local(), clip.endMs - 100) }); }}>Start at playhead</Button>
+            <Button onClick={() => { update({ endMs: Math.max(local(), clip.startMs + 100) }); }}>End at playhead</Button>
           </div>
         </Row>
       )}
@@ -253,7 +257,6 @@ export function TimelineEffectPanel(): React.JSX.Element {
   const id = useEditor((s) => s.selectedEffect);
   const project = useEditor((s) => s.project);
   const selectEffect = useEditor((s) => s.selectEffect);
-  const playheadMs = useEditor((s) => s.playheadMs);
 
   const found = id === null ? null : findEffect(project, id);
   if (!found || id === null) return <EmptyNote>That effect is no longer there.</EmptyNote>;
@@ -266,7 +269,6 @@ export function TimelineEffectPanel(): React.JSX.Element {
   const update = (patch: actions.EffectPatch): void => {
     dispatch(sceneIndex === null ? actions.updateTimelineEffect(clip.id, patch) : actions.updateSceneEffect(clip.id, patch));
   };
-  const local = Math.max(0, playheadMs - origin);
   const where = sceneIndex === null
     ? 'On the timeline · over every scene and layer'
     : `In scene ${sceneIndex + 1} · moves with the scene`;
@@ -299,6 +301,9 @@ export function TimelineEffectPanel(): React.JSX.Element {
         onChange={(s) => { update({ endMs: clip.startMs + s * 1000 }); }} />
       <div className="mb-3 flex gap-1">
         <Button onClick={() => {
+          // Read when pressed, not subscribed to: see SceneEffectRow (D-154).
+          const playheadMs = useEditor.getState().playheadMs;
+          const local = Math.max(0, playheadMs - origin);
           const length = endMs - clip.startMs;
           const start = sceneIndex === null ? playheadMs : Math.min(local, Math.max(0, sceneMs - length));
           update({ startMs: start, endMs: start + length });

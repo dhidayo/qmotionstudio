@@ -4,6 +4,7 @@ import { sceneSpans } from '@/document/select/timeline';
 import { NO_SLOT_TRANSFORM } from '@/document/types';
 import { useEditor } from '@/state/store';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
+import { usePausedPlayhead } from '@/ui/hooks/usePausedPlayhead';
 import { KeyframeControls } from './KeyframeControls';
 
 /**
@@ -22,7 +23,8 @@ import { KeyframeControls } from './KeyframeControls';
  */
 export function SlotKeyframes({ slotKey }: { slotKey: string }): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
-  const playheadMs = useEditor((s) => s.playheadMs);
+  // Held still while the picture plays, so this panel is not redrawn every frame (D-154).
+  const playheadMs = usePausedPlayhead();
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const selectedScene = useEditor((s) => s.selectedScene);
   const scenes = useEditor((s) => s.project.scenes);
@@ -45,6 +47,8 @@ export function SlotKeyframes({ slotKey }: { slotKey: string }): React.JSX.Eleme
   const sceneStartMs = span?.startMs ?? 0;
   const speed = scene.inputs.look.speed;
   const localMs = Math.round((playheadMs - sceneStartMs) * speed);
+  // Where the playhead is at the press, which during playback is not `localMs`.
+  const localNow = (): number => Math.round((useEditor.getState().playheadMs - sceneStartMs) * speed);
 
   const current = transform ?? NO_SLOT_TRANSFORM;
 
@@ -70,8 +74,8 @@ export function SlotKeyframes({ slotKey }: { slotKey: string }): React.JSX.Eleme
         value: current.easing ?? 'smooth',
         onChange: (easing) => { dispatch(actions.setSlotEasing(slotKey, easing)); },
       }}
-      onToggle={(on) => { dispatch(actions.setSlotAnimated(slotKey, on, localMs)); }}
-      onAdd={(atMs) => { dispatch(actions.addSlotMotion(slotKey, atMs, scene.durationMs)); }}
+      onToggle={(on) => { dispatch(actions.setSlotAnimated(slotKey, on, localNow())); }}
+      onAdd={() => { dispatch(actions.addSlotMotion(slotKey, localNow(), scene.durationMs)); }}
       onGoTo={goTo}
     />
   );

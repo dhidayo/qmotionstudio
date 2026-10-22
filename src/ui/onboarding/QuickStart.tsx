@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEditor } from '@/state/store';
 import { projectPhotos } from '@/document/select/media';
 import { useLayout } from '@/ui/shell/useLayout';
@@ -35,7 +35,10 @@ function Tour(): React.JSX.Element | null {
   // The design that was open when the tour began: a different one means step one is done.
   const startedOn = useRef(useEditor.getState().project.scenes[0]?.templateId ?? '');
   const designChosen = useEditor((s) => (s.project.scenes[0]?.templateId ?? '') !== startedOn.current || s.project.sourceAdTemplateId !== undefined);
-  const photosAdded = useEditor((s) => projectPhotos(s.project).length > 0);
+  // Worked out when the document changes, not in the selector: the store
+  // changes every frame while the picture plays, and each change ran it (D-154).
+  const project = useEditor((s) => s.project);
+  const photosAdded = useMemo(() => projectPhotos(project).length > 0, [project]);
   const exporting = useEditor((s) => s.exporting);
   const [exported, setExported] = useState(false);
   if (exporting && !exported) setExported(true);
@@ -159,19 +162,31 @@ function Bubble({
   );
 }
 
+/** How often the button is looked for between the events that say it moved. */
+const TARGET_POLL_MS = 250;
+
 /**
- * Where the step's button is on screen, followed every frame so the popup
- * keeps up with scrolling, folding panels and rotation. Null while it cannot
- * be seen, or while another sheet or dialog is open — the tour waits rather
- * than sitting on top of what the person is doing.
+ * Where the step's button is on screen. Null while it cannot be seen, or while
+ * another sheet or dialog is open — the tour waits rather than sitting on top
+ * of what the person is doing.
+ *
+ * Measured when the step begins, at once on a scroll or a resize (one measure
+ * per frame however many arrive), and a few times a second for everything
+ * else: a folding panel, a dialog opening, rotation. It used to be every frame,
+ * and that query and layout read, sixty times a second right beside a playing
+ * picture, was part of why the motion dragged (D-154).
  */
 function useTargetRect(target: string | null): DOMRect | null {
   const [rect, setRect] = useState<DOMRect | null>(null);
   useEffect(() => {
     if (target === null) return;
-    let frame = 0;
     let last = '';
-    const tick = (): void => {
+    let frame = 0;
+    const measure = (): void => {
+      // A poll that lands first makes a scheduled measure redundant; cancelled,
+      // it cannot outlive the step either.
+      cancelAnimationFrame(frame);
+      frame = 0;
       const busy = document.querySelector('[role="dialog"]') !== null;
       const found = busy ? null : [...document.querySelectorAll<HTMLElement>(`[data-tour="${target}"]`)]
         .map((el) => el.getBoundingClientRect())
@@ -179,10 +194,21 @@ function useTargetRect(target: string | null): DOMRect | null {
       const next = found ?? null;
       const key = next === null ? '' : `${next.left},${next.top},${next.width},${next.height}`;
       if (key !== last) { last = key; setRect(next); }
-      frame = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(frame); };
+    const soon = (): void => {
+      if (frame === 0) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    const poll = setInterval(measure, TARGET_POLL_MS);
+    // Capture, so a scroll inside a panel counts too; passive, as it never prevents one.
+    window.addEventListener('scroll', soon, { capture: true, passive: true });
+    window.addEventListener('resize', soon);
+    return () => {
+      clearInterval(poll);
+      cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', soon, { capture: true });
+      window.removeEventListener('resize', soon);
+    };
   }, [target]);
   return rect;
 }

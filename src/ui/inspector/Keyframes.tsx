@@ -3,12 +3,14 @@ import { isAnimated, posesOf } from '@/document/select/overlay';
 import type { Overlay } from '@/document/types';
 import { useEditor } from '@/state/store';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
+import { usePausedPlayhead } from '@/ui/hooks/usePausedPlayhead';
 import { KeyframeControls } from './KeyframeControls';
 
 /** An overlay's keyframes: its placement over time (§6.1). */
 export function Keyframes({ overlay }: { overlay: Overlay }): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
-  const playheadMs = useEditor((s) => s.playheadMs);
+  // Held still while the picture plays, so this panel is not redrawn every frame (D-154).
+  const playheadMs = usePausedPlayhead();
   const setPlayhead = useEditor((s) => s.setPlayhead);
   const clock = usePreviewClock();
 
@@ -20,6 +22,8 @@ export function Keyframes({ overlay }: { overlay: Overlay }): React.JSX.Element 
    * rather than having it reinterpreted against the project clock.
    */
   const localMs = Math.round(playheadMs - overlay.startMs);
+  // Where the playhead is at the press, which during playback is not `localMs`.
+  const localNow = (): number => Math.round(useEditor.getState().playheadMs - overlay.startMs);
 
   /**
    * Publishes the playhead as well as seeking, for the reason D-064 gave:
@@ -56,8 +60,8 @@ export function Keyframes({ overlay }: { overlay: Overlay }): React.JSX.Element 
         value: overlay.easing ?? 'smooth',
         onChange: (easing) => { dispatch(actions.setOverlayEasing(id, easing)); },
       }}
-      onToggle={(on) => { dispatch(actions.setOverlayAnimated(id, on, localMs)); }}
-      onAdd={(atMs) => { dispatch(actions.addOverlayMotion(id, atMs)); }}
+      onToggle={(on) => { dispatch(actions.setOverlayAnimated(id, on, localNow())); }}
+      onAdd={() => { dispatch(actions.addOverlayMotion(id, localNow())); }}
       onGoTo={goTo}
     />
   );

@@ -1,11 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Project } from '@/document/types';
 import type { PreviewClock } from '@/core/time/clock';
 import type { DrawnScene, RenderRig } from '@/core/render/rig';
 import { renderFrame } from '@/core/render/renderFrame';
 import { videoDemandsWithLead } from '@/document/select/media';
 import { totalDurationMs } from '@/document/select/timeline';
+import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import type { MediaStore } from '@/media/store';
+import { peekTemplate } from '@/templates/registry';
+import { FrameMeter } from './frameMeter';
+import type { PreviewSizes } from './previewResolution';
 
 /**
  * Drives renderFrame from requestAnimationFrame (§3A).
@@ -21,9 +25,22 @@ import type { MediaStore } from '@/media/store';
  * The export path runs the same renderFrame from a fixed timestep instead. That
  * is the only difference between the two, and it is why they agree.
  */
-/** Under about forty frames a second, averaged over this many frames, is "slow". */
-const SLOW_FRAME_MS = 25;
-const SLOW_WINDOW_FRAMES = 45;
+
+/**
+ * A paused picture is redrawn at least this often even when nothing seems to
+ * have changed (D-154) — the safety net under the list of things that can.
+ */
+const PAUSED_REDRAW_MS = 500;
+
+/**
+ * Whether every scene's design has arrived (D-029 fetches them lazily). The
+ * scene under the playhead says so by drawing nothing, but the one coming in
+ * on a transition does not, and its arrival changes the picture.
+ */
+function designsLoaded(project: Project): boolean {
+  return project.scenes.every(({ templateId }) =>
+    templateId === PLACEHOLDER_TEMPLATE_ID || templateId === DEMO_TEMPLATE_ID || peekTemplate(templateId) !== null);
+}
 
 export function usePreviewLoop(
   canvas: HTMLCanvasElement | null,
@@ -32,8 +49,14 @@ export function usePreviewLoop(
   rig: RenderRig,
   media: MediaStore,
   /**
-   * Called when playback has been missing frames for a while (D-112), so the
-   * artboard can draw at a lower resolution. Null when it cannot go lower.
+   * The canvas backing store while playing and while paused (D-154). The loop
+   * owns it: it changes size inside the animation frame that draws at the new
+   * size, so the picture never shows a cleared canvas in between.
+   */
+  sizes: PreviewSizes,
+  /**
+   * Called when playback has been missing frames for a while (D-112, D-154),
+   * so the artboard can draw at a lower resolution. Null when it cannot go lower.
    */
   onSlow: (() => void) | null = null,
 ): DrawnScene | null {
@@ -50,6 +73,11 @@ export function usePreviewLoop(
   const lastDrawn = useRef<DrawnScene | null>(null);
   const slow = useRef(onSlow);
   useEffect(() => { slow.current = onSlow; }, [onSlow]);
+  // Read by the loop every frame, so a new size never restarts it.
+  const wanted = useRef(sizes);
+  useLayoutEffect(() => { wanted.current = sizes; }, [sizes]);
+  // Kept across restarts: what it has learnt about the screen stays true.
+  const meterRef = useRef<FrameMeter | null>(null);
 
   useEffect(() => {
     if (!canvas) return;
@@ -59,33 +87,68 @@ export function usePreviewLoop(
       throw new Error('Artboard: could not acquire a 2D context. The editor cannot render.');
     }
 
+    meterRef.current ??= new FrameMeter();
+    const meter = meterRef.current;
+    // A document change is an edit, not playback: the frames around it say
+    // nothing about the device.
+    meter.reset();
+
     let frame = 0;
     let previous = performance.now();
     let cancelled = false;
-    /** Frame gaps while playing, to notice a device that cannot keep up. */
-    let gaps = 0;
-    let gapTotal = 0;
+
+    /*
+     * What the paused picture was last drawn from (D-154).
+     *
+     * Paused, the same time draws the same pixels (§3A), so redrawing a
+     * megapixel and a half sixty times a second only made the editor's own
+     * controls slower to respond. A frame is drawn when anything that can
+     * change it has: the time, the canvas size, a photo decoding, a font
+     * loading or added, a design arriving (which also empties the layer cache),
+     * the watermark — and the document, which restarts this effect. Anything
+     * still on its way (a scene's design, a font, a video's frames) draws every
+     * frame until it is there, and at least every PAUSED_REDRAW_MS regardless.
+     */
+    let drawnAt = Number.NEGATIVE_INFINITY;
+    let drawnMs = Number.NaN;
+    let drawnRevision = -1;
+    let drawnFontsLoaded = false;
+    let drawnFontCount = -1;
+    let drawnBuilt = -1;
+    let drawnWatermark: boolean | null = null;
+    // Once true it stays true: the document is fixed for this effect's life.
+    let designsHere = false;
 
     const tick = (now: number): void => {
       if (cancelled) return;
       const delta = now - previous;
       previous = now;
 
-      if (clock.playing && slow.current) {
-        // A hidden tab or a breakpoint is not slowness; cap what one gap can say.
-        gapTotal += Math.min(delta, 100);
-        gaps += 1;
-        if (gaps >= SLOW_WINDOW_FRAMES) {
-          if (gapTotal / gaps > SLOW_FRAME_MS) slow.current();
-          gaps = 0;
-          gapTotal = 0;
-        }
-      } else {
-        gaps = 0;
-        gapTotal = 0;
+      const wasPlaying = clock.playing;
+      const timeMs = clock.tick(delta);
+      // Read after the tick: a clock that plays once stops by itself at the end.
+      const playing = clock.playing;
+
+      // The size for what the picture is doing now, applied in the frame that
+      // draws at it. Exact ratios (previewResolution) keep the design box the
+      // same, so this never rebuilds the template or moves the selection.
+      const size = wanted.current[playing ? 'playing' : 'paused'];
+      const resized = canvas.width !== size.w || canvas.height !== size.h;
+      if (resized) {
+        canvas.width = size.w;
+        canvas.height = size.h;
       }
 
-      const timeMs = clock.tick(delta);
+      if (wasPlaying && playing && !resized && document.visibilityState === 'visible') {
+        const verdict = meter.push(delta);
+        if (verdict !== 'ignored') {
+          rig.stats.playedFrames += 1;
+          if (verdict === 'late') rig.stats.droppedFrames += 1;
+        }
+        if (meter.takeSlow()) slow.current?.();
+      } else {
+        meter.reset();
+      }
 
       /*
        * Past the end of the video there is nothing to draw — the last scene's
@@ -105,7 +168,8 @@ export function usePreviewLoop(
        * does await, which is why its output is exact and this one is merely
        * smooth.
        */
-      for (const demand of videoDemandsWithLead(project, renderMs)) {
+      const demands = videoDemandsWithLead(project, renderMs);
+      for (const demand of demands) {
         void media.prefetchVideo(demand.mediaId, demand.timeMs).catch((error: unknown) => {
           // §16: surface it. A decode that fails every frame would otherwise
           // be an overlay that is simply never there.
@@ -113,13 +177,45 @@ export function usePreviewLoop(
         });
       }
 
-      renderFrame(ctx, project, renderMs, rig);
+      const fonts = document.fonts;
+      const fontsLoaded = fonts.status === 'loaded';
+      const watermark = rig.watermark();
+      designsHere ||= designsLoaded(project);
+      const unchanged =
+        !playing &&
+        !resized &&
+        rig.drawn !== null &&
+        designsHere &&
+        demands.length === 0 &&
+        // Both: a frame drawn while a font was loading used a stand-in for it.
+        fontsLoaded &&
+        drawnFontsLoaded &&
+        fonts.size === drawnFontCount &&
+        renderMs === drawnMs &&
+        media.revision === drawnRevision &&
+        rig.layerCache.size === drawnBuilt &&
+        watermark === drawnWatermark &&
+        now - drawnAt < PAUSED_REDRAW_MS;
 
-      // Identity comparison, not a deep one: renderFrame keeps the same object
-      // until the scene or its layers actually change.
-      if (rig.drawn !== lastDrawn.current) {
-        lastDrawn.current = rig.drawn;
-        setDrawn(rig.drawn);
+      if (!unchanged) {
+        renderFrame(ctx, project, renderMs, rig);
+        drawnAt = now;
+        drawnMs = renderMs;
+        drawnRevision = media.revision;
+        drawnFontsLoaded = fontsLoaded;
+        drawnFontCount = fonts.size;
+        // Read after drawing, which may itself have built a scene.
+        drawnBuilt = rig.layerCache.size;
+        drawnWatermark = watermark;
+        rig.stats.backingW = canvas.width;
+        rig.stats.backingH = canvas.height;
+
+        // Identity comparison, not a deep one: renderFrame keeps the same object
+        // until the scene or its layers actually change.
+        if (rig.drawn !== lastDrawn.current) {
+          lastDrawn.current = rig.drawn;
+          setDrawn(rig.drawn);
+        }
       }
 
       frame = requestAnimationFrame(tick);

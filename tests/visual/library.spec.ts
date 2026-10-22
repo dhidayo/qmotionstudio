@@ -60,10 +60,12 @@ test('in Video, the library says a template replaces the scenes, and the toast h
   // Opened from the address, it is the starting point: no toast for that.
   await expect(page.locator('[data-toast]')).toHaveCount(0);
 
-  const scenes = await page.evaluate(() =>
+  const sceneCount = (): Promise<number> => page.evaluate(() =>
     (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { scenes: unknown[] } } } } })
       .__motionStudio.editor.getState().project.scenes.length);
-  expect(scenes).toBeGreaterThan(1);
+  // The video template loads lazily: count its scenes once they are there.
+  await expect.poll(sceneCount).toBeGreaterThan(1);
+  const scenes = await sceneCount();
   await library.locator('[data-design-card][aria-pressed="false"]').first().click();
   const toast = page.locator('[data-toast]');
   await expect(toast).toContainText('is your video now');

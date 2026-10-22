@@ -133,14 +133,38 @@
   animation: toast-in-out 2.5s var(--ease-out) both;
 }
 
-/* The quick start's ring round the button to press next (D-148). */
+/*
+ * The quick start's ring round the button to press next (D-148).
+ *
+ * The ring itself stands still; the glow round it pulses by fading in and out.
+ * Fading is done by the compositor, where a growing box-shadow repainted the
+ * glow every frame right beside the playing picture (D-154).
+ */
 @keyframes tour-pulse {
-  0%, 100% { box-shadow: 0 0 0 3px var(--c-accent), 0 0 0 6px rgb(0 0 0 / 0); }
-  50% { box-shadow: 0 0 0 3px var(--c-accent), 0 0 0 10px color-mix(in srgb, var(--c-accent) 30%, transparent); }
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
 }
 
 .tour-ring {
+  box-shadow: 0 0 0 3px var(--c-accent);
+}
+
+.tour-ring::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 7px color-mix(in srgb, var(--c-accent) 30%, transparent);
+  opacity: 0;
   animation: tour-pulse 1.6s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* The rule below for reduced motion matches elements, not their ::after. */
+@media (prefers-reduced-motion: reduce) {
+  .tour-ring::after {
+    animation: none;
+  }
 }
 
 /*

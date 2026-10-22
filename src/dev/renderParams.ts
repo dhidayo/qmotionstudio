@@ -14,6 +14,7 @@ import { ASPECTS, type Aspect } from '@/core/types';
  *   ?aspect=16:9     force an aspect
  *   ?frozen=<ms>     park the playhead at an exact time
  *   ?thumb=<px>      cap the preview's short edge, for thumbnail capture
+ *   ?perf=1          show the frame-rate readout in a production build too (D-154)
  */
 export type RenderParams = {
   readonly template: string | null;
@@ -21,6 +22,7 @@ export type RenderParams = {
   readonly aspect: Aspect | null;
   readonly frozenMs: number | null;
   readonly thumbShortEdge: number | null;
+  readonly perf: boolean;
 };
 
 function parse(): RenderParams {
@@ -44,10 +46,11 @@ function parse(): RenderParams {
       aspect,
       frozenMs: frozen !== null && Number.isFinite(frozen) ? frozen : null,
       thumbShortEdge: thumb !== null && Number.isFinite(thumb) && thumb > 0 ? thumb : null,
+      perf: params.get('perf') === '1',
     };
   } catch {
     // No location — a worker or a test harness.
-    return { template: null, scene: null, aspect: null, frozenMs: null, thumbShortEdge: null };
+    return { template: null, scene: null, aspect: null, frozenMs: null, thumbShortEdge: null, perf: false };
   }
 }
 

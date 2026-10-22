@@ -36,10 +36,21 @@ export const EMPTY_MEDIA: MediaResolver = {
 export type RenderStats = {
   frameCount: number;
   lastFrameMs: number;
+  /** Every frame's time added up, so a mean over any stretch is two readings apart (D-154). */
+  frameMsTotal: number;
   lastBuildMs: number;
   /** How many times build() has actually run. §16 forbids it inside the render
    *  loop, so this must stay flat while frameCount climbs. */
   buildCount: number;
+  /*
+   * The preview loop's own counters (D-154); the export leaves them at zero.
+   * Frames shown while playing, how many of those arrived late, and the
+   * canvas backing store the last frame was drawn at.
+   */
+  playedFrames: number;
+  droppedFrames: number;
+  backingW: number;
+  backingH: number;
 };
 
 export type RenderRig = {
@@ -125,7 +136,10 @@ export function createRenderRig(
     media,
     drawn: null,
     watermark,
-    stats: { frameCount: 0, lastFrameMs: 0, lastBuildMs: 0, buildCount: 0 },
+    stats: {
+      frameCount: 0, lastFrameMs: 0, frameMsTotal: 0, lastBuildMs: 0, buildCount: 0,
+      playedFrames: 0, droppedFrames: 0, backingW: 0, backingH: 0,
+    },
   };
 }
 

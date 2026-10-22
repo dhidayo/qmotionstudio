@@ -379,7 +379,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
           <PurposeBar variant="wide" />
           <div className="relative min-h-0 flex-1">
             <Artboard project={project} clock={clock} rig={rig} media={media} />
-            <PerfOverlay rig={rig} />
+            {(import.meta.env.DEV || renderParams().perf) && <PerfOverlay rig={rig} />}
           </div>
           <ToolStrip onOpenPanel={layout === 'desktop' ? undefined : () => { setSheet(true); }} />
           {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}

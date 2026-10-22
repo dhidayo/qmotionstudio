@@ -14,6 +14,14 @@ import { makeCanvas, context2d, type AnyCanvas } from './surface';
  * closely. Going down and back up in one jump instead is much cheaper to write
  * and visibly wrong — a single large upscale leaves stepped, faceted edges on
  * exactly the soft gradients blur is usually used for.
+ *
+ * Bilinear means `imageSmoothingQuality = 'low'` (D-154). The chain asked for
+ * 'high' — bicubic, with mipmaps — on every step. With 'low', and the chain
+ * stopping one doubling short (below), a frame of a blurred-photo background
+ * at 1184×666 takes a quarter to a third of the time, and the picture differs
+ * by 1.7 levels in 255 on average, six at most: nothing anyone can see. A
+ * layer is drawn into the scratch as it would be onto the canvas, whose
+ * default is 'low' too.
  */
 
 /** Below this the blur is invisible and the round trip is pure waste. */
@@ -58,11 +66,20 @@ export function releaseBlurScratch(): void {
   pool.length = 0;
 }
 
+/** Cleared past the edge of what a step draws: see `prepare`. */
+const EDGE_MARGIN = 2;
+
 function prepare(surface: Surface, w: number, h: number): void {
   surface.ctx.setTransform(1, 0, 0, 1, 0, 0);
-  surface.ctx.clearRect(0, 0, w, h);
+  /*
+   * A little past the edge too (D-154). A smoothed draw from part of a
+   * surface reads the pixels just outside that part, and a pooled surface
+   * still holds whatever a larger blur left there: it showed as a thin dark
+   * line along the right and bottom of a blurred card's box.
+   */
+  surface.ctx.clearRect(0, 0, Math.ceil(w) + EDGE_MARGIN, Math.ceil(h) + EDGE_MARGIN);
   surface.ctx.imageSmoothingEnabled = true;
-  surface.ctx.imageSmoothingQuality = 'high';
+  surface.ctx.imageSmoothingQuality = 'low';
 }
 
 /**
@@ -114,8 +131,10 @@ export function withBlur(
   // bilinear reduction, which is what keeps the result smooth.
   const steps = Math.max(1, Math.round(Math.log2(downscale)));
 
-  const ping = surfaceAt(base + 1, pixelW, pixelH);
-  const pong = surfaceAt(base + 2, pixelW, pixelH);
+  // Half size is enough: the first halving and the last doubling both land
+  // at or under it, now that the chain stops short of full size (D-154).
+  const ping = surfaceAt(base + 1, pixelW / 2, pixelH / 2);
+  const pong = surfaceAt(base + 2, pixelW / 2, pixelH / 2);
 
   let source = full;
   let target = ping;
@@ -144,9 +163,16 @@ export function withBlur(
     }
   }
 
-  // Back up the chain by doubling. Going straight to full size in one draw is
-  // what produces the stepped edges this chain exists to avoid.
-  while (curW * 2 <= pixelW && curH * 2 <= pixelH) {
+  /*
+   * Back up the chain by doubling. Going straight to full size in one draw is
+   * what produces the stepped edges this chain exists to avoid.
+   *
+   * It stops one doubling short, and the draw onto the canvas below makes the
+   * last step of two to four times (D-154). The full-size step only to copy
+   * it one to one afterwards was a whole extra pass over the largest surface
+   * in the chain, for a difference of a level or two in 255.
+   */
+  while (curW * 4 <= pixelW && curH * 4 <= pixelH) {
     const nextW = Math.min(pixelW, curW * 2);
     const nextH = Math.min(pixelH, curH * 2);
 
@@ -162,7 +188,7 @@ export function withBlur(
 
   ctx.save();
   ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingQuality = 'low';
   ctx.drawImage(
     source.canvas,
     0, 0, curW, curH,

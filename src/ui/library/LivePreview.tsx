@@ -117,14 +117,18 @@ function LiveCanvas({
     return () => { clock.pause(); };
   }, [clock, project]);
 
-  const drawn = usePreviewLoop(canvas, project, clock, rig, media);
+  // One fixed size, playing or paused: a preview is small already (D-154 owns the backing store in the loop).
+  const { w, h } = backing;
+  const sizes = useMemo(() => {
+    const size = { w, h };
+    return { playing: size, paused: size, shown: size };
+  }, [w, h]);
+  const drawn = usePreviewLoop(canvas, project, clock, rig, media, sizes);
   useEffect(() => { if (drawn !== null) onDrawn(project); }, [drawn, project, onDrawn]);
 
   return (
     <canvas
       ref={setCanvas}
-      width={backing.w}
-      height={backing.h}
       data-live-preview={project.aspect}
       aria-hidden
       className="absolute inset-0 block size-full"

@@ -138,6 +138,7 @@ export function renderFrame(
 
   rig.stats.frameCount += 1;
   rig.stats.lastFrameMs = now() - started;
+  rig.stats.frameMsTotal += rig.stats.lastFrameMs;
 }
 
 /**
