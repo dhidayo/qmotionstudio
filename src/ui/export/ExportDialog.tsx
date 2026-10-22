@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { useEntitlements } from '@/entitlements';
@@ -11,10 +11,21 @@ import {
   type ExportFormat, type ExportSettings, type FormatAvailability, type QualityTier,
 } from '@/export/config';
 import { totalDurationMs } from '@/document/select/timeline';
-import { renderStills } from '@/export/stills';
-import { makeZip } from '@/export/zip';
-import { makePdf } from '@/export/pdf';
-import { Button, Section, Segmented } from '@/ui/inspector/controls';
+import type { Project } from '@/document/types';
+import type { MediaStore } from '@/media/store';
+import type { PreviewClock } from '@/core/time/clock';
+import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
+import { aspectValue, fitContain, renderSizeFor } from '@/core/math/aspect';
+import { drawStill, renderStill } from '@/export/stills';
+import {
+  defaultImagePreset, IMAGE_PRESETS, imageFileName, imageSize,
+  type ImageFormat, type ImagePreset,
+} from '@/export/imagePresets';
+import { pictureMomentMs, type PictureMoment } from '@/export/picture';
+import { restMomentMs } from '@/templates/restMoment';
+import { usePreviewClock } from '@/ui/shell/ClockProvider';
+import { isAppleTouch } from '@/ui/shell/platform';
+import { Button, Row, Section, Segmented } from '@/ui/inspector/controls';
 
 type Phase =
   | { kind: 'idle' }
@@ -22,15 +33,28 @@ type Phase =
   | { kind: 'done'; fileName: string; bytes: number; seconds: number; file: File; toPhotos: boolean; live: boolean }
   | { kind: 'error'; message: string };
 
-/** §11.8: real progress, a working cancel, and a clear error surface. */
+/**
+ * §11.8: real progress, a working cancel, and a clear error surface.
+ *
+ * What can be saved follows the mode (D-155): "allow the Design to be
+ * exportable as high definition images … user can be allowed to export as
+ * videos as well … On Video, only video can be exported." An image opens on
+ * Image, with Video beside it; a video has nothing to choose, which retires
+ * D-135's carousel of a video's scenes.
+ */
 export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const project = useEditor((s) => s.project);
   const media = useMediaStore();
   const { limits } = useEntitlements(project.mode);
+  const imageMode = project.mode === 'showcase';
 
   const [settings, setSettings] = useState<ExportSettings>(DEFAULT_EXPORT);
-  // A video, or its scenes as pictures — a carousel (D-135).
-  const [what, setWhat] = useState<'video' | 'images'>('video');
+  const [what, setWhat] = useState<'image' | 'video'>(imageMode ? 'image' : 'video');
+  const making = imageMode ? what : 'video';
+  // Chosen here so the header can say the size; offered first is the first the plan can save.
+  const [presetId, setPresetId] = useState(() => defaultImagePreset(project.aspect, limits.maxImageShortEdge).id);
+  const preset = IMAGE_PRESETS[project.aspect].find((p) => p.id === presetId) ?? defaultImagePreset(project.aspect, limits.maxImageShortEdge);
+  const picture = imageSize(project.aspect, preset);
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   const [formats, setFormats] = useState<FormatAvailability[] | null>(null);
   const handle = useRef<ExportHandle | null>(null);
@@ -121,31 +145,33 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-[14px] font-semibold">Export</h2>
           <span className="tabular text-[11px] text-ink-faint">
-            {what === 'video' ? `${size.w}×${size.h} · ${totalFrames} frames` : `${size.w}×${size.h} · ${project.scenes.length} ${project.scenes.length === 1 ? 'picture' : 'pictures'}`}
+            {making === 'video' ? `${size.w}×${size.h} · ${totalFrames} frames` : `${picture.w}×${picture.h} · one picture`}
           </span>
         </div>
 
-        {!running && (
-          <Segmented<'video' | 'images'>
-            label="Make"
+        {imageMode && !running && (
+          <Segmented<'image' | 'video'>
+            label="Save as"
             value={what}
             options={[
+              { value: 'image', label: 'Image' },
               { value: 'video', label: 'Video' },
-              { value: 'images', label: project.scenes.length > 1 ? 'Images · carousel' : 'Image' },
             ]}
             onChange={setWhat}
           />
         )}
 
-        {what === 'images' ? (
-          <ImagesExport shortEdge={settings.shortEdge} onShortEdge={(shortEdge) => { setSettings((s) => ({ ...s, shortEdge })); }} onClose={onClose} />
+        {making === 'image' ? (
+          <ImageExport preset={preset} onPreset={setPresetId} onClose={onClose} />
         ) : (<>
 
         {!offline && (
-          <p className="mb-3 rounded-md border border-edge p-2 text-[11px] leading-relaxed text-ink-muted">
+          <p className="mb-3 rounded-md border border-edge p-2 text-[11px] leading-relaxed text-ink-muted" data-export-fallback>
             This browser has no WebCodecs support, so export falls back to
             real-time recording — WebM only. It takes as long as the clip and
             the result may drop frames.
+            {/* The recording films the canvas alone: say so before the music is missed (D-155). */}
+            {project.audio.length > 0 && <> It is also <strong style={{ color: 'var(--c-ink)' }} data-export-silent>without sound</strong>: your music will not be in the file.</>}
           </p>
         )}
 
@@ -271,68 +297,94 @@ function savesToPhotos(file: File | readonly File[]): boolean {
   }
 }
 
-const isApple = (): boolean =>
-  /iphone|ipad|ipod/i.test(navigator.userAgent) || (/macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+/**
+ * The picture moment as React state (D-155): the frame Export → Image saves,
+ * re-read whenever the transport changes — a pause, a seek, the play ending.
+ * Between those it cannot change: while playing it is the picture moment.
+ */
+function usePictureMoment(clock: PreviewClock | null, project: Project): PictureMoment {
+  const videoMs = totalDurationMs(project);
+  const restMs = restMomentMs(project);
+  const subscribe = useCallback(
+    (onChange: () => void) => (clock === null ? () => undefined : clock.subscribe(onChange)),
+    [clock],
+  );
+  // A string, so an unchanged moment is the same snapshot.
+  const key = useSyncExternalStore(subscribe, () => {
+    const moment = pictureMomentMs({
+      videoMs,
+      restMs,
+      clockMs: clock?.timeMs ?? 0,
+      playing: clock?.playing ?? false,
+      ended: clock?.ended ?? false,
+    });
+    return `${moment.atMs}|${moment.source}`;
+  });
+  const [at, source] = key.split('|');
+  return { atMs: Number(at), source: source === 'paused' ? 'paused' : 'rest' };
+}
+
+/** In whole hundredths, as the slider's readout says it: the last frame of 10s is 9.99s, not 10.00s. */
+const seconds = (ms: number): string => `${(Math.floor(ms / 10) / 100).toFixed(2)}s`;
 
 /**
- * The scenes as pictures (D-135): PNGs — one ZIP on a computer, straight to
- * Photos on a phone — or a PDF, which LinkedIn shows as a swipeable document.
+ * An image as a picture (D-155): "high definition images, which can serve as
+ * … picture posting, thumbnail pictures for youtube videos or blogposts".
+ *
+ * The sizes are offered as what they are for, in the image's own frame shape
+ * (`IMAGE_PRESETS`), as PNG or JPG; a YouTube thumbnail is a JPG kept under
+ * YouTube's 2 MB. The picture is the frame on screen — the picture moment,
+ * or the frame paused on — shown small above the choices, with the moment
+ * named. Free saves up to full HD with the watermark; Pro up to 4K.
  */
-function ImagesExport({
-  shortEdge,
-  onShortEdge,
+function ImageExport({
+  preset,
+  onPreset,
   onClose,
 }: {
-  shortEdge: 720 | 1080;
-  onShortEdge: (shortEdge: 720 | 1080) => void;
+  preset: ImagePreset;
+  onPreset: (id: string) => void;
   onClose: () => void;
 }): React.JSX.Element {
   const project = useEditor((s) => s.project);
   const media = useMediaStore();
+  const clock = usePreviewClock();
   const { limits } = useEntitlements(project.mode);
-  const [format, setFormat] = useState<'png' | 'pdf'>('png');
+  const [chosenFormat, setFormat] = useState<ImageFormat>('png');
+  // A destination that takes only one format decides it.
+  const format = preset.format ?? chosenFormat;
+  const size = imageSize(project.aspect, preset);
+  const locked = preset.shortEdge > limits.maxImageShortEdge;
+  const moment = usePictureMoment(clock, project);
+  const restMs = restMomentMs(project);
   const [state, setState] = useState<
     | { kind: 'idle' }
-    | { kind: 'running'; done: number; total: number }
-    | { kind: 'done'; files: readonly File[]; share: boolean; note: string }
+    | { kind: 'running' }
+    | { kind: 'done'; file: File; share: boolean; fits: boolean }
     | { kind: 'error'; message: string }
   >({ kind: 'idle' });
   const [shareError, setShareError] = useState<string | null>(null);
-  const size = exportSize(project.aspect, { ...DEFAULT_EXPORT, shortEdge });
-  const count = project.scenes.length;
-  const stem = (project.name.trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').toLowerCase() || 'motion-studio') + `-${shortEdge}p`;
+  const [sent, setSent] = useState(false);
 
   const run = (): void => {
     setSent(false);
-    setState({ kind: 'running', done: 0, total: count });
-    void renderStills({
+    setShareError(null);
+    setState({ kind: 'running' });
+    void renderStill({
       project,
       media,
       size,
+      atMs: moment.atMs,
       watermark: limits.watermark,
-      type: format === 'pdf' ? 'image/jpeg' : 'image/png',
-      stem,
-      onProgress: (done, total) => { setState({ kind: 'running', done, total }); },
+      format,
+      maxBytes: preset.maxBytes,
     })
-      .then(async (stills) => {
-        if (format === 'pdf') {
-          const pages = await Promise.all(stills.map(async (still) => ({ jpeg: new Uint8Array(await still.blob.arrayBuffer()), width: still.width, height: still.height })));
-          const file = new File([makePdf(pages)], `${stem}.pdf`, { type: 'application/pdf' });
-          const share = savesToPhotos(file);
-          if (!share) downloadBlob(file, file.name);
-          setState({ kind: 'done', files: [file], share, note: `${file.name} — ${stills.length} ${stills.length === 1 ? 'page' : 'pages'}.` });
-          return;
-        }
-        const files = stills.map((still) => new File([still.blob], still.name, { type: 'image/png' }));
-        const share = savesToPhotos(files);
-        if (!share) {
-          if (files.length === 1 && files[0]) downloadBlob(files[0], files[0].name);
-          else {
-            const zip = makeZip(await Promise.all(files.map(async (file) => ({ name: file.name, data: new Uint8Array(await file.arrayBuffer()) }))));
-            downloadBlob(zip, `${stem}-slides.zip`);
-          }
-        }
-        setState({ kind: 'done', files, share, note: files.length === 1 ? `Saved ${files[0]?.name ?? 'the picture'}.` : `Saved ${files.length} slides, in order, as ${stem}-slides.zip.` });
+      .then(({ blob, fits }) => {
+        const file = new File([blob], imageFileName(project.name, size, format), { type: blob.type || (format === 'png' ? 'image/png' : 'image/jpeg') });
+        // On a phone the picture goes to Photos through the share sheet (D-125).
+        const share = savesToPhotos(file);
+        if (!share) downloadBlob(file, file.name);
+        setState({ kind: 'done', file, share, fits });
       })
       .catch((error: unknown) => {
         // §16: an export error is said, never swallowed.
@@ -341,74 +393,202 @@ function ImagesExport({
       });
   };
 
-  const [sent, setSent] = useState(false);
-  const share = (files: readonly File[]): void => {
+  const share = (file: File): void => {
     setShareError(null);
-    navigator.share({ files: [...files], title: project.name })
+    navigator.share({ files: [file], title: project.name })
       .then(() => { setSent(true); })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === 'AbortError') return;
-        console.error('Sharing the images failed.', reason);
+        console.error('Sharing the image failed.', reason);
         setShareError(reason instanceof Error ? reason.message : String(reason));
       });
   };
 
-  return (
-    <div data-export-images>
-      <p className="mb-3 text-[11px] leading-relaxed text-ink-muted">
-        {count > 1
-          ? 'One picture per scene, taken once each has settled — ready for an Instagram carousel or a LinkedIn document.'
-          : 'A still of this design, once it has settled.'}
-      </p>
-      <Section>
-        <Segmented<'png' | 'pdf'>
-          label="As"
-          value={format}
-          options={[
-            { value: 'png', label: count > 1 ? 'Pictures · PNG' : 'Picture · PNG' },
-            { value: 'pdf', label: 'PDF · LinkedIn' },
-          ]}
-          onChange={setFormat}
-        />
-        <Segmented<720 | 1080>
-          label="Size"
-          value={shortEdge}
-          options={[{ value: 720, label: '720p' }, { value: 1080, label: '1080p' }]}
-          onChange={onShortEdge}
-        />
-      </Section>
-      {limits.watermark && <p className="mb-3 text-[11px] text-ink-faint">Free pictures carry the small watermark.</p>}
+  const mb = (bytes: number): string => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-      {state.kind === 'running' && (
-        <p className="mb-3 text-[12px] text-ink-muted" role="status">Drawing picture {state.done + (state.done < state.total ? 1 : 0)} of {state.total}…</p>
+  return (
+    <div data-export-image>
+      <div className="mb-3 flex items-center gap-3">
+        <StillPreview project={project} media={media} atMs={moment.atMs} watermark={limits.watermark} />
+        <div className="min-w-0 flex-1 text-[11px] leading-relaxed text-ink-muted" data-picture-moment={moment.source}>
+          {moment.source === 'rest' ? (
+            <>
+              <p className="font-semibold text-ink">Picture moment · {seconds(moment.atMs)}</p>
+              <p>Where the design comes to rest. Pause on another frame to save that one instead.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-semibold text-ink">The frame you paused on · {seconds(moment.atMs)}</p>
+              {restMs !== null && clock !== null && (
+                <button
+                  type="button"
+                  onClick={() => { clock.pause(); clock.seek(restMs); }}
+                  className="mt-1 rounded-md border border-edge px-2 py-0.5 text-[11px] hover:bg-panel-alt"
+                >
+                  Use the picture moment
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <Section>
+        <Row label="Size">
+          {/* One column that may shrink, so a long use is cut short rather than widening the dialog. */}
+          <div role="radiogroup" aria-label="Size" className="grid grid-cols-1 gap-1">
+            {IMAGE_PRESETS[project.aspect].map((option) => {
+              const optionSize = imageSize(project.aspect, option);
+              const active = option.id === preset.id;
+              const pro = option.shortEdge > limits.maxImageShortEdge;
+              const dims = `${optionSize.w} × ${optionSize.h}`;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={`${dims}, ${option.use}${pro ? ', Pro' : ''}`}
+                  onClick={() => { onPreset(option.id); }}
+                  className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-left transition-colors"
+                  style={{
+                    borderColor: active ? 'var(--c-accent)' : 'var(--c-edge)',
+                    background: active ? 'var(--c-accent-soft)' : 'transparent',
+                    transitionDuration: 'var(--t-fast)',
+                  }}
+                >
+                  <span className="tabular w-[84px] shrink-0 text-[12px] font-semibold" style={{ color: active ? 'var(--c-accent)' : 'var(--c-ink)' }}>{dims}</span>
+                  <span className="min-w-0 flex-1 truncate text-[11px] text-ink-muted">{option.use}</span>
+                  {pro && (
+                    <span className="shrink-0 rounded-sm px-1 py-0.5 text-[9px] font-bold uppercase" style={{ background: 'var(--c-pro-soft)', color: 'var(--c-pro)' }}>
+                      Pro
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </Row>
+        {preset.format === undefined ? (
+          <Segmented<ImageFormat>
+            label="Format"
+            value={format}
+            options={[
+              { value: 'png', label: 'PNG · sharpest' },
+              { value: 'jpeg', label: 'JPG · smaller file' },
+            ]}
+            onChange={setFormat}
+          />
+        ) : (
+          <Row label="Format">
+            <p className="text-[11px] text-ink-muted" data-format-note>{preset.why ?? (format === 'png' ? 'PNG' : 'JPG')}</p>
+          </Row>
+        )}
+      </Section>
+
+      {locked && (
+        <p className="mb-3 rounded-md border p-2 text-[11px] leading-relaxed" style={{ borderColor: 'var(--c-pro)', color: 'var(--c-ink-muted)' }} data-image-pro>
+          <strong style={{ color: 'var(--c-pro)' }}>Pro</strong> saves pictures up to 4K. Free pictures go up to {limits.maxImageShortEdge} pixels on the short side.
+        </p>
       )}
+      {limits.watermark && !locked && <p className="mb-3 text-[11px] text-ink-faint">Free pictures carry the small watermark.</p>}
+
+      {state.kind === 'running' && <p className="mb-3 text-[12px] text-ink-muted" role="status">Drawing the picture…</p>}
       {state.kind === 'error' && <p className="mb-3 text-[11px]" style={{ color: 'var(--c-danger)' }}>{state.message}</p>}
-      {state.kind === 'done' && !state.share && <p className="mb-3 text-[11px] text-ink-muted" data-images-done>{state.note}</p>}
+      {state.kind === 'done' && !state.share && (
+        <p className="mb-3 text-[11px] leading-relaxed text-ink-muted" data-image-done>
+          Saved <strong style={{ color: 'var(--c-ink)' }}>{state.file.name}</strong> — {mb(state.file.size)}.
+          {!state.fits && ' That is larger than this size allows; a design with fewer photos makes a smaller file.'}
+        </p>
+      )}
       {state.kind === 'done' && state.share && (
         <div className="mb-3" data-save-to-photos>
           <p className="mb-2 text-[12px] text-ink-muted">
-            {format === 'pdf' ? 'Your PDF is ready. Send it to LinkedIn or save it to Files.' : isApple() ? <>Tap <strong style={{ color: 'var(--c-ink)' }}>Save to Photos</strong>, then <strong style={{ color: 'var(--c-ink)' }}>Save {state.files.length === 1 ? 'Image' : `${state.files.length} Images`}</strong>.</> : 'Save them to your gallery or send them straight to an app.'}
+            {isAppleTouch() ? <>Tap <strong style={{ color: 'var(--c-ink)' }}>Save to Photos</strong>, then <strong style={{ color: 'var(--c-ink)' }}>Save Image</strong>.</> : 'Save it to your gallery or send it straight to an app.'}
           </p>
           {sent ? (
             <p className="flex items-center gap-2 rounded-xl border px-3 py-3 text-[14px] font-semibold" style={{ borderColor: 'var(--c-accent)', color: 'var(--c-accent)' }} role="status" data-saved>
-              <span aria-hidden>✓</span> {format === 'pdf' ? 'Done — the PDF went where you sent it.' : isApple() ? `Saved — ${state.files.length === 1 ? 'your picture is' : `your ${state.files.length} pictures are`} in Photos.` : 'Done — sent where you chose.'}
+              <span aria-hidden>✓</span> {isAppleTouch() ? 'Saved — your picture is in Photos.' : 'Done — sent where you chose.'}
             </p>
           ) : (
-            <button type="button" onClick={() => { share(state.files); }} className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink">
-              {format === 'pdf' ? 'Share the PDF' : isApple() ? 'Save to Photos' : 'Save or share'}
+            <button type="button" onClick={() => { share(state.file); }} className="w-full rounded-xl bg-accent py-3 text-[15px] font-semibold text-accent-ink">
+              {isAppleTouch() ? 'Save to Photos' : 'Save or share'}
             </button>
           )}
+          <button
+            type="button"
+            onClick={() => { downloadBlob(state.file, state.file.name); }}
+            className="mt-1.5 w-full rounded-xl border border-edge py-2 text-[13px]"
+          >
+            Save to Files instead
+          </button>
           {shareError !== null && <p className="mt-2 text-[11px]" style={{ color: 'var(--c-danger)' }}>Could not open sharing: {shareError}</p>}
         </div>
       )}
 
       <div className="flex gap-1">
         <Button onClick={onClose}>Close</Button>
-        <Button variant="accent" onClick={run} disabled={state.kind === 'running'}>
-          {state.kind === 'done' ? 'Export again' : count > 1 ? `Export ${count} pictures` : 'Export picture'}
+        <Button variant="accent" onClick={run} disabled={state.kind === 'running' || locked}>
+          {state.kind === 'done' ? 'Export again' : 'Export image'}
         </Button>
       </div>
     </div>
+  );
+}
+
+/** The largest the preview is drawn, in CSS pixels: a glance, not a second artboard. */
+const PREVIEW_BOX = { w: 132, h: 132 };
+
+/**
+ * The picture, small, as it will be saved (D-155) — drawn by the exporter's
+ * own renderer on a rig of its own, never the artboard's (D-001), and
+ * redrawn a moment after the frame or the document changes.
+ */
+function StillPreview({
+  project,
+  media,
+  atMs,
+  watermark,
+}: {
+  project: Project;
+  media: MediaStore;
+  atMs: number;
+  watermark: boolean;
+}): React.JSX.Element {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const box = fitContain(PREVIEW_BOX, aspectValue(project.aspect));
+  const dpr = typeof devicePixelRatio === 'number' ? Math.min(devicePixelRatio, 2) : 1;
+  const backing = renderSizeFor(project.aspect, Math.round(Math.min(box.w, box.h) * dpr));
+  // Built again on a change of plan, so the watermark comes and goes with it (§12).
+  const rig = useMemo(() => createRenderRig(media, () => watermark), [media, watermark]);
+  useEffect(() => () => { disposeRenderRig(rig); }, [rig]);
+
+  useEffect(() => {
+    const el = canvas.current;
+    const ctx = el?.getContext('2d', { alpha: false });
+    if (!ctx) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      drawStill(ctx, project, media, atMs, rig).catch((error: unknown) => {
+        if (!cancelled) console.error('Could not draw the picture preview.', error);
+      });
+    }, 120);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [project, media, atMs, rig, backing.w, backing.h]);
+
+  return (
+    // As wide as the box whatever the shape, so the words beside it line up; as tall as the picture.
+    <span className="grid shrink-0 items-center justify-items-start" style={{ width: PREVIEW_BOX.w, height: box.h }}>
+      <canvas
+        ref={canvas}
+        width={backing.w}
+        height={backing.h}
+        aria-label="The picture, as it will be saved"
+        data-still-preview
+        className="block rounded-md border border-edge"
+        style={{ width: box.w, height: box.h, background: 'var(--c-panel-alt)' }}
+      />
+    </span>
   );
 }
 
@@ -419,7 +599,7 @@ function SaveToPhotos({ file, bytes }: { file: File; bytes: number }): React.JSX
   // it has been saved or not… would have helped the users from clicking multiple times".
   const [sent, setSent] = useState(false);
   // An iPad asks for the desktop site, so it says "Macintosh" — with a touch screen.
-  const apple = isApple();
+  const apple = isAppleTouch();
 
   const share = (): void => {
     setError(null);

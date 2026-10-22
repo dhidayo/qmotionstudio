@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ASPECTS, type Aspect } from '@/core/types';
 import type { PreviewClock } from '@/core/time/clock';
 import { useEditor } from '@/state/store';
-import { MODE_LABEL } from '@/ui/shell/modeLabels';
+import { MODE_COPY } from '@/ui/shell/modeLabels';
+import { switchMode } from '@/ui/shell/switchMode';
 import { useOverlays, type PhonePanel } from '@/ui/shell/overlays';
 import { ScenePicker } from '@/ui/timeline/ScenePicker';
 import { LibraryRail } from '@/ui/library/LibraryRail';
@@ -59,6 +60,7 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
   const close = useOverlays((o) => o.openPhonePanel);
   const section = useOverlays((o) => o.phoneSection);
   const template = useEditor((s) => s.template);
+  const mode = useEditor((s) => s.project.mode);
   const done = (): void => { close(null); };
   // Long panels show one section at a time on a phone (D-114).
   const tabs = (body: React.ReactNode): React.JSX.Element => <SectionTabs initial={section}>{body}</SectionTabs>;
@@ -66,7 +68,7 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
   switch (panel) {
     case 'designs':
       return (
-        <BottomSheet title="Choose a design" onClose={done} tall>
+        <BottomSheet title={MODE_COPY[mode].choose} onClose={done} tall>
           <LibraryRail variant="sheet" onPicked={done} />
         </BottomSheet>
       );
@@ -199,7 +201,6 @@ function AddPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
 function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const name = useEditor((s) => s.project.name);
   const mode = useEditor((s) => s.project.mode);
-  const setMode = useEditor((s) => s.setMode);
   const theme = useEditor((s) => s.theme);
   const setTheme = useEditor((s) => s.setTheme);
   const setProjectsOpen = useEditor((s) => s.setProjectsOpen);
@@ -227,14 +228,14 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
         className="mt-1 w-full rounded-lg border border-edge bg-panel-alt px-3 py-2 text-[15px] focus:border-accent focus:outline-none"
       />
 
-      <div className="mt-4 text-[12px] text-ink-muted">Kind of video</div>
+      <div className="mt-4 text-[12px] text-ink-muted">Mode</div>
       <div className="mt-1 grid grid-cols-2 gap-1.5">
         {(['showcase', 'motionAd'] as const).map((m) => (
           <button
             key={m}
             type="button"
             aria-pressed={mode === m}
-            onClick={() => { if (mode !== m) setMode(m); onClose(); }}
+            onClick={() => { switchMode(m); onClose(); }}
             className="rounded-lg border px-2 py-2.5 text-[14px]"
             style={{
               borderColor: mode === m ? 'var(--c-accent)' : 'var(--c-edge)',
@@ -243,15 +244,15 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
               fontWeight: mode === m ? 600 : 400,
             }}
           >
-            {MODE_LABEL[m]}
-            <span className="block text-[11px] font-normal text-ink-muted">{m === 'showcase' ? 'One looping scene' : 'Scenes, layers, music'}</span>
+            {MODE_COPY[m].label}
+            <span className="block text-[11px] font-normal text-ink-muted">{MODE_COPY[m].subtitle}</span>
           </button>
         ))}
       </div>
 
       <div className="mt-4 divide-y divide-[var(--c-edge)] border-y border-edge">
-        {row('New design', () => { void startNew('template'); onClose(); }, 'One scene')}
-        {row('New video', () => { void startNew('blank'); onClose(); }, 'Scenes in sequence')}
+        {row(MODE_COPY.showcase.newProject, () => { void startNew('template'); onClose(); }, MODE_COPY.showcase.newHint)}
+        {row(MODE_COPY.motionAd.newProject, () => { void startNew('blank'); onClose(); }, MODE_COPY.motionAd.newHint)}
         {row('Open…', () => { onClose(); setProjectsOpen(true); }, 'Your projects')}
         {row('Save project file', () => { file.save(); }, '.qmotion')}
         {row('Open project file…', () => { file.open(); })}

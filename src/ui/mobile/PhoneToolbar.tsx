@@ -3,6 +3,7 @@ import { totalDurationMs } from '@/document/select/timeline';
 import { useEditor } from '@/state/store';
 import { useShallow } from 'zustand/react/shallow';
 import { useOverlays } from '@/ui/shell/overlays';
+import { MODE_COPY } from '@/ui/shell/modeLabels';
 import { deleteSelection, deleteSlot, duplicateSelection, findEffect, overlayLabel } from '@/ui/editing/commands';
 import { Icon, type IconName } from './Icon';
 
@@ -160,7 +161,7 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
     };
   }
 
-  const designs: Tool = { label: 'Designs', icon: 'designs', onSelect: () => { o.openPhonePanel('designs'); } };
+  const designs: Tool = { label: MODE_COPY[project.mode].tool, icon: 'designs', onSelect: () => { o.openPhonePanel('designs'); } };
   const photos: Tool = { label: 'Photos', icon: 'photo', onSelect: () => { o.openPhonePanel('photos'); } };
   const text: Tool = { label: 'Text', icon: 'text', onSelect: () => { o.openPhonePanel('text'); } };
   const effects: Tool = { label: 'Effects', icon: 'effects', onSelect: () => { o.openPhonePanel('effects'); } };

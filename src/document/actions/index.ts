@@ -7,6 +7,8 @@ import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../selec
 import { MAX_TRACKS, compactTracks, overlapsOn, placeNew, settleTrack, usedTracks } from '../select/tracks';
 import { sceneLengthMs, sceneSpans } from '../select/timeline';
 import { projectPhotos } from '../select/media';
+import { layersInSpan, placeAmong } from '../select/sceneLayers';
+import { MODE_LABEL } from '../modeNames';
 import { LOGO_KEY } from '../types';
 import type {
   AnimPreset,
@@ -1227,6 +1229,29 @@ export function addScene(scene: Scene, atIndex?: number): Action {
   };
 }
 
+/**
+ * A saved image as a scene, with its layers (D-155): words from + Add text and
+ * extra photos come along, moved to where the new scene starts and cut to its
+ * length, so the scene is the image as it was made, animated. One undo step.
+ * `layers` are in the image's own time; each gets a new id, since a copy of a
+ * project shares its layers' ids with the original.
+ */
+export function addSceneWithLayers(scene: Scene, layers: readonly Overlay[], atIndex: number): Action {
+  const add = addScene(scene, atIndex);
+  return {
+    label: add.label,
+    apply: (project, scope) => {
+      const next = add.apply(project, scope);
+      const at = next.scenes.findIndex((s) => s.id === scene.id);
+      const span = sceneSpans(next.scenes)[at];
+      if (!span || layers.length === 0) return next;
+      const moved = layersInSpan(layers, { fromMs: 0, toMs: span.endMs - span.startMs }, span.startMs)
+        .map((overlay) => ({ ...overlay, id: newId('ovl') }));
+      return { ...next, overlays: [...next.overlays, ...placeAmong(next.overlays, moved)] };
+    },
+  };
+}
+
 export function duplicateScene(index: number): Action {
   return {
     label: 'Duplicate scene',
@@ -1378,7 +1403,7 @@ export function duplicateProject(project: Project): Project {
 
 export function setMode(mode: ProjectMode): Action {
   return {
-    label: mode === 'motionAd' ? 'Switch to Video' : 'Switch to Design',
+    label: `Switch to ${MODE_LABEL[mode]}`,
     apply: (project, scope) => {
       if (project.mode === mode) return project;
 
@@ -1386,19 +1411,24 @@ export function setMode(mode: ProjectMode): Action {
         return { ...project, mode, updatedAt: Date.now() };
       }
 
-      // §5: showcase has exactly one scene and no overlays or audio. Keeping
-      // the *selected* scene rather than the first is what makes this feel like
+      // §5: showcase has exactly one scene and no music. Keeping the
+      // *selected* scene rather than the first is what makes this feel like
       // "extract this beat" instead of "throw away my work" — and it is
       // undoable either way.
-      const kept = project.scenes[scope.sceneIndex] ?? project.scenes[0];
-      if (!kept) return project;
+      const index = project.scenes[scope.sceneIndex] ? scope.sceneIndex : 0;
+      const kept = project.scenes[index];
+      const span = sceneSpans(project.scenes)[index];
+      if (!kept || !span) return project;
 
+      // The layers over that scene come too, moved to its start (D-155): the
+      // words and photos on top are part of the picture.
+      const overlays = layersInSpan(project.overlays, { fromMs: span.startMs, toMs: span.endMs }, 0);
       const { sourceAdTemplateId: _dropped, effects: _timelineFx, ...rest } = project;
       return {
         ...rest,
         mode,
         scenes: [{ ...kept, transitionIn: null }],
-        overlays: [],
+        overlays: compactTracks(overlays),
         audio: [],
         updatedAt: Date.now(),
       };

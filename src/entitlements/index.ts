@@ -15,7 +15,12 @@ export type Limits = {
   readonly maxDurationMs: number;
   readonly proTemplates: boolean;
   readonly customMedia: boolean;
-  readonly maxExportHeight: number;
+  /**
+   * The largest short edge an exported image may have (D-155): 1080 free —
+   * full HD, an Instagram post, a YouTube thumbnail — and 2160 on Pro, for 4K
+   * and print. Videos stay at 720 or 1080 for everyone.
+   */
+  readonly maxImageShortEdge: number;
   readonly watermark: boolean;
 };
 
@@ -38,7 +43,7 @@ export function getLimits(tier: Tier, mode: Mode): Limits {
       maxDurationMs: mode === 'motionAd' ? 120_000 : 60_000,
       proTemplates: true,
       customMedia: true,
-      maxExportHeight: 1080,
+      maxImageShortEdge: 2160,
       watermark: false,
     };
   }
@@ -46,7 +51,7 @@ export function getLimits(tier: Tier, mode: Mode): Limits {
     maxDurationMs: mode === 'motionAd' ? 15_000 : 60_000,
     proTemplates: false,
     customMedia: false,
-    maxExportHeight: 1080,
+    maxImageShortEdge: 1080,
     watermark: true,
   };
 }

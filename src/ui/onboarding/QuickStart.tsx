@@ -4,6 +4,7 @@ import { projectPhotos } from '@/document/select/media';
 import { useLayout } from '@/ui/shell/useLayout';
 import { useStoredWorkspace, useWorkspace } from '@/state/workspace';
 import { WORKSPACES } from '@/templates/workspaces';
+import { MODE_COPY } from '@/ui/shell/modeLabels';
 import { closeQuickStart, useQuickStartOpen } from './quickStartState';
 import { useStarterVersion } from './purposeState';
 
@@ -39,15 +40,16 @@ function Tour(): React.JSX.Element | null {
   const [exported, setExported] = useState(false);
   if (exporting && !exported) setExported(true);
 
-  // The words follow what the person said they make most (D-149).
+  // The words follow what the person said they make most (D-149), and the mode (D-155).
   const { tour } = WORKSPACES[useWorkspace()];
+  const copy = MODE_COPY[useEditor((s) => s.project.mode)];
   // "Ask users one simple question on visit": the first step points at the Purpose bar (D-150).
   const purposeChosen = useStoredWorkspace() !== null;
   const steps: readonly Step[] = [
     { target: 'purpose', title: 'Pick your purpose', body: `Social, Business or News — the designs for it come first. ${phone ? 'Tap' : 'Click'} one, even the one already on. You can change it any time.`, done: purposeChosen },
-    { target: 'design', title: 'Choose a design', body: tour.design === null ? `${phone ? 'Tap' : 'Click'} here and pick a look — a post, a product, a story told in words…` : phone ? tour.design.phone : tour.design.wide, done: designChosen },
+    { target: 'design', title: copy.choose, body: copy.tourChoose !== null ? (phone ? copy.tourChoose.phone : copy.tourChoose.wide) : tour.design === null ? `${phone ? 'Tap' : 'Click'} here and pick a look — a post, a product, a story told in words…` : phone ? tour.design.phone : tour.design.wide, done: designChosen },
     ...(tour.skipPhotos ? [] : [{ target: 'photos', title: 'Add your photos', body: tour.photos ?? 'Choose photos or take one. Each takes the place of a sample photo, and they stay in Your photos for later.', done: photosAdded }]),
-    { target: 'export', title: 'Export your video', body: `${phone ? 'Tap' : 'Click'} any words on the picture to make them yours, then export here.`, done: exported },
+    { target: 'export', title: copy.exportStep, body: `${phone ? 'Tap' : 'Click'} any words on the picture to make them yours, then export here.`, done: exported },
   ];
   const index = steps.findIndex((step) => !step.done);
   const step = steps[index];
@@ -58,7 +60,7 @@ function Tour(): React.JSX.Element | null {
     if (exporting) return null;
     return (
       <Bubble phone={phone} rect={null} label="Quick start">
-        <p className="text-[13px] font-semibold">You made your first video</p>
+        <p className="text-[13px] font-semibold">{copy.finished}</p>
         <p className="mt-0.5 text-[12px] text-ink-muted">Bring this tour back any time from the menu.</p>
         <div className="mt-2 flex justify-end">
           <button type="button" onClick={closeQuickStart} className="rounded-md bg-accent px-3 py-1 text-[12px] font-semibold text-accent-ink hover:bg-accent-hover">Done</button>

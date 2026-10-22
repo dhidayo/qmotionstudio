@@ -36,7 +36,7 @@ async function uploadOwnPhoto(page: Page): Promise<void> {
   await expect(page.locator('[data-media-id]:not([data-media-id^="sample:"])').first()).toBeVisible({ timeout: 10_000 });
 }
 
-test('a saved design comes into a video as a scene, from My designs', async ({ page }) => {
+test('a saved image comes into a video as a scene, from Your images (D-155)', async ({ page }) => {
   await page.goto('/?template=type-typewriter&aspect=9:16');
   await page.waitForSelector('canvas');
   await page.waitForTimeout(1_200);
@@ -50,14 +50,14 @@ test('a saved design comes into a video as a scene, from My designs', async ({ p
 
   await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
   const picker = page.getByRole('dialog', { name: 'Add a scene' });
-  await picker.getByRole('tab', { name: 'My designs' }).click();
+  await picker.getByRole('tab', { name: 'Your images' }).click();
   const design = picker.locator('[data-my-design]').first();
   await expect(design).toBeVisible();
   await design.click();
 
   await expect(picker).toHaveCount(0);
   await expect(sceneClips(page)).toHaveCount(before + 1);
-  await expect(toast(page)).toContainText('Added your design');
+  await expect(toast(page)).toContainText('Added your image');
 });
 
 test('a project saved as a file opens on another device with its photos', async ({ page, browser }) => {

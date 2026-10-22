@@ -1,110 +1,188 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * A video's scenes as pictures (D-135): a carousel of PNGs, a LinkedIn PDF,
- * or straight to Photos on a phone.
+ * Image saves pictures; Video saves video only (D-155).
+ *
+ * "Allow the Design to be exportable as high definition images, which can
+ * serve as … picture posting, thumbnail pictures for youtube videos or
+ * blogposts … user can be allowed to export as videos as well … On Video,
+ * only video can be exported." So an image's Export opens on Image, with
+ * sizes named for what they are for in its own frame shape, PNG or JPG, of
+ * the frame on screen; a video's has nothing to choose. This replaces D-135's
+ * carousel of a video's scenes.
  */
+
+const DEV_ONLY = 'Reads the dev-only editor handle, which the production build rightly omits.';
 
 test.use({ viewport: { width: 1440, height: 960 } });
 
 /**
- * Downloads are caught in the page and kept there: a slide ZIP is megabytes,
- * and sending it out as a list of numbers (and back in to read it) took most
- * of a test's time on a busy machine. Only names, sizes and the few bytes a
- * test looks at leave the page.
+ * Downloads are caught in the page and kept there: only names, sizes and the
+ * few bytes a test looks at leave the page.
  */
 async function captureDownloads(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    const store = globalThis as unknown as { __downloads?: { name: string; buffer: ArrayBuffer }[] };
+    const store = globalThis as unknown as { __downloads?: { name: string; buffer: ArrayBuffer; type: string }[] };
     store.__downloads = [];
     HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
       if (!this.download) return;
       const name = this.download;
-      void fetch(this.href).then((r) => r.arrayBuffer()).then((buffer) => { store.__downloads?.push({ name, buffer }); });
+      void fetch(this.href).then((r) => r.blob()).then(async (blob) => {
+        store.__downloads?.push({ name, buffer: await blob.arrayBuffer(), type: blob.type });
+      });
     };
   });
 }
 
 const downloads = (page: Page) => page.evaluate(() =>
-  (globalThis as unknown as { __downloads: { name: string; buffer: ArrayBuffer }[] }).__downloads.map((d) => ({ name: d.name, size: d.buffer.byteLength })));
+  (globalThis as unknown as { __downloads: { name: string; buffer: ArrayBuffer; type: string }[] }).__downloads
+    .map((d) => ({ name: d.name, size: d.buffer.byteLength, type: d.type })));
 
-/** Bytes `start` to `end` of the first download. */
-const bytesOf = (page: Page, start: number, end: number) => page.evaluate(([from, to]) =>
-  [...new Uint8Array((globalThis as unknown as { __downloads: { buffer: ArrayBuffer }[] }).__downloads[0]?.buffer ?? new ArrayBuffer(0), from, Math.max(0, to - from))], [start, end] as const);
+/** Bytes `start` to `end` of download `index`. */
+const bytesOf = (page: Page, index: number, start: number, end: number) => page.evaluate(([at, from, to]) =>
+  [...new Uint8Array((globalThis as unknown as { __downloads: { buffer: ArrayBuffer }[] }).__downloads[at]?.buffer ?? new ArrayBuffer(0), from, Math.max(0, to - from))], [index, start, end] as const);
 
-async function openImages(page: Page, url: string): Promise<void> {
+/** The width and height download `index` decodes to. */
+const decodedSize = (page: Page, index: number) => page.evaluate(async (at) => {
+  const entry = (globalThis as unknown as { __downloads: { buffer: ArrayBuffer; type: string }[] }).__downloads[at];
+  if (!entry) throw new Error('nothing downloaded');
+  const bitmap = await createImageBitmap(new Blob([entry.buffer], { type: entry.type }));
+  return [bitmap.width, bitmap.height];
+}, index);
+
+const exportDialog = (page: Page) => page.getByRole('dialog', { name: 'Export' });
+
+async function openExport(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await page.waitForSelector('canvas');
-  await page.waitForTimeout(2_000);
+  await page.waitForTimeout(1_500);
   await page.getByTitle(/^Export \(/).click();
-  await page.getByRole('button', { name: /^Images? / }).or(page.getByRole('button', { name: 'Image', exact: true })).click();
-  await page.getByRole('button', { name: '720p' }).click();
+  await expect(exportDialog(page)).toBeVisible();
 }
 
-test('a four-scene video becomes four slides, in order, in one ZIP', async ({ page }) => {
-  await captureDownloads(page);
-  await openImages(page, '/?template=story-big-news&aspect=4:5');
-  await page.getByRole('button', { name: 'Export 4 pictures' }).click();
-  await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(1);
-  const [zip] = await downloads(page);
-  expect(zip?.name).toMatch(/-slides\.zip$/);
-
-  // Read the archive back in the page: four PNGs, each the frame's size, each different.
-  const report = await page.evaluate(async () => {
-    const data = new Uint8Array((globalThis as unknown as { __downloads: { buffer: ArrayBuffer }[] }).__downloads[0]?.buffer ?? new ArrayBuffer(0));
-    const view = new DataView(data.buffer);
-    const end = data.length - 22;
-    const count = view.getUint16(end + 10, true);
-    let at = view.getUint32(end + 16, true);
-    const slides: { name: string; w: number; h: number; sample: number }[] = [];
-    for (let i = 0; i < count; i++) {
-      const nameLength = view.getUint16(at + 28, true);
-      const size = view.getUint32(at + 20, true);
-      const local = view.getUint32(at + 42, true);
-      const name = new TextDecoder().decode(data.slice(at + 46, at + 46 + nameLength));
-      const start = local + 30 + view.getUint16(local + 26, true);
-      const bitmap = await createImageBitmap(new Blob([data.slice(start, start + size)], { type: 'image/png' }));
-      const canvas = new OffscreenCanvas(8, 8);
-      const cx = canvas.getContext('2d');
-      cx?.drawImage(bitmap, 0, 0, 8, 8);
-      const px = cx?.getImageData(0, 0, 8, 8).data ?? new Uint8ClampedArray();
-      let sum = 0;
-      for (let k = 0; k < px.length; k += 1) sum += (px[k] ?? 0) * ((k % 7) + 1);
-      slides.push({ name, w: bitmap.width, h: bitmap.height, sample: sum });
-      at += 46 + nameLength + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
-    }
-    return slides;
-  });
-
-  expect(report.map((slide) => slide.name.slice(-7))).toEqual(['-01.png', '-02.png', '-03.png', '-04.png']);
-  for (const slide of report) expect([slide.w, slide.h]).toEqual([720, 900]);
-  expect(new Set(report.map((slide) => slide.sample)).size).toBe(4);
+test('a video saves as a video only: no pictures to choose', async ({ page }) => {
+  await openExport(page, '/?template=story-big-news&aspect=4:5');
+  const dialog = exportDialog(page);
+  await expect(dialog.getByRole('group', { name: 'Resolution' })).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Save as' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: /^Export image/ })).toHaveCount(0);
+  await expect(dialog.getByText(/carousel|PDF/)).toHaveCount(0);
 });
 
-test('as a PDF, one page per scene', async ({ page }) => {
-  await captureDownloads(page);
-  await openImages(page, '/?template=story-big-news&aspect=4:5');
-  await page.getByRole('button', { name: 'PDF · LinkedIn' }).click();
-  await page.getByRole('button', { name: 'Export 4 pictures' }).click();
-  await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(1);
-  const [pdf] = await downloads(page);
-  expect(pdf?.name).toMatch(/\.pdf$/);
-  const head = (await bytesOf(page, 0, Math.min(4000, pdf?.size ?? 0))).map((b) => String.fromCharCode(b)).join('');
-  expect(head.slice(0, 9)).toBe('%PDF-1.4\n');
-  expect(head).toContain('/Count 4');
+test('an image opens on Image, and can still be saved as a video', async ({ page }) => {
+  await openExport(page, '/?template=type-typewriter&aspect=1:1');
+  const saveAs = exportDialog(page).getByRole('group', { name: 'Save as' });
+  await expect(saveAs.getByRole('button', { name: 'Image', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(exportDialog(page).locator('[data-export-image]')).toBeVisible();
+  await saveAs.getByRole('button', { name: 'Video', exact: true }).click();
+  await expect(exportDialog(page).getByRole('group', { name: 'Resolution' })).toBeVisible();
+  await expect(exportDialog(page).locator('[data-export-image]')).toHaveCount(0);
 });
 
-test('one design becomes one picture', async ({ page }) => {
+test('a 16:9 image as a YouTube thumbnail: a JPG at 1280×720, under 2 MB', async ({ page }) => {
   await captureDownloads(page);
-  await openImages(page, '/?template=type-typewriter&aspect=1:1');
-  await page.getByRole('button', { name: 'Export picture' }).click();
+  await openExport(page, '/?template=tn-youtube-bold&aspect=16:9');
+  const dialog = exportDialog(page);
+  // The first size offered is the thumbnail, which decides its own format.
+  await expect(dialog.getByRole('radio', { name: /^1280 × 720, YouTube thumbnail/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(dialog.locator('[data-format-note]')).toContainText('JPG under 2 MB');
+  await expect(dialog.locator('[data-still-preview]')).toBeVisible();
+
+  await dialog.getByRole('button', { name: 'Export image' }).click();
+  await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(1);
+  const [jpg] = await downloads(page);
+  expect(jpg?.name).toMatch(/-1280x720\.jpg$/);
+  expect(jpg?.size).toBeLessThan(2_000_000);
+  expect(await bytesOf(page, 0, 0, 3)).toEqual([0xff, 0xd8, 0xff]);
+  expect(await decodedSize(page, 0)).toEqual([1280, 720]);
+  await expect(dialog.locator('[data-image-done]')).toContainText('-1280x720.jpg');
+});
+
+test('a 4:5 image as an Instagram post: a PNG at 1080×1350', async ({ page }) => {
+  await captureDownloads(page);
+  await openExport(page, '/?template=type-typewriter&aspect=4:5');
+  const dialog = exportDialog(page);
+  await expect(dialog.getByRole('radio', { name: /^1080 × 1350, Instagram post/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(dialog.getByRole('group', { name: 'Format' }).getByRole('button', { name: /^PNG/ })).toHaveAttribute('aria-pressed', 'true');
+
+  await dialog.getByRole('button', { name: 'Export image' }).click();
   await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(1);
   const [png] = await downloads(page);
-  expect(png?.name).toMatch(/\.png$/);
-  expect(await bytesOf(page, 1, 4)).toEqual([0x50, 0x4e, 0x47]);
+  expect(png?.name).toMatch(/-1080x1350\.png$/);
+  expect(await bytesOf(page, 0, 1, 4)).toEqual([0x50, 0x4e, 0x47]);
+  expect(await decodedSize(page, 0)).toEqual([1080, 1350]);
 });
 
-test('on a phone, the slides go to Photos through the share sheet', async ({ page }) => {
+test('4K is Pro: offered and marked, and not saved on the free plan', async ({ page }) => {
+  await openExport(page, '/?template=tn-youtube-bold&aspect=16:9');
+  const dialog = exportDialog(page);
+  const fourK = dialog.getByRole('radio', { name: /^3840 × 2160, .*Pro$/ });
+  await expect(fourK).toBeVisible();
+  await fourK.click();
+  await expect(dialog.locator('[data-image-pro]')).toContainText('Pro');
+  await expect(dialog.getByRole('button', { name: 'Export image' })).toBeDisabled();
+  // Back to a size the plan saves.
+  await dialog.getByRole('radio', { name: /^1920 × 1080/ }).click();
+  await expect(dialog.getByRole('button', { name: 'Export image' })).toBeEnabled();
+});
+
+test('the picture is the frame on screen: the one paused on, or the picture moment', async ({ page }) => {
+  test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
+  await captureDownloads(page);
+  await page.goto('/?template=tn-youtube-bold&aspect=16:9');
+  await page.waitForSelector('canvas');
+  await page.waitForTimeout(1_500);
+  // Paused on a frame of the person's own: early, while the design is still arriving.
+  await page.evaluate(() => { (globalThis as unknown as { __motionStudio: { clock: { seek: (ms: number) => void } } }).__motionStudio.clock.seek(400); });
+  await page.waitForTimeout(400);
+  const onScreen = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) throw new Error('no artboard');
+    const small = document.createElement('canvas');
+    small.width = 32;
+    small.height = 18;
+    const cx = small.getContext('2d');
+    cx?.drawImage(canvas, 0, 0, 32, 18);
+    return [...(cx?.getImageData(0, 0, 32, 18).data ?? [])];
+  });
+
+  await page.getByTitle(/^Export \(/).click();
+  const dialog = exportDialog(page);
+  await expect(dialog.locator('[data-picture-moment="paused"]')).toContainText('The frame you paused on · 0.40s');
+  await dialog.getByRole('radio', { name: /^1920 × 1080/ }).click();
+  await dialog.getByRole('group', { name: 'Format' }).getByRole('button', { name: /^PNG/ }).click();
+  await dialog.getByRole('button', { name: 'Export image' }).click();
+  await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(1);
+
+  // Then the design's own picture moment, from the dialog.
+  await dialog.getByRole('button', { name: 'Use the picture moment' }).click();
+  await expect(dialog.locator('[data-picture-moment="rest"]')).toContainText('Picture moment · 2.40s');
+  await dialog.getByRole('button', { name: 'Export again' }).click();
+  await expect.poll(async () => (await downloads(page)).length, { timeout: 30_000 }).toBe(2);
+
+  // Each file against the frame that was on screen at 0.4s, at the same small size.
+  const errors = await page.evaluate(async (screen) => {
+    const store = (globalThis as unknown as { __downloads: { buffer: ArrayBuffer; type: string }[] }).__downloads;
+    const out: number[] = [];
+    for (const entry of store) {
+      const bitmap = await createImageBitmap(new Blob([entry.buffer], { type: entry.type }));
+      const small = new OffscreenCanvas(32, 18);
+      const cx = small.getContext('2d');
+      cx?.drawImage(bitmap, 0, 0, 32, 18);
+      const px = cx?.getImageData(0, 0, 32, 18).data ?? new Uint8ClampedArray();
+      let sum = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        for (let c = 0; c < 3; c++) sum += Math.abs((px[i + c] ?? 0) - (screen[i + c] ?? 0));
+      }
+      out.push(sum / ((px.length / 4) * 3));
+    }
+    return out;
+  }, onScreen);
+  expect(errors[0], 'the paused frame is the picture saved').toBeLessThan(8);
+  expect(errors[1], 'the picture moment is another frame').toBeGreaterThan((errors[0] ?? 0) + 4);
+});
+
+test('on a phone, the picture goes to Photos through the share sheet', async ({ page }) => {
   await captureDownloads(page);
   await page.addInitScript(() => {
     const real = window.matchMedia.bind(window);
@@ -118,14 +196,14 @@ test('on a phone, the slides go to Photos through the share sheet', async ({ pag
       value: (data: ShareData) => { store.__shared = (data.files ?? []).map((f) => `${f.name}:${f.type}`); return Promise.resolve(); },
     });
   });
-  await openImages(page, '/?template=story-big-news&aspect=4:5');
-  await page.getByRole('button', { name: 'Export 4 pictures' }).click();
+  await openExport(page, '/?template=type-typewriter&aspect=1:1');
+  await exportDialog(page).getByRole('button', { name: 'Export image' }).click();
   const offer = page.locator('[data-save-to-photos]');
   await expect(offer).toBeVisible({ timeout: 30_000 });
   expect(await downloads(page)).toEqual([]);
   await offer.getByRole('button', { name: /^(Save to Photos|Save or share)$/ }).click();
   const shared = await page.evaluate(() => (globalThis as unknown as { __shared?: string[] }).__shared);
-  expect(shared?.length).toBe(4);
+  expect(shared).toHaveLength(1);
+  expect(shared?.[0]).toMatch(/-1080x1080\.png:image\/png$/);
   await expect(offer.locator('[data-saved]')).toBeVisible();
-  for (const entry of shared ?? []) expect(entry).toMatch(/\.png:image\/png$/);
 });

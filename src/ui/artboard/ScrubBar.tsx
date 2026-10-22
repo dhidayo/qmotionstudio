@@ -9,7 +9,9 @@ import { sceneSpans, timelineSpanMs } from '@/document/select/timeline';
 import { EFFECT_ROW_PX, EffectClipView, laneEffects, packEffectRows } from '@/ui/timeline/EffectRows';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
+import { useClockEnded } from '@/ui/hooks/useClockEnded';
 import { continueAsVideo } from '@/ui/editing/commands';
+import { restMomentMs } from '@/templates/restMoment';
 
 /**
  * §1.1: showcase scrubs with a simple slider, not a track timeline.
@@ -39,6 +41,9 @@ export function ScrubBar({
    */
   const durationMs = useEditor((s) => timelineSpanMs(s.project));
   const [playing, setPlaying] = useState(clock.playing);
+  const ended = useClockEnded(clock);
+  // Where an image rests, and what Export → Image saves (D-155); null in a video.
+  const pictureMs = useEditor((s) => restMomentMs(s.project));
   const shownPlaying = useRef(clock.playing);
   const range = useRef<HTMLInputElement>(null);
   const readout = useRef<HTMLSpanElement>(null);
@@ -63,13 +68,14 @@ export function ScrubBar({
   return (
     <div className="shrink-0 border-t border-edge bg-panel">
       <div className="flex items-center gap-3 px-3 py-2">
+        {/* Replay once an image has played and come to rest (D-155). */}
         {!phone && <button
           type="button"
           onClick={toggle}
-          aria-label={playing ? 'Pause' : 'Play'}
+          aria-label={playing ? 'Pause' : ended ? 'Replay' : 'Play'}
           className="w-16 rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
         >
-          {playing ? 'Pause' : 'Play'}
+          {playing ? 'Pause' : ended ? 'Replay' : 'Play'}
         </button>}
 
         {/*
@@ -98,6 +104,9 @@ export function ScrubBar({
             // A phone's thumb needs something taller than a hairline to land on.
             className={`${phone ? 'h-7' : 'h-1'} w-full accent-[var(--c-accent)]`}
           />
+          {pictureMs !== null && durationMs > 0 && (
+            <PictureMark atMs={pictureMs} durationMs={durationMs} phone={phone} onSeek={seek} />
+          )}
           <ShowcaseMotion durationMs={durationMs} onSeek={seek} />
         </div>
 
@@ -117,10 +126,10 @@ export function ScrubBar({
           type="button"
           data-continue-video
           onClick={continueAsVideo}
-          title="Make a longer video: this design becomes scene 1 and you pick the next"
-          className="shrink-0 rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink hover:bg-accent-hover"
+          title="This image becomes scene 1 of a video, animated, and you pick what comes next"
+          className="shrink-0 whitespace-nowrap rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink hover:bg-accent-hover"
         >
-          + Scene
+          Make a video
         </button>}
       </div>
       <EffectStrip durationMs={durationMs} onSeek={seek} phone={phone} />
@@ -167,10 +176,44 @@ function EffectStrip({
   );
 }
 
+/**
+ * The picture moment, marked on the slider (D-155): where the image comes to
+ * rest once it has played, and the frame Export → Image saves unless you pause
+ * on another. Pressing it goes there.
+ */
+function PictureMark({
+  atMs,
+  durationMs,
+  phone,
+  onSeek,
+}: {
+  atMs: number;
+  durationMs: number;
+  phone: boolean;
+  onSeek: (ms: number) => void;
+}): React.JSX.Element {
+  const share = Math.max(0, Math.min(1, atMs / durationMs));
+  return (
+    <button
+      type="button"
+      data-picture-mark
+      onClick={() => { onSeek(atMs); }}
+      aria-label={`Go to the picture moment, ${format(atMs)}`}
+      title="The picture: where the design rests, and what Export → Image saves"
+      className={`absolute grid -translate-x-1/2 place-items-center ${phone ? '-top-3 size-5' : '-top-3 size-4'}`}
+      // The thumb's centre travels the track less one thumb's width.
+      style={{ left: `calc(8px + (100% - 16px) * ${share})` }}
+    >
+      <span aria-hidden className="block size-2 rotate-45 rounded-[2px]" style={{ background: 'var(--c-accent)' }} />
+    </button>
+  );
+}
+
 function format(ms: number): string {
-  const total = Math.max(0, ms) / 1000;
-  const seconds = Math.floor(total);
-  const hundredths = Math.floor((total - seconds) * 100);
+  // In whole hundredths, so 2400ms — a picture moment — reads 2.40s, not 2.39s (D-155).
+  const total = Math.floor(Math.max(0, ms) / 10);
+  const seconds = Math.floor(total / 100);
+  const hundredths = total % 100;
   return `${seconds}.${hundredths.toString().padStart(2, '0')}s`;
 }
 

@@ -2,6 +2,7 @@ import { useEditor, type InspectorTab } from '@/state/store';
 import { StartActions } from '@/ui/editing/StartActions';
 import { Icon, type IconName } from '@/ui/mobile/Icon';
 import { useOverlays } from './overlays';
+import { MODE_COPY } from './modeLabels';
 import { useLayout } from './useLayout';
 import { showBackgroundSettings } from '@/ui/editing/commands';
 
@@ -88,7 +89,7 @@ export function ToolStrip({ onOpenPanel }: { onOpenPanel?: (() => void) | undefi
               style={{ color: on ? 'var(--c-accent)' : 'var(--c-ink)' }}
             >
               <Icon name={tool.icon} size={20} />
-              <span>{tool.label}</span>
+              <span>{tool.panel === 'designs' ? MODE_COPY[corporate ? 'motionAd' : 'showcase'].tool : tool.label}</span>
             </button>
           );
         })}

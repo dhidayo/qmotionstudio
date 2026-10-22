@@ -11,6 +11,7 @@ import { NO_ZOOM, useOverlays } from '@/ui/shell/overlays';
 import { useLayout } from '@/ui/shell/useLayout';
 import { usePreviewLoop } from './usePreviewLoop';
 import { CanvasSelection } from './CanvasSelection';
+import { RestFade } from './RestFade';
 
 /**
  * Preview renders at most this on the short edge regardless of display size.
@@ -135,6 +136,7 @@ export function Artboard({ project, clock, rig, media, padding = 24 }: Props): R
               display: 'block',
             }}
           />
+          <RestFade canvas={canvas} clock={clock} />
           <CanvasSelection project={project} drawn={drawn} width={display.w} />
           {/* Said while the design's code is still arriving, so a slow
               connection shows progress rather than an empty frame (D-112). */}

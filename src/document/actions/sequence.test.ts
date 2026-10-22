@@ -140,13 +140,59 @@ describe('switching modes', () => {
     expect(next.scenes[0]?.transitionIn).toBeNull();
   });
 
-  it('drops overlays and audio, which Showcase has no way to show (§5)', () => {
-    const overlay = { id: 'o', track: 0, startMs: 0, endMs: 1_000 } as Overlay;
-    const project = { ...adProject(), overlays: [overlay] };
-    const next = actions.setMode('showcase').apply(project, scope(0));
+  it('keeps the layers over the kept scene, moved to its start, and sets the rest and the music aside (D-155)', () => {
+    // adProject's scenes run 0–3000, 2500–6500 and 6100–11100.
+    const over = (id: string, startMs: number, endMs: number, track = 0): Overlay =>
+      ({ id, track, startMs, endMs } as Overlay);
+    const clip = { id: 'a', mediaId: 'm', startMs: 0, trimStartMs: 0, trimEndMs: 0, gainDb: 0, fadeInMs: 0, fadeOutMs: 0 };
+    const project = {
+      ...adProject(),
+      overlays: [over('first', 0, 1_000), over('second', 3_000, 5_000, 1), over('spans', 5_000, 8_000, 3)],
+      audio: [clip],
+    };
+    const next = actions.setMode('showcase').apply(project, scope(1));
 
-    expect(next.overlays).toEqual([]);
+    expect(next.overlays.map((o) => [o.id, o.startMs, o.endMs, o.track])).toEqual([
+      ['second', 500, 2_500, 0],
+      ['spans', 2_500, 4_000, 1],
+    ]);
     expect(next.audio).toEqual([]);
+  });
+
+  it('says the mode by its name in the undo label (D-155)', () => {
+    expect(actions.setMode('showcase').label).toBe('Switch to Image');
+    expect(actions.setMode('motionAd').label).toBe('Switch to Video');
+  });
+});
+
+describe('a saved image as a scene (D-155)', () => {
+  const words = (id: string, startMs: number, endMs: number, track = 0): Overlay =>
+    actions.makeOverlay({ kind: 'text', text: id } as Overlay['content'], { startMs, endMs, track });
+
+  it('brings its layers, moved to where the new scene starts and cut to its length', () => {
+    const scene = { ...createScene('angle-fan', 2_000), id: 'new', transitionIn: null };
+    const layers = [words('title', 0, 1_500), words('late', 1_800, 4_000, 1), words('gone', 3_000, 4_000)];
+    const next = actions.addSceneWithLayers(scene, layers, 1).apply(adProject(), scope(0));
+
+    expect(next.scenes[1]?.id).toBe('new');
+    // Scene 2 now starts as scene 1 cross-fades out, at 2400, and lasts 2000.
+    expect(next.overlays.map((o) => [o.startMs, o.endMs])).toEqual([[2_400, 3_900], [4_200, 4_400]]);
+    // New ids: a copy shares its layers' ids with the image it came from.
+    expect(next.overlays.some((o) => layers.some((l) => l.id === o.id))).toBe(false);
+  });
+
+  it('puts them on rows of their own when the video already has layers there', () => {
+    const scene = { ...createScene('angle-fan', 2_000), id: 'new', transitionIn: null };
+    const project = { ...adProject(), overlays: [words('there', 0, 20_000)] };
+    const next = actions.addSceneWithLayers(scene, [words('title', 0, 1_000)], 1).apply(project, scope(0));
+    expect(next.overlays.map((o) => o.track)).toEqual([0, 1]);
+  });
+
+  it('is one step, named as adding a scene', () => {
+    const scene = { ...createScene('angle-fan', 2_000), id: 'new', transitionIn: null };
+    const add = actions.addSceneWithLayers(scene, [], 1);
+    expect(add.label).toBe(actions.addScene(scene, 1).label);
+    expect(add.apply(adProject(), scope(0)).overlays).toEqual([]);
   });
 });
 

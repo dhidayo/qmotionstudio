@@ -56,7 +56,7 @@ export function ScenePicker({
 
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
-  // Where a new scene comes from (D-140): the library, or a design already made and saved.
+  // Where a new scene comes from (D-140, D-155): the library, or an image already made and saved.
   const [source, setSource] = useState<'library' | 'mine'>('library');
   const search = useRef<HTMLInputElement | null>(null);
 
@@ -135,9 +135,11 @@ export function ScenePicker({
   };
 
   const title = mode === 'add' ? 'Add a scene' : `Change scene ${index + 1}`;
-  const hint = mode === 'add'
-    ? 'It goes after the selected scene, with your photos, logo and colours already in it.'
-    : 'The scene keeps its photos, its text where the new design has room for it, and its length.';
+  const hint = mode !== 'add'
+    ? 'The scene keeps its photos, its text where the new design has room for it, and its length.'
+    : source === 'mine'
+      ? 'Your image comes in animated, as it plays in Image, with its words and photos, after the selected scene.'
+      : 'It goes after the selected scene, with your photos, logo and colours already in it.';
 
   return (
     <div
@@ -160,8 +162,8 @@ export function ScenePicker({
             type="search"
             value={query}
             onChange={(event) => { setQuery(event.target.value); }}
-            placeholder="Search designs"
-            aria-label="Search designs"
+            placeholder={mode === 'add' && source === 'mine' ? 'Search your images' : 'Search designs'}
+            aria-label={mode === 'add' && source === 'mine' ? 'Search your images' : 'Search designs'}
             className="order-last w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
           />
           <button
@@ -175,7 +177,7 @@ export function ScenePicker({
 
         {mode === 'add' && (
           <div className="flex gap-1.5 border-b border-edge px-4 py-2" role="tablist" aria-label="Where the scene comes from">
-            {([['library', 'New scene'], ['mine', 'My designs']] as const).map(([value, label]) => (
+            {([['library', 'New scene'], ['mine', 'Your images']] as const).map(([value, label]) => (
               <button
                 key={value}
                 type="button"
@@ -256,11 +258,13 @@ export function ScenePicker({
 }
 
 /**
- * Designs made and saved on their own, as scenes (D-140): "Can I design
+ * Images made and saved on their own, as scenes (D-140, D-155): "Can I design
  * multiple and save, then, on video I can do Add scene and the options will
  * be new scene or saved scene." Each comes in whole — its photos, words, look,
- * logo and effects — after the selected scene. The saved design itself is
- * untouched: the video gets a copy.
+ * logo and effects, and the layers added on top of it — after the selected
+ * scene, animated as it plays in Image: "the Design, if added to Video or
+ * scene, then, the animated version is what is used for that space". The
+ * saved image itself is untouched: the video gets a copy.
  */
 function MyDesigns({ query, onAdded }: { query: string; onAdded: () => void }): React.JSX.Element {
   const projectId = useEditor((s) => s.project.id);
@@ -285,7 +289,7 @@ function MyDesigns({ query, onAdded }: { query: string; onAdded: () => void }): 
         setDesigns(found);
       })
       .catch((error: unknown) => {
-        console.error('Could not read your saved designs.', error);
+        console.error('Could not read your saved images.', error);
         if (alive) setDesigns([]);
       });
     return () => { alive = false; };
@@ -299,13 +303,14 @@ function MyDesigns({ query, onAdded }: { query: string; onAdded: () => void }): 
       // Its photos are on this device; bring them in before the scene arrives.
       await restoreMedia(media, referencedMedia(design));
       await loadSceneTemplate(scene.templateId);
-      dispatch(actions.addScene({ ...scene, id: newId('scn'), transitionIn: { kind: 'crossFade', durationMs: 500 } }, index + 1));
+      // The scene and the layers over it, in one step one undo takes back.
+      dispatch(actions.addSceneWithLayers({ ...scene, id: newId('scn') }, design.overlays, index + 1));
       selectScene(index + 1);
-      showToast(`Added your design “${design.name}” as scene ${index + 2}.`);
+      showToast(`Added your image “${design.name}” as scene ${index + 2}.`);
       onAdded();
     } catch (error: unknown) {
-      console.error(`Could not add the design "${design.name}".`, error);
-      showToast('That design could not be added. Try again.');
+      console.error(`Could not add the image "${design.name}".`, error);
+      showToast('That image could not be added. Try again.');
       setBusy(null);
     }
   };
@@ -315,10 +320,10 @@ function MyDesigns({ query, onAdded }: { query: string; onAdded: () => void }): 
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3" data-my-designs>
-      {designs === null && <p className="py-6 text-center text-[12px] text-ink-faint">Reading your designs…</p>}
+      {designs === null && <p className="py-6 text-center text-[12px] text-ink-faint">Reading your images…</p>}
       {designs !== null && designs.length === 0 && (
         <p className="py-6 text-center text-[12px] leading-relaxed text-ink-muted">
-          No saved designs yet. Make one with Menu → New design; it is saved as you go, and comes here to be a scene.
+          No saved images yet. Make one with Menu → New image; it is saved as you go, and comes here to be a scene.
         </p>
       )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-5">

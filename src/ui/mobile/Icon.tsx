@@ -26,6 +26,7 @@ const PATHS = {
   redo: 'M15 14l5-5-5-5M20 9H10a6 6 0 0 0 0 12h3',
   play: 'M7 4l13 8-13 8z',
   pause: 'M7 4h3v16H7zM14 4h3v16h-3z',
+  replay: 'M4.5 14.7A8 8 0 1 0 6.3 6.3L4.2 8.5M4.2 3.5v5h5',
   more: 'M5 12h.01M12 12h.01M19 12h.01',
   timeline: 'M4 6h16M4 12h10M4 18h13',
   up: 'M6 15l6-6 6 6',

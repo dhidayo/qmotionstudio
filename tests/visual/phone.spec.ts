@@ -311,12 +311,13 @@ test.describe('the background and the plan (D-120, D-122)', () => {
 test.describe('nothing pushed off a short phone screen (D-136)', () => {
   test.use({ viewport: { width: 375, height: 600 } });
 
-  for (const [mode, card] of [['Design', 'type-typewriter'], ['Video', 'story-big-news']] as const) {
+  // The library tool is Designs in Image and Templates in Video (D-155).
+  for (const [mode, card, tool] of [['Image', 'type-typewriter', 'Designs'], ['Video', 'story-big-news', 'Templates']] as const) {
     test(`"Use this design" stays on screen — ${mode}`, async ({ page }) => {
       await page.goto(mode === 'Video' ? '/?template=story-big-news&aspect=9:16' : '/');
       await page.waitForSelector('canvas');
       await page.waitForTimeout(800);
-      await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Designs' }).click();
+      await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: tool }).click();
       await page.locator(`[data-design-card="${card}"]`).click();
       // A film's button says what it is (D-160): a whole video template, not one design.
       const use = page.getByRole('button', { name: mode === 'Video' ? 'Use this video template' : 'Use this design' });

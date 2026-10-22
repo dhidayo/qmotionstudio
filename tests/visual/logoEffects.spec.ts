@@ -99,8 +99,11 @@ test.describe('the logo lives in Look (D-105)', () => {
   test('the product and its modes go by their new names', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle('Q Motion Studio');
-    await expect(page.getByRole('button', { name: 'Design', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Video', exact: true })).toBeVisible();
+    // Image and Video, named for what each makes (D-155).
+    const modes = page.getByRole('group', { name: 'Mode' });
+    await expect(modes.getByRole('button', { name: 'Image', exact: true })).toBeVisible();
+    await expect(modes.getByRole('button', { name: 'Video', exact: true })).toBeVisible();
+    await expect(modes.getByRole('button', { name: 'Design', exact: true })).toHaveCount(0);
     // Exact: designs such as "App Showcase" are cards in the library now.
     await expect(page.getByRole('button', { name: 'Showcase', exact: true })).toHaveCount(0);
   });

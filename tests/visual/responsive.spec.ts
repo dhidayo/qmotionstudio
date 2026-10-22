@@ -29,8 +29,8 @@ test.describe('at desktop width', () => {
     await open(page);
     await expect(page.getByRole('complementary', { name: 'Template library' })).toBeVisible();
     await expect(page.locator('[data-sheet]')).toHaveCount(0);
-    // And the same way in as a phone's, under the picture (D-116).
-    await expect(page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a design' })).toBeVisible();
+    // And the same way in as a phone's, under the picture (D-116); an ad is a video (D-155).
+    await expect(page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a video template' })).toBeVisible();
   });
 });
 
@@ -62,8 +62,8 @@ test.describe('at tablet width', () => {
     await open(page);
 
     // Designs opens as a window over the editor (D-116); a tap outside it closes it.
-    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a design' }).click();
-    const designs = page.getByRole('dialog', { name: 'Choose a design' });
+    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a video template' }).click();
+    const designs = page.getByRole('dialog', { name: 'Choose a video template' });
     await expect(designs).toBeVisible();
     await page.mouse.click(12, 500);
     await expect(designs).toHaveCount(0);
@@ -99,9 +99,9 @@ test.describe('at phone width', () => {
   test('the template library opens as a sheet and can pick a template', async ({ page }) => {
     await open(page);
 
-    // A phone has its own layout (D-109): the library is "Designs" in the toolbar.
-    await page.locator('[data-phone-toolbar]').getByRole('button', { name: 'Designs' }).click();
-    const sheet = page.getByRole('dialog', { name: 'Choose a design' });
+    // A phone has its own layout (D-109): the library is in the toolbar, "Templates" in a video (D-155).
+    await page.locator('[data-phone-toolbar]').getByRole('button', { name: 'Templates' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Choose a video template' });
     await expect(sheet).toBeVisible();
     await expect(sheet.getByRole('searchbox', { name: 'Search templates' })).toBeVisible();
   });

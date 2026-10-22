@@ -124,10 +124,11 @@ test.describe('photos on top of the design', () => {
 });
 
 test.describe('a longer video from one design (D-129)', () => {
-  test('+ Scene keeps the design as scene 1 and asks for the next', async ({ page }) => {
+  test('Make a video keeps the image as scene 1 and asks for the next (D-155)', async ({ page }) => {
     await page.goto('/?template=type-typewriter&aspect=9:16');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_200);
+    await expect(page.locator('[data-continue-video]').first()).toHaveText('Make a video');
     await page.locator('[data-continue-video]').first().click();
     await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('dialog', { name: 'Add a scene' })).toBeVisible();

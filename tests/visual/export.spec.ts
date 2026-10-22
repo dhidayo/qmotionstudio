@@ -43,8 +43,20 @@ async function captureDownloads(page: Page): Promise<void> {
   });
 }
 
-async function runExport(page: Page, format: 'mp4' | 'webm'): Promise<void> {
+/**
+ * Opens Export on its video panel. An image opens on Image, with Video beside
+ * it; a video has nothing to choose, since it saves as a video only (D-155).
+ */
+async function openVideoExport(page: Page): Promise<void> {
   await page.getByTitle(/^Export \(/).click();
+  const dialog = page.getByRole('dialog', { name: 'Export' });
+  await expect(dialog).toBeVisible();
+  const saveAs = dialog.getByRole('group', { name: 'Save as' });
+  if (await saveAs.count() > 0) await saveAs.getByRole('button', { name: 'Video', exact: true }).click();
+}
+
+async function runExport(page: Page, format: 'mp4' | 'webm'): Promise<void> {
+  await openVideoExport(page);
   await page.getByRole('button', { name: format === 'mp4' ? 'MP4 · H.264' : 'WebM · VP9' }).click();
   await page.getByRole('button', { name: /^Export( again)?$/ }).last().click();
 }
@@ -286,7 +298,7 @@ test.describe('offline export', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1200);
 
-    await page.getByTitle(/^Export \(/).click();
+    await openVideoExport(page);
     // The window loads on demand (D-112): its own button, not the top bar's.
     await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: /^Export( again)?$/ }).click();
 
@@ -309,7 +321,7 @@ test.describe('offline export', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1200);
 
-    await page.getByTitle(/^Export \(/).click();
+    await openVideoExport(page);
     // The window loads on demand (D-112): its own button, not the top bar's.
     await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: /^Export( again)?$/ }).click();
     await expect(page.getByText(/Encoding frame/)).toBeVisible({ timeout: 20_000 });
@@ -358,7 +370,7 @@ test.describe('realtime fallback (§11.9)', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1200);
 
-    await page.getByTitle(/^Export \(/).click();
+    await openVideoExport(page);
 
     // §11.9: the user is told plainly why, rather than silently getting
     // something different from what the dialog offered.
@@ -674,7 +686,7 @@ test.describe('saving to Photos on a phone (D-125)', () => {
     await page.goto('/?template=type-typewriter&aspect=1:1');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_500);
-    await page.getByTitle(/^Export \(/).click();
+    await openVideoExport(page);
     await page.getByRole('button', { name: '720p' }).click();
     await page.getByRole('button', { name: /^Export$/ }).last().click();
 

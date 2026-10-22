@@ -6,6 +6,7 @@ import { readWorkspace } from '@/state/workspace';
 import { SCHEMA_VERSION, type Project } from '@/document/types';
 import { writeLastOpened, writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
+import { MODE_COPY } from '@/ui/shell/modeLabels';
 
 /**
  * Everything that saves, copies, renames or starts a project (D-099).
@@ -106,16 +107,16 @@ export function useProjectActions(): {
     const { aspect } = useEditor.getState().project;
     const project = kind === 'blank'
       // A new video starts empty: scenes come from the library or from your
-      // saved designs (D-140), layers from the timeline's own tools.
+      // saved images (D-140, D-155), layers from the timeline's own tools.
       ? createProject({ name: 'Untitled video', aspect, mode: 'motionAd', templateId: 'blank', photoCount: 0 })
-      // A new design opens on this person's starting design (D-149), in the frame in use.
+      // A new image opens on this person's starting design (D-149), in the frame in use.
       : starterProject(readWorkspace(), { aspect });
     try {
       await flush();
       await write(project);
       await writeLastOpened(project.id);
       openProject(project);
-      showToast(kind === 'blank' ? 'New video. Add scenes — new ones or your saved designs — and layers from the timeline.' : 'New design started.');
+      showToast(MODE_COPY[kind === 'blank' ? 'motionAd' : 'showcase'].started);
     } catch (error: unknown) {
       fail('start a new project', error);
     }

@@ -334,21 +334,25 @@ export function backgroundMenu(layout: Layout): readonly MenuItem[] {
     { label: 'Change background…', onSelect: () => { showBackgroundSettings(layout); } },
     { label: 'Use a picture as background…', onSelect: () => { o.openPhotoPicker({ kind: 'background' }); } },
     { kind: 'separator' },
-    { label: 'Choose a different design…', onSelect: () => { o.openPhonePanel('designs'); } },
+    // In a video the library holds whole videos, which replace every scene;
+    // this scene's own design is changed in the scene picker (D-155).
+    useEditor.getState().project.mode === 'motionAd'
+      ? { label: 'Change this scene’s design…', onSelect: () => { o.openScenePicker('replace'); } }
+      : { label: 'Choose a different design…', onSelect: () => { o.openPhonePanel('designs'); } },
   ];
 }
 
 /**
- * A longer video from the design on screen (D-129): "add a button somewhere
- * to create multi-scene videos from Showcase … continue with design as scene
- * 1". Corporate Ads keeps the current design as its first scene (setMode
+ * A video from the image on screen (D-129, D-155): "add a button somewhere
+ * to create multi-scene videos … continue with design as scene 1". Video
+ * keeps the image as its first scene, animated as it plays in Image (setMode
  * always has), then the scene picker opens for the second. One undo goes back.
  */
 export function continueAsVideo(): void {
   const s = useEditor.getState();
   if (s.project.mode !== 'motionAd') s.setMode('motionAd');
   useOverlays.getState().openScenePicker('add');
-  s.showToast('Your design is scene 1. Pick what comes next.');
+  s.showToast('Your image is scene 1 — it plays animated in the video. Pick what comes next.');
 }
 
 /** Where a scene sits on the project clock, for "Move playhead here". */

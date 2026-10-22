@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { crc32, makeZip } from './zip';
-import { makePdf } from './pdf';
 
 const bytes = async (blob: Blob): Promise<Uint8Array> => new Uint8Array(await blob.arrayBuffer());
 
-describe('the ZIP of carousel slides (D-135)', () => {
+// Written for D-135's carousel; it now carries the project file (D-141).
+describe('the stored ZIP (D-135, D-141)', () => {
   it('computes the standard CRC-32', () => {
     expect(crc32(new TextEncoder().encode('hello'))).toBe(0x3610a686);
     expect(crc32(new Uint8Array())).toBe(0);
@@ -36,22 +36,5 @@ describe('the ZIP of carousel slides (D-135)', () => {
       expect([...zip.slice(dataAt, dataAt + file.data.length)]).toEqual([...file.data]);
       at += 46 + nameLength;
     }
-  });
-});
-
-describe('the PDF of carousel slides (D-135)', () => {
-  it('has one page per slide and a cross-reference table that points at every object', async () => {
-    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
-    const pdf = await bytes(makePdf([{ jpeg, width: 1080, height: 1350 }, { jpeg, width: 1080, height: 1350 }]));
-    const text = new TextDecoder('latin1').decode(pdf);
-    expect(text.startsWith('%PDF-1.4')).toBe(true);
-    expect(text.trimEnd().endsWith('%%EOF')).toBe(true);
-    expect(text).toContain('/Count 2');
-    expect(text).toContain('/MediaBox [0 0 810.00 1012.50]');
-    const startxref = Number(/startxref\n(\d+)/.exec(text)?.[1]);
-    expect(text.slice(startxref, startxref + 4)).toBe('xref');
-    const offsets = [...text.slice(startxref).matchAll(/^(\d{10}) 00000 n $/gm)].map((m) => Number(m[1]));
-    expect(offsets.length).toBe(8);
-    offsets.forEach((offset, i) => { expect(text.slice(offset, offset + 10)).toMatch(new RegExp(`^${i + 1} 0 obj`)); });
   });
 });

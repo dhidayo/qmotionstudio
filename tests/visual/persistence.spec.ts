@@ -198,7 +198,7 @@ test.describe('the project list (§13)', () => {
     await settled(page);
 
     await openList(page);
-    await page.getByRole('button', { name: 'New design' }).click();
+    await page.getByRole('button', { name: 'New image' }).click();
     await expect(dialog(page)).toHaveCount(0);
 
     // The new one has none of the old one's work …

@@ -10,6 +10,7 @@ import { Artboard } from '@/ui/artboard/Artboard';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
+import { useClockEnded } from '@/ui/hooks/useClockEnded';
 import { StartActions } from '@/ui/editing/StartActions';
 import { PurposeBar } from '@/ui/shell/PurposeBar';
 import { Icon } from './Icon';
@@ -114,6 +115,8 @@ function readSideways(): boolean {
 function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
   const [playing, setPlaying] = useState(clock.playing);
   const shownPlaying = useRef(clock.playing);
+  // An image that has played once offers Replay (D-155).
+  const ended = useClockEnded(clock);
   const now = useRef<HTMLSpanElement>(null);
   const durationMs = useEditor((s) => totalDurationMs(s.project));
   const corporate = useEditor((s) => s.project.mode === 'motionAd');
@@ -139,17 +142,17 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
       <button
         type="button"
         onClick={() => { if (clock.playing) clock.pause(); else clock.play(); }}
-        aria-label={playing ? 'Pause' : 'Play'}
+        aria-label={playing ? 'Pause' : ended ? 'Replay' : 'Play'}
         className="grid size-10 place-items-center rounded-full"
         style={{ background: 'var(--c-panel-alt)', color: 'var(--c-ink)' }}
       >
-        <Icon name={playing ? 'pause' : 'play'} size={20} />
+        <Icon name={playing ? 'pause' : ended ? 'replay' : 'play'} size={20} />
       </button>
       <span className="flex items-center justify-end gap-1">
-        {/* A longer video from this design (D-129), where the play controls are. */}
+        {/* A video from this image (D-129, D-155), where the play controls are. */}
         {!corporate && (
-          <button type="button" data-continue-video onClick={continueAsVideo} className="mr-1 rounded-full bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink">
-            + Scene
+          <button type="button" data-continue-video onClick={continueAsVideo} title="Make a video: this image becomes scene 1" className="mr-1 whitespace-nowrap rounded-full bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink">
+            + Video
           </button>
         )}
         <button type="button" onClick={undo} disabled={!canUndo()} aria-label="Undo" className="grid size-9 place-items-center rounded-full disabled:opacity-35">

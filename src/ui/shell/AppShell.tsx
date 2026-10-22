@@ -37,6 +37,7 @@ import { ShortcutsDialog } from './ShortcutsDialog';
 import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
 import { PhonePanels } from '@/ui/mobile/PhonePanels';
 import { ToolStrip } from './ToolStrip';
+import { usePlayOnce } from './usePlayOnce';
 
 /*
  * Opened rarely and heavy — the export pipeline, the project list — so they
@@ -98,6 +99,8 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   );
 
   useEffect(() => { clock.setDuration(duration); }, [clock, duration]);
+  // Image plays once and rests on its picture; Video loops (D-155).
+  usePlayOnce(clock, project);
 
   /*
    * The export window is fetched once the editor has settled, so pressing

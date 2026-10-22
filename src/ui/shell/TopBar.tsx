@@ -3,7 +3,8 @@ import { useEditor } from '@/state/store';
 import { TierSwitch } from './TierSwitch';
 import type { SaveState } from '@/ui/persist/saveState';
 import { ProjectTitle } from '@/ui/projects/ProjectTitle';
-import { MODE_LABEL } from './modeLabels';
+import { MODE_COPY } from './modeLabels';
+import { switchMode } from './switchMode';
 import { useOverlays } from './overlays';
 import { chord, readInputCaps, useInputCaps } from './platform';
 import { useLayout } from './useLayout';
@@ -188,32 +189,17 @@ function HistoryButton({
 }
 
 /**
- * §1.1 / §1.2. Switching to Motion Ads keeps the scene you were on and lets you
- * add more; switching back keeps the *selected* scene and drops the rest along
- * with the overlays and audio, because §5 says showcase has exactly one scene.
+ * §1.1 / §1.2. Image and Video (D-155), named for what each makes. Switching
+ * to Video keeps the image as scene 1 and lets you add more; switching back
+ * keeps the *selected* scene and the layers over it, and sets the rest aside.
  *
- * That is destructive, and it is one ⌘Z away — which is why the button says so
- * rather than opening a dialog.
+ * That is destructive, and it is one undo away — which is why the toast says
+ * so (`switchMode`) rather than a dialog asking first.
  */
 function ModeSwitch(): React.JSX.Element {
   const mode = useEditor((s) => s.project.mode);
   const sceneCount = useEditor((s) => s.project.scenes.length);
-  const layerCount = useEditor((s) => s.project.overlays.length + s.project.audio.length);
-  const setMode = useEditor((s) => s.setMode);
-  const showToast = useEditor((s) => s.showToast);
-
-  /*
-   * Showcase holds one scene and no layers or music (§5), so going back to it
-   * from an ad keeps the selected scene and sets the rest aside. It was only
-   * ever said in a tooltip; now it is said at the moment it happens, with the
-   * way back (D-098).
-   */
-  const choose = (next: 'showcase' | 'motionAd'): void => {
-    setMode(next);
-    if (next === 'showcase' && (sceneCount > 1 || layerCount > 0)) {
-      showToast('Design keeps the selected scene. Press ⌘Z to bring the rest of the video back.');
-    }
-  };
+  const selectedScene = useEditor((s) => s.selectedScene);
 
   return (
     <div className="flex rounded-md border border-edge p-0.5" role="group" aria-label="Mode">
@@ -226,11 +212,11 @@ function ModeSwitch(): React.JSX.Element {
             type="button"
             aria-current={active}
             aria-pressed={active}
-            onClick={() => { if (!active) choose(m); }}
+            onClick={() => { if (!active) switchMode(m); }}
             title={
               lossy
-                ? `Keeps the selected scene and drops the other ${sceneCount - 1}. Undoable.`
-                : m === 'showcase' ? 'One design — a post, a story, a slide. Saved designs can become scenes of a video.' : 'Scenes in sequence — new ones or your saved designs — with transitions, layers and music'
+                ? `${MODE_COPY[m].label} keeps scene ${selectedScene + 1} and the layers over it, and sets the other ${sceneCount - 1} aside. Undoable.`
+                : MODE_COPY[m].hint
             }
             className="whitespace-nowrap rounded-sm px-2 py-0.5 text-[12px] transition-colors"
             style={
@@ -239,7 +225,7 @@ function ModeSwitch(): React.JSX.Element {
                 : { color: 'var(--c-ink-faint)' }
             }
           >
-            {MODE_LABEL[m]}
+            {MODE_COPY[m].label}
           </button>
         );
       })}
@@ -321,8 +307,8 @@ function AppMenu(): React.JSX.Element {
       y: box.bottom + 4,
       title: 'Q Motion Studio',
       items: [
-        { label: 'New design', hint: 'One scene', onSelect: () => { void startNew('template'); } },
-        { label: 'New video', hint: 'Scenes in sequence', onSelect: () => { void startNew('blank'); } },
+        { label: MODE_COPY.showcase.newProject, hint: MODE_COPY.showcase.newHint, onSelect: () => { void startNew('template'); } },
+        { label: MODE_COPY.motionAd.newProject, hint: MODE_COPY.motionAd.newHint, onSelect: () => { void startNew('blank'); } },
         { label: 'Open…', hint: 'Your projects', onSelect: () => { setProjectsOpen(true); } },
         { kind: 'separator' },
         { label: 'Save project file', hint: '.qmotion — keep or share', onSelect: file.save },

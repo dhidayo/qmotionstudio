@@ -21,7 +21,7 @@ import {
  * before, and is what anyone who skips the question gets.
  *
  * Pure data and pure functions: no storage, no DOM, so it is tested in Node.
- * The word "mode" belongs to Design and Video; on screen this is "Set up for".
+ * The word "mode" belongs to Image and Video (D-155); on screen this is "Set up for".
  */
 
 export const WORKSPACE_IDS = ['social', 'business', 'news', 'both'] as const;

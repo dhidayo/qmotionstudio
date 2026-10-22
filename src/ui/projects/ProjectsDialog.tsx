@@ -10,6 +10,7 @@ import {
 import { restoreMedia } from '@/persist/media';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
+import { MODE_COPY } from '@/ui/shell/modeLabels';
 import { useProjectActions } from './useProjectActions';
 
 /**
@@ -139,14 +140,14 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
             onClick={() => { void startNew('template').then(onClose); }}
             className="ml-auto rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink hover:bg-accent-hover"
           >
-            New design
+            {MODE_COPY.showcase.newProject}
           </button>
           <button
             type="button"
             onClick={() => { void startNew('blank').then(onClose); }}
             className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
           >
-            New video
+            {MODE_COPY.motionAd.newProject}
           </button>
           <button
             type="button"
