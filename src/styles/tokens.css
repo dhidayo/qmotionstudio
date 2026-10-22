@@ -59,7 +59,6 @@
   --h-topbar: 52px;
   --w-library: 264px;
   --w-inspector: 312px;
-  --h-timeline: 236px;
 
   /* Motion — chrome only. §13: prefers-reduced-motion suppresses these and
      never touches the artboard. */

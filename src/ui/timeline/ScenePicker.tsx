@@ -220,7 +220,7 @@ export function ScenePicker({
                 <span className="min-w-0">
                   <span className="block text-[12px] font-semibold">Blank</span>
                   <span className="block text-[11px] text-ink-faint">
-                    A background and your logo. Add photos, text and video with + Photo, + Text and + Media, and give each its own motion.
+                    A background and your logo. Add photos, text and video with + Photo, + Text and + Video, and give each its own motion.
                   </span>
                 </span>
               </button>

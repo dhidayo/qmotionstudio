@@ -33,6 +33,13 @@ const PATHS = {
   down: 'M6 9l6 6 6-6',
   menu: 'M4 7h16M4 12h16M4 17h16',
   background: 'M4 5h16v14H4zM4 12l7-7M4 19l14-14M11 19l9-9M17 19l3-3',
+  // The add bar's newer things (D-153).
+  shape: 'M3 20l5.5-9 5.5 9zM13 8.5a4 4 0 1 0 8 0 4 4 0 1 0-8 0',
+  sticker: 'M4 4h11l5 5v11H4zM15 4v5h5M8.5 14c.9 1.3 2.1 2 3.5 2s2.6-.7 3.5-2M9 10.5h.01M14 10.5h.01',
+  number: 'M10 4L8 20M16 4l-2 16M5 9h15M4 15h15',
+  sound: 'M4 9h4l5-4v14l-5-4H4zM16.5 9.5a3.5 3.5 0 0 1 0 5M19 7a7 7 0 0 1 0 10',
+  left: 'M15 6l-6 6 6 6',
+  right: 'M9 6l6 6-6 6',
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { addMusic } from '../support/audio';
 
 /**
  * Acting on things on the timeline (D-103, D-104).
@@ -259,13 +260,18 @@ test.describe('layers (D-103)', () => {
 test.describe('the timeline lines up and grows (D-106)', () => {
   test('every row’s label sits exactly beside its lane', async ({ page }) => {
     await openAd(page);
+    // Rows come with what is on them (D-153): a text with a motion and an
+    // effect bring the motion, effects and two layer rows beside the scenes.
+    await addText(page);
+    await page.locator('[data-add="motion"]').click();
+    await page.getByTitle(/^Add an effect at the playhead/).click();
+    await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="flash"]').click();
     const rows = await page.evaluate(() =>
-      [...document.querySelectorAll('[aria-label="Timeline"] [data-lane="true"]')]
-        .filter((lane) => lane.parentElement?.firstElementChild !== lane)
-        .map((lane) => {
-          const label = lane.parentElement?.firstElementChild?.getBoundingClientRect();
-          const own = lane.getBoundingClientRect();
-          return { dTop: Math.abs((label?.top ?? -99) - own.top), dHeight: Math.abs((label?.height ?? -99) - own.height) };
+      [...document.querySelectorAll('[aria-label="Timeline"] [data-row]')]
+        .map((row) => {
+          const label = row.firstElementChild?.getBoundingClientRect();
+          const own = row.lastElementChild?.getBoundingClientRect();
+          return { dTop: Math.abs((label?.top ?? -99) - (own?.top ?? 99)), dHeight: Math.abs((label?.height ?? -99) - (own?.height ?? 99)) };
         }),
     );
     expect(rows.length).toBeGreaterThan(4);
@@ -277,12 +283,13 @@ test.describe('the timeline lines up and grows (D-106)', () => {
 
   test('grows with its rows, so the music row stays in view', async ({ page }) => {
     await openAd(page);
+    await addMusic(page);
     for (const id of ['lightning', 'shake', 'flash']) {
       await page.getByTitle(/^Add an effect at the playhead/).click();
       await page.getByRole('dialog', { name: 'Effects' }).locator(`[data-effect="${id}"]`).click();
     }
     const panel = await page.locator('[aria-label="Timeline"]').boundingBox();
-    const music = await page.locator('[aria-label="Timeline"] [data-lane="true"]').last().boundingBox();
+    const music = await page.locator('[aria-label="Timeline"] [data-row="music"]').boundingBox();
     if (!panel || !music) throw new Error('no timeline');
     expect(music.y + music.height).toBeLessThanOrEqual(panel.y + panel.height + 1);
   });
@@ -343,7 +350,8 @@ test.describe('Lifestyle (D-106)', () => {
     await page.goto('/?template=pop-float&aspect=1:1&frozen=3000');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(2_000);
-    await page.getByRole('button', { name: 'Add an effect' }).click();
+    // In the add bar beside the scrubber now (D-153).
+    await page.getByRole('button', { name: '+ Effect' }).click();
     await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="flash"]').click();
 
     const clip = page.locator('[data-fx-clip="flash"]');

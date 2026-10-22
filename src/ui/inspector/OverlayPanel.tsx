@@ -250,7 +250,7 @@ function MediaPicker({
     return (
       <EmptyNote>
         {kind === 'video'
-          ? 'No clips loaded. Use “+ Media” on the timeline to add one.'
+          ? 'No clips loaded. Use “+ Video” on the timeline to add one.'
           : 'No photos loaded. Add some in the Photos tab first.'}
       </EmptyNote>
     );

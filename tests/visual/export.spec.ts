@@ -424,7 +424,8 @@ test.describe('a multi-scene ad exports (M5)', () => {
     // have the document before the dialog can size the job.
     await page.waitForTimeout(2_500);
 
-    await expect(page.getByText('8 scenes · 0 overlays')).toBeVisible();
+    // Read, not looked at: the summary gives way to the add bar where the column is narrow (D-153).
+    await expect(page.locator('[data-timeline-summary]')).toHaveText('8 scenes · 0 overlays');
 
     await runExport(page, 'mp4');
     await waitForExport(page, 140_000);

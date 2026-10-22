@@ -11,6 +11,9 @@ import { addMusic, LONG_AUDIO_FIXTURE } from '../support/audio';
 
 test.use({ viewport: { width: 1500, height: 940 } });
 
+/** The timeline's music row, there only while there is music (D-153). */
+const musicRow = (page: Page) => page.locator('[aria-label="Timeline"] [data-row="music"]');
+
 async function openAd(page: Page): Promise<void> {
   await page.goto('/?template=quick-pitch&aspect=9:16&frozen=1000');
   await page.waitForSelector('canvas');
@@ -21,8 +24,10 @@ test.describe('music (§10)', () => {
   test('an imported track appears on the music row with a waveform', async ({ page }) => {
     await openAd(page);
 
-    await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
+    // No music, no music row (D-153): it appears with the first track.
+    await expect(musicRow(page)).toHaveCount(0);
     await addMusic(page);
+    await expect(musicRow(page)).toHaveCount(1);
 
     const clip = page.getByRole('button', { name: /^Music clip/ });
     await expect(clip).toBeVisible();
@@ -93,7 +98,8 @@ test.describe('music (§10)', () => {
     await page.getByRole('button', { name: 'Remove music' }).click();
 
     await expect(page.getByLabel('Music inspector')).toBeHidden();
-    await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
+    // …and the row goes with the last track, giving its height back (D-153).
+    await expect(musicRow(page)).toHaveCount(0);
   });
 
   test('a file that will not decode is refused, not silently ignored', async ({ page }) => {
@@ -177,7 +183,7 @@ test.describe('music (§10)', () => {
     await openAd(page);
     await addMusic(page);
     await page.getByRole('button', { name: 'Remove music' }).click();
-    await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
+    await expect(musicRow(page)).toHaveCount(0);
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.getByRole('button', { name: /^Music clip/ })).toBeVisible();
@@ -221,7 +227,8 @@ test.describe('a track longer than the video (§10)', () => {
     // track's own length, which is the ordinary case and the one that broke.
     await addMusic(page, LONG_AUDIO_FIXTURE);
 
-    await expect(page.getByText(/music runs .* past the end/)).toBeVisible();
+    // The header's summary says so where there is room for it (D-153).
+    await expect(page.locator('[data-timeline-summary]')).toHaveText(/music runs .* past the end/);
     await expect(page.getByText(/runs past the end of the video/)).toBeVisible();
 
     /*

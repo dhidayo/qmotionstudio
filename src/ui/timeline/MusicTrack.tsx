@@ -70,25 +70,7 @@ export function MusicTrack({
   laneWidth: number;
   onSeek: (projectMs: number) => void;
 }): React.JSX.Element {
-  if (clips.length === 0) {
-    return (
-      <div className="relative h-full" data-lane>
-        {/*
-          * `pointer-events-none`, so the row underneath gets the press.
-          *
-          * Without it the note was the click target for most of the row's
-          * width, and the timeline's scrub handler — which only acts on the
-          * lane itself — quietly did nothing. Reported precisely: "when I click
-          * the Music section with the text 'No music…' the playhead is not
-          * adjusted".
-          */}
-        <span className="pointer-events-none absolute inset-y-0 left-2 text-[10px] leading-7 text-ink-faint">
-          No music. Use “+ Music” above.
-        </span>
-      </div>
-    );
-  }
-
+  // Only drawn once there is music: the timeline shows the rows in use (D-153).
   return (
     <div className="relative h-full" data-lane>
       {clips.map((clip) => (

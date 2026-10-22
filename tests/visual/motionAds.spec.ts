@@ -36,6 +36,12 @@ async function openAd(page: Page, id: string, frozenMs?: number): Promise<void> 
   await page.waitForTimeout(2_000);
 }
 
+/**
+ * The timeline header's "N scenes · N overlays". Read rather than looked at:
+ * it gives way to the add bar where the column is narrow (D-153).
+ */
+const summary = (page: Page) => page.locator('[data-timeline-summary]');
+
 /** Mean luminance of the artboard, sampled sparsely. Enough to tell frames apart. */
 async function luminance(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -99,7 +105,7 @@ test.describe('scene sequencing', () => {
     await openAd(page, 'launch-story', BEAT.one);
 
     await expect(page.getByLabel('Timeline')).toBeVisible();
-    await expect(page.getByText('8 scenes · 0 overlays')).toBeVisible();
+    await expect(summary(page)).toHaveText('8 scenes · 0 overlays');
     await expect(page.getByText('Scene 1 of 8')).toBeVisible();
 
     // The advertised length is the rendered length (D-004 from both sides).
@@ -140,8 +146,10 @@ test.describe('scene sequencing', () => {
 
     await page.getByRole('button', { name: 'Video', exact: true }).click();
     await expect(page.getByLabel('Timeline', { exact: true })).toBeVisible();
-    // The music row is real since M6; it invites a track rather than promising one.
-    await expect(page.getByText('No music. Use “+ Music” above.')).toBeVisible();
+    // Only the rows in use (D-153): the ruler and the scenes, and no empty music row.
+    await expect(page.locator('[aria-label="Timeline"] [data-row="scenes"]')).toHaveCount(1);
+    await expect(page.locator('[aria-label="Timeline"] [data-row="music"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '+ Music' })).toBeAttached();
   });
 });
 
@@ -284,6 +292,10 @@ test.describe('overlays (§3C)', () => {
     // Past its end, the same overlay must contribute nothing at all — which is
     // only true if removing it changes the frame not one bit.
     await scrubTo(page, 8_000, QUICK_PITCH_MS);
+    // Folded, so the picture holds its size while the layer rows go (D-153):
+    // a picture that changed size would differ for that reason alone.
+    await page.locator('[data-timeline-fold]').click();
+    await page.waitForTimeout(400);
     const outsideWith = await fingerprint(page);
 
     await page.getByRole('button', { name: /^Delete layer/ }).click();
@@ -305,7 +317,7 @@ test.describe('overlays (§3C)', () => {
     await page.getByRole('button', { name: 'Duplicate this scene' }).click();
     await page.waitForTimeout(300);
 
-    await expect(page.getByText(/1 overlays|· 1 overlay/)).toBeVisible();
+    await expect(summary(page)).toHaveText(/1 overlays|· 1 overlay/);
   });
 
   test('the editor offers the entrance and exit presets of §5', async ({ page }) => {
@@ -336,7 +348,7 @@ test.describe('overlays (§3C)', () => {
     await page.getByRole('button', { name: /^Delete layer/ }).click();
 
     await expect(page.getByLabel('Overlay inspector')).toBeHidden();
-    await expect(page.getByText('5 scenes · 0 overlays')).toBeVisible();
+    await expect(summary(page)).toHaveText('5 scenes · 0 overlays');
   });
 });
 
@@ -376,13 +388,13 @@ test.describe('the sequence is editable', () => {
 
   test('⌘Z puts back a scene that was removed', async ({ page }) => {
     await openAd(page, 'quick-pitch');
-    await expect(page.getByText('5 scenes · 0 overlays')).toBeVisible();
+    await expect(summary(page)).toHaveText('5 scenes · 0 overlays');
 
     await page.getByRole('button', { name: 'Remove this scene' }).click();
-    await expect(page.getByText('4 scenes · 0 overlays')).toBeVisible();
+    await expect(summary(page)).toHaveText('4 scenes · 0 overlays');
 
     await page.keyboard.press('ControlOrMeta+z');
-    await expect(page.getByText('5 scenes · 0 overlays')).toBeVisible();
+    await expect(summary(page)).toHaveText('5 scenes · 0 overlays');
   });
 
   test('the library lists ads in Motion Ads and scene templates in Showcase (D-013)', async ({ page }) => {

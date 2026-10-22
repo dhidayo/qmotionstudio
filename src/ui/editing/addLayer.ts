@@ -5,8 +5,12 @@ import { placeNew } from '@/document/select/tracks';
 import { timelineSpanMs } from '@/document/select/timeline';
 import { useEditor } from '@/state/store';
 
-/** Where a new layer goes: in an ad, a clip at the playhead; on a single design, for as long as it lasts. */
-function spotFor(
+/**
+ * Where a new layer goes: in an ad, a clip at the playhead; on a single
+ * design, for as long as it lasts. Shared with the add bar (D-153), which adds
+ * to designs as well as videos.
+ */
+export function spotFor(
   project: Project,
   overlays: readonly Overlay[],
   playheadMs: number,

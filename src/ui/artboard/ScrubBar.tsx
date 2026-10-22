@@ -1,13 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
-import { hasNudgePoses, nudgePoses } from '@/core/render/slots';
-import { spanOf } from '@/document/select/motion';
-import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
-import { MotionBar } from '@/ui/timeline/MotionBar';
 import { sceneSpans, timelineSpanMs } from '@/document/select/timeline';
 import { EFFECT_ROW_PX, EffectClipView, laneEffects, packEffectRows } from '@/ui/timeline/EffectRows';
-import { useOverlays } from '@/ui/shell/overlays';
+import { MotionLane } from '@/ui/timeline/MotionLane';
+import { AddBar } from '@/ui/editing/AddBar';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { useClockEnded } from '@/ui/hooks/useClockEnded';
 import { continueAsVideo } from '@/ui/editing/commands';
@@ -62,8 +59,11 @@ export function ScrubBar({
     else clock.play();
   };
 
-  const openPicker = useOverlays((o) => o.openPicker);
+  const scenes = useEditor((s) => s.project.scenes);
+  const spans = useMemo(() => sceneSpans(scenes), [scenes]);
   const seek = (at: number): void => { clock.pause(); clock.seek(at); setPlayhead(at); };
+  const slider = useRef<HTMLDivElement>(null);
+  const sliderBox = useSliderBox(slider);
 
   return (
     <div className="shrink-0 border-t border-edge bg-panel">
@@ -86,8 +86,9 @@ export function ScrubBar({
           * through the panel. The same bar, against the same time axis, in the
           * one place this mode has for time.
           */}
-        {/* min-w-0, or a range input's intrinsic width pushes a phone screen sideways. */}
-        <div className="relative min-w-0 flex-1" data-lane>
+        {/* min-w-0, or a range input's intrinsic width pushes a phone screen
+            sideways; beside the add bar, never squeezed below a usable length. */}
+        <div ref={slider} className={`relative flex-1 ${phone ? 'min-w-0' : 'min-w-[200px]'}`} data-lane>
           <input
             type="range"
             min={0}
@@ -107,21 +108,15 @@ export function ScrubBar({
           {pictureMs !== null && durationMs > 0 && (
             <PictureMark atMs={pictureMs} durationMs={durationMs} phone={phone} onSeek={seek} />
           )}
-          <ShowcaseMotion durationMs={durationMs} onSeek={seek} />
+          {/* Template elements and overlays alike (D-153), drawn only while they move. */}
+          <MotionLane spans={spans} durationMs={durationMs} onSeek={seek} quiet />
         </div>
 
         {!phone && <span ref={readout} className="tabular w-20 shrink-0 text-right text-[11px] text-ink-muted sm:w-24">
           {format(0)} / {format(durationMs)}
         </span>}
-        {!phone && <button
-          type="button"
-          onClick={() => { openPicker({ target: { kind: 'scene' } }); }}
-          title="Add an effect — snow, sparkles, light, a shake, a film look…"
-          aria-label="Add an effect"
-          className="shrink-0 rounded-md border border-edge px-2 py-1 text-[11px] text-ink-muted hover:bg-panel-alt"
-        >
-          + <span className="hidden sm:inline">Effect</span><span className="sm:hidden">FX</span>
-        </button>}
+        {/* Everything that can be added to a design, scrolled sideways when it does not fit (D-153). */}
+        {!phone && <AddBar className="shrink" />}
         {!phone && <button
           type="button"
           data-continue-video
@@ -132,9 +127,33 @@ export function ScrubBar({
           Make a video
         </button>}
       </div>
-      <EffectStrip durationMs={durationMs} onSeek={seek} phone={phone} />
+      <EffectStrip durationMs={durationMs} onSeek={seek} phone={phone} under={sliderBox} />
     </div>
   );
+}
+
+/**
+ * Where the slider sits in its row, so the effects under it line up with it
+ * whatever is beside it — the add bar is as wide as there is room for (D-153).
+ */
+function useSliderBox(slider: React.RefObject<HTMLDivElement | null>): { left: number; width: number } | null {
+  const [box, setBox] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const el = slider.current;
+    const row = el?.parentElement;
+    if (!el || !row) return undefined;
+    const measure = (): void => {
+      const left = Math.round(el.getBoundingClientRect().left - row.getBoundingClientRect().left);
+      const width = Math.round(el.getBoundingClientRect().width);
+      setBox((now) => (now?.left === left && now.width === width ? now : { left, width }));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    observer.observe(row);
+    return () => { observer.disconnect(); };
+  }, [slider]);
+  return box;
 }
 
 /**
@@ -149,10 +168,13 @@ function EffectStrip({
   durationMs,
   onSeek,
   phone,
+  under,
 }: {
   durationMs: number;
   onSeek: (ms: number) => void;
   phone: boolean;
+  /** The slider's place in the row above, to line up with; until measured, the full width. */
+  under: { left: number; width: number } | null;
 }): React.JSX.Element | null {
   const project = useEditor((s) => s.project);
   const rows = useMemo(
@@ -162,16 +184,21 @@ function EffectStrip({
   if (rows.length === 0 || durationMs <= 0) return null;
 
   return (
-    <div className="flex gap-3 px-3 pb-2" aria-label="Effects in this scene">
-      {!phone && <span className="w-16 shrink-0 pt-1.5 text-[10px] uppercase tracking-wide text-ink-faint">Effects</span>}
+    <div className={`relative pb-2 ${under === null ? 'px-3' : ''}`} aria-label="Effects in this scene">
+      {!phone && <span className="absolute left-3 top-1.5 text-[10px] uppercase tracking-wide text-ink-faint">Effects</span>}
       {/* One layer for every row, so a clip that changes row moves rather than being rebuilt mid-drag. */}
-      <div className="relative min-w-0 flex-1" style={{ height: rows.length * EFFECT_ROW_PX }} data-lane="true">
+      <div
+        className="relative"
+        style={{
+          height: rows.length * EFFECT_ROW_PX,
+          ...(under === null ? {} : { marginLeft: under.left, width: under.width }),
+        }}
+        data-lane="true"
+      >
         {rows.flatMap((row, r) => row.map((fx) => (
           <EffectClipView key={fx.clip.id} fx={fx} row={r} durationMs={durationMs} onSeek={onSeek} showScene={false} />
         )))}
       </div>
-      {!phone && <span className="w-20 shrink-0 sm:w-24" />}
-      {!phone && <span className="w-[42px] shrink-0 sm:w-[58px]" />}
     </div>
   );
 }
@@ -215,54 +242,4 @@ function format(ms: number): string {
   const seconds = Math.floor(total / 100);
   const hundredths = total % 100;
   return `${seconds}.${hundredths.toString().padStart(2, '0')}s`;
-}
-
-/**
- * The selected element's motion, over Showcase's scrubber.
- *
- * Showcase is a single scene, so the scene's clock and the project's are the
- * same one — no origin to offset by, and the speed remap is the only
- * conversion. That is why this is a few lines where the timeline's equivalent
- * needs a scene span to position against.
- */
-function ShowcaseMotion({
-  durationMs,
-  onSeek,
-}: {
-  durationMs: number;
-  onSeek: (projectMs: number) => void;
-}): React.JSX.Element | null {
-  const dispatch = useEditor((s) => s.dispatch);
-  const endInteraction = useEditor((s) => s.endInteraction);
-  const selectedSlot = useEditor((s) => s.selectedSlot);
-  const scene = useEditor((s) => s.project.scenes[s.selectedScene]);
-  const transform = useEditor((s) =>
-    selectedSlot === null
-      ? undefined
-      : s.project.scenes[s.selectedScene]?.inputs.slotTransforms[selectedSlot],
-  );
-
-  if (selectedSlot === null || !scene || !transform || !hasNudgePoses(transform)) return null;
-
-  const times = nudgePoses(transform).map((pose) => pose.atMs);
-  const span = spanOf(times);
-  if (!span) return null;
-
-  const speed = scene.inputs.look.speed;
-  const scale = speed === 0 ? 1 : 1 / speed;
-
-  return (
-    <MotionBar
-      span={span}
-      poseTimes={times}
-      originMs={0}
-      scale={scale}
-      laneMs={Math.max(1, durationMs)}
-      onChange={(change) => {
-        dispatch(actions.reshapeSlotMotion(selectedSlot, scene.durationMs, change));
-      }}
-      onCommit={endInteraction}
-      onSeek={(atMs) => { onSeek(atMs * scale); }}
-    />
-  );
 }

@@ -15,7 +15,7 @@ import { OverlayPanel } from '@/ui/inspector/OverlayPanel';
 import { AudioPanel } from '@/ui/inspector/AudioPanel';
 import { TimelineEffectPanel } from '@/ui/effects/EffectEditors';
 import { Timeline } from '@/ui/timeline/Timeline';
-import { useAddLayers } from '@/ui/timeline/useAddLayers';
+import { AddBar } from '@/ui/editing/AddBar';
 import { MAX_NAME, useProjectActions } from '@/ui/projects/useProjectActions';
 import { SectionTabs } from '@/ui/inspector/controls';
 import { BottomSheet } from './BottomSheet';
@@ -26,7 +26,7 @@ import { readInputCaps } from '@/ui/shell/platform';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import * as actions from '@/document/actions';
 import { TRANSITION_LABELS } from '@/ui/timeline/transitionLabels';
-import { Icon, type IconName } from './Icon';
+import { Icon } from './Icon';
 
 /**
  * Every phone panel, one at a time, each a bottom sheet (D-109). The panels
@@ -162,37 +162,20 @@ function AspectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   );
 }
 
-/** Adding to an ad: a scene, a layer, music, an effect at the playhead. */
+/**
+ * Adding, on a phone: the add bar's own items as a grid (D-153), so the phone
+ * and the computer never disagree about what can be added. A video's sheet
+ * starts with a scene, which a computer adds from the timeline's scene bar.
+ */
 function AddPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
-  const layers = useAddLayers();
-  const o = useOverlays.getState();
-  const item = (icon: IconName, label: string, hint: string, run: () => void): React.JSX.Element => (
-    <button
-      type="button"
-      onClick={run}
-      className="flex items-center gap-3 rounded-xl border border-edge px-3 py-3 text-left active:bg-panel-alt"
-    >
-      <span className="grid size-10 place-items-center rounded-lg" style={{ background: 'var(--c-accent-soft)', color: 'var(--c-accent)' }}>
-        <Icon name={icon} />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[14px] font-semibold">{label}</span>
-        <span className="block text-[12px] text-ink-muted">{hint}</span>
-      </span>
-    </button>
-  );
+  const video = useEditor((s) => s.project.mode === 'motionAd');
   return (
     <BottomSheet title="Add" onClose={onClose}>
-      <div className="grid gap-2">
-        {item('scene', 'Scene', 'A new beat after this one, in any design', () => { onClose(); o.openScenePicker('add'); })}
-        {item('text', 'Text', 'A caption at the playhead', () => { layers.addText(); onClose(); })}
-        {item('photo', 'Photo', 'A picture on top of the scene', () => { layers.addPhoto(); onClose(); })}
-        {item('effects', 'Effect', 'Snow, light, a shake — at the playhead', () => { onClose(); o.openPicker({ target: { kind: 'timeline' } }); })}
-        {item('music', 'Music', layers.musicBusy ? 'Reading…' : 'A track from your phone', () => { layers.pickMusic(); })}
-        {layers.canVideo && item('video', 'Video', layers.videoBusy ? 'Reading…' : 'A clip from your phone', () => { layers.pickVideo(); })}
-      </div>
-      {layers.error !== null && <p className="mt-2 text-[12px]" style={{ color: 'var(--c-danger)' }}>{layers.error}</p>}
-      {layers.inputs}
+      <AddBar
+        variant="grid"
+        onDone={onClose}
+        onScene={video ? () => { useOverlays.getState().openScenePicker('add'); } : undefined}
+      />
     </BottomSheet>
   );
 }

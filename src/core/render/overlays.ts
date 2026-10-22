@@ -44,6 +44,17 @@ export const TEXT_BASE = 0.062;
 const ENTER_MS = 520;
 const EXIT_MS = 420;
 
+/**
+ * How long an overlay of this length takes to leave at the end of its life,
+ * or 0 when it simply stops. While its exit runs it is fading, sliding or
+ * shrinking away, so "+ Motion" finishes a new motion before it starts
+ * (D-153): the motion's last moment is then one where the element can be
+ * seen, and dragged.
+ */
+export function exitMsOf(durationMs: number, exitAnim: AnimPreset): number {
+  return exitAnim === 'none' ? 0 : Math.min(EXIT_MS, durationMs / 3);
+}
+
 export type OverlayBuildContext = {
   readonly design: Size;
   /** Deterministic ids, like BuildContext — the cache key assumes stable output. */

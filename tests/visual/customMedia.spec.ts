@@ -33,7 +33,8 @@ test.describe('custom media (§9)', () => {
      * nothing when clicked gives the user no way to find out why, which is how
      * this shipped looking broken.
      */
-    const add = page.getByRole('button', { name: /\+ Media/ });
+    // "+ Video" in the add bar (D-153), once "+ Media".
+    const add = page.getByRole('button', { name: /\+ Video/ });
     await expect(add).toBeEnabled();
     await expect(add.getByText('Pro')).toBeVisible();
 

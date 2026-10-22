@@ -173,7 +173,8 @@ test.describe('the phone layout', () => {
     await tap(page, await at(page, PHOTO.x, PHOTO.y));
     const tools = page.locator('[data-phone-toolbar="selection"]');
     await expect(tools).toBeVisible();
-    for (const name of ['Replace', 'Crop', 'Effects', 'Animate', 'Delete', 'Done']) {
+    // "Motion", once "Animate": it adds a motion at once, as "+ Motion" does (D-153).
+    for (const name of ['Replace', 'Crop', 'Effects', 'Motion', 'Delete', 'Done']) {
       await expect(tools.getByRole('button', { name, exact: true })).toBeVisible();
     }
     // No floating toolbar over the picture on a phone: the bottom bar is it.
@@ -287,7 +288,8 @@ test.describe('the background and the plan (D-120, D-122)', () => {
   test('Background is one tap from the toolbar, and fits beside the other tools', async ({ page }) => {
     await open(page, LIFESTYLE);
     const toolbar = page.locator('[data-phone-toolbar="main"]');
-    const background = toolbar.getByRole('button', { name: 'Background' });
+    // "Backdrop" in a design too, now that its row of tools has Add and is seven long (D-153).
+    const background = toolbar.getByRole('button', { name: 'Backdrop' });
     await expect(background).toBeVisible();
     // The whole word shows: no tool's label is cut off.
     const clipped = await toolbar.locator('button span').evaluateAll((spans) => spans.some((s) => s.scrollWidth > s.clientWidth + 1));

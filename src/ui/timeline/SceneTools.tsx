@@ -4,7 +4,6 @@ import * as actions from '@/document/actions';
 import { TRANSITION_KINDS, usesDirection } from '@/core/render/transitions';
 import { useEditor } from '@/state/store';
 import { formatSeconds } from './timelineGeometry';
-import { ScenePicker } from './ScenePicker';
 import { sceneLengthMs } from '@/document/select/timeline';
 import { useOverlays } from '@/ui/shell/overlays';
 
@@ -28,8 +27,8 @@ export function SceneTools(): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
   const endInteraction = useEditor((s) => s.endInteraction);
   const selectScene = useEditor((s) => s.selectScene);
-  // In the overlay store, so the timeline's right-click menu can open it too.
-  const picking = useOverlays((o) => o.scenePicker);
+  // In the overlay store, so the timeline's right-click menu can open it too;
+  // the timeline draws it, so it opens with this bar collapsed away (D-153).
   const setPicking = useOverlays((o) => o.openScenePicker);
 
   const scene = project.scenes[index];
@@ -42,7 +41,8 @@ export function SceneTools(): React.JSX.Element | null {
   };
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-edge px-3 py-1.5">
+    /* One line, scrolled sideways when it does not fit, rather than two (D-153). */
+    <div className="flex shrink-0 items-center gap-x-3 overflow-x-auto whitespace-nowrap border-b border-edge px-3 py-1.5 [scrollbar-width:thin]">
       <span className="text-[11px] font-semibold text-ink">
         Scene {index + 1}
         <span className="font-normal text-ink-faint"> of {project.scenes.length}</span>
@@ -174,8 +174,6 @@ export function SceneTools(): React.JSX.Element | null {
           Remove
         </ToolButton>
       </div>
-
-      {picking !== null && <ScenePicker mode={picking} onClose={() => { setPicking(null); }} />}
     </div>
   );
 }

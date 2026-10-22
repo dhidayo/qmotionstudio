@@ -4,7 +4,9 @@ import { useEditor } from '@/state/store';
 import { useShallow } from 'zustand/react/shallow';
 import { useOverlays } from '@/ui/shell/overlays';
 import { MODE_COPY } from '@/ui/shell/modeLabels';
+import { usePreviewClock } from '@/ui/shell/ClockProvider';
 import { deleteSelection, deleteSlot, duplicateSelection, findEffect, overlayLabel } from '@/ui/editing/commands';
+import { addMotionToSelection } from '@/ui/editing/motion';
 import { Icon, type IconName } from './Icon';
 
 /**
@@ -46,6 +48,7 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
     selectedScene: selection.scene,
   } };
   const o = useOverlays.getState();
+  const clock = usePreviewClock();
   const corporate = project.mode === 'motionAd';
   const done: Tool = {
     label: 'Done',
@@ -76,6 +79,8 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
           ...first,
           { label: overlay.content.kind === 'text' ? 'Style' : 'Settings', icon: 'settings', onSelect: () => { o.openPhonePanel('element', overlay.content.kind === 'text' ? 'Content' : 'Placement'); } },
           { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target }); } },
+          // The add bar's "+ Motion", for the thing in hand (D-153); one it already has opens its settings.
+          { label: 'Motion', icon: 'motion', onSelect: () => { if (addMotionToSelection(clock) === 'exists') o.openPhonePanel('element', 'Motion path'); } },
           { label: 'Copy', icon: 'copy', onSelect: () => { s.dispatch(actions.duplicateOverlay(overlay.id, totalDurationMs(s.project))); } },
           del(),
           done,
@@ -100,7 +105,8 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
           : { label: 'Edit text', icon: 'edit', onSelect: () => { o.openTextEdit(key); } },
         { label: photo ? 'Crop' : 'Style', icon: 'settings', onSelect: () => { o.openPhonePanel('element', sectionName); } },
         { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target }); } },
-        { label: 'Animate', icon: 'motion', onSelect: () => { o.openPhonePanel('effects', sectionName); } },
+        // A motion added at once (D-153); one it already has opens its settings.
+        { label: 'Motion', icon: 'motion', onSelect: () => { if (addMotionToSelection(clock) === 'exists') o.openPhonePanel('effects', sectionName); } },
         { label: photo ? 'Delete' : 'Remove', icon: 'trash', danger: true, onSelect: () => { deleteSlot(key); } },
         done,
       ],
@@ -168,8 +174,10 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
   const style: Tool = { label: 'Style', icon: 'style', onSelect: () => { o.openPhonePanel('style'); } };
   const add: Tool = { label: 'Add', icon: 'add', onSelect: () => { o.openPhonePanel('add'); } };
   // D-120: the background, one tap away. "Backdrop" fits a phone's row of seven.
-  const background: Tool = { label: corporate ? 'Backdrop' : 'Background', icon: 'background', onSelect: () => { o.openPhonePanel('style', 'Background'); } };
-  return { context: null, tools: corporate ? [designs, add, photos, text, effects, style, background] : [designs, photos, text, effects, style, background] };
+  // Both modes have seven tools now that a design has Add too (D-153).
+  const background: Tool = { label: 'Backdrop', icon: 'background', onSelect: () => { o.openPhonePanel('style', 'Background'); } };
+  // Add in both modes: a design takes text, photos, shapes, stickers and motion too (D-153).
+  return { context: null, tools: [designs, add, photos, text, effects, style, background] };
 }
 
 export function PhoneToolbar(): React.JSX.Element {

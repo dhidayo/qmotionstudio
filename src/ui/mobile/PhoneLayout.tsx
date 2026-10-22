@@ -19,6 +19,7 @@ import { PhoneToolbar } from './PhoneToolbar';
 import { PhoneTopBar } from './PhoneTopBar';
 import { continueAsVideo } from '@/ui/editing/commands';
 import { useSceneReorder } from '@/ui/timeline/useSceneReorder';
+import { anyMotion } from '@/ui/timeline/timelineRows';
 import * as actions from '@/document/actions';
 
 /**
@@ -210,6 +211,7 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
   };
 
   const fxCount = project.scenes.reduce((n, s) => n + (s.inputs.effects?.length ?? 0), 0) + (project.effects?.length ?? 0);
+  const moving = useMemo(() => anyMotion(project), [project]);
 
   // Scenes rearranged by dragging along the strip (D-130).
   const dispatch = useEditor((s) => s.dispatch);
@@ -289,8 +291,10 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
         />
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-muted">
-        <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Layers · {project.overlays.length}</span>
-        <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Effects · {fxCount}</span>
+        {/* What the full timeline holds — only what is used, as on a computer (D-153). */}
+        {project.overlays.length > 0 && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Layers · {project.overlays.length}</span>}
+        {fxCount > 0 && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Effects · {fxCount}</span>}
+        {moving && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Motion</span>}
         {project.audio.length > 0 && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Music</span>}
         <button
           type="button"

@@ -1,18 +1,17 @@
 import { useCallback, useRef } from 'react';
 import * as actions from '@/document/actions';
 import type { Overlay } from '@/document/types';
-import { DEFAULT_OVERLAY_MS, DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } from '@/document/defaults';
-import { placeNew } from '@/document/select/tracks';
-import { timelineSpanMs } from '@/document/select/timeline';
+import { DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } from '@/document/defaults';
 import { useEntitlements } from '@/entitlements';
+import { spotFor } from '@/ui/editing/addLayer';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 
 /**
- * Adding layers and music to an ad, from anywhere (D-109): the timeline's
- * toolbar on a computer, the Add panel on a phone. One implementation, so a
- * caption added on a phone lands exactly where one added on a computer would.
+ * Adding layers and music, from anywhere (D-109): the add bar on a computer,
+ * the Add sheet on a phone (D-153). One implementation, so a caption added on
+ * a phone lands exactly where one added on a computer would.
  *
  * The file inputs it needs are returned as `inputs`, to be rendered once by
  * whoever uses it.
@@ -32,23 +31,18 @@ export function useAddLayers(): {
   const dispatch = useEditor((s) => s.dispatch);
   const selectOverlay = useEditor((s) => s.selectOverlay);
   const selectAudio = useEditor((s) => s.selectAudio);
-  const { limits } = useEntitlements('motionAd');
+  const { limits } = useEntitlements(useEditor((s) => s.project.mode));
 
   /*
    * A new element goes on a layer that has room for it (D-103): on the layer
    * the person chose, at the playhead or straight after the clip it would have
    * landed on; otherwise on the highest layer free at the playhead; a new layer
-   * only when none is.
+   * only when none is. On a design, which has no timeline, it lasts as long as
+   * the design does — the add bar adds to designs too (D-153).
    */
   const placeOverlay = useCallback((content: Overlay['content']): void => {
     const { project, playheadMs, targetTrack } = useEditor.getState();
-    const spot = placeNew(project.overlays, {
-      atMs: playheadMs,
-      lengthMs: DEFAULT_OVERLAY_MS,
-      durationMs: timelineSpanMs(project),
-      preferTrack: targetTrack,
-    });
-    const overlay = actions.makeOverlay(content, spot);
+    const overlay = actions.makeOverlay(content, spotFor(project, project.overlays, playheadMs, targetTrack));
     dispatch(actions.addOverlay(overlay));
     selectOverlay(overlay.id);
   }, [dispatch, selectOverlay]);

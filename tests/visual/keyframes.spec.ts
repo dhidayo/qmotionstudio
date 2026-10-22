@@ -90,15 +90,25 @@ test.describe('motion is a span on the timeline', () => {
 
   test('adding one changes nothing until the element is moved', async ({ page }) => {
     await overlayProject(page);
-    const before = centreOf(await boxOf(page));
+    /*
+     * Where it sits on the picture, as a fraction of the picture: the motion
+     * row arrives with the first motion (D-153) and the picture above the
+     * timeline gives it the room, so screen pixels move while the frame does not.
+     */
+    const onPicture = async (): Promise<{ x: number; y: number }> => {
+      const centre = centreOf(await boxOf(page));
+      const picture = await boxOf(page, 'canvas');
+      return { x: (centre.x - picture.x) / picture.width, y: (centre.y - picture.y) / picture.height };
+    };
+    const before = await onPicture();
 
     await addMotion(page).click();
     await seek(page, 4_000);
 
     // Both ends hold the pose it already had, so the overlay has not moved.
-    const after = centreOf(await boxOf(page));
-    expect(after.x).toBeCloseTo(before.x, 0);
-    expect(after.y).toBeCloseTo(before.y, 0);
+    const after = await onPicture();
+    expect(after.x).toBeCloseTo(before.x, 2);
+    expect(after.y).toBeCloseTo(before.y, 2);
   });
 
   test('the end of the bar is where the element ends up', async ({ page }) => {
@@ -268,21 +278,24 @@ test.describe('clicking the timeline moves the playhead', () => {
     await expect.poll(() => now(page)).toBeLessThan(before);
   });
 
-  test('the empty music row is a time axis like any other', async ({ page }) => {
+  test('a row\'s note never swallows a press: the motion row is a time axis like any other', async ({ page }) => {
     /*
-     * It was not: the "No music" note sat over most of the row and swallowed
-     * the press, so the one row with nothing in it was the one row a click did
-     * nothing on.
+     * The music row's "No music" note once sat over most of the row and
+     * swallowed the press, so the one row with nothing in it was the one row
+     * a click did nothing on. Empty rows are gone (D-153); the motion row's
+     * note, shown while the selection does not move, is the one note left on
+     * a lane, and it must let the press through just the same.
      */
-    await page.goto('/?template=quick-pitch&aspect=9:16&frozen=8000');
-    await page.waitForSelector('canvas');
-
-    const note = page.getByText('No music.', { exact: false });
+    await overlayProject(page);
+    await page.locator('[data-add="motion"]').click();
+    // Something moves, so the row is there; with the scene chosen, it holds a note.
+    await page.getByRole('button', { name: /^2\. / }).click();
+    const note = page.locator('[aria-label="Timeline"] [data-row="motion"]').getByText(/^Select something that moves/);
     const box = await note.boundingBox();
-    if (!box) throw new Error('no music row');
+    if (!box) throw new Error('no motion row');
 
     const before = await now(page);
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    expect(await now(page)).not.toBe(before);
+    await expect.poll(() => now(page)).not.toBe(before);
   });
 });
