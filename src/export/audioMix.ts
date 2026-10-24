@@ -1,5 +1,5 @@
 import type { Project } from '@/document/types';
-import { resolvedAudio } from '@/document/select/timeline';
+import { playedAudio } from '@/document/select/videoSound';
 import { renderMixdown, type Mixdown } from '@/core/audio/mixdown';
 import { soundFor } from '@/audio/library';
 import { SoundLoadError, loadSounds } from '@/media/sounds';
@@ -15,7 +15,9 @@ import type { MediaStore } from '@/media/store';
  * It now stops the export and names what is missing (§11.8, §16).
  *
  * Mixes the clips as they play: a background loop that fits the video runs to
- * its end (`resolvedAudio`).
+ * its end (`resolvedAudio`), and each video layer's own sound plays with its
+ * picture at its volume, unless it is muted (`playedAudio`, D-163) — the
+ * same clips the preview schedules.
  */
 
 /** An export stopped because a clip's sound is not there to mix; the message says which and what to do. */
@@ -27,7 +29,7 @@ export class AudioNotReadyError extends Error {
 }
 
 export async function mixForExport(project: Project, media: MediaStore, durationMs: number): Promise<Mixdown | null> {
-  const clips = resolvedAudio(project);
+  const clips = playedAudio(project, media.videoSoundOf);
   try {
     await loadSounds(media, clips.map((clip) => clip.mediaId));
   } catch (error) {

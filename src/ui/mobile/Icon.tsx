@@ -40,6 +40,8 @@ const PATHS = {
   sound: 'M4 9h4l5-4v14l-5-4H4zM16.5 9.5a3.5 3.5 0 0 1 0 5M19 7a7 7 0 0 1 0 10',
   left: 'M15 6l-6 6 6 6',
   right: 'M9 6l6 6-6 6',
+  // + Sound's "Upload your own sound or music" (D-163).
+  upload: 'M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4',
 } as const;
 
 export type IconName = keyof typeof PATHS;

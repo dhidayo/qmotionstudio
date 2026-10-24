@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import {
-  addClip, BAND, centreColour, DROPPED_AT_MS, nearestBand, openProAd, scrubTo,
+  addClip, BAND, centreColour, DROPPED_AT_MS, nearestBand, openProAd, scrubTo, SOUND_FIXTURE,
 } from '../support/customMedia';
 
 /**
@@ -96,5 +96,46 @@ test.describe('custom media (§9)', () => {
     // §16: it says so rather than leaving an overlay that never appears.
     await expect(page.getByText(/Could not read "broken\.webm"/)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByLabel('Overlay inspector')).toBeHidden();
+  });
+
+  /*
+   * D-163: "uploaded video should have volume control on the setting where I
+   * can reduce, increase or mute sound of the videos." The layer's own sound,
+   * with a Mute switch and a Volume slider, one undo step per drag.
+   */
+  test('a video with sound has a Mute switch and a Volume slider', async ({ page }) => {
+    await openProAd(page, DROPPED_AT_MS);
+    await addClip(page, SOUND_FIXTURE);
+    const panel = page.getByLabel('Overlay inspector');
+    const sound = panel.locator('[data-video-sound]');
+    await expect(sound).toHaveAttribute('data-video-sound', 'on');
+    await expect(panel.locator('[data-video-volume-note]')).toHaveText('0 dB plays it as recorded.');
+
+    const volume = panel.getByRole('slider', { name: 'Volume' });
+    await expect(volume).toHaveAttribute('min', '-40');
+    await expect(volume).toHaveAttribute('max', '6');
+    await volume.focus();
+    for (let i = 0; i < 6; i++) await page.keyboard.press('ArrowLeft');
+    await volume.blur();
+    await expect(volume).toHaveValue('-6');
+    await expect(panel.locator('[data-video-volume-note]')).toContainText('50% of the recorded level');
+
+    // Six key presses, one adjustment: one undo puts it back.
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+z' : 'Control+z');
+    await expect(volume).toHaveValue('0');
+
+    const mute = panel.getByRole('switch', { name: 'Mute' });
+    await mute.click();
+    await expect(mute).toHaveAttribute('aria-checked', 'true');
+    await expect(sound).toHaveAttribute('data-video-sound', 'muted');
+    await expect(panel.locator('[data-video-volume-note]')).toContainText('plays silently');
+  });
+
+  test('a video with no sound says so', async ({ page }) => {
+    await openProAd(page, DROPPED_AT_MS);
+    await addClip(page);
+    const panel = page.getByLabel('Overlay inspector');
+    await expect(panel.getByText('This video has no sound.')).toBeVisible();
+    await expect(panel.getByRole('switch', { name: 'Mute' })).toHaveCount(0);
   });
 });

@@ -108,6 +108,126 @@ test.describe('an image plays once', () => {
   });
 });
 
+/**
+ * "Let the animation stop on a specific image so that it can be the basis
+ * for export to JPG" (D-163). Paused on a frame, "Use this frame" makes it
+ * the picture: the design plays once and rests there, Export → Image saves
+ * it, and Reset goes back to the design's own moment. The mark on the slider
+ * drags to choose one too.
+ */
+test.describe('choosing the picture (D-163)', () => {
+  test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
+
+  const chosenAt = (page: Page) => page.evaluate(() =>
+    (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { pictureAtMs?: number } } } } })
+      .__motionStudio.editor.getState().project.pictureAtMs ?? null);
+
+  /** The artboard, or a decoded download, at 32×18: enough to tell one frame of a design from another. */
+  const smallFrame = (page: Page) => page.evaluate(() => {
+    const canvas = document.querySelector('canvas');
+    if (!canvas) throw new Error('no artboard');
+    const small = document.createElement('canvas');
+    small.width = 32;
+    small.height = 18;
+    const cx = small.getContext('2d');
+    cx?.drawImage(canvas, 0, 0, 32, 18);
+    return [...(cx?.getImageData(0, 0, 32, 18).data ?? [])];
+  });
+
+  test('Use this frame: it rests there, saves there as a JPG, and Reset goes back', async ({ page }) => {
+    await page.addInitScript(() => {
+      const store = globalThis as unknown as { __downloads?: { buffer: ArrayBuffer; type: string }[] };
+      store.__downloads = [];
+      HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+        if (!this.download) return;
+        void fetch(this.href).then((r) => r.blob()).then(async (blob) => {
+          store.__downloads?.push({ buffer: await blob.arrayBuffer(), type: blob.type });
+        });
+      };
+    });
+    await open(page, IMAGE);
+    const use = page.locator('[data-use-frame]');
+    const mark = page.locator('[data-picture-mark]');
+    await expect(mark).toHaveAttribute('data-picture-mark', 'design');
+
+    // Offered once paused on another frame, and not on the picture itself.
+    await seek(page, 6_000);
+    await expect(use).toBeVisible();
+    await use.click();
+    expect(await chosenAt(page)).toBe(6_000);
+    await expect(use).toHaveCount(0);
+    await expect(mark).toHaveAttribute('data-picture-mark', 'chosen');
+    await expect(mark).toHaveAccessibleName('Go to the picture moment, 6.00s, the frame you chose');
+
+    // Undoable in one step, and back again.
+    await page.keyboard.press('Control+z');
+    expect(await chosenAt(page)).toBeNull();
+    await page.keyboard.press('Control+Shift+z');
+    expect(await chosenAt(page)).toBe(6_000);
+
+    // Played once, it rests on the chosen frame.
+    await playToTheEnd(page);
+    expect(await clockTime(page)).toBe(6_000);
+    await expect(page.getByText('6.00s / 10.00s')).toBeVisible();
+    const onScreen = await smallFrame(page);
+
+    // Export → Image names it and saves it, as a JPG.
+    await page.getByTitle(/^Export \(/).click();
+    const dialog = page.getByRole('dialog', { name: 'Export' });
+    await expect(dialog.locator('[data-picture-moment="chosen"]')).toContainText('Your chosen frame · 6.00s');
+    await dialog.getByRole('radio', { name: /^1920 × 1080/ }).click();
+    await dialog.getByRole('group', { name: 'Format' }).getByRole('button', { name: /^JPG/ }).click();
+    await dialog.getByRole('button', { name: 'Export image' }).click();
+    await expect.poll(() => page.evaluate(() => (globalThis as unknown as { __downloads: unknown[] }).__downloads.length), { timeout: 30_000 }).toBe(1);
+    const saved = await page.evaluate(async (screen) => {
+      const entry = (globalThis as unknown as { __downloads: { buffer: ArrayBuffer; type: string }[] }).__downloads[0];
+      if (!entry) throw new Error('nothing downloaded');
+      const bitmap = await createImageBitmap(new Blob([entry.buffer], { type: entry.type }));
+      const small = new OffscreenCanvas(32, 18);
+      const cx = small.getContext('2d');
+      cx?.drawImage(bitmap, 0, 0, 32, 18);
+      const px = cx?.getImageData(0, 0, 32, 18).data ?? new Uint8ClampedArray();
+      let sum = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        for (let c = 0; c < 3; c++) sum += Math.abs((px[i + c] ?? 0) - (screen[i + c] ?? 0));
+      }
+      return { type: entry.type, error: sum / ((px.length / 4) * 3) };
+    }, onScreen);
+    expect(saved.type).toBe('image/jpeg');
+    expect(saved.error, 'the JPG is the chosen frame').toBeLessThan(8);
+    await dialog.getByRole('button', { name: 'Close' }).first().click();
+
+    // Reset: the design's own moment again.
+    await page.locator('[data-reset-frame]').click();
+    expect(await chosenAt(page)).toBeNull();
+    await expect(mark).toHaveAttribute('data-picture-mark', 'design');
+    await expect(mark).toHaveAccessibleName('Go to the picture moment, 2.40s');
+    await expect(page.locator('[data-reset-frame]')).toHaveCount(0);
+  });
+
+  test('the mark on the slider drags to a new moment, showing each frame on the way', async ({ page }) => {
+    await open(page, IMAGE);
+    const mark = page.locator('[data-picture-mark]');
+    const lane = page.locator('[data-lane]').first();
+    const box = await lane.boundingBox();
+    const from = await mark.boundingBox();
+    if (!box || !from) throw new Error('no slider');
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    // Halfway along the track: 5s of the 10s design.
+    const half = box.x + 8 + (box.width - 16) / 2;
+    await page.mouse.move(half, from.y + from.height / 2, { steps: 6 });
+    expect(await clockPlaying(page)).toBe(false);
+    expect(Math.abs((await clockTime(page)) - 5_000)).toBeLessThan(150);
+    await page.mouse.up();
+    const chosen = await chosenAt(page);
+    expect(Math.abs((chosen ?? 0) - 5_000)).toBeLessThan(150);
+    await expect(mark).toHaveAttribute('data-picture-mark', 'chosen');
+    // The drop chose; it did not jump back to the old moment.
+    expect(Math.abs((await clockTime(page)) - (chosen ?? 0))).toBeLessThan(1);
+  });
+});
+
 test.describe('a video still loops', () => {
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
 

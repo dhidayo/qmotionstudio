@@ -9,6 +9,7 @@ import { sceneLengthMs, sceneSpans, totalDurationMs } from '../select/timeline';
 import { MIN_AUDIO_CLIP_MS, fitClip } from '../select/audio';
 import { MAX_LOOP_LENGTH_MS, clipDurationMs, isLooping, loopPhaseOf, loopWindowMs } from '@/core/audio/envelope';
 import { projectPhotos } from '../select/media';
+import { VIDEO_VOLUME_MAX_DB, VIDEO_VOLUME_MIN_DB } from '../select/videoSound';
 import { layersInSpan, placeAmong } from '../select/sceneLayers';
 import { MODE_LABEL } from '../modeNames';
 import { LOGO_KEY } from '../types';
@@ -1122,8 +1123,7 @@ export function setTemplate(
 ): Action {
   return {
     label: 'Change template',
-    apply: (project, scope) =>
-      editScene(project, scope, (scene) => {
+    apply: (project, scope) => forgetPictureOnNewDesign(project, editScene(project, scope, (scene) => {
         if (scene.templateId === templateId) return scene;
 
         const durationMs = options?.durationMs;
@@ -1142,7 +1142,37 @@ export function setTemplate(
         return photos === scene.inputs.photos
           ? next
           : { ...next, inputs: { ...next.inputs, photos } };
-      }),
+      })),
+  };
+}
+
+/**
+ * A frame chosen in one design means nothing in another (D-163): a new
+ * design rests on its own picture moment until the person picks again.
+ */
+function forgetPictureOnNewDesign(before: Project, after: Project): Project {
+  if (after.pictureAtMs === undefined || after.scenes[0]?.templateId === before.scenes[0]?.templateId) return after;
+  const { pictureAtMs: _chosen, ...rest } = after;
+  return rest;
+}
+
+/**
+ * The frame an image rests on and saves as its picture (D-163): "Use this
+ * frame" with the time paused on, or null for "Reset" — back to the design's
+ * own picture moment. One undo step; saved with the project.
+ */
+export function setPictureMoment(atMs: number | null): Action {
+  return {
+    label: atMs === null ? 'Reset the picture' : 'Use this frame',
+    apply: (project) => {
+      if (atMs === null || !Number.isFinite(atMs)) {
+        if (project.pictureAtMs === undefined) return project;
+        const { pictureAtMs: _chosen, ...rest } = project;
+        return { ...rest, updatedAt: Date.now() };
+      }
+      const next = Math.max(0, Math.round(atMs));
+      return project.pictureAtMs === next ? project : { ...project, pictureAtMs: next, updatedAt: Date.now() };
+    },
   };
 }
 
@@ -1909,9 +1939,40 @@ export function setOverlayMedia(id: string, mediaId: string): Action {
     apply: (project) =>
       editOverlay(project, id, (overlay) =>
         overlay.content.kind === 'photo' || overlay.content.kind === 'customMedia'
-          ? { ...overlay, content: { kind: overlay.content.kind, mediaId } }
+          // A video's sound settings stay with the layer when its clip is swapped (D-163).
+          ? { ...overlay, content: { ...overlay.content, mediaId } }
           : overlay,
       ),
+  };
+}
+
+/**
+ * A video layer's volume (D-163), in dB from −40 to +6; 0 is as recorded.
+ * A drag on the slider is one undo step, like `setAudioGain`.
+ */
+export function setVideoVolume(id: string, volumeDb: number): Action {
+  return {
+    label: 'Change video volume',
+    coalesceKey: `videoVolume:${id}`,
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        if (overlay.content.kind !== 'customMedia' || !Number.isFinite(volumeDb)) return overlay;
+        const next = Math.round(clamp(volumeDb, VIDEO_VOLUME_MIN_DB, VIDEO_VOLUME_MAX_DB) * 10) / 10;
+        return (overlay.content.volumeDb ?? 0) === next ? overlay : { ...overlay, content: { ...overlay.content, volumeDb: next } };
+      }),
+  };
+}
+
+/** Mutes a video layer's sound, or brings it back at the volume it had (D-163). */
+export function setVideoMuted(id: string, muted: boolean): Action {
+  return {
+    label: muted ? 'Mute video' : 'Unmute video',
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        if (overlay.content.kind !== 'customMedia' || (overlay.content.muted === true) === muted) return overlay;
+        const { muted: _was, ...rest } = overlay.content;
+        return { ...overlay, content: muted ? { ...rest, muted: true } : rest };
+      }),
   };
 }
 

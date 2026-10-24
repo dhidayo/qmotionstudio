@@ -26,7 +26,11 @@ export type MediaEntry = {
   readonly bitmap: ImageBitmap | null;
   /** Video only: the open container and its frame ring (§9, D-051). */
   readonly clip?: VideoClip;
-  /** Audio only: the whole decoded track, and its peaks for the timeline (§10). */
+  /**
+   * The whole decoded track (§10): an audio file's, or a video's own sound
+   * (D-163) — absent for a video with no sound track. Peaks for the timeline
+   * are audio files' only.
+   */
   readonly audio?: AudioBuffer;
   readonly waveform?: Waveform;
   readonly width: number;
@@ -156,6 +160,23 @@ export class MediaStore implements MediaResolver {
   /** The decoded track behind an audio clip (§10). Null until it has landed. */
   getAudioBuffer(mediaId: string): AudioBuffer | null {
     return this.#entries.get(mediaId)?.audio ?? null;
+  }
+
+  /**
+   * A video's sound as the mix needs it (D-163): how long its picture runs
+   * before looping, which is the window its sound loops over. Null for a
+   * video with no sound, or one not decoded yet.
+   */
+  readonly videoSoundOf = (mediaId: string): { readonly lengthMs: number } | null => {
+    const entry = this.#entries.get(mediaId);
+    if (entry?.kind !== 'video' || !entry.audio) return null;
+    const lengthMs = entry.clip?.durationMs ?? entry.durationMs ?? 0;
+    return lengthMs > 0 ? { lengthMs } : null;
+  };
+
+  /** Whether a video has a sound track to play, for the inspector (D-163). */
+  hasSound(mediaId: string): boolean {
+    return this.#entries.get(mediaId)?.audio !== undefined;
   }
 
   getWaveform(mediaId: string): Waveform | null {

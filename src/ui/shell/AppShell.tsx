@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { Artboard } from '@/ui/artboard/Artboard';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { Timeline } from '@/ui/timeline/Timeline';
@@ -9,7 +9,8 @@ import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { pendingAdTemplateId, useEditor } from '@/state/store';
 import * as documentActions from '@/document/actions';
-import { resolvedAudio, timelineSpanMs } from '@/document/select/timeline';
+import { timelineSpanMs } from '@/document/select/timeline';
+import { playedAudio } from '@/document/select/videoSound';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { watermarked } from '@/entitlements';
 import { ClockProvider } from './ClockProvider';
@@ -352,7 +353,14 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
    * so the visual loop follows the audio device rather than the other way
    * round (D-054).
    */
-  useAudioPlayback(clock, resolvedAudio(project), media, duration);
+  /*
+   * With each video layer's own sound (D-163), as the export mixes it. The
+   * media store's revision is subscribed to so a video's sound is heard once it has
+   * decoded; `playedAudio` hands back the same array while nothing that
+   * sounds has changed, so playback is not rescheduled for nothing.
+   */
+  useSyncExternalStore(media.subscribe, media.getRevision, media.getRevision);
+  useAudioPlayback(clock, playedAudio(project, media.videoSoundOf), media, duration);
 
   /*
    * §13. Reopen the last project, then keep saving it.

@@ -18,22 +18,30 @@ import type { ProjectMode } from '@/document/types';
  * top are the Photos panel's) — then the things you put on the picture, then
  * what changes how it moves, then what you hear, then a video's scenes, and
  * last the Pro video layer.
+ *
+ * D-163 took + Music out: "I do not need to have a separate + Music as it is
+ * duplicating almost the same thing. Under sound, I can have custom upload,
+ * and the upload could be sound or music." + Sound is the one way to add
+ * audio, the library and the person's own file together. And "I should have
+ * only one button to represent the Shape, Sticker, and Number, since
+ * everything is stacked under the same popup menu": one **+ Element**, which
+ * opens the elements library on all three.
  */
 export type AddItemId =
-  | 'photos' | 'text' | 'shape' | 'sticker' | 'number'
-  | 'motion' | 'effect' | 'sound' | 'music' | 'scene' | 'video';
+  | 'photos' | 'text' | 'element'
+  | 'motion' | 'effect' | 'sound' | 'scene' | 'video';
 
 export const ADD_ORDER: readonly AddItemId[] = [
-  'photos', 'text', 'shape', 'sticker', 'number', 'motion', 'effect', 'sound', 'music', 'scene', 'video',
+  'photos', 'text', 'element', 'motion', 'effect', 'sound', 'scene', 'video',
 ];
 
 /**
  * A design (Image mode) is a picture first — exported as a still as often as
- * a clip — so it takes no video layer, sound or music, and switching to it
+ * a clip — so it takes no video layer or sound, and switching to it
  * drops any audio (`setMode`). It is one scene, so it has no + Scene either.
  * A video has everything.
  */
-const NOT_IN_IMAGES: ReadonlySet<AddItemId> = new Set<AddItemId>(['video', 'sound', 'music', 'scene']);
+const NOT_IN_IMAGES: ReadonlySet<AddItemId> = new Set<AddItemId>(['video', 'sound', 'scene']);
 
 export function addItemIds(mode: ProjectMode): readonly AddItemId[] {
   return mode === 'motionAd' ? ADD_ORDER : ADD_ORDER.filter((id) => !NOT_IN_IMAGES.has(id));

@@ -31,3 +31,22 @@ describe('the frame Export → Image saves (D-155)', () => {
     expect(at({ restMs: 9_000, ended: true })).toEqual({ atMs: 5_999, source: 'rest' });
   });
 });
+
+describe('a frame the person chose (D-163)', () => {
+  const chosen = (over: Partial<Parameters<typeof pictureMomentMs>[0]>): ReturnType<typeof pictureMomentMs> =>
+    at({ restMs: 4_200, chosen: true, ...over });
+
+  it('is the picture while playing, once rested, and parked at the start', () => {
+    expect(chosen({ playing: true, clockMs: 900 })).toEqual({ atMs: 4_200, source: 'chosen' });
+    expect(chosen({ ended: true, clockMs: 4_200 })).toEqual({ atMs: 4_200, source: 'chosen' });
+    expect(chosen({ clockMs: 0 })).toEqual({ atMs: 4_200, source: 'chosen' });
+  });
+
+  it('is the picture when paused on it', () => {
+    expect(chosen({ clockMs: 4_200.3 })).toEqual({ atMs: 4_200, source: 'chosen' });
+  });
+
+  it('gives way to a frame paused on elsewhere, which is saved as it is on screen', () => {
+    expect(chosen({ clockMs: 1_000 })).toEqual({ atMs: 1_000, source: 'paused' });
+  });
+});

@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
-import type { AnimPreset, TextStyle } from '@/document/types';
+import type { AnimPreset, CustomMediaContent, TextStyle } from '@/document/types';
+import { dbToGain } from '@/core/audio/envelope';
+import { VIDEO_VOLUME_MAX_DB, VIDEO_VOLUME_MIN_DB, videoVolumeDb } from '@/document/select/videoSound';
 import * as actions from '@/document/actions';
 import { ANIM_PRESETS } from '@/core/render/overlays';
 import { useEditor, useSelectedOverlay } from '@/state/store';
@@ -134,6 +136,7 @@ export function OverlayPanel(): React.JSX.Element {
           />
         </Section>
       )}
+      {overlay.content.kind === 'customMedia' && <VideoSound id={id} content={overlay.content} />}
 
       <Keyframes overlay={overlay} />
 
@@ -252,6 +255,60 @@ export function OverlayPanel(): React.JSX.Element {
  * and knowing which is which is the difference between a deliberate loop and
  * an apparent stutter.
  */
+/**
+ * A video layer's sound (D-163): "uploaded video should have volume control
+ * on the setting where I can reduce, increase or mute sound of the videos."
+ *
+ * A Mute switch and a Volume slider from −40 dB to +6 dB, with the level it
+ * comes to as a percentage of the recording beside it, so 0 dB reads plainly
+ * as "as recorded". A drag is one undo step, like a music clip's volume. A
+ * video with no sound track says so rather than offering controls that would
+ * do nothing.
+ */
+function VideoSound({ id, content }: { id: string; content: CustomMediaContent }): React.JSX.Element {
+  const dispatch = useEditor((s) => s.dispatch);
+  const media = useMediaStore();
+  useMediaRevision();
+  const decoded = media.has(content.mediaId);
+  const hasSound = media.hasSound(content.mediaId);
+  const muted = content.muted === true;
+  const db = videoVolumeDb(content);
+  const percent = Math.round(dbToGain(db) * 100);
+  return (
+    <Section title="Sound">
+      <div data-video-sound={hasSound ? (muted ? 'muted' : 'on') : 'none'}>
+        {!decoded ? (
+          <p className="text-[11px] text-ink-faint">Reading this video…</p>
+        ) : !hasSound ? (
+          <p className="text-[11px] text-ink-muted">This video has no sound.</p>
+        ) : (
+          <>
+            <Toggle checked={muted} onChange={(on) => { dispatch(actions.setVideoMuted(id, on)); }} label="Mute" />
+            <div className="mt-2" style={muted ? { opacity: 0.5 } : undefined}>
+              <Slider
+                value={db}
+                min={VIDEO_VOLUME_MIN_DB}
+                max={VIDEO_VOLUME_MAX_DB}
+                step={1}
+                onChange={(next) => { dispatch(actions.setVideoVolume(id, next)); }}
+                label="Volume"
+                suffix=" dB"
+              />
+            </div>
+            <p className="mt-1 text-[10px] text-ink-faint" data-video-volume-note>
+              {muted
+                ? 'Muted: this video plays silently, in the preview and the export.'
+                : db === 0
+                  ? '0 dB plays it as recorded.'
+                  : `${percent}% of the recorded level. 0 dB plays it as recorded.`}
+            </p>
+          </>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 function MediaPicker({
   id,
   kind,

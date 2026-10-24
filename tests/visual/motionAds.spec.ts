@@ -149,7 +149,8 @@ test.describe('scene sequencing', () => {
     // Only the rows in use (D-153): the ruler and the scenes, and no empty audio row.
     await expect(page.locator('[aria-label="Timeline"] [data-row="scenes"]')).toHaveCount(1);
     await expect(page.locator('[aria-label="Timeline"] [data-row="audio"]')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: '+ Music' })).toBeAttached();
+    await expect(page.getByRole('button', { name: '+ Sound' })).toBeAttached();
+    await expect(page.getByRole('button', { name: '+ Music' })).toHaveCount(0);
   });
 });
 

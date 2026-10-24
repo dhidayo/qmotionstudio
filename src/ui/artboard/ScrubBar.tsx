@@ -7,7 +7,8 @@ import { MotionLane } from '@/ui/timeline/MotionLane';
 import { AddBar } from '@/ui/editing/AddBar';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { useClockEnded } from '@/ui/hooks/useClockEnded';
-import { restMomentMs } from '@/templates/restMoment';
+import { chosenMomentMs, restMomentMs } from '@/templates/restMoment';
+import { setPictureMoment } from '@/document/actions';
 
 /**
  * §1.1: showcase scrubs with a simple slider, not a track timeline.
@@ -40,6 +41,16 @@ export function ScrubBar({
   const ended = useClockEnded(clock);
   // Where an image rests, and what Export → Image saves (D-155); null in a video.
   const pictureMs = useEditor((s) => restMomentMs(s.project));
+  // A frame the person chose with "Use this frame" (D-163); null for the design's own.
+  const chosenMs = useEditor((s) => chosenMomentMs(s.project));
+  const dispatch = useEditor((s) => s.dispatch);
+  /*
+   * Paused on a frame that is not the picture, so "Use this frame" is
+   * offered. Tracked here, with the thumb, rather than by re-rendering on
+   * every frame of playback.
+   */
+  const [offPicture, setOffPicture] = useState(false);
+  const shownOff = useRef(false);
   const shownPlaying = useRef(clock.playing);
   const range = useRef<HTMLInputElement>(null);
   const readout = useRef<HTMLSpanElement>(null);
@@ -51,7 +62,28 @@ export function ScrubBar({
       shownPlaying.current = isPlaying;
       setPlaying(isPlaying);
     }
+    // The very start is not offered: most designs have not arrived there yet, and Export treats it as unchosen.
+    const off = !isPlaying && pictureMs !== null && timeMs > 0 && Math.abs(timeMs - pictureMs) >= 1;
+    if (off !== shownOff.current) {
+      shownOff.current = off;
+      setOffPicture(off);
+    }
   });
+
+  /** The frame on screen becomes the picture (D-163): where the design rests, and what Export → Image saves. */
+  const useThisFrame = (): void => {
+    const at = Math.max(0, Math.min(Math.round(clock.timeMs), Math.max(0, durationMs - 1)));
+    dispatch(setPictureMoment(at));
+  };
+  const resetPicture = (): void => { dispatch(setPictureMoment(null)); };
+  const frameButtons = pictureMs !== null && (offPicture || chosenMs !== null) ? (
+    <FrameButtons
+      offer={offPicture && !playing}
+      chosen={chosenMs !== null}
+      onUse={useThisFrame}
+      onReset={resetPicture}
+    />
+  ) : null;
 
   const toggle = (): void => {
     if (clock.playing) clock.pause();
@@ -86,6 +118,7 @@ export function ScrubBar({
           <span ref={readout} className="tabular w-[5.5rem] shrink-0 text-[11px] text-ink-muted">
             {format(0)} / {format(durationMs)}
           </span>
+          {frameButtons}
           <AddBar className="flex-1" />
         </div>
       )}
@@ -116,12 +149,22 @@ export function ScrubBar({
             className={`${phone ? 'h-7' : 'h-1'} w-full accent-[var(--c-accent)]`}
           />
           {pictureMs !== null && durationMs > 0 && (
-            <PictureMark atMs={pictureMs} durationMs={durationMs} phone={phone} onSeek={seek} />
+            <PictureMark
+              atMs={pictureMs}
+              durationMs={durationMs}
+              phone={phone}
+              chosen={chosenMs !== null}
+              onSeek={seek}
+              onPreview={(at) => { clock.pause(); clock.seek(at); }}
+              onChoose={(at) => { seek(at); dispatch(setPictureMoment(at)); }}
+            />
           )}
           {/* Template elements and overlays alike (D-153), drawn only while they move. */}
           <MotionLane spans={spans} durationMs={durationMs} onSeek={seek} />
         </div>
       </div>
+      {/* A phone has no row of actions, so the frame's buttons sit under the slider, only when they apply. */}
+      {phone && frameButtons !== null && <div className="flex items-center gap-2 px-3 pb-2">{frameButtons}</div>}
       <EffectStrip durationMs={durationMs} onSeek={seek} phone={phone} under={sliderBox} />
     </div>
   );
@@ -200,34 +243,136 @@ function EffectStrip({
 }
 
 /**
+ * "Use this frame" and "Reset" (D-163): "let the animation stop on a specific
+ * image so that it can be the basis for export to JPG." Paused on a frame
+ * that is not the picture, the first makes it the picture — the design plays
+ * once and rests there, and Export → Image saves it. Once one is chosen,
+ * Reset goes back to the design's own picture moment. Both are undoable and
+ * saved with the project.
+ */
+function FrameButtons({
+  offer,
+  chosen,
+  onUse,
+  onReset,
+}: {
+  offer: boolean;
+  chosen: boolean;
+  onUse: () => void;
+  onReset: () => void;
+}): React.JSX.Element {
+  return (
+    <span className="flex shrink-0 items-center gap-1.5" data-frame-buttons>
+      {offer && (
+        <button
+          type="button"
+          data-use-frame
+          onClick={onUse}
+          title="Rest the design on this frame, and save it when you export an image"
+          className="flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-accent bg-accent-soft px-2.5 text-[12px] font-semibold text-accent transition-colors hover:bg-accent hover:text-accent-ink"
+        >
+          <span aria-hidden className="block size-2 rotate-45 rounded-[2px]" style={{ background: 'var(--c-accent)' }} />
+          Use this frame
+        </button>
+      )}
+      {chosen && (
+        <button
+          type="button"
+          data-reset-frame
+          onClick={onReset}
+          title="Go back to the design’s own picture moment"
+          className="flex h-7 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-strong bg-panel px-2.5 text-[12px] font-medium text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+        >
+          Reset frame
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
  * The picture moment, marked on the slider (D-155): where the image comes to
  * rest once it has played, and the frame Export → Image saves unless you pause
- * on another. Pressing it goes there.
+ * on another. Pressing it goes there; dragging it chooses another moment,
+ * showing each frame on the way (D-163). A chosen moment is drawn solid, the
+ * design's own as an outline.
  */
 function PictureMark({
   atMs,
   durationMs,
   phone,
+  chosen,
   onSeek,
+  onPreview,
+  onChoose,
 }: {
   atMs: number;
   durationMs: number;
   phone: boolean;
+  chosen: boolean;
   onSeek: (ms: number) => void;
+  /** Shows a frame while the mark is dragged, without choosing it yet. */
+  onPreview: (ms: number) => void;
+  /** The mark was dropped here: this is the picture now. */
+  onChoose: (ms: number) => void;
 }): React.JSX.Element {
-  const share = Math.max(0, Math.min(1, atMs / durationMs));
+  const [dragMs, setDragMs] = useState<number | null>(null);
+  const drag = useRef<{ startX: number; moved: boolean } | null>(null);
+  // A drag ends in a click too; it must not then jump back to the old moment.
+  const dragged = useRef(false);
+  const shown = dragMs ?? atMs;
+  const share = Math.max(0, Math.min(1, shown / durationMs));
+
+  const msAt = (target: HTMLElement, clientX: number): number => {
+    const lane = target.parentElement?.getBoundingClientRect();
+    if (!lane || lane.width <= 16) return atMs;
+    const along = Math.max(0, Math.min(1, (clientX - lane.left - 8) / (lane.width - 16)));
+    return Math.max(0, Math.min(durationMs - 1, Math.round(along * durationMs)));
+  };
+
   return (
     <button
       type="button"
-      data-picture-mark
-      onClick={() => { onSeek(atMs); }}
-      aria-label={`Go to the picture moment, ${format(atMs)}`}
-      title="The picture: where the design rests, and what Export → Image saves"
-      className={`absolute grid -translate-x-1/2 place-items-center ${phone ? '-top-3 size-5' : '-top-3 size-4'}`}
+      data-picture-mark={chosen ? 'chosen' : 'design'}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.currentTarget.setPointerCapture(event.pointerId);
+        drag.current = { startX: event.clientX, moved: false };
+      }}
+      onPointerMove={(event) => {
+        const state = drag.current;
+        if (!state) return;
+        if (!state.moved && Math.abs(event.clientX - state.startX) < 3) return;
+        state.moved = true;
+        const at = msAt(event.currentTarget, event.clientX);
+        setDragMs(at);
+        onPreview(at);
+      }}
+      onPointerUp={(event) => {
+        const state = drag.current;
+        drag.current = null;
+        dragged.current = state?.moved === true;
+        if (state?.moved) onChoose(msAt(event.currentTarget, event.clientX));
+        setDragMs(null);
+      }}
+      onPointerCancel={() => { drag.current = null; setDragMs(null); }}
+      onClick={() => {
+        if (dragged.current) { dragged.current = false; return; }
+        onSeek(atMs);
+      }}
+      aria-label={`Go to the picture moment, ${format(atMs)}${chosen ? ', the frame you chose' : ''}`}
+      title={chosen
+        ? 'Your chosen picture: where the design rests, and what Export → Image saves. Drag to choose another.'
+        : 'The picture: where the design rests, and what Export → Image saves. Drag to choose another.'}
+      className={`absolute grid -translate-x-1/2 cursor-ew-resize touch-none place-items-center ${phone ? '-top-3 size-6' : '-top-3 size-4'}`}
       // The thumb's centre travels the track less one thumb's width.
       style={{ left: `calc(8px + (100% - 16px) * ${share})` }}
     >
-      <span aria-hidden className="block size-2 rotate-45 rounded-[2px]" style={{ background: 'var(--c-accent)' }} />
+      <span
+        aria-hidden
+        className="block size-2.5 rotate-45 rounded-[2px] border-2"
+        style={{ borderColor: 'var(--c-accent)', background: chosen ? 'var(--c-accent)' : 'var(--c-panel)' }}
+      />
     </button>
   );
 }

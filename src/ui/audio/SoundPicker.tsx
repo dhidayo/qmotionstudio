@@ -4,6 +4,7 @@ import { loadSound } from '@/media/sounds';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { noHover } from '@/ui/library/PlayingPreview';
+import { Icon } from '@/ui/mobile/Icon';
 import { useHoldStill, usePreviewClock } from '@/ui/shell/ClockProvider';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useMusicUpload } from '@/ui/timeline/useAddLayers';
@@ -18,8 +19,14 @@ import { libraryBackgrounds } from './placeSound';
  * instead of only custom music." Two kinds, said plainly: background music,
  * which loops under the whole video, and effects, which go at the playhead.
  * Every sound can be listened to first — a background goes round its loop
- * exactly as it will under the video — and added with one press. The person's
- * own music is one press away at the foot of the list.
+ * exactly as it will under the video — and added with one press.
+ *
+ * The person's own file comes first (D-163): "I do not need to have a
+ * separate + Music … under sound, I can have custom upload, and the upload
+ * could be sound or music." The add bar's + Music went, and the list opens on
+ * **Upload your own sound or music** — any MP3, M4A, WAV or OGG, a song or a
+ * single effect, which lands as a music clip from the start of the video, as
+ * + Music's did.
  *
  * A window on a computer, a sheet from the bottom on a phone, like the
  * effect library. Opened from the add bar's + Sound.
@@ -43,20 +50,21 @@ export function SoundPicker(): React.JSX.Element {
   /*
    * The device's file chooser lives here, outside the dialog, so it is still
    * on the page when the chosen file arrives — the dialog closes as the
-   * chooser opens. Its own name, so it is never mistaken for + Music's.
+   * chooser opens. It keeps the name + Music's input had, "Add a music
+   * track", now that it is the only one (D-163).
    */
-  const music = useMusicUpload('Choose a music file');
+  const music = useMusicUpload();
   const showToast = useEditor((s) => s.showToast);
   useEffect(() => { if (music.error !== null) showToast(music.error); }, [music.error, showToast]);
   return (
     <>
       {music.input}
-      {open && <SoundDialog onUseFile={music.pick} />}
+      {open && <SoundDialog onUseFile={music.pick} busy={music.busy} />}
     </>
   );
 }
 
-function SoundDialog({ onUseFile }: { onUseFile: () => void }): React.JSX.Element {
+function SoundDialog({ onUseFile, busy }: { onUseFile: () => void; busy: boolean }): React.JSX.Element {
   const close = (): void => { useOverlays.getState().openSoundPicker(false); };
   const media = useMediaStore();
   const showToast = useEditor((s) => s.showToast);
@@ -154,7 +162,7 @@ function SoundDialog({ onUseFile }: { onUseFile: () => void }): React.JSX.Elemen
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-edge px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-[14px] font-semibold">Add a sound</h2>
-            <p className="text-[11px] text-ink-faint">Listen first, then add. Background music loops for the whole video; effects go at the playhead.</p>
+            <p className="text-[11px] text-ink-faint">Upload your own, or listen to one of ours first, then add. Background music loops for the whole video; effects go at the playhead.</p>
           </div>
           <input
             ref={search}
@@ -195,6 +203,7 @@ function SoundDialog({ onUseFile }: { onUseFile: () => void }): React.JSX.Elemen
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <UploadCard busy={busy} onClick={() => { close(); onUseFile(); }} />
           {groups.length === 0 && (
             <p className="py-8 text-center text-[12px] text-ink-faint">No sounds match “{query}”.</p>
           )}
@@ -221,18 +230,48 @@ function SoundDialog({ onUseFile }: { onUseFile: () => void }): React.JSX.Elemen
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-edge px-4 py-2.5">
-          <button
-            type="button"
-            onClick={() => { close(); onUseFile(); }}
-            className="rounded-md border border-edge px-2.5 py-1.5 text-[12px] hover:bg-panel-alt sm:py-1"
-          >
-            Use a music file from your device…
-          </button>
-          <span className="text-[10px] text-ink-faint">MP3, M4A, WAV or OGG — your own music, under the video from its start.</span>
-        </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * The person's own file, first in the list and drawn as a card of its own so
+ * it cannot be missed (D-163). Pressing it closes the library and opens the
+ * device's file chooser; the input lives outside the dialog (`SoundPicker`).
+ */
+function UploadCard({ busy, onClick }: { busy: boolean; onClick: () => void }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      data-sound-upload
+      onClick={onClick}
+      disabled={busy}
+      className="mb-4 flex w-full items-center gap-3 rounded-lg border border-dashed px-3 py-3 text-left transition-colors hover:bg-accent-soft disabled:opacity-60"
+      style={{ borderColor: 'var(--c-accent)' }}
+    >
+      <span
+        className="grid size-10 shrink-0 place-items-center rounded-full"
+        style={{ background: 'var(--c-accent)', color: 'var(--c-accent-ink)' }}
+      >
+        <Icon name="upload" size={20} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-semibold text-ink">
+          {busy ? 'Reading your file…' : 'Upload your own sound or music'}
+        </span>
+        <span className="block text-[11px] leading-snug text-ink-muted">
+          MP3, M4A, WAV or OGG from your device — a song, a voice-over or a single effect. It plays from the start of the video; move or trim it on the timeline.
+        </span>
+      </span>
+      <span
+        aria-hidden
+        className="hidden shrink-0 rounded-md border px-3 py-1.5 text-[12px] font-medium sm:block"
+        style={{ borderColor: 'var(--c-accent)', color: 'var(--c-accent)' }}
+      >
+        Choose a file…
+      </span>
+    </button>
   );
 }
 

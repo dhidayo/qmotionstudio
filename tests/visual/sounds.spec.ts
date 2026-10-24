@@ -157,11 +157,11 @@ test.describe('+ Sound (D-156)', () => {
     await expect(page.getByRole('button', { name: /^Music clip, 12\.0 seconds$/ })).toBeVisible();
   });
 
-  test('the music file chooser is one press from the library', async ({ page }) => {
+  test('your own sound or music is the first thing in the library (D-163)', async ({ page }) => {
     await openAd(page);
     await openSounds(page);
     const chooser = page.waitForEvent('filechooser');
-    await picker(page).getByRole('button', { name: 'Use a music file from your device…' }).click();
+    await picker(page).getByRole('button', { name: /Upload your own sound or music/ }).click();
     await chooser;
     await expect(picker(page)).toBeHidden();
   });

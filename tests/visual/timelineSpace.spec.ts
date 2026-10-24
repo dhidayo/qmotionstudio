@@ -17,8 +17,8 @@ import { addMusic } from '../support/audio';
 
 test.use({ viewport: { width: 1500, height: 940 } });
 
-const VIDEO_ORDER = ['photos', 'text', 'shape', 'sticker', 'number', 'motion', 'effect', 'sound', 'music', 'scene', 'video'];
-const DESIGN_ORDER = ['photos', 'text', 'shape', 'sticker', 'number', 'motion', 'effect'];
+const VIDEO_ORDER = ['photos', 'text', 'element', 'motion', 'effect', 'sound', 'scene', 'video'];
+const DESIGN_ORDER = ['photos', 'text', 'element', 'motion', 'effect'];
 
 const timeline = (page: Page): Locator => page.locator('[aria-label="Timeline"]');
 const toast = (page: Page): Locator => page.locator('[data-toast]');
@@ -236,8 +236,8 @@ test.describe('on a narrow screen', () => {
     await page.mouse.wheel(0, 240);
     await expect.poll(at).toBeGreaterThan(0);
     // Every item is still reachable.
-    await row.locator('[data-add="music"]').scrollIntoViewIfNeeded();
-    await expect(row.locator('[data-add="music"]')).toBeInViewport();
+    await row.locator('[data-add="video"]').scrollIntoViewIfNeeded();
+    await expect(row.locator('[data-add="video"]')).toBeInViewport();
   });
 });
 
