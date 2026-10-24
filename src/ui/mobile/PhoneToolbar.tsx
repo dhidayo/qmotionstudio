@@ -6,7 +6,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { useOverlays } from '@/ui/shell/overlays';
 import { MODE_COPY } from '@/ui/shell/modeLabels';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
-import { deleteSelection, deleteSlot, duplicateSelection, findEffect, overlayLabel } from '@/ui/editing/commands';
+import {
+  changeSticker, deleteSelection, deleteSlot, duplicateSelection, editElement, findEffect, overlayLabel, overlayThis,
+} from '@/ui/editing/commands';
 import { addMotionToSelection } from '@/ui/editing/motion';
 import { Icon, type IconName } from './Icon';
 
@@ -68,17 +70,28 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
   if (s.selectedOverlay !== null) {
     const overlay = s.project.overlays.find((x) => x.id === s.selectedOverlay);
     if (overlay) {
-      const target = { kind: 'element' as const, target: { kind: 'overlay' as const, id: overlay.id }, label: overlay.kind === 'text' ? 'this caption' : 'this layer' };
-      const first: Tool[] = overlay.content.kind === 'text'
-        ? [{ label: 'Edit text', icon: 'edit', onSelect: () => { o.openTextEdit(overlay.id); } }]
-        : overlay.content.kind === 'photo'
-          ? [{ label: 'Replace', icon: 'replace', onSelect: () => { o.openPhotoPicker({ kind: 'overlay', id: overlay.id }); } }]
-          : [];
+      const target = { kind: 'element' as const, target: { kind: 'overlay' as const, id: overlay.id }, label: overlayThis(overlay) };
+      const first: Tool[] = ((): Tool[] => {
+        switch (overlay.content.kind) {
+          case 'text': return [{ label: 'Edit text', icon: 'edit', onSelect: () => { o.openTextEdit(overlay.id); } }];
+          case 'photo': return [{ label: 'Replace', icon: 'replace', onSelect: () => { o.openPhotoPicker({ kind: 'overlay', id: overlay.id }); } }];
+          // Each element's own first tool (D-158): its settings, or another sticker.
+          case 'shape': return [{ label: 'Style', icon: 'shape', onSelect: () => { editElement(overlay, 'phone'); } }];
+          case 'sticker': return [{ label: 'Change', icon: 'replace', onSelect: () => { changeSticker(overlay); } }];
+          case 'counter': return [{ label: 'Number', icon: 'number', onSelect: () => { editElement(overlay, 'phone'); } }];
+          default: return [];
+        }
+      })();
       return {
         context: overlayLabel(overlay),
         tools: [
           ...first,
-          { label: overlay.content.kind === 'text' ? 'Style' : 'Settings', icon: 'settings', onSelect: () => { o.openPhonePanel('element', overlay.content.kind === 'text' ? 'Content' : 'Placement'); } },
+          {
+            label: overlay.content.kind === 'text' ? 'Style' : 'Settings',
+            icon: 'settings',
+            // A sticker's first tool swaps it, so its settings open on its words and colours.
+            onSelect: () => { o.openPhonePanel('element', overlay.content.kind === 'text' ? 'Content' : overlay.content.kind === 'sticker' ? 'Sticker' : 'Placement'); },
+          },
           { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target }); } },
           // The add bar's "+ Motion", for the thing in hand (D-153); one it already has opens its settings.
           { label: 'Motion', icon: 'motion', onSelect: () => { if (addMotionToSelection(clock) === 'exists') o.openPhonePanel('element', 'Motion path'); } },

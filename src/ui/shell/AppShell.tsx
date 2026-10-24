@@ -34,6 +34,7 @@ import { PaneResizer, restorePaneWidths } from './PaneResizer';
 import { ContextMenu } from './ContextMenu';
 import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { SoundPicker } from '@/ui/audio/SoundPicker';
+import { ElementPicker } from '@/ui/elements/ElementPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
@@ -324,7 +325,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
        */
       editor: useEditor,
       actions: documentActions,
-      /** The pickers and sheets, so a test can open one directly. */
+      /** The UI's own store — pickers, sheets, menus — for tests that open one directly. */
       overlays: useOverlays,
       textCacheSize: () => rig.textCache.size,
       /*
@@ -434,6 +435,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
       <ContextMenu />
       <EffectPicker />
       <SoundPicker />
+      <ElementPicker />
       <PhotoPickerDialog />
       <ShortcutsDialog />
       </ClockProvider>

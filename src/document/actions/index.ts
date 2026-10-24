@@ -1,7 +1,7 @@
 import type { Palette, PaletteRole, PropValues } from '@/core/types';
 import { DEFAULT_LOGO, newId, restyleLook, STARTER_PHOTO_IDS } from '../defaults';
 import { NO_SLOT_TRANSFORM } from '../types';
-import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
+import { isAnimated, overlayMediaId, poseAt, poseIndexAt } from '../select/overlay';
 import { nudgeAt, nudgePoses } from '@/core/render/slots';
 import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../select/motion';
 import { MAX_TRACKS, compactTracks, overlapsOn, placeNew, settleTrack, usedTracks } from '../select/tracks';
@@ -498,7 +498,7 @@ export function removeFromLibrary(mediaId: string): Action {
         }
         return inputs === scene.inputs ? scene : { ...scene, inputs };
       });
-      const overlays = project.overlays.filter((o) => o.content.kind === 'text' || o.content.mediaId !== mediaId);
+      const overlays = project.overlays.filter((o) => overlayMediaId(o.content) !== mediaId);
       return {
         ...project,
         scenes,
@@ -1440,9 +1440,19 @@ export function setMode(mode: ProjectMode): Action {
 
 // ── Overlays (§3C, §1.2) ────────────────────────────────────────────────────
 
+/** What an undo step calls each kind of layer: "Undo Add shape". */
+const LAYER_NOUN: Readonly<Record<OverlayContent['kind'], string>> = {
+  photo: 'photo overlay',
+  text: 'text overlay',
+  customMedia: 'media overlay',
+  shape: 'shape',
+  sticker: 'sticker',
+  counter: 'number',
+};
+
 export function addOverlay(overlay: Overlay): Action {
   return {
-    label: `Add ${overlay.kind === 'customMedia' ? 'media' : overlay.kind} overlay`,
+    label: `Add ${LAYER_NOUN[overlay.content.kind]}`,
     apply: (project) => ({
       ...project,
       overlays: [...project.overlays, overlay],
@@ -1898,9 +1908,9 @@ export function setOverlayMedia(id: string, mediaId: string): Action {
     label: 'Change overlay media',
     apply: (project) =>
       editOverlay(project, id, (overlay) =>
-        overlay.content.kind === 'text'
-          ? overlay
-          : { ...overlay, content: { kind: overlay.content.kind, mediaId } },
+        overlay.content.kind === 'photo' || overlay.content.kind === 'customMedia'
+          ? { ...overlay, content: { kind: overlay.content.kind, mediaId } }
+          : overlay,
       ),
   };
 }
@@ -1915,10 +1925,88 @@ export function setOverlayTextStyle(
     ...(options?.coalesceKey === undefined ? {} : { coalesceKey: options.coalesceKey }),
     apply: (project) =>
       editOverlay(project, id, (overlay) =>
-        overlay.content.kind === 'text'
+        // A number's figure is styled by the same controls as words (D-158).
+        overlay.content.kind === 'text' || overlay.content.kind === 'counter'
           ? { ...overlay, content: { ...overlay.content, style: { ...overlay.content.style, ...patch } } }
           : overlay,
       ),
+  };
+}
+
+// ── Elements: shapes, stickers and numbers (D-158) ─────────────────────────
+
+/**
+ * Gives an overlay new content — another sticker, a preset — keeping where it
+ * is, when it shows, how it moves and its effects. `kind` follows the content.
+ */
+export function setOverlayContent(id: string, content: OverlayContent, label = 'Change element'): Action {
+  return {
+    label,
+    apply: (project) => editOverlay(project, id, (overlay) => ({ ...overlay, kind: content.kind, content })),
+  };
+}
+
+type ElementKind = 'shape' | 'sticker' | 'counter';
+export type ElementPatch<K extends ElementKind> = Partial<Omit<Extract<OverlayContent, { kind: K }>, 'kind'>>;
+
+/**
+ * Changes some of an element's settings — a shape's fill, a sticker's words,
+ * where a number counts to. Does nothing to an overlay of another kind, so a
+ * control left over from the last selection cannot turn a photo into a star.
+ */
+export function patchOverlayContent<K extends ElementKind>(
+  id: string,
+  kind: K,
+  patch: ElementPatch<K>,
+  options?: { label?: string; coalesceKey?: string },
+): Action {
+  return {
+    label: options?.label ?? 'Change element',
+    ...(options?.coalesceKey === undefined ? {} : { coalesceKey: options.coalesceKey }),
+    apply: (project) =>
+      editOverlay(project, id, (overlay) => {
+        if (overlay.content.kind !== kind) return overlay;
+        const content = { ...overlay.content, ...patch } as OverlayContent;
+        return { ...overlay, content };
+      }),
+  };
+}
+
+/** A shape's box, as fractions of the short edge: never so small it cannot be grabbed, never past three frames. */
+const MIN_SHAPE_SIDE = 0.01;
+const MAX_SHAPE_SIDE = 3;
+
+/**
+ * A shape resized from a side or a corner on the picture: its own box
+ * changes, not its scale, so its outline keeps its width and its corners
+ * stay round as it stretches. Where it sits changes in the same step, as it
+ * would for anything else resized from one edge.
+ *
+ * Shares its coalesce key with the moves (`setOverlayTransform`, or
+ * `setOverlayPose` at the same moment), so a drag that moves and resizes is
+ * one undo step.
+ */
+export function setShapeBox(
+  id: string,
+  size: { readonly w: number; readonly h: number },
+  placement: { readonly x: number; readonly y: number },
+  poseAtMs: number | null,
+): Action {
+  const move = poseAtMs === null ? setOverlayTransform(id, placement) : setOverlayPose(id, poseAtMs, placement);
+  return {
+    label: 'Resize shape',
+    ...(move.coalesceKey === undefined ? {} : { coalesceKey: move.coalesceKey }),
+    apply: (project, scope) => {
+      if (project.overlays.find((o) => o.id === id)?.content.kind !== 'shape') return project;
+      const w = clamp(size.w, MIN_SHAPE_SIDE, MAX_SHAPE_SIDE);
+      const h = clamp(size.h, MIN_SHAPE_SIDE, MAX_SHAPE_SIDE);
+      const sized = editOverlay(project, id, (overlay) =>
+        overlay.content.kind !== 'shape' || (overlay.content.w === w && overlay.content.h === h)
+          ? overlay
+          : { ...overlay, content: { ...overlay.content, w, h } },
+      );
+      return move.apply(sized, scope);
+    },
   };
 }
 

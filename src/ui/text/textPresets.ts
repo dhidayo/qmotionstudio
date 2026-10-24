@@ -28,7 +28,8 @@ export const TEXT_PRESETS: readonly TextPreset[] = [
   { id: 'caption', name: 'Small caption', text: 'Small caption', style: style({ fontId: 'body', weight: 500, sizePct: 65, letterSpacingPct: 4 }) },
   { id: 'serif', name: 'Elegant serif', text: 'Timeless & elegant', style: style({ fontId: 'sys:georgia', weight: 400, sizePct: 125 }) },
   { id: 'print', name: 'Classic print', text: 'Breaking news', style: style({ fontId: 'sys:times', weight: 700, sizePct: 120 }) },
-  { id: 'outline', name: 'Sticker', text: 'STICKER', style: style({ fontId: 'headline', weight: 800, sizePct: 150, outline: true }) },
+  // Called "Sticker" until stickers became elements of their own (D-158).
+  { id: 'outline', name: 'Outlined', text: 'OUTLINED', style: style({ fontId: 'headline', weight: 800, sizePct: 150, outline: true }) },
   { id: 'pill', name: 'Label pill', text: 'NEW ARRIVAL', style: style({ fontId: 'body', weight: 700, sizePct: 70, pill: true, letterSpacingPct: 10 }) },
   { id: 'shadow', name: 'Drop shadow', text: 'Stand out', style: style({ fontId: 'headline', weight: 800, sizePct: 140, shadow: true }) },
   { id: 'neon', name: 'Neon glow', text: 'Open late', style: style({ fontId: 'sys:rounded', weight: 700, sizePct: 130, color: '#ff4fd8' }), effects: [during('glow-el', 0.9)] },

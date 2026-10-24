@@ -122,7 +122,7 @@ export type Tracks = Partial<Record<AnimatedProp, readonly Keyframe[]>>;
 
 // ── Layers ──────────────────────────────────────────────────────────────────
 
-export type LayerType = 'image' | 'text' | 'shape' | 'gradient' | 'group' | 'mask' | 'video';
+export type LayerType = 'image' | 'text' | 'shape' | 'gradient' | 'group' | 'mask' | 'video' | 'sticker';
 
 export type Direction = 'left' | 'right' | 'up' | 'down';
 
@@ -152,7 +152,38 @@ export type Reveal =
   | { readonly kind: 'swap'; readonly altText: string; readonly atMs: number; readonly durationMs: number }
   | KineticReveal
   /** Numbers in the text count up from zero, keeping their format (D-118). */
-  | { readonly kind: 'count'; readonly startMs: number; readonly durationMs: number };
+  | { readonly kind: 'count'; readonly startMs: number; readonly durationMs: number }
+  | CounterReveal;
+
+/**
+ * How a number element writes its figure (D-158): "1,250", "1.3K", "$25K+".
+ * ASCII and Latin-1 only in what the app supplies, since the extended font
+ * subsets are not loaded (a person may still type a "€" of their own).
+ */
+export type CounterFormat = {
+  readonly decimals: 0 | 1 | 2;
+  /** Thousands separator. 'dot' writes the decimals after a comma, as much of Europe does. */
+  readonly grouping: 'none' | 'comma' | 'space' | 'dot' | 'apostrophe';
+  /** 1.2K, 3.4M, 1B. */
+  readonly compact: boolean;
+  readonly prefix: string;
+  readonly suffix: string;
+};
+
+/**
+ * A number element (D-158): the figure runs from `from` to `to`, written by
+ * `format`. Unlike `count` it can start anywhere, count down, and draws its
+ * digits in cells of one width, so the figure does not jiggle as it changes.
+ */
+export type CounterReveal = {
+  readonly kind: 'counter';
+  readonly from: number;
+  readonly to: number;
+  readonly startMs: number;
+  readonly durationMs: number;
+  readonly ease: EaseName;
+  readonly format: CounterFormat;
+};
 
 /**
  * Kinetic type (D-118): each letter, word or line moves into place on its own
@@ -217,14 +248,38 @@ export interface DecodedFrame {
 // checking that a text layer never carries an image's fields.
 
 export type ShapeProps = {
-  readonly shape: 'rect' | 'ellipse';
+  readonly shape: ShapeGeometry;
   readonly w: number;
   readonly h: number;
   readonly fill: Paint;
   readonly cornerRadius?: number;
   readonly stroke?: Stroke;
   readonly shadow?: Shadow;
+  /**
+   * Outline only (D-158): the fill is not drawn — a line, an empty frame.
+   * Templates never set it; the fill stays a paint, so nothing that reads a
+   * shape's colour has to allow for none.
+   */
+  readonly hollow?: boolean;
+  /** Star points, or a badge's scallops. */
+  readonly points?: number;
+  /** A star's or badge's inner radius, 0–1 of the outer. */
+  readonly inner?: number;
+  /** Arrowheads on a line. */
+  readonly heads?: 'none' | 'end' | 'both';
+  /** Where a speech bubble's tail sits. */
+  readonly tail?: 'left' | 'center' | 'right';
+  /** A dashed outline or line. */
+  readonly dash?: boolean;
 };
+
+/**
+ * The outlines a shape layer draws. Templates use the first two; the rest are
+ * the shapes people add (D-158), traced by layers/shapePath.ts.
+ */
+export type ShapeGeometry =
+  | 'rect' | 'ellipse'
+  | 'triangle' | 'diamond' | 'hexagon' | 'star' | 'badge' | 'heart' | 'line' | 'arrow' | 'bubble';
 
 export type GradientStop = { readonly at: number; readonly paint: Paint };
 
@@ -398,8 +453,31 @@ export type MaskLayer = LayerBase & {
   readonly children: readonly Layer[];
 };
 
+/**
+ * An animated sticker (D-158): looping art from src/core/stickers, drawn by
+ * code at the layer's local time. An id this build does not know draws nothing.
+ */
+export type StickerProps = {
+  /** Permanent library id. */
+  readonly sticker: string;
+  readonly w: number;
+  readonly h: number;
+  /** The words, by label key: the sticker's own with the person's changes on top. */
+  readonly labels: Readonly<Record<string, string>>;
+  readonly primary: Paint;
+  readonly secondary: Paint;
+  /** 'still' holds the sticker's poster moment. */
+  readonly play: 'loop' | 'still';
+  /** Multiplies the loop's pace. */
+  readonly speed: number;
+  readonly flip: boolean;
+  readonly seed: number;
+};
+
+export type StickerLayer = LayerBase & { readonly type: 'sticker'; readonly props: StickerProps };
+
 export type Layer =
-  | ShapeLayer | GradientLayer | ImageLayer | TextLayer | VideoLayer | GroupLayer | MaskLayer;
+  | ShapeLayer | GradientLayer | ImageLayer | TextLayer | VideoLayer | GroupLayer | MaskLayer | StickerLayer;
 
 /** Retained for the spec's naming; the union above is the real shape. */
 export type StaticProps = Layer['props'];

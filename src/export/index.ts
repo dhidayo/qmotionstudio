@@ -16,6 +16,7 @@ import {
 import { canUseRealtimeExport, startRealtimeExport } from './fallback/mediaRecorder';
 import { AudioNotReadyError, mixForExport } from './audioMix';
 import { usedUserFonts } from '@/document/select/media';
+import { overlayMediaId } from '@/document/select/overlay';
 import { readFont } from '@/persist/db';
 
 export { ExportCancelled };
@@ -241,7 +242,8 @@ function mediaIdsIn(project: Project): string[] {
     if (backdrop !== undefined) ids.add(backdrop);
   }
   for (const overlay of project.overlays) {
-    if (overlay.content.kind !== 'text') ids.add(overlay.content.mediaId);
+    const id = overlayMediaId(overlay.content);
+    if (id !== null) ids.add(id);
   }
   /*
    * Audio is deliberately absent: the mix crosses as rendered PCM, not as

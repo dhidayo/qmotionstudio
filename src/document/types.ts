@@ -1,4 +1,4 @@
-import type { Aspect, Direction, Palette, PropValues, Rect } from '@/core/types';
+import type { Aspect, CounterFormat, Direction, Palette, PaintRole, PropValues, Rect } from '@/core/types';
 
 /**
  * The document model (§5).
@@ -282,7 +282,89 @@ export type AnimPreset = 'none' | 'fade' | 'riseIn' | 'popIn' | 'slideIn' | 'wip
 export type OverlayContent =
   | { readonly kind: 'photo'; readonly mediaId: string }
   | { readonly kind: 'text'; readonly text: string; readonly style: TextStyle }
-  | { readonly kind: 'customMedia'; readonly mediaId: string };
+  | { readonly kind: 'customMedia'; readonly mediaId: string }
+  | ShapeContent
+  | StickerContent
+  | CounterContent;
+
+// ── Elements people add (D-158) ─────────────────────────────────────────────
+//
+// Shapes, animated stickers and numbers are ordinary overlays: they sit on the
+// timeline, move, keyframe, take entrances and effects, and export through
+// the same renderer. Added without a schema bump, as effects were (D-100).
+
+export type { CounterFormat };
+
+/**
+ * A colour on an element: a role of the look, so it restyles with it (D-121);
+ * a colour of the person's own (D-126); or none.
+ */
+export type ElementColor = { readonly role: PaintRole } | { readonly hex: string } | null;
+
+export type ShapeKind =
+  | 'rect' | 'roundedRect' | 'circle' | 'pill' | 'line' | 'arrow'
+  | 'triangle' | 'diamond' | 'hexagon' | 'star' | 'badge' | 'heart' | 'bubble';
+
+export type ShapeContent = {
+  readonly kind: 'shape';
+  readonly shape: ShapeKind;
+  /**
+   * The shape's own box, in fractions of the frame's short edge (D-044's
+   * unit). The side handles change these rather than the overlay's scale, so
+   * an outline stays its width and a corner stays round as the shape stretches.
+   */
+  readonly w: number;
+  readonly h: number;
+  readonly fill: ElementColor;
+  readonly stroke: ElementColor;
+  /** Outline (or line) thickness, a fraction of the short edge: 0.01 is about 11px at 1080. */
+  readonly strokeWidth: number;
+  /** 0 square … 1 fully round (half the shorter side). */
+  readonly corner: number;
+  readonly shadow: boolean;
+  /** Star points (3–12) or badge scallops (8–32). */
+  readonly points?: number;
+  /** A star's or badge's inner radius, 0.2–0.95 of the outer. */
+  readonly inner?: number;
+  /** A line's arrowheads. */
+  readonly heads?: 'none' | 'end' | 'both';
+  /** A speech bubble's tail. */
+  readonly tail?: 'left' | 'center' | 'right';
+  readonly dash?: boolean;
+};
+
+export type StickerContent = {
+  readonly kind: 'sticker';
+  /** Permanent library id (src/core/stickers). */
+  readonly sticker: string;
+  /** The person's words, by label key, over the sticker's own: { label: 'ABONNIEREN' }. */
+  readonly labels?: Readonly<Record<string, string>>;
+  /** Absent: the sticker's own colours. */
+  readonly primary?: ElementColor;
+  readonly secondary?: ElementColor;
+  readonly play: 'loop' | 'still';
+  /** 0.25–3. */
+  readonly speed: number;
+  /** Offered only where the sticker can point either way. */
+  readonly flip?: boolean;
+};
+
+/** How a number runs: smooth slows into its value, steady runs evenly, snappy races then settles, gentle eases both ends. */
+export type CounterEase = 'smooth' | 'steady' | 'snappy' | 'gentle';
+
+/** A number that counts (D-158), shown to people as "Number". */
+export type CounterContent = {
+  readonly kind: 'counter';
+  readonly from: number;
+  readonly to: number;
+  /** After the element appears. */
+  readonly delayMs: number;
+  readonly countMs: number;
+  readonly ease: CounterEase;
+  readonly format: CounterFormat;
+  /** The text controls' own style; wrapping is always off for a number. */
+  readonly style: TextStyle;
+};
 
 /**
  * One moment in an overlay's motion: where it is, how big, how turned.

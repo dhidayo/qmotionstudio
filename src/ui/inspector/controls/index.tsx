@@ -1,5 +1,9 @@
 import { createContext, useCallback, useContext, useId, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { useEditor } from '@/state/store';
+import type { PaintRole } from '@/core/types';
+import type { ElementColor } from '@/document/types';
+import { onAccent } from '@/core/render/paint';
+import { parseNumber } from './parseNumber';
 
 /**
  * Inspector control primitives (§8).
@@ -498,4 +502,141 @@ export function SectionTabs({ initial, children }: { initial?: string | null; ch
   }), [openTitle, register]);
 
   return <AccordionContext.Provider value={accordion}>{children}</AccordionContext.Provider>;
+}
+
+/**
+ * A number typed in (D-158): "1,250", "1 250", "-3.5" and "4,9" all read as
+ * people mean them. Written on Enter or on leaving the field, never per
+ * keystroke — a half-typed "1" must not flash on the picture on its way to
+ * "1,000" — and anything that is not a number puts the last value back.
+ */
+export function NumberField({
+  value,
+  onChange,
+  label,
+  min = -Infinity,
+  max = Infinity,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  label: string;
+  min?: number;
+  max?: number;
+}): React.JSX.Element {
+  const endInteraction = useEditor((s) => s.endInteraction);
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = (): void => {
+    if (draft === null) return;
+    const parsed = parseNumber(draft);
+    setDraft(null);
+    if (parsed === null) return;
+    const next = Math.max(min, Math.min(max, parsed));
+    if (next !== value) onChange(next);
+    endInteraction();
+  };
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      aria-label={label}
+      value={draft ?? String(value)}
+      onChange={(e) => { setDraft(e.target.value); }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); }
+      }}
+      className="tabular w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[12px] text-ink focus:border-accent focus:outline-none"
+    />
+  );
+}
+
+/** The colours an element can take from the look, by what people call them. */
+const ELEMENT_ROLES: readonly { readonly role: PaintRole; readonly name: string }[] = [
+  { role: 'accent', name: 'Accent' },
+  { role: 'ink', name: 'Text' },
+  { role: 'surface', name: 'Panels' },
+  { role: 'bg', name: 'Background' },
+  { role: 'onAccent', name: 'On accent' },
+];
+
+/**
+ * An element's colour (D-158): one of the look's — which changes when the
+ * look does (D-121) — a colour of the person's own (D-126), or none.
+ * `own` adds a first choice for "as it comes", for a sticker's own colours.
+ */
+export function ElementColorField({
+  value,
+  onChange,
+  label,
+  allowNone = false,
+  own,
+}: {
+  value: ElementColor | undefined;
+  onChange: (value: ElementColor | undefined) => void;
+  label: string;
+  allowNone?: boolean;
+  /** The swatch and name for "the element's own colour", which is `undefined`. */
+  own?: { readonly name: string; readonly swatch: string };
+}): React.JSX.Element {
+  const palette = useEditor((st) => (st.project.scenes[st.selectedScene] ?? st.project.scenes[0])?.inputs.look.palette);
+  const endInteraction = useEditor((s) => s.endInteraction);
+  const id = useId();
+  const resolved = (role: PaintRole): string =>
+    palette === undefined ? '#888888' : role === 'onAccent' ? onAccent(palette.accent) : palette[role];
+  const custom = value !== undefined && value !== null && 'hex' in value ? value.hex : null;
+  const pick = (next: ElementColor | undefined): void => { onChange(next); endInteraction(); };
+
+  const swatch = (key: string, name: string, colour: string | null, active: boolean, onSelect: () => void): React.JSX.Element => (
+    <button
+      key={key}
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+      aria-label={`${label}: ${name}`}
+      title={name}
+      className="relative grid size-7 shrink-0 place-items-center rounded-full border"
+      style={{
+        background: colour ?? 'transparent',
+        borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
+        boxShadow: active ? '0 0 0 2px var(--c-panel), 0 0 0 3.5px var(--c-accent)' : undefined,
+      }}
+    >
+      {colour === null && (
+        <svg aria-hidden width={18} height={18} viewBox="0 0 18 18"><path d="M3 15L15 3" stroke="var(--c-danger)" strokeWidth={1.8} strokeLinecap="round" /></svg>
+      )}
+    </button>
+  );
+
+  return (
+    <Row label={label}>
+      <div role="group" aria-label={label} className="flex flex-wrap items-center gap-2">
+        {own !== undefined && swatch('own', own.name, own.swatch, value === undefined, () => { pick(undefined); })}
+        {ELEMENT_ROLES.map(({ role, name }) =>
+          swatch(role, name, resolved(role), value !== undefined && value !== null && 'role' in value && value.role === role, () => { pick({ role }); }),
+        )}
+        {allowNone && swatch('none', 'None', null, value === null, () => { pick(null); })}
+        <label
+          htmlFor={id}
+          title="Your own colour"
+          className="relative grid size-7 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-full border"
+          style={{
+            background: custom ?? 'conic-gradient(#f43f5e, #f59e0b, #84cc16, #06b6d4, #6366f1, #d946ef, #f43f5e)',
+            borderColor: custom !== null ? 'var(--c-accent)' : 'var(--c-edge-strong)',
+            boxShadow: custom !== null ? '0 0 0 2px var(--c-panel), 0 0 0 3.5px var(--c-accent)' : undefined,
+          }}
+        >
+          <span className="sr-only">{`${label}: your own colour`}</span>
+          <input
+            id={id}
+            type="color"
+            value={normaliseHex(custom ?? (palette?.accent ?? '#888888'))}
+            onChange={(e) => { onChange({ hex: e.target.value }); }}
+            onBlur={endInteraction}
+            className="absolute inset-0 size-full cursor-pointer opacity-0"
+          />
+        </label>
+      </div>
+    </Row>
+  );
 }

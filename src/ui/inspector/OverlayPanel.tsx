@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { AnimPreset, TextStyle } from '@/document/types';
 import * as actions from '@/document/actions';
 import { ANIM_PRESETS } from '@/core/render/overlays';
@@ -8,7 +9,10 @@ import { ElementEffectsEditor } from '@/ui/effects/EffectEditors';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
 import { Button, ColorField, EmptyNote, Row, Section, Segmented, Slider, TextInput, Toggle } from './controls';
 import { useLayout } from '@/ui/shell/useLayout';
+import { useOverlays } from '@/ui/shell/overlays';
+import { ELEMENT_SECTIONS, overlayName, overlayThis } from '@/ui/editing/commands';
 import { FontPicker } from './FontPicker';
+import { CounterSection, ShapeSection, StickerSection } from './ElementSections';
 
 /**
  * The overlay editor (§1.2, §3C).
@@ -38,6 +42,14 @@ export function OverlayPanel(): React.JSX.Element {
   // Above the early return below — hooks run in the same order every render.
   const playheadMs = useEditor((s) => s.playheadMs);
   const phone = useLayout() === 'phone';
+
+  // An element's own settings, asked for from the picture (D-158): its section, in view.
+  const focus = useOverlays((o) => o.inspectorSection);
+  useEffect(() => {
+    if (focus === null || !(Object.values(ELEMENT_SECTIONS) as readonly string[]).includes(focus)) return;
+    document.querySelector(`[data-section="${focus}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    useOverlays.getState().focusInspectorSection(null);
+  }, [focus]);
 
   if (!overlay) {
     return <EmptyNote>That overlay is gone. Pick another clip on the timeline.</EmptyNote>;
@@ -82,7 +94,7 @@ export function OverlayPanel(): React.JSX.Element {
           ← Scene
         </button>
         <span className="truncate text-[12px] font-semibold">
-          {overlay.kind === 'text' ? 'Text overlay' : overlay.kind === 'photo' ? 'Photo overlay' : 'Media overlay'}
+          {overlayName(overlay)}
         </span>
       </div>}
 
@@ -102,7 +114,15 @@ export function OverlayPanel(): React.JSX.Element {
         </Section>
       )}
 
-      {overlay.content.kind !== 'text' && (
+      {overlay.content.kind === 'shape' && <ShapeSection overlay={overlay} content={overlay.content} />}
+      {overlay.content.kind === 'sticker' && <StickerSection overlay={overlay} content={overlay.content} />}
+      {overlay.content.kind === 'counter' && (
+        <CounterSection overlay={overlay} content={overlay.content}>
+          <TextStyleControls id={id} style={overlay.content.style} number />
+        </CounterSection>
+      )}
+
+      {(overlay.content.kind === 'photo' || overlay.content.kind === 'customMedia') && (
         <Section title="Source">
           {/* An overlay can only be pointed at media of its own kind: a photo
               overlay draws bitmaps and a custom-media one draws decoded video
@@ -182,7 +202,7 @@ export function OverlayPanel(): React.JSX.Element {
       <Section title="Effects">
         <ElementEffectsEditor
           target={{ kind: 'overlay', id }}
-          label={overlay.kind === 'text' ? 'this caption' : 'this layer'}
+          label={overlayThis(overlay)}
           effects={overlay.effects ?? []}
         />
       </Section>
@@ -274,8 +294,11 @@ function MediaPicker({
   );
 }
 
-/** The subset of §8.2's text block that means something without a template slot. */
-export function TextStyleControls({ id, style }: { id: string; style: TextStyle }): React.JSX.Element {
+/**
+ * The subset of §8.2's text block that means something without a template slot.
+ * A `number` (D-158) never wraps, and its size reads as the number's.
+ */
+export function TextStyleControls({ id, style, number = false }: { id: string; style: TextStyle; number?: boolean }): React.JSX.Element {
   // No colour of its own means the look's ink: show that, not white (D-121's light looks).
   const ink = useEditor((st) => st.project.scenes[st.selectedScene]?.inputs.look.palette.ink ?? '#ffffff');
   const dispatch = useEditor((s) => s.dispatch);
@@ -312,18 +335,18 @@ export function TextStyleControls({ id, style }: { id: string; style: TextStyle 
         // Distinct from the Placement section's own "Size": one sets the type
         // size, the other scales the whole overlay, and a screen reader that
         // announced both as "Size" would make them indistinguishable.
-        label="Text size"
+        label={number ? 'Number size' : 'Text size'}
         suffix="%"
       />
       <Row label="Colour">
         <ColorField
           value={style.color.length > 0 ? style.color : ink}
           onChange={(color) => { patch({ color }, { coalesceKey: `overlayColor:${id}` }); }}
-          label="Text colour"
+          label={number ? 'Number colour' : 'Text colour'}
         />
       </Row>
       <div className="mt-1.5 grid grid-cols-2 gap-1">
-        <Toggle checked={style.wrap} onChange={(wrap) => { patch({ wrap }); }} label="Wrap" />
+        {!number && <Toggle checked={style.wrap} onChange={(wrap) => { patch({ wrap }); }} label="Wrap" />}
         <Toggle checked={style.shadow} onChange={(shadow) => { patch({ shadow }); }} label="Shadow" />
         <Toggle checked={style.outline} onChange={(outline) => { patch({ outline }); }} label="Outline" />
         <Toggle checked={style.pill} onChange={(pill) => { patch({ pill }); }} label="Pill" />

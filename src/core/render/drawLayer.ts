@@ -7,6 +7,8 @@ import { withBlur } from './blur';
 import { combinedShade, depthOrdered, turnOf } from './depth';
 import { withIsolation, type Glow } from './isolate';
 import { drawShape } from './layers/shape';
+import { traceShape } from './layers/shapePath';
+import { drawSticker } from './layers/sticker';
 import { drawGradient } from './layers/gradient';
 import { drawImage } from './layers/image';
 import { drawText, textBlock } from './layers/text';
@@ -135,6 +137,11 @@ function paintLayer(
       // letterSpacing is an animated prop (§6.1), so a tracked value is added
       // on top of the layer's static percentage.
       drawText(dc, layer.props, x, y, localMs, props.letterSpacing);
+      return;
+
+    // The compiler cannot see a missing case here: a sticker without one would draw nothing (D-158).
+    case 'sticker':
+      drawSticker(dc, layer.props, x, y, localMs);
       return;
 
     case 'group': {
@@ -323,7 +330,8 @@ function darken(
   ctx.save();
   ctx.fillStyle = `rgba(0,0,0,${shade.toFixed(3)})`;
   const radius = 'cornerRadius' in layer.props ? layer.props.cornerRadius ?? 0 : 0;
-  if (layer.type === 'shape' && layer.props.shape === 'ellipse') ellipsePath(ctx, x, y, box.w, box.h);
+  // A star or a heart darkens as itself, not as its box (D-158).
+  if (layer.type === 'shape') traceShape(ctx, layer.props, x, y);
   else roundedRectPath(ctx, x, y, box.w, box.h, radius);
   ctx.fill();
   ctx.restore();

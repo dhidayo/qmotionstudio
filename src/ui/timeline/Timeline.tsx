@@ -9,7 +9,7 @@ import { MAX_TRACKS } from '@/document/select/tracks';
 import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
 import { useHoldStill } from '@/ui/shell/ClockProvider';
-import { overlayMenu, sceneMenu } from '@/ui/editing/commands';
+import { elementName, overlayMenu, sceneMenu } from '@/ui/editing/commands';
 import { EffectClipView, laneEffects, packEffectRows } from './EffectRows';
 import { MoreButton, TrimHandle } from './ClipParts';
 import { useEditor } from '@/state/store';
@@ -960,8 +960,12 @@ function TrackGutter({
 }
 
 function labelFor(overlay: Overlay): string {
-  if (overlay.content.kind === 'text') return overlay.content.text || 'Text';
-  return overlay.content.kind === 'photo' ? 'Photo' : 'Media';
+  const { content } = overlay;
+  if (content.kind === 'text') return content.text || 'Text';
+  if (content.kind === 'photo') return 'Photo';
+  if (content.kind === 'customMedia') return 'Media';
+  // "Star", "Check tick", "1,000" (D-158).
+  return elementName(content);
 }
 
 /**

@@ -8,7 +8,7 @@ import type { TextMeasureContext } from '@/core/text/layout';
 import * as actions from '@/document/actions';
 import { activeOverlaysAt, sceneSpans } from '@/document/select/timeline';
 import { hasNudgePoses } from '@/core/render/slots';
-import { isAnimated, poseAt, poseIndexAt, posesOf } from '@/document/select/overlay';
+import { isAnimated, poseAt, poseIndexAt, posesOf, stretchAxes } from '@/document/select/overlay';
 import type { Aspect, Size } from '@/core/types';
 import { NO_SLOT_TRANSFORM, type Overlay, type Project, type SlotKey, type SlotTransform } from '@/document/types';
 import { useEditor } from '@/state/store';
@@ -18,7 +18,9 @@ import { NO_ZOOM, useOverlays, type ViewZoom } from '@/ui/shell/overlays';
 import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { useLayout } from '@/ui/shell/useLayout';
 import { LongPress } from '@/ui/shell/ContextMenu';
-import { backgroundMenu, deleteSelection, logoMenu, overlayMenu, slotMenu } from '@/ui/editing/commands';
+import {
+  backgroundMenu, changeSticker, deleteSelection, editElement, logoMenu, overlayMenu, overlayName, overlayThis, slotMenu,
+} from '@/ui/editing/commands';
 import { InlineTextEditor, SelectionToolbar, screenBounds, type ToolbarAction } from './CanvasEditing';
 import { DESIGN_SHORT_EDGE } from '@/core/render/bounds';
 import { TEXT_BASE } from '@/core/render/overlays';
@@ -315,10 +317,7 @@ export function CanvasSelection({
         overlay,
         poseAtMs: isAnimated(overlay) ? playheadMs - overlay.startMs : null,
         box,
-        label:
-          overlay.kind === 'text' ? 'Text overlay'
-          : overlay.kind === 'photo' ? 'Photo overlay'
-          : 'Media overlay',
+        label: overlayName(overlay),
       });
     }
 
@@ -521,7 +520,8 @@ export function CanvasSelection({
 
     const near = (value: number, at: number, within: number): boolean => Math.abs(value - at) <= within;
 
-    for (const corner of CORNERS) {
+    const grips = gripsOf(selected);
+    for (const corner of grips.corners) {
       const d = DIRECTION[corner];
       if (near(local.x, (d.x * box.w) / 2, reachX) && near(local.y, (d.y * box.h) / 2, reachY)) {
         return corner;
@@ -530,7 +530,7 @@ export function CanvasSelection({
 
     // Sides are overlay-only: the logo is square and resizes proportionally.
     if (selected.kind === 'overlay') {
-      for (const side of SIDES) {
+      for (const side of grips.sides) {
         const d = DIRECTION[side];
         const onAxis = d.x === 0
           ? near(local.y, (d.y * box.h) / 2, reachY) && Math.abs(local.x) <= box.w / 2 - reachX
@@ -827,6 +827,8 @@ export function CanvasSelection({
     const photo = target.kind === 'slot' ? /^photo:(\d+)$/.exec(target.key) : null;
     if (photo?.[1] !== undefined) openPhotoPicker({ kind: 'slot', index: Number(photo[1]) });
     else if (target.kind === 'overlay' && target.overlay.content.kind === 'photo') openPhotoPicker({ kind: 'overlay', id: target.key });
+    // A shape, sticker or number opens its own settings (D-158).
+    else if (target.kind === 'overlay') editElement(target.overlay, layout);
     else if (target.kind === 'logo') openPhotoPicker({ kind: 'logo' });
   };
 
@@ -853,12 +855,19 @@ export function CanvasSelection({
       ];
     }
     if (target.kind === 'overlay') {
-      const name = target.overlay.kind === 'text' ? 'this caption' : 'this layer';
-      const edit: ToolbarAction[] = target.overlay.content.kind === 'text'
-        ? [{ label: 'Edit text', icon: '✎', onSelect: () => { openTextEdit(target.key); } }]
-        : target.overlay.content.kind === 'photo'
-          ? [{ label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'overlay', id: target.key }); } }]
-          : [];
+      const name = overlayThis(target.overlay);
+      const { overlay } = target;
+      const edit: ToolbarAction[] = ((): ToolbarAction[] => {
+        switch (overlay.content.kind) {
+          case 'text': return [{ label: 'Edit text', icon: '✎', onSelect: () => { openTextEdit(target.key); } }];
+          case 'photo': return [{ label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'overlay', id: target.key }); } }];
+          // Each element's own first thing to do (D-158).
+          case 'shape': return [{ label: 'Style', icon: '◧', onSelect: () => { editElement(overlay, layout); } }];
+          case 'sticker': return [{ label: 'Change', icon: '⇄', onSelect: () => { changeSticker(overlay); } }];
+          case 'counter': return [{ label: 'Number', icon: '#', onSelect: () => { editElement(overlay, layout); } }];
+          default: return [];
+        }
+      })();
       return [
         ...edit,
         { label: 'Effects', icon: '✦', onSelect: () => { openPicker({ target: { kind: 'element', target: { kind: 'overlay', id: target.key }, label: name } }); } },
@@ -985,11 +994,10 @@ export function CanvasSelection({
             style={{ outline: '1.5px solid var(--c-accent)', outlineOffset: -1 }}
           />
 
-          {CORNERS.map((corner) => (
+          {gripsOf(selected).corners.map((corner) => (
             <Dot key={corner} grip={corner} rotation={selected.box.rotation} />
           ))}
-          {selected.kind === 'overlay' &&
-            SIDES.map((side) => <Dot key={side} grip={side} rotation={selected.box.rotation} />)}
+          {gripsOf(selected).sides.map((side) => <Dot key={side} grip={side} rotation={selected.box.rotation} />)}
           {selected.kind !== 'logo' && (
             <>
               <span
@@ -1049,6 +1057,25 @@ type EditInfo = {
   readonly maxLength: number | undefined;
   readonly write: (text: string) => void;
 };
+
+/**
+ * The handles a selection has. Side handles stretch, so they belong to
+ * overlays that can stretch (D-158): a shape both ways, a line only along
+ * itself — and a line's two ends are all it needs — while a sticker or a
+ * number only grows whole, from its corners, like the logo.
+ */
+function gripsOf(target: Target): { readonly corners: readonly Corner[]; readonly sides: readonly Side[] } {
+  if (target.kind !== 'overlay') return { corners: CORNERS, sides: NO_SIDES };
+  switch (stretchAxes(target.overlay)) {
+    case 'both': return { corners: CORNERS, sides: SIDES };
+    case 'x': return { corners: NO_CORNERS, sides: ENDS };
+    case 'none': return { corners: CORNERS, sides: NO_SIDES };
+  }
+}
+
+const NO_CORNERS: readonly Corner[] = [];
+const NO_SIDES: readonly Side[] = [];
+const ENDS: readonly Side[] = ['e', 'w'];
 
 /** Whether a target is words someone can type into. */
 function isTextTarget(target: Target): boolean {
@@ -1333,6 +1360,22 @@ function resizeAction(
     gy = 1 + (fy - 1) * low;
   }
   const position = placed(gx, gy);
+
+  /*
+   * A shape stretches its own box rather than its scale (D-158), so the
+   * outline keeps its width and the corners stay round however it is pulled.
+   * Its scale stays as it was; its place moves in the same step, under the
+   * same coalesce key as a move, so the drag is one undo.
+   */
+  const { content } = target.overlay;
+  if (content.kind === 'shape') {
+    return actions.setShapeBox(
+      target.key,
+      { w: content.w * gx, h: content.shape === 'line' ? content.h : content.h * gy },
+      { x: clamp01(position.x / design.w), y: clamp01(position.y / design.h) },
+      target.poseAtMs,
+    );
+  }
 
   const sized = {
     scaleX: clamp(scaleX * gx, MIN_SCALE, MAX_SCALE),

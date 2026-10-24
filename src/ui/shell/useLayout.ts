@@ -53,6 +53,11 @@ function read(): Layout {
   return 'desktop';
 }
 
+/** The layout now, for code outside React that has to open the right kind of panel. */
+export function currentLayout(): Layout {
+  return typeof window === 'undefined' ? 'desktop' : read();
+}
+
 export function useLayout(): Layout {
   // The server snapshot is the desktop one; there is no server, but the hook
   // requires an answer for an environment that never renders this.

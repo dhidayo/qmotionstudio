@@ -1,4 +1,5 @@
 import type { Project, Scene } from '@/document/types';
+import { overlayFontId, overlayMediaId } from './overlay';
 import { activeOverlaysAt } from './timeline';
 
 /**
@@ -70,7 +71,8 @@ export function referencedMedia(project: Project): ReadonlySet<string> {
     if (backdrop !== undefined) ids.add(backdrop);
   }
   for (const overlay of project.overlays) {
-    if (overlay.content.kind !== 'text') ids.add(overlay.content.mediaId);
+    const id = overlayMediaId(overlay.content);
+    if (id !== null) ids.add(id);
   }
   for (const clip of project.audio) ids.add(clip.mediaId);
 
@@ -140,7 +142,9 @@ export function usedUserFonts(project: Project): ReadonlySet<string> {
     }
   }
   for (const overlay of project.overlays) {
-    if (overlay.content.kind === 'text' && overlay.content.style.fontId.startsWith('user:')) ids.add(overlay.content.style.fontId);
+    // A number's figure too (D-158), not only words.
+    const font = overlayFontId(overlay.content);
+    if (font?.startsWith('user:') === true) ids.add(font);
   }
   return ids;
 }

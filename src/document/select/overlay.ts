@@ -1,6 +1,6 @@
 import { createProps, resolveProps } from '@/core/anim/interpolate';
 import type { AnimatedProp, Ease, Keyframe, PropValues, Tracks } from '@/core/types';
-import type { Overlay, OverlayEasing, OverlayPose } from '../types';
+import type { Overlay, OverlayContent, OverlayEasing, OverlayPose } from '../types';
 
 /**
  * Overlay motion (§6.1's keyframes, put where a person can reach them).
@@ -148,4 +148,34 @@ export function poseIndexAt(
     }
   });
   return best;
+}
+
+// ── What an overlay is made of (D-158) ─────────────────────────────────────
+//
+// Until shapes, stickers and numbers, "not text" meant "a picture or a clip",
+// and a dozen places read a media id off anything that was not text. These
+// say what they mean, so a new kind cannot be mistaken for media again.
+
+/** The photo or clip an overlay shows, or null for words and elements. */
+export function overlayMediaId(content: OverlayContent): string | null {
+  return content.kind === 'photo' || content.kind === 'customMedia' ? content.mediaId : null;
+}
+
+/** The font an overlay's words are set in: text and numbers have one. */
+export function overlayFontId(content: OverlayContent): string | null {
+  return content.kind === 'text' || content.kind === 'counter' ? content.style.fontId : null;
+}
+
+/**
+ * Which ways the side handles may stretch an overlay. A shape stretches
+ * either way (a line, only along itself); a sticker is drawn art and a number
+ * is a figure, so both only grow and shrink whole, from the corners.
+ */
+export function stretchAxes(overlay: Overlay): 'both' | 'x' | 'none' {
+  switch (overlay.content.kind) {
+    case 'shape': return overlay.content.shape === 'line' ? 'x' : 'both';
+    case 'sticker':
+    case 'counter': return 'none';
+    default: return 'both';
+  }
 }

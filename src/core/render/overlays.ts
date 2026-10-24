@@ -1,10 +1,12 @@
 import {
-  colorFill, roleFill,
-  type Direction, type Keyframe, type Layer, type Paint, type Size, type Tracks,
+  colorFill,
+  type Direction, type Keyframe, type Layer, type Size, type Tracks,
 } from '@/core/types';
 import type { AnimPreset, Overlay } from '@/document/types';
 import { easeOf, poseTrack } from '@/document/select/overlay';
 import { sampleTrack } from '@/core/anim/interpolate';
+import { hashString } from '@/core/effects/random';
+import { counterTextProps, overlayTextProps, shapeProps, stickerProps, TEXT_BASE } from './elements';
 import { timeElementEffects } from './tuning';
 
 /**
@@ -38,8 +40,8 @@ const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe
 
 /** A photo overlay at scale 1 covers this much of the frame's short edge. */
 export const PHOTO_BASE = 0.34;
-/** A text overlay at 100% is this much of the short edge. */
-export const TEXT_BASE = 0.062;
+/** A text overlay at 100% is this much of the short edge. Defined with the elements' builders. */
+export { TEXT_BASE };
 
 const ENTER_MS = 520;
 const EXIT_MS = 420;
@@ -180,37 +182,30 @@ function contentLayer(
       };
     }
 
-    case 'text': {
-      const style = overlay.content.style;
-      const fontSizePx = unit * TEXT_BASE * (style.sizePct / 100);
-      const fill: Paint = style.color.length > 0 ? colorFill(style.color) : style.pill ? roleFill('onAccent') : roleFill('ink');
-      const maxWidthPx = style.wrap ? unit * 0.8 * (style.wrapWidthPct / 100) : null;
-
+    case 'text':
       return {
         ...base,
         id: ctx.id('ovl-text'),
         type: 'text',
-        props: {
-          text: overlay.content.text,
-          fontId: style.fontId,
-          fontSizePx,
-          weight: style.weight,
-          letterSpacingPct: style.letterSpacingPct,
-          lineHeight: 1.16,
-          align: style.align,
-          fill,
-          maxWidthPx,
-          reveal: { kind: 'none' },
-          ...(style.shadow
-            ? { shadow: { blur: fontSizePx * 0.3, offsetX: 0, offsetY: fontSizePx * 0.07, paint: colorFill('rgba(0,0,0,0.55)') } }
-            : {}),
-          ...(style.outline ? { outline: { paint: roleFill('bg'), width: Math.max(1, fontSizePx * 0.055) } } : {}),
-          ...(style.pill
-            ? { pill: { paint: roleFill('accent'), paddingX: fontSizePx * 0.55, paddingY: fontSizePx * 0.3, radius: fontSizePx * 0.6 } }
-            : {}),
-        },
+        props: { ...overlayTextProps(overlay.content.text, overlay.content.style, unit), reveal: { kind: 'none' } },
       };
-    }
+
+    // The elements people add (D-158): drawn by the same layers as the
+    // templates' own, except stickers, which have a layer of their own.
+    case 'shape':
+      return { ...base, id: ctx.id('ovl-shape'), type: 'shape', props: shapeProps(overlay.content, unit) };
+
+    case 'sticker':
+      return {
+        ...base,
+        id: ctx.id('ovl-sticker'),
+        type: 'sticker',
+        // Seeded by the overlay, so two copies of one sticker need not move in step.
+        props: stickerProps(overlay.content, unit, hashString(overlay.id)),
+      };
+
+    case 'counter':
+      return { ...base, id: ctx.id('ovl-number'), type: 'text', props: counterTextProps(overlay.content, unit) };
   }
 }
 
@@ -425,8 +420,9 @@ export function overlayKey(overlay: Overlay, design: Size): string {
     overlay.poses ?? null,
     overlay.easing ?? null,
     overlay.effects ?? null,
-    content.kind,
-    content.kind === 'text' ? [content.text, content.style] : content.mediaId,
+    // The whole content: small, and everything in it changes what is drawn —
+    // a shape's colour, a sticker's words, where a number counts to (D-158).
+    content,
   ]);
 }
 

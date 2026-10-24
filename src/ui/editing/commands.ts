@@ -1,6 +1,9 @@
 import * as actions from '@/document/actions';
 import { effectName } from '@/core/effects/catalog';
-import type { EffectClip, Overlay, Project } from '@/document/types';
+import { stickerDef } from '@/core/stickers/catalog';
+import { formatCounter } from '@/core/text/counter';
+import { SHAPE_NAMES } from '@/document/elements';
+import type { CounterContent, EffectClip, Overlay, Project, ShapeContent, StickerContent } from '@/document/types';
 import { resolvedAudio, sceneLengthMs, sceneSpans, totalDurationMs } from '@/document/select/timeline';
 import { clipEndMs } from '@/core/audio/envelope';
 import { soundFor } from '@/audio/library';
@@ -8,7 +11,7 @@ import { summaryFor } from '@/templates/manifest';
 import { useEditor } from '@/state/store';
 import { useOverlays, type MenuItem } from '@/ui/shell/overlays';
 import { undoSentence } from '@/ui/shell/platform';
-import type { Layout } from '@/ui/shell/useLayout';
+import { currentLayout, type Layout } from '@/ui/shell/useLayout';
 
 /**
  * What can be done to a thing on the timeline or the canvas (D-104), in one
@@ -25,11 +28,82 @@ export function undoHint(): string {
 }
 
 export function overlayLabel(overlay: Overlay): string {
-  if (overlay.content.kind === 'text') {
-    const text = overlay.content.text.trim();
-    return text.length > 0 ? `“${text.length > 24 ? `${text.slice(0, 24)}…` : text}”` : 'the caption';
+  const { content } = overlay;
+  switch (content.kind) {
+    case 'text': {
+      const text = content.text.trim();
+      return text.length > 0 ? `“${text.length > 24 ? `${text.slice(0, 24)}…` : text}”` : 'the caption';
+    }
+    case 'photo': return 'the photo layer';
+    case 'customMedia': return 'the video layer';
+    // "Deleted the star", "the “Check tick” sticker", "the number 1,000" (D-158).
+    case 'shape': return `the ${elementName(content).toLowerCase()}`;
+    case 'sticker': return `the “${elementName(content)}” sticker`;
+    case 'counter': return `the number ${elementName(content)}`;
   }
-  return overlay.content.kind === 'photo' ? 'the photo layer' : 'the video layer';
+}
+
+/** What an element is, in a word or two: "Star", "Check tick", "1,000" (D-158). */
+export function elementName(content: ShapeContent | StickerContent | CounterContent): string {
+  switch (content.kind) {
+    case 'shape': return SHAPE_NAMES[content.shape];
+    case 'sticker': return stickerDef(content.sticker)?.name ?? 'Sticker';
+    case 'counter': return formatCounter(content.to, content.format);
+  }
+}
+
+/** What the selection, its menu and its settings call a layer: "Text overlay", "Shape · Star". */
+export function overlayName(overlay: Overlay): string {
+  const { content } = overlay;
+  switch (content.kind) {
+    case 'text': return 'Text overlay';
+    case 'photo': return 'Photo overlay';
+    case 'customMedia': return 'Media overlay';
+    case 'shape': return `Shape · ${elementName(content)}`;
+    case 'sticker': return `Sticker · ${elementName(content)}`;
+    case 'counter': return 'Number';
+  }
+}
+
+/** How the effects library speaks of a layer: "Effects for this caption". */
+export function overlayThis(overlay: Overlay): string {
+  switch (overlay.content.kind) {
+    case 'text': return 'this caption';
+    case 'shape': return 'this shape';
+    case 'sticker': return 'this sticker';
+    case 'counter': return 'this number';
+    default: return 'this layer';
+  }
+}
+
+/** The section an element's own settings are in (D-158). */
+export const ELEMENT_SECTIONS = { shape: 'Shape', sticker: 'Sticker', counter: 'Number' } as const;
+
+/**
+ * An element's own settings, wherever settings are on this screen: the phone's
+ * sheet open at its section; beside the picture on a computer; the side sheet
+ * on a tablet. A sticker's own action is choosing another, so that opens the
+ * library in its place.
+ */
+export function editElement(overlay: Overlay, layout: Layout = currentLayout()): void {
+  const s = useEditor.getState();
+  const o = useOverlays.getState();
+  const kind = overlay.content.kind;
+  if (kind !== 'shape' && kind !== 'sticker' && kind !== 'counter') return;
+  s.selectOverlay(overlay.id);
+  const section = ELEMENT_SECTIONS[kind];
+  if (layout === 'phone') {
+    o.openPhonePanel('element', section);
+    return;
+  }
+  if (layout === 'tablet') o.setInspectorSheet(true);
+  o.focusInspectorSection(section);
+}
+
+/** Choose another sticker in this one's place, keeping where it is and how it moves. */
+export function changeSticker(overlay: Overlay): void {
+  useEditor.getState().selectOverlay(overlay.id);
+  useOverlays.getState().openElementPicker({ category: 'Stickers', replace: overlay.id });
 }
 
 const designName = (templateId: string): string => summaryFor(templateId)?.name ?? templateId;
@@ -168,12 +242,20 @@ export function overlayMenu(overlay: Overlay, seek: Seek | null, atMs: number): 
   const o = useOverlays.getState();
   const label = overlayLabel(overlay);
   const target = { kind: 'overlay' as const, id: overlay.id };
-  const name = overlay.kind === 'text' ? 'this caption' : 'this layer';
-  const edit: MenuItem[] = overlay.content.kind === 'text'
-    ? [{ label: 'Edit text', keys: 'Enter', onSelect: () => { s.selectOverlay(overlay.id); o.openTextEdit(overlay.id); } }]
-    : overlay.content.kind === 'photo'
-      ? [{ label: 'Replace photo…', keys: 'double-click', onSelect: () => { s.selectOverlay(overlay.id); o.openPhotoPicker({ kind: 'overlay', id: overlay.id }); } }]
-      : [];
+  const name = overlayThis(overlay);
+  const edit: MenuItem[] = ((): MenuItem[] => {
+    switch (overlay.content.kind) {
+      case 'text': return [{ label: 'Edit text', keys: 'Enter', onSelect: () => { s.selectOverlay(overlay.id); o.openTextEdit(overlay.id); } }];
+      case 'photo': return [{ label: 'Replace photo…', keys: 'double-click', onSelect: () => { s.selectOverlay(overlay.id); o.openPhotoPicker({ kind: 'overlay', id: overlay.id }); } }];
+      case 'shape': return [{ label: 'Shape style…', keys: 'double-click', onSelect: () => { editElement(overlay); } }];
+      case 'sticker': return [
+        { label: 'Change sticker…', onSelect: () => { changeSticker(overlay); } },
+        { label: 'Sticker settings…', keys: 'double-click', onSelect: () => { editElement(overlay); } },
+      ];
+      case 'counter': return [{ label: 'Number settings…', keys: 'double-click', onSelect: () => { editElement(overlay); } }];
+      default: return [];
+    }
+  })();
   return [
     ...edit,
     { label: 'Effects…', hint: 'Shine, pulse, glow…', onSelect: () => { s.selectOverlay(overlay.id); o.openPicker({ target: { kind: 'element', target, label: name } }); } },
@@ -338,6 +420,8 @@ export function backgroundMenu(layout: Layout): readonly MenuItem[] {
   return [
     { label: 'Change background…', onSelect: () => { showBackgroundSettings(layout); } },
     { label: 'Use a picture as background…', onSelect: () => { o.openPhotoPicker({ kind: 'background' }); } },
+    // Shapes, stickers and numbers (D-158), the add bar's three in one.
+    { label: 'Add an element…', hint: 'Shapes, stickers, numbers', onSelect: () => { o.openElementPicker({}); } },
     { kind: 'separator' },
     // In a video the library holds whole videos, which replace every scene;
     // this scene's own design is changed in the scene picker (D-155).

@@ -1,5 +1,6 @@
 import { DEFAULT_SAFE_INSET, renderSizeFor } from '@/core/math/aspect';
 import { layoutText, type TextMeasureContext } from '@/core/text/layout';
+import { counterPillWidth, layoutCounter } from '@/core/text/counter';
 import { fontString } from '@/fonts/registry';
 import type { Aspect, Layer, Rect, Size } from '@/core/types';
 import type { Overlay, SceneInputs } from '@/document/types';
@@ -268,6 +269,7 @@ function layerExtent(layer: Layer, measure: TextMeasureContext): Extent | null {
     case 'image':
     case 'video':
     case 'shape':
+    case 'sticker':
     case 'mask': {
       const size = { w: layer.props.w, h: layer.props.h };
       return {
@@ -278,7 +280,7 @@ function layerExtent(layer: Layer, measure: TextMeasureContext): Extent | null {
 
     case 'text': {
       const props = layer.props;
-      const run = layoutText(measure, {
+      const spec = {
         text: props.text,
         font: fontString(props.fontId, props.fontSizePx, props.weight),
         fontSizePx: props.fontSizePx,
@@ -286,7 +288,22 @@ function layerExtent(layer: Layer, measure: TextMeasureContext): Extent | null {
         lineHeight: props.lineHeight,
         align: props.align,
         maxWidthPx: props.maxWidthPx,
-      });
+      };
+      const run = layoutText(measure, spec);
+      if (props.reveal.kind === 'counter') {
+        // A number is drawn in digit cells round its widest figure (D-158).
+        const figure = layoutCounter(props.text, (char) => layoutText(measure, { ...spec, text: char, maxWidthPx: null }).width).width;
+        const blockWidth = props.maxWidthPx ?? figure;
+        const alignOffset =
+          props.align === 'left' ? 0
+          : props.align === 'right' ? blockWidth - figure
+          : (blockWidth - figure) / 2;
+        const w = props.pill ? counterPillWidth(figure, run.height, props.pill) : figure;
+        return {
+          size: { w, h: run.height + (props.pill ? props.pill.paddingY * 2 : 0) },
+          offset: { x: alignOffset + figure / 2 - (props.maxWidthPx ?? 0) * anchorX, y: run.height / 2 },
+        };
+      }
       // A pill draws outside the glyphs, and it is the part the eye reads as
       // the edge of the object, so it is the part the handles have to sit on.
       // Symmetric, so it grows the box without moving its centre.

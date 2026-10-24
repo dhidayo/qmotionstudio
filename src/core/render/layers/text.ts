@@ -2,6 +2,8 @@ import type { Ctx2D, Reveal, TextProps } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import type { GlyphRun, TextAlign, TextLine, TextSpec } from '@/core/text/layout';
 import { progress, roundedRectPath } from '@/core/math/geometry';
+import { applyEase } from '@/core/anim/easings';
+import { counterPillWidth, formatCounter, layoutCounter, type CounterLayout } from '@/core/text/counter';
 import { resolvePaint } from '../paint';
 import type { DrawContext } from '../drawContext';
 import { countedText, drawKinetic, unitsOf } from './kinetic';
@@ -84,13 +86,17 @@ export function drawText(
 
   if (props.pill) {
     const { paddingX, paddingY, radius } = props.pill;
+    // A number's pill goes round its widest figure, not its whole block (D-158).
+    const figure = props.reveal.kind === 'counter' ? counterLayout(dc, spec, props.text).width : null;
+    const pillW = figure === null ? blockWidth + paddingX * 2 : counterPillWidth(figure, run.height, props.pill);
+    const pillX = figure === null ? x - paddingX : x + offsetFor(figure, blockWidth, spec.align) - (pillW - figure) / 2;
     ctx.save();
     ctx.fillStyle = resolvePaint(props.pill.paint, palette);
     roundedRectPath(
       ctx,
-      x - paddingX,
+      pillX,
       y - paddingY,
-      blockWidth + paddingX * 2,
+      pillW,
       run.height + paddingY * 2,
       radius,
     );
@@ -114,9 +120,69 @@ export function drawText(
 
   if (swapAlpha < 1) ctx.globalAlpha *= swapAlpha;
 
-  applyReveal(dc, props.reveal, run, x, y, blockWidth, localMs, props, spec.align, letterSpacingBoostPx);
+  if (props.reveal.kind === 'counter') {
+    drawCounter(dc, spec, props, props.reveal, run, x, y, blockWidth, localMs, letterSpacingBoostPx);
+  } else {
+    applyReveal(dc, props.reveal, run, x, y, blockWidth, localMs, props, spec.align, letterSpacingBoostPx);
+  }
 
   ctx.restore();
+}
+
+/**
+ * A number element's figure (D-158), lined up in cells as it counts.
+ *
+ * Every character is its own fillText, from the cached single-character
+ * measurements, so a count costs no measureText per frame. With a shadow,
+ * the figure is drawn twice — shadows first, then the glyphs over them — or
+ * each digit's shadow would fall across the one before it.
+ */
+function drawCounter(
+  dc: DrawContext,
+  spec: TextSpec,
+  props: TextProps,
+  reveal: Extract<Reveal, { kind: 'counter' }>,
+  run: GlyphRun,
+  x: number,
+  y: number,
+  blockWidth: number,
+  localMs: number,
+  boostPx: number,
+): void {
+  const { ctx } = dc;
+  const p = progress(localMs, reveal.startMs, reveal.startMs + reveal.durationMs);
+  const value = reveal.from + (reveal.to - reveal.from) * applyEase(reveal.ease, p);
+  const figure = counterLayout(dc, spec, formatCounter(value, reveal.format));
+  const width = figure.width + Math.max(0, figure.glyphs.length - 1) * boostPx;
+  const left = x + offsetFor(width, blockWidth, spec.align);
+  const line = run.lines[0];
+  const baseline = y + (line ? baselineOf(line, props.fontSizePx) : props.fontSizePx * 0.8);
+  const outline = props.outline && props.outline.width > 0 ? resolvePaint(props.outline.paint, dc.palette) : null;
+
+  const each = (paint: (char: string, at: number) => void): void => {
+    figure.glyphs.forEach((glyph, i) => { paint(glyph.char, left + glyph.x + i * boostPx); });
+  };
+  const glyphs = (): void => {
+    if (outline !== null && props.outline) {
+      ctx.lineWidth = props.outline.width;
+      ctx.strokeStyle = outline;
+      ctx.lineJoin = 'round';
+      each((char, at) => { ctx.strokeText(char, at, baseline); });
+    }
+    each((char, at) => { ctx.fillText(char, at, baseline); });
+  };
+
+  glyphs();
+  if (props.shadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0)';
+    ctx.shadowBlur = 0;
+    glyphs();
+  }
+}
+
+/** A figure in cells, measured through the frame's cache one character at a time. */
+function counterLayout(dc: DrawContext, spec: TextSpec, text: string): CounterLayout {
+  return layoutCounter(text, (char) => dc.measurer.measure({ ...spec, text: char, maxWidthPx: null }).width);
 }
 
 /**
@@ -196,6 +262,10 @@ function applyReveal(
     props.outline && props.outline.width > 0 ? resolvePaint(props.outline.paint, dc.palette) : null;
 
   switch (reveal.kind) {
+    // A number's figure changes width as it counts; drawCounter lays it out.
+    case 'counter':
+      return;
+
     case 'none':
     case 'swap': {
       for (const line of run.lines) paintLine(ctx, line, x, y, blockWidth, props, align, outlineStyle, boostPx);
