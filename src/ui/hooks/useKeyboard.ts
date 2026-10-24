@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import { useEditor } from '@/state/store';
-import { arrangeSelection, deleteSelection, duplicateSelection } from '@/ui/editing/commands';
+import { arrangeSelection, deleteSelection, duplicateSelection, moveSelectedScene } from '@/ui/editing/commands';
 import { useOverlays } from '@/ui/shell/overlays';
 
 /**
@@ -9,7 +9,7 @@ import { useOverlays } from '@/ui/shell/overlays';
  *
  *   space        play/pause
  *   ⌘Z / ⌘⇧Z     undo / redo
- *   ← →          step one frame
+ *   ← →          step one frame; with ⌥ and a scene's clip selected, move the scene (D-162)
  *   ⌘E           export
  *   ⌘S           no-op with a "saves automatically" note
  *   ⌫ / Delete   delete what is selected — a layer, an effect, the music, a
@@ -103,6 +103,11 @@ export function useKeyboard(clock: PreviewClock, options: { onExport: () => void
       }
 
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        // ⌥ with a scene's clip selected moves the scene, as its menu's Move earlier / later (D-162).
+        if (event.altKey && !covered && moveSelectedScene(event.key === 'ArrowRight' ? 1 : -1)) {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         clock.pause();
         clock.seek(clock.timeMs + (event.key === 'ArrowRight' ? FRAME_MS : -FRAME_MS));

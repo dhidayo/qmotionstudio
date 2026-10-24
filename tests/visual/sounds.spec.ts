@@ -79,13 +79,13 @@ test.describe('+ Sound (D-156)', () => {
     await picker(page).getByRole('button', { name: 'Add Lo-fi Haze' }).click();
     await expect(picker(page)).toBeHidden();
 
-    const clip = timeline(page).locator('[data-row="music"]').getByRole('button', { name: /^Music clip, 15\.0 seconds, loops, Lo-fi Haze/ });
+    const clip = timeline(page).locator('[data-row="audio"]').getByRole('button', { name: /^Music clip, 15\.0 seconds, loops, Lo-fi Haze/ });
     await expect(clip).toBeVisible();
     // Fetched and decoded: its waveform is drawn, not a loading note.
     await expect(clip.getByText(/Loading/)).toBeHidden({ timeout: 15_000 });
     expect(await clip.locator('line').count()).toBeGreaterThan(50);
-    // It spans the video: no sound row for it, and it ends where the video does.
-    await expect(timeline(page).locator('[data-row="sounds"]')).toHaveCount(0);
+    // It spans the video, on the one Audio row (D-162), and ends where the video does.
+    await expect(timeline(page).locator('[data-row="audio"]')).toHaveCount(1);
     const [stored] = await audio(page);
     expect(stored).toMatchObject({ mediaId: 'sound:lofi-haze', startMs: 0, loop: true, fitsVideo: true });
 
@@ -99,7 +99,7 @@ test.describe('+ Sound (D-156)', () => {
     await page.evaluate(() => { (globalThis as unknown as { __motionStudio: Handle }).__motionStudio.editor.getState().undo(); });
     await page.evaluate(() => { (globalThis as unknown as { __motionStudio: Handle }).__motionStudio.editor.getState().undo(); });
     expect(await audio(page)).toEqual([]);
-    await expect(timeline(page).locator('[data-row="music"]')).toHaveCount(0);
+    await expect(timeline(page).locator('[data-row="audio"]')).toHaveCount(0);
   });
 
   test('choosing another background replaces the first', async ({ page }) => {
@@ -115,17 +115,17 @@ test.describe('+ Sound (D-156)', () => {
     await expect(timeline(page).getByRole('button', { name: /^Music clip, .*Upbeat Pulse/ })).toBeVisible();
   });
 
-  test('an effect lands at the playhead on the Sounds row, selected; overlapping ones stack', async ({ page }) => {
+  test('an effect lands at the playhead on the Audio row, selected; overlapping ones stack', async ({ page }) => {
     await openAd(page);
     await page.evaluate(() => { (globalThis as unknown as { __motionStudio: Handle }).__motionStudio.clock.seek(2_000); });
     await openSounds(page);
     await picker(page).getByRole('button', { name: 'Add Whoosh' }).click();
 
-    const row = timeline(page).locator('[data-row="sounds"]');
+    // Music and sounds share one Audio row (D-162).
+    const row = timeline(page).locator('[data-row="audio"]');
     await expect(row).toHaveCount(1);
     await expect(row.getByRole('button', { name: 'Sound clip, Whoosh, 1.0 seconds' })).toBeVisible();
-    // Effects alone are not music.
-    await expect(timeline(page).locator('[data-row="music"]')).toHaveCount(0);
+    await expect(timeline(page).locator('[data-row="music"], [data-row="sounds"]')).toHaveCount(0);
     await expect(page.getByLabel('Sound inspector')).toBeVisible();
     expect((await audio(page))[0]).toMatchObject({ mediaId: 'sound:whoosh', startMs: 2_000 });
 

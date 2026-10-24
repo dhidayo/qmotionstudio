@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import type { AudioClip } from '@/document/types';
 import { clipDurationMs, gainAt, isLooping, loopPhaseOf, loopWindowMs, resolvedFades, sourceMsAt } from '@/core/audio/envelope';
 import { soundFor } from '@/audio/library';
-import { packRows, type AudioLane } from '@/document/select/audio';
+import { laneOf, packRows, type AudioLane } from '@/document/select/audio';
 import { peakAt } from '@/media/audio/waveform';
 import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
@@ -59,27 +59,28 @@ export function audioRowsHeight(clips: readonly AudioClip[]): number {
 }
 
 /**
- * The Music row, and the Sounds row (D-156).
+ * The Audio group: music and library sounds together (D-156, D-162).
+ *
+ * They had a row each — Music, and Sounds — and a short video with one pop in
+ * it spent two rows on audio. Now they share one group of lanes, each clip
+ * saying what it is (a sound by its name, music by its waveform).
  *
  * Renders every clip it is given, not just the first — splitting a clip to
  * cut a passage out is only useful if both halves are then on screen. Clips
- * that overlap in time stack onto rows of their own, so a whoosh under a pop,
- * or two tracks crossing, are each there to grab.
+ * that overlap in time stack onto lanes of their own, so a whoosh under a pop,
+ * or a track under a sound, are each there to grab.
  *
  * `clips` are as they play (`resolvedAudio`): a background loop that fits
  * the video is drawn to the video's end.
  */
 export function MusicTrack({
   clips,
-  lane = 'music',
   durationMs,
   videoMs,
   laneWidth,
   onSeek,
 }: {
   clips: readonly AudioClip[];
-  /** Which row this is: the names it gives its clips depend on it. */
-  lane?: AudioLane;
   /** The lane's span, which includes anything past the end of the video. */
   durationMs: number;
   /** What actually renders and exports. */
@@ -95,7 +96,7 @@ export function MusicTrack({
         <MusicClip
           key={clip.id}
           clip={clip}
-          lane={lane}
+          lane={laneOf(clip)}
           row={rowOf.get(clip.id) ?? 0}
           durationMs={durationMs}
           videoMs={videoMs}

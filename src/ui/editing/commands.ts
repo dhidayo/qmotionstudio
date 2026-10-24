@@ -273,23 +273,50 @@ export function overlayMenu(overlay: Overlay, seek: Seek | null, atMs: number): 
   ];
 }
 
+/**
+ * A scene's menu: right-click or hold its clip, or press the "⋯" on the
+ * selected one (D-162). The timeline's scene bar — + Scene, Change design,
+ * Duplicate, ←, →, Remove, and the length and transition controls — was a
+ * row of its own under the add bar; everything in it is here now, + Scene is
+ * in the row of actions, and the length and transition open in a small window
+ * of their own (the phone's Timing panel, D-133).
+ */
 export function sceneMenu(index: number, seek: Seek, atMs: number, openDesigns: (mode: 'add' | 'replace') => void): readonly MenuItem[] {
   const s = useEditor.getState();
   const o = useOverlays.getState();
   const count = s.project.scenes.length;
   return [
     { label: 'Change design…', onSelect: () => { s.selectSceneClip(index); openDesigns('replace'); } },
+    { label: 'Length and transition…', onSelect: () => { s.selectSceneClip(index); o.openPhonePanel('scene'); } },
     { label: 'Scene effects…', hint: 'Snow, light, shake…', onSelect: () => { s.selectSceneClip(index); o.openPicker({ target: { kind: 'scene' } }); } },
     { label: 'Motion properties', onSelect: () => { s.selectSceneClip(index); s.setInspectorTab('motion'); } },
     { kind: 'separator' },
     { label: 'Move playhead here', onSelect: () => { seek(atMs); } },
     { label: 'Add a scene after…', onSelect: () => { s.selectSceneClip(index); openDesigns('add'); } },
-    { label: 'Duplicate scene', onSelect: () => { s.dispatch(actions.duplicateScene(index)); s.selectScene(index + 1); } },
-    { label: 'Move earlier', disabled: index === 0, onSelect: () => { s.dispatch(actions.moveScene(index, index - 1)); s.selectSceneClip(index - 1); } },
-    { label: 'Move later', disabled: index >= count - 1, onSelect: () => { s.dispatch(actions.moveScene(index, index + 1)); s.selectSceneClip(index + 1); } },
+    { label: 'Duplicate scene', keys: 'mod+D', onSelect: () => { s.dispatch(actions.duplicateScene(index)); s.selectSceneClip(index + 1); } },
+    { label: 'Move earlier', keys: 'alt+←', disabled: index === 0, onSelect: () => { s.dispatch(actions.moveScene(index, index - 1)); s.selectSceneClip(index - 1); } },
+    { label: 'Move later', keys: 'alt+→', disabled: index >= count - 1, onSelect: () => { s.dispatch(actions.moveScene(index, index + 1)); s.selectSceneClip(index + 1); } },
     { kind: 'separator' },
     { label: 'Delete scene', keys: 'Delete', danger: true, disabled: count <= 1, onSelect: () => { s.selectSceneClip(index); deleteSelection(); } },
   ];
+}
+
+/**
+ * ⌥← and ⌥→ with a scene's clip selected: the scene one place earlier or
+ * later (D-162) — the scene bar's ← and →, from the keyboard. False when no
+ * scene clip is selected, or it is already at that end, so the key is left
+ * to step the playhead as usual.
+ */
+export function moveSelectedScene(delta: 1 | -1): boolean {
+  const s = useEditor.getState();
+  if (!s.sceneClipSelected || s.project.mode !== 'motionAd') return false;
+  if (s.selectedOverlay !== null || s.selectedEffect !== null || s.selectedAudio !== null || s.selectedSlot !== null) return false;
+  const from = s.selectedScene;
+  const to = from + delta;
+  if (to < 0 || to >= s.project.scenes.length) return false;
+  s.dispatch(actions.moveScene(from, to));
+  s.selectSceneClip(to);
+  return true;
 }
 
 export function audioMenu(clipId: string, seek: Seek, atMs: number): readonly MenuItem[] {

@@ -106,7 +106,7 @@ test.describe('scene sequencing', () => {
 
     await expect(page.getByLabel('Timeline')).toBeVisible();
     await expect(summary(page)).toHaveText('8 scenes · 0 overlays');
-    await expect(page.getByText('Scene 1 of 8')).toBeVisible();
+    await expect(page.locator('[data-scene-clip]')).toHaveCount(8);
 
     // The advertised length is the rendered length (D-004 from both sides).
     const total = await page.getByLabel('Scrub').getAttribute('aria-valuemax');
@@ -146,9 +146,9 @@ test.describe('scene sequencing', () => {
 
     await page.getByRole('button', { name: 'Video', exact: true }).click();
     await expect(page.getByLabel('Timeline', { exact: true })).toBeVisible();
-    // Only the rows in use (D-153): the ruler and the scenes, and no empty music row.
+    // Only the rows in use (D-153): the ruler and the scenes, and no empty audio row.
     await expect(page.locator('[aria-label="Timeline"] [data-row="scenes"]')).toHaveCount(1);
-    await expect(page.locator('[aria-label="Timeline"] [data-row="music"]')).toHaveCount(0);
+    await expect(page.locator('[aria-label="Timeline"] [data-row="audio"]')).toHaveCount(0);
     await expect(page.getByRole('button', { name: '+ Music' })).toBeAttached();
   });
 });
@@ -253,7 +253,11 @@ test.describe('transitions (§6.4)', () => {
 
     // Scene 4 is the one the flash belongs to.
     await page.getByRole('button', { name: /^4\./ }).click();
-    await page.getByLabel('Transition', { exact: true }).selectOption('crossFade');
+    // How it arrives is in the scene's menu now (D-162): Length and transition.
+    await page.getByRole('button', { name: 'More for scene 4' }).click();
+    await page.getByRole('menuitem', { name: /^Length and transition/ }).click();
+    await page.getByRole('dialog', { name: 'Scene 4' }).getByRole('button', { name: 'Fade', exact: true }).click();
+    await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
 
     // A crossfade at the same instant is nothing like a blown-out frame.
@@ -314,7 +318,9 @@ test.describe('overlays (§3C)', () => {
     // Editing the scene under it must not disturb it.
     await page.getByRole('button', { name: '← Scene' }).click();
     await page.getByRole('button', { name: /^1\./ }).click();
-    await page.getByRole('button', { name: 'Duplicate this scene' }).click();
+    // The scene bar went; its Duplicate is in the scene's own menu (D-162).
+    await page.getByRole('button', { name: 'More for scene 1' }).click();
+    await page.getByRole('menuitem', { name: /^Duplicate scene/ }).click();
     await page.waitForTimeout(300);
 
     await expect(summary(page)).toHaveText(/1 overlays|· 1 overlay/);
@@ -376,12 +382,14 @@ test.describe('the sequence is editable', () => {
 
     const before = await total();
     // "+ Scene" asks which design (D-097); any one adds a beat.
-    await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+    await page.locator('[data-add-bar] [data-add="scene"]').click();
     await page.getByRole('dialog', { name: 'Add a scene' }).getByRole('button', { name: /^Statement/ }).click();
     await page.waitForTimeout(300);
     expect(await total()).toBeGreaterThan(before);
 
-    await page.getByRole('button', { name: 'Remove this scene' }).click();
+    // Removed from its own menu, the "⋯" on the selected scene (D-162).
+    await page.getByRole('button', { name: /^More for scene/ }).click();
+    await page.getByRole('menuitem', { name: /^Delete scene/ }).click();
     await page.waitForTimeout(300);
     expect(await total()).toBe(before);
   });
@@ -390,7 +398,8 @@ test.describe('the sequence is editable', () => {
     await openAd(page, 'quick-pitch');
     await expect(summary(page)).toHaveText('5 scenes · 0 overlays');
 
-    await page.getByRole('button', { name: 'Remove this scene' }).click();
+    await page.getByRole('button', { name: 'More for scene 1' }).click();
+    await page.getByRole('menuitem', { name: /^Delete scene/ }).click();
     await expect(summary(page)).toHaveText('4 scenes · 0 overlays');
 
     await page.keyboard.press('ControlOrMeta+z');

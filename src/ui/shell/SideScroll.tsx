@@ -3,7 +3,7 @@ import { Icon } from '@/ui/mobile/Icon';
 
 /**
  * A row that scrolls sideways when it does not fit, and shows that it does
- * (D-153): the add bar under the picture, and the tool strip above it.
+ * (D-153): the row of actions under the picture (D-162).
  *
  * "We may be having more elements, which mean that we may be having scroll of
  * applicable elements on smaller screen." A row that is simply cut off reads

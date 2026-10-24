@@ -11,8 +11,8 @@ import { addMusic, LONG_AUDIO_FIXTURE } from '../support/audio';
 
 test.use({ viewport: { width: 1500, height: 940 } });
 
-/** The timeline's music row, there only while there is music (D-153). */
-const musicRow = (page: Page) => page.locator('[aria-label="Timeline"] [data-row="music"]');
+/** The timeline's Audio row — music and sounds together (D-162) — there only while there is audio (D-153). */
+const musicRow = (page: Page) => page.locator('[aria-label="Timeline"] [data-row="audio"]');
 
 async function openAd(page: Page): Promise<void> {
   await page.goto('/?template=quick-pitch&aspect=9:16&frozen=1000');
@@ -21,10 +21,10 @@ async function openAd(page: Page): Promise<void> {
 }
 
 test.describe('music (§10)', () => {
-  test('an imported track appears on the music row with a waveform', async ({ page }) => {
+  test('an imported track appears on the audio row with a waveform', async ({ page }) => {
     await openAd(page);
 
-    // No music, no music row (D-153): it appears with the first track.
+    // No audio, no audio row (D-153): it appears with the first track.
     await expect(musicRow(page)).toHaveCount(0);
     await addMusic(page);
     await expect(musicRow(page)).toHaveCount(1);

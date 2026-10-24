@@ -164,18 +164,13 @@ function AspectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
 
 /**
  * Adding, on a phone: the add bar's own items as a grid (D-153), so the phone
- * and the computer never disagree about what can be added. A video's sheet
- * starts with a scene, which a computer adds from the timeline's scene bar.
+ * and the computer never disagree about what can be added. A video's starts
+ * with + Scene; photos are the Photos tool's (D-162).
  */
 function AddPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
-  const video = useEditor((s) => s.project.mode === 'motionAd');
   return (
     <BottomSheet title="Add" onClose={onClose}>
-      <AddBar
-        variant="grid"
-        onDone={onClose}
-        onScene={video ? () => { useOverlays.getState().openScenePicker('add'); } : undefined}
-      />
+      <AddBar variant="grid" onDone={onClose} />
     </BottomSheet>
   );
 }
@@ -260,9 +255,9 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
 }
 
 /**
- * A scene's length and how it arrives, on a phone (D-133). The timeline's
- * scene bar has these on a computer; a phone had no way to change a
- * transition at all.
+ * A scene's length and how it arrives (D-133): the phone's Timing tool, and
+ * on a computer "Length and transition…" in the scene's menu, as a small
+ * window (D-162) — the timeline's scene bar that held these is gone.
  */
 function SceneTimingPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const index = useEditor((s) => s.selectedScene);

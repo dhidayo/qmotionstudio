@@ -4,8 +4,8 @@ import { expect, test, type Page } from '@playwright/test';
  * The background and the looks (D-120, D-121).
  *
  * "Allow users to change background too" — a colour, a gradient, a pattern
- * or a picture of their own, reached from the tool strip and from a
- * right-click on the empty canvas. And "the dark background on every template
+ * or a picture of their own, reached from Style and from a right-click on
+ * the empty canvas (the tool strip that also had it went in D-162). And "the dark background on every template
  * makes it look somehow" — designs open in looks of their own, and a tap
  * restyles the same design.
  */
@@ -50,7 +50,11 @@ async function stripesPng(page: Page): Promise<Buffer> {
 
 test('a picture of your own goes behind the design, and is still there after a reload', async ({ page }) => {
   await open(page);
-  await page.getByRole('navigation', { name: 'Tools' }).getByRole('button', { name: 'Background' }).click();
+  // The tool strip's Background went (D-162); the canvas's own menu opens the same section.
+  const box = await page.locator('canvas').boundingBox();
+  if (!box) throw new Error('no canvas');
+  await page.mouse.click(box.x + 6, box.y + box.height * 0.3, { button: 'right' });
+  await page.locator('[data-context-menu]').getByRole('menuitem', { name: /^Change background/ }).click();
   await page.getByRole('button', { name: 'Your picture' }).click();
 
   const dialog = page.getByRole('dialog', { name: 'Background picture' });
@@ -83,7 +87,8 @@ test('right-click where nothing is offers the background', async ({ page }) => {
 
 test('a look restyles the same design in one tap', async ({ page }) => {
   await open(page);
-  await page.getByRole('navigation', { name: 'Tools' }).getByRole('button', { name: 'Style' }).click();
+  // The inspector's Style tab, now that there is no tool strip (D-162).
+  await page.getByRole('tab', { name: 'Style' }).click();
 
   await page.locator('[data-look="midnight"]').click();
   await expect.poll(async () => brightness(await corner(page))).toBeLessThan(60);

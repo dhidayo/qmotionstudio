@@ -6,7 +6,7 @@ import { projectPhotos } from '@/document/select/media';
 import type { PhotoCropMode, PhotoFrame, PhotoInput, PhotoSizeMode } from '@/document/types';
 import { useEditor } from '@/state/store';
 import type { PhotoSlots, SceneTemplate } from '@/templates/schema';
-import { useAddYourPhotos } from '@/ui/editing/StartActions';
+import { useAddYourPhotos } from '@/ui/editing/useAddYourPhotos';
 import { addLayer, addPhotoLayers } from '@/ui/editing/addLayer';
 import { undoHint } from '@/ui/editing/commands';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
@@ -29,7 +29,7 @@ import { SlotPlacement } from '../SlotPlacement';
  * bottom:
  *
  *   Photos in this design  the design's own spots, each a photo of theirs or
- *                          a sample, with + Add photo to replace the samples
+ *                          a sample, with + Add photos to replace the samples (D-162)
  *   Your photos            only while some of theirs are not in the design
  *   Photo N                the chosen spot's frame, size and crop
  *   Extra photos           photos on top, anywhere
@@ -72,7 +72,7 @@ const carriesFiles = (event: React.DragEvent): boolean => [...event.dataTransfer
 
 /**
  * "Photos in this design" (D-152): the template's own photo spots, in order.
- * Each shows one of the person's photos or a sample; + Add photo, Take photo,
+ * Each shows one of the person's photos or a sample; + Add photos, Take photo,
  * a drop or a paste put new photos in place of the samples, first spot first.
  */
 function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
@@ -122,7 +122,7 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
       >
         <div className="flex flex-wrap gap-1.5">
           <button type="button" onClick={add.pick} disabled={add.busy} data-add-photo className={`${addButton} bg-accent text-accent-ink hover:bg-accent-hover`}>
-            {add.busy ? 'Reading…' : '+ Add photo'}
+            {add.busy ? 'Reading…' : '+ Add photos'}
           </button>
           {phone && (
             <button type="button" onClick={add.takePhoto} disabled={add.busy} className={`${addButton} border border-edge bg-panel hover:bg-panel-alt`}>
@@ -424,7 +424,11 @@ function PhotoLayers({ blank }: { blank: boolean }): React.JSX.Element {
   );
 }
 
-/** "+ Add photo" for Extra photos: picks photos and puts each on the canvas as a layer of its own (D-124). */
+/**
+ * "+ Add extra photos": picks photos and puts each on the canvas as a layer of
+ * its own (D-124). Named for what it adds, so it never reads as a second copy
+ * of the panel's "+ Add photos", which fills the design's spots (D-162).
+ */
 function useAddPhotoLayers(primary: boolean): { button: React.JSX.Element; error: React.JSX.Element | null } {
   const store = useMediaStore();
   const showToast = useEditor((s) => s.showToast);
@@ -445,7 +449,7 @@ function useAddPhotoLayers(primary: boolean): { button: React.JSX.Element; error
           disabled={upload.busy}
           className={`min-w-[7.5rem] whitespace-nowrap rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60 ${primary ? 'flex-1 bg-accent text-accent-ink hover:bg-accent-hover' : 'border border-edge hover:bg-panel-alt'}`}
         >
-          {upload.busy ? 'Reading…' : '+ Add photo'}
+          {upload.busy ? 'Reading…' : '+ Add extra photos'}
         </button>
         <input
           ref={input}

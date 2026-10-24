@@ -8,8 +8,9 @@ import { expect, test, type Page } from '@playwright/test';
  * picture moment — the template's own best still — with Replay; a video
  * still loops. And "when I am on video and I am choosing a design, I see it
  * is different from scene … you should have Add a scene, and add your photos
- * to differentiate these": Video's start row is Choose a video template ·
- * Add a scene · Add your photos.
+ * to differentiate these" — so Video's row of actions starts Templates ·
+ * + Photos, with + Scene in the same row, and Image's Choose a design ·
+ * + Photos, each action once (D-162).
  */
 
 const DEV_ONLY = 'Reads the dev-only editor handle, which the production build rightly omits.';
@@ -124,32 +125,37 @@ test.describe('a video still loops', () => {
   });
 });
 
-test.describe('the start row says what each mode makes', () => {
-  test('an image: Choose a design · Add your photos', async ({ page }) => {
+test.describe('the row of actions says what each mode makes (D-162)', () => {
+  test('an image: Choose a design · + Photos … Make a video', async ({ page }) => {
     await open(page, IMAGE);
-    const row = page.locator('[data-start-actions]');
-    await expect(row).toHaveAttribute('data-start-actions', 'showcase');
-    await expect(row.getByRole('button')).toHaveText(['Choose a design', 'Add your photos']);
-    await expect(page.locator('[data-tool-strip]').getByRole('button', { name: 'Designs', exact: true })).toBeVisible();
+    const bar = page.locator('[data-add-bar]');
+    await expect(bar.locator('[data-choose-design]')).toHaveAttribute('data-choose-design', 'showcase');
+    const labels = await bar.getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
+    expect(labels.slice(0, 2)).toEqual(['Choose a design', '+ Photos']);
+    expect(labels[labels.length - 1]).toBe('Make a video');
+    // An image is one scene: no + Scene.
+    await expect(bar.locator('[data-add="scene"]')).toHaveCount(0);
   });
 
-  test('a video: Choose a video template · Add a scene · Add your photos', async ({ page }) => {
+  test('a video: Templates · + Photos … + Scene', async ({ page }) => {
     await open(page, VIDEO);
-    const row = page.locator('[data-start-actions]');
-    await expect(row).toHaveAttribute('data-start-actions', 'motionAd');
-    await expect(row.getByRole('button')).toHaveText(['Choose a video template', 'Add a scene', 'Add your photos']);
-    await expect(page.locator('[data-tool-strip]').getByRole('button', { name: 'Templates', exact: true })).toBeVisible();
+    const bar = page.locator('[data-add-bar]');
+    await expect(bar.locator('[data-choose-design]')).toHaveAttribute('data-choose-design', 'motionAd');
+    const labels = await bar.getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
+    expect(labels.slice(0, 2)).toEqual(['Templates', '+ Photos']);
+    expect(labels).toContain('+ Scene');
+    expect(labels).not.toContain('Make a video');
 
-    // Add a scene opens the scene picker, with a new scene or one of your images.
-    await row.getByRole('button', { name: 'Add a scene' }).click();
+    // + Scene opens the scene picker, with a new scene or one of your images.
+    await bar.locator('[data-add="scene"]').click();
     const picker = page.getByRole('dialog', { name: 'Add a scene' });
     await expect(picker).toBeVisible();
     await expect(picker.getByRole('tab')).toHaveText(['New scene', 'Your images']);
     await picker.getByRole('button', { name: 'Cancel' }).click();
     await expect(picker).toHaveCount(0);
 
-    // Choose a video template opens the library under its own name.
-    await row.getByRole('button', { name: 'Choose a video template' }).click();
+    // Templates opens the library under its full name.
+    await bar.getByRole('button', { name: 'Templates' }).click();
     await expect(page.getByRole('dialog', { name: 'Choose a video template' })).toBeVisible();
   });
 });
@@ -178,27 +184,28 @@ test.describe('switching modes', () => {
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 375, height: 760 }, hasTouch: true, isMobile: true });
 
-  test('a video’s three start buttons share the row, each a column with its icon above', async ({ page }) => {
+  test('a video’s toolbar holds each action once, in one row, its icons above the words (D-162)', async ({ page }) => {
     await open(page, VIDEO);
-    const buttons = page.locator('[data-start-actions]').getByRole('button');
-    await expect(buttons).toHaveCount(3);
+    await expect(page.locator('[data-start-actions]')).toHaveCount(0);
+    const buttons = page.locator('[data-phone-toolbar="main"]').getByRole('button');
     const boxes = await buttons.evaluateAll((els) => els.map((el) => {
       const r = el.getBoundingClientRect();
       const icon = el.querySelector('svg')?.getBoundingClientRect();
       const iconMiddle = icon ? (icon.top + icon.bottom) / 2 : Number.NaN;
       return { left: r.left, right: r.right, top: r.top, iconAbove: iconMiddle < (r.top + r.bottom) / 2, text: el.textContent.trim() };
     }));
-    expect(boxes.map((b) => b.text)).toEqual(['Video template', 'Add a scene', 'Add your photos']);
+    expect(boxes.map((b) => b.text)).toEqual(['Templates', 'Add', 'Photos', 'Text', 'Effects', 'Style']);
     for (const box of boxes) {
       expect(box.left).toBeGreaterThanOrEqual(0);
       expect(box.right).toBeLessThanOrEqual(375);
       expect(box.iconAbove, `${box.text}: the icon above the words`).toBe(true);
     }
-    // One row: the same top for all three.
     expect(new Set(boxes.map((b) => Math.round(b.top))).size).toBe(1);
-    // The full name is still what a screen reader hears.
-    await expect(buttons.first()).toHaveAccessibleName('Choose a video template');
-    await expect(page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Templates' })).toBeVisible();
+    // Add starts with + Scene; photos are the Photos tool's.
+    await buttons.filter({ hasText: /^Add$/ }).tap();
+    const ids = await page.getByRole('group', { name: 'Add' }).locator('[data-add]').evaluateAll((all) => all.map((tile) => tile.getAttribute('data-add')));
+    expect(ids[0]).toBe('scene');
+    expect(ids).not.toContain('photos');
   });
 
   test('an image offers + Video beside the transport, and Replay once it has played', async ({ page }) => {

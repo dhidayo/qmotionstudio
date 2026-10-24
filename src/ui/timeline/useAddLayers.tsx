@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import * as actions from '@/document/actions';
 import type { Overlay } from '@/document/types';
-import { DEFAULT_OVERLAY_TEXT_STYLE, STARTER_PHOTO_IDS } from '@/document/defaults';
+import { DEFAULT_OVERLAY_TEXT_STYLE } from '@/document/defaults';
 import { useEntitlements } from '@/entitlements';
 import { spotFor } from '@/ui/editing/addLayer';
 import { useEditor } from '@/state/store';
@@ -18,7 +18,6 @@ import { AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE, useUpload } from '@/ui/
  */
 export function useAddLayers(): {
   addText: () => void;
-  addPhoto: () => void;
   pickVideo: () => void;
   pickMusic: () => void;
   canVideo: boolean;
@@ -49,14 +48,6 @@ export function useAddLayers(): {
   const addText = useCallback((): void => {
     placeOverlay({ kind: 'text', text: 'New caption', style: DEFAULT_OVERLAY_TEXT_STYLE });
   }, [placeOverlay]);
-
-  // A photo layer needs something to show: the person's own photos first, the
-  // samples as a fallback so the button is never a dead end.
-  const addPhoto = useCallback((): void => {
-    const own = media.ids('image').find((id) => !id.startsWith('sample:'));
-    const first = own ?? media.ids('image')[0] ?? STARTER_PHOTO_IDS[0] ?? '';
-    placeOverlay({ kind: 'photo', mediaId: first });
-  }, [media, placeOverlay]);
 
   // Video picks its file first: a clip is not something to invent a default for (§9).
   const videoInput = useRef<HTMLInputElement>(null);
@@ -90,7 +81,6 @@ export function useAddLayers(): {
 
   return {
     addText,
-    addPhoto,
     pickVideo: () => { videoInput.current?.click(); },
     pickMusic: music.pick,
     canVideo: limits.customMedia,

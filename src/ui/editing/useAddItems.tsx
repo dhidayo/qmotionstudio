@@ -5,13 +5,14 @@ import type { IconName } from '@/ui/mobile/Icon';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useAddLayers } from '@/ui/timeline/useAddLayers';
-import { addItemIds, type AddItemId } from './addItems';
+import { addItemIds, gridItemIds, type AddItemId } from './addItems';
 import { addMotionToSelection } from './motion';
+import { useAddYourPhotos } from './useAddYourPhotos';
 
 /** One thing the add bar can add (D-153). */
 export type AddItem = {
   readonly id: AddItemId;
-  /** The word after the "+": "Text", "Photo". */
+  /** The word after the "+": "Text", "Photos". */
   readonly label: string;
   readonly icon: IconName;
   /** The tooltip: what it does. Tests find several of these by it, so they are kept as they were. */
@@ -24,25 +25,32 @@ export type AddItem = {
   readonly pro: boolean;
   /** Lit, because there is something for it to act on — the selection, for "+ Motion". */
   readonly ready: boolean;
+  /** The main thing anyone opens the editor to do: drawn in the accent colour (D-162). */
+  readonly primary: boolean;
   /** Opens the device's file chooser, whose input lives with the bar — so a sheet holding it stays open. */
   readonly picksFile: boolean;
   readonly run: () => void;
 };
 
 /** An item as written below: the flags that are usually off may be left out. */
-type ItemSpec = Omit<AddItem, 'id' | 'busy' | 'pro' | 'ready' | 'picksFile'>
-  & Partial<Pick<AddItem, 'busy' | 'pro' | 'ready' | 'picksFile'>>;
+type ItemSpec = Omit<AddItem, 'id' | 'busy' | 'pro' | 'ready' | 'primary' | 'picksFile'>
+  & Partial<Pick<AddItem, 'busy' | 'pro' | 'ready' | 'primary' | 'picksFile'>>;
 
 /**
  * The add bar's items for the project's mode, with what each one does — the
  * one list behind the bar on a computer and the sheet on a phone (D-153).
  *
- * `inputs` are the hidden file inputs for video and music, to be rendered
- * once by whoever draws the items: two copies on one page would give two
- * controls of the same name. `note` is the Pro explanation or an upload error,
- * when there is one.
+ * `inputs` are the hidden file inputs for photos, video and music, to be
+ * rendered once by whoever draws the items: two copies on one page would give
+ * two controls of the same name. `note` is the Pro explanation or an upload
+ * error, when there is one. `order` is the bar's, or the phone sheet's, which
+ * puts + Photos and + Scene first (D-162). `onPhotosAdded` runs once photos
+ * have landed — the phone's sheet closes then, so the picture can be seen.
  */
-export function useAddItems(): {
+export function useAddItems({ order = 'bar', onPhotosAdded }: {
+  order?: 'bar' | 'grid';
+  onPhotosAdded?: (() => void) | undefined;
+} = {}): {
   items: readonly AddItem[];
   inputs: React.JSX.Element;
   note: React.JSX.Element | null;
@@ -54,24 +62,37 @@ export function useAddItems(): {
   const selected = useEditor((s) => s.selectedOverlay !== null || s.selectedSlot !== null);
   const clock = usePreviewClock();
   const layers = useAddLayers();
+  const photos = useAddYourPhotos('Add your photos', onPhotosAdded);
+  const sceneNumber = useEditor((s) => s.selectedScene + 1);
   const { tier } = useEntitlements(mode);
   const [proNote, setProNote] = useState(false);
 
   const overlays = useOverlays.getState;
   const all: Record<AddItemId, ItemSpec> = {
+    /*
+     * The one way to add photos (D-162), doing what "Add your photos" did:
+     * each takes the place of a sample photo, one for one, and stays in Your
+     * photos; a design with no photo spots takes them on top. Nothing is
+     * uploaded.
+     */
+    photos: {
+      label: 'Photos',
+      icon: 'photo',
+      title: video
+        ? `Your photos replace the sample photos in scene ${sceneNumber}, one for one, and stay in Your photos. Nothing is uploaded.`
+        : 'Your photos replace the sample photos, one for one, and stay in Your photos. Nothing is uploaded.',
+      hint: 'Yours in place of the samples',
+      busy: photos.busy ? 'Reading…' : null,
+      primary: true,
+      picksFile: true,
+      run: photos.pick,
+    },
     text: {
       label: 'Text',
       icon: 'text',
       title: 'Add a text overlay',
       hint: video ? 'A caption at the playhead' : 'A caption on the design',
       run: layers.addText,
-    },
-    photo: {
-      label: 'Photo',
-      icon: 'photo',
-      title: 'Add a photo overlay',
-      hint: video ? 'A picture on top of the scene' : 'A picture on top of the design',
-      run: layers.addPhoto,
     },
     video: {
       label: 'Video',
@@ -150,11 +171,19 @@ export function useAddItems(): {
       picksFile: true,
       run: layers.pickMusic,
     },
+    // What the scene bar's "+ Scene" was, beside everything else (D-162).
+    scene: {
+      label: 'Scene',
+      icon: 'scene',
+      title: `Add a scene after scene ${sceneNumber} — a new design, or one of your saved images`,
+      hint: 'A new scene after this one, in any design',
+      run: () => { overlays().openScenePicker('add'); },
+    },
   };
 
-  const items = addItemIds(mode).map((id): AddItem => {
+  const items = (order === 'grid' ? gridItemIds(mode) : addItemIds(mode)).map((id): AddItem => {
     const item = all[id];
-    return { busy: null, pro: false, ready: false, picksFile: false, ...item, id };
+    return { busy: null, pro: false, ready: false, primary: false, picksFile: false, ...item, id };
   });
 
   const pro = proNote && !layers.canVideo ? (
@@ -174,11 +203,16 @@ export function useAddItems(): {
       )}
     </span>
   ) : null;
-  const error = layers.error === null ? null : (
-    <span className="max-w-64 shrink-0 truncate text-[10px]" style={{ color: 'var(--c-danger)' }} data-add-note>
-      {layers.error}
+  const problem = photos.error ?? layers.error;
+  const error = problem === null ? null : (
+    <span className="max-w-64 shrink-0 truncate text-[10px]" style={{ color: 'var(--c-danger)' }} data-add-note role="alert">
+      {problem}
     </span>
   );
 
-  return { items, inputs: layers.inputs, note: pro === null && error === null ? null : <>{pro}{error}</> };
+  return {
+    items,
+    inputs: <>{photos.input}{layers.inputs}</>,
+    note: pro === null && error === null ? null : <>{pro}{error}</>,
+  };
 }

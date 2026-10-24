@@ -11,7 +11,6 @@ import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { useClockEnded } from '@/ui/hooks/useClockEnded';
-import { StartActions } from '@/ui/editing/StartActions';
 import { PurposeBar } from '@/ui/shell/PurposeBar';
 import { Icon } from './Icon';
 import { PhonePanels } from './PhonePanels';
@@ -28,9 +27,15 @@ import * as actions from '@/document/actions';
  *
  * Laid out the way phone video editors are — CapCut is the model the person
  * asked for: one-row top bar, the picture as large as the screen allows, a
- * transport line under it, the timeline (folded, for an ad), and a toolbar of
+ * transport line under it, the scene strip (a video only), and a toolbar of
  * labelled icons along the bottom that turns into the selected thing's tools.
  * Every panel is a bottom sheet over the picture, never a column beside it.
+ *
+ * There is no row of big start buttons above the toolbar any more (D-162):
+ * "On smaller screens, the timeline section covers largest part of the screen
+ * when indeed it should have been the work area." Each of them is in the
+ * toolbar once — the designs as its first tool, photos as Photos, a scene at
+ * the top of its Add sheet — and their height went back to the picture.
  */
 /** Safari's own pinch-to-zoom of the page, which `touch-action` does not stop on older iPhones (D-113). */
 function useNoPageZoom(): void {
@@ -69,7 +74,6 @@ export function PhoneLayout({
       </main>
       <PhoneTransport clock={clock} />
       {project.mode === 'motionAd' ? <PhoneTimeline clock={clock} /> : <ScrubBar clock={clock} variant="phone" />}
-      <StartActions variant="phone" onChooseDesign={() => { useOverlays.getState().openPhonePanel('designs'); }} />
       <PhoneToolbar />
       <PhonePanels clock={clock} />
       <SidewaysNote />

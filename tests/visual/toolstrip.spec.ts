@@ -1,13 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
 /**
- * The way in, on every screen (D-116).
+ * The way in, on every screen (D-116, D-162).
  *
- * Asked for as: the Designs, Photos, Text, Effects and Style tools "shown too"
- * on a computer; "Add Your Photos should be always shown, to be able to
- * replace all photos on template … same for choose template"; and a click on
- * the canvas that selects and nothing else — "clear gestures should be for
- * right clicks".
+ * Asked for first as tools under the picture and "Add Your Photos should be
+ * always shown … same for choose template"; then, once that made three rows of
+ * buttons under the picture with photos in four of them: "Please ensure same
+ * buttons are not shown or both items are not shown two different times with
+ * different representations." So one row of actions, each once — Choose a
+ * design first, + Photos the one way to add photos — and the inspector's tabs
+ * as the way to Photos, Text, Effects and Style. And a click on the canvas
+ * that selects and nothing else — "clear gestures should be for right clicks".
  */
 
 const DEV_ONLY = 'Reads the dev-only editor handle, which the production build rightly omits.';
@@ -46,25 +49,30 @@ const photoIds = (page: Page): Promise<string[][]> => page.evaluate(() =>
 test.describe('on a computer', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
-  test('the tools sit under the picture, and each opens what it says', async ({ page }) => {
+  test('one row of actions sits under the picture, each action once (D-162)', async ({ page }) => {
     await open(page, LIFESTYLE);
-    const strip = page.locator('[data-tool-strip]');
-    await expect(strip.getByRole('button', { name: 'Choose a design' })).toBeVisible();
-    await expect(strip.getByRole('button', { name: 'Add your photos' })).toBeVisible();
-    for (const name of ['Designs', 'Photos', 'Text', 'Effects', 'Style']) {
-      await expect(strip.getByRole('button', { name, exact: true })).toBeVisible();
-    }
+    const row = page.locator('[data-control-row]');
+    await expect(row.getByRole('button', { name: 'Choose a design' })).toBeVisible();
+    await expect(row.getByRole('button', { name: '+ Photos' })).toBeVisible();
+    // No strip of tools, no big start buttons, and photos added from one button only.
+    await expect(page.locator('[data-tool-strip], [data-start-actions]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Add your photos' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '+ Photo', exact: true })).toHaveCount(0);
+    const labels = await row.getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
+    expect(new Set(labels).size, `each once: ${labels.join(' · ')}`).toBe(labels.length);
+    expect(labels.filter((label) => /photo/i.test(label))).toEqual(['+ Photos']);
     const canvas = await page.locator('canvas').boundingBox();
-    const bar = await strip.boundingBox();
+    const bar = await row.boundingBox();
     expect(bar && canvas && bar.y >= canvas.y + canvas.height - 1, 'under the picture').toBe(true);
 
-    await strip.getByRole('button', { name: 'Text', exact: true }).click();
+    // The inspector's tabs are the way to each panel.
+    await page.getByRole('tab', { name: 'Text' }).click();
     await expect(page.getByRole('tab', { name: 'Text' })).toHaveAttribute('aria-selected', 'true');
-    await strip.getByRole('button', { name: 'Style', exact: true }).click();
+    await page.getByRole('tab', { name: 'Style' }).click();
     await expect(page.getByRole('tab', { name: 'Style' })).toHaveAttribute('aria-selected', 'true');
 
     // Designs opens as a window in the middle, not a sheet stuck to the bottom.
-    await strip.getByRole('button', { name: 'Designs', exact: true }).click();
+    await row.getByRole('button', { name: 'Choose a design' }).click();
     const window = page.getByRole('dialog', { name: 'Choose a design' });
     await expect(window).toBeVisible();
     const panel = await window.locator(':scope > div').first().boundingBox();
@@ -85,7 +93,7 @@ test.describe('on a computer', () => {
     await expect(page.getByRole('menu')).toBeVisible();
   });
 
-  test('Add your photos replaces the samples one for one, and stays (D-150)', async ({ page }) => {
+  test('+ Photos replaces the samples one for one, and stays (D-150, D-162)', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, LIFESTYLE);
     await page.getByLabel('Add your photos').setInputFiles([
@@ -98,7 +106,7 @@ test.describe('on a computer', () => {
     expect(ids.slice(0, 2).every((id) => id.startsWith('upload:')), 'yours first, in order').toBe(true);
     expect(ids.slice(2).every((id) => id.startsWith('sample:')), 'samples in the rest, not repeats').toBe(true);
     await expect(page.locator('[data-toast]')).toContainText('Your 2 photos replaced 2 samples.');
-    await expect(page.locator('[data-start-actions]').getByRole('button', { name: 'Add your photos' })).toBeVisible();
+    await expect(page.locator('[data-add-bar]').getByRole('button', { name: '+ Photos' })).toBeVisible();
     // One undo takes them all back out.
     await page.keyboard.press('ControlOrMeta+z');
     await expect.poll(async () => (await photoIds(page))[0]?.every((id) => id.startsWith('sample:'))).toBe(true);
@@ -128,27 +136,42 @@ test.describe('on a computer', () => {
 test.describe('on a tablet', () => {
   test.use({ viewport: { width: 900, height: 1100 } });
 
-  test('one row of header, one frame-shape chip, and the tools open their panels', async ({ page }) => {
+  test('one row of header, one frame-shape chip, and Settings opens the panels', async ({ page }) => {
     await open(page, LIFESTYLE);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow, 'no sideways scroll').toBeLessThanOrEqual(1);
     await expect(page.getByRole('button', { name: /^Frame shape 1:1/ })).toBeVisible();
-    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Photos', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Photos, text and style' })).toBeVisible();
+    // The inspector is a sheet here; the row of actions ends with the way to it (D-162).
+    await page.locator('[data-settings-toggle]').click();
+    const sheet = page.getByRole('dialog', { name: 'Photos, text and style' });
+    await expect(sheet).toBeVisible();
+    for (const name of ['Photos', 'Text', 'Effects', 'Style']) {
+      await expect(sheet.getByRole('tab', { name })).toBeVisible();
+    }
   });
 });
 
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('Choose a design and Add your photos stay while something is selected', async ({ page }) => {
+  test('the designs and adding photos are in the toolbar once, and back with one tap after a selection (D-162)', async ({ page }) => {
     await open(page, LIFESTYLE);
+    const main = page.locator('[data-phone-toolbar="main"]');
+    // No row of big buttons above the toolbar: each action is in it once.
+    await expect(page.locator('[data-start-actions]')).toHaveCount(0);
+    const tools = await main.getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
+    expect(tools).toEqual(['Designs', 'Add', 'Photos', 'Text', 'Effects', 'Style']);
+
     const box = await page.locator('canvas').boundingBox();
     if (!box) throw new Error('no canvas');
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
     await expect(page.locator('[data-phone-toolbar="selection"]')).toBeVisible();
-    const row = page.locator('[data-start-actions]');
-    await expect(row.getByRole('button', { name: 'Choose a design' })).toBeVisible();
-    await expect(row.getByRole('button', { name: 'Add your photos' })).toBeVisible();
+    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Done' }).tap();
+    // Photos are added from Photos; the Add sheet has no second way to do it.
+    await main.getByRole('button', { name: 'Add', exact: true }).tap();
+    await expect(page.getByRole('group', { name: 'Add' }).locator('[data-add="photos"]')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await main.getByRole('button', { name: 'Photos', exact: true }).tap();
+    await expect(page.getByRole('button', { name: '+ Add photos' })).toBeVisible();
   });
 });

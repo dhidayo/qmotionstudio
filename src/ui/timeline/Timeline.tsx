@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { PreviewClock } from '@/core/time/clock';
 import type { Overlay } from '@/document/types';
 import { resolvedAudio, sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
-import { laneOf } from '@/document/select/audio';
 import * as actions from '@/document/actions';
 import { summaryFor } from '@/templates/manifest';
 import { MAX_TRACKS } from '@/document/select/tracks';
@@ -10,19 +9,18 @@ import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
 import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { elementName, overlayMenu, sceneMenu } from '@/ui/editing/commands';
-import { EffectClipView, laneEffects, packEffectRows } from './EffectRows';
+import { EffectClipView, laneEffects } from './EffectRows';
 import { MoreButton, TrimHandle } from './ClipParts';
 import { useEditor } from '@/state/store';
 import { AddBar } from '@/ui/editing/AddBar';
 import { Icon } from '@/ui/mobile/Icon';
 import { capturePointer } from './pointerCapture';
-import { SceneTools } from './SceneTools';
 import { ScenePicker } from './ScenePicker';
-import { MotionLane } from './MotionLane';
+import { OverlayMotionBar, SlotMotionBar } from './MotionLane';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { MusicTrack, audioRowsHeight } from './MusicTrack';
 import { useSceneReorder } from './useSceneReorder';
-import { newRowKinds, timelineRows } from './timelineRows';
+import { newRowKinds, packEffectLanes, sceneMoves, timelineRows } from './timelineRows';
 import { useTimelineFold } from './timelineFold';
 import {
   dragResult, formatSeconds, msToPct, pxToMs, rowCount, snap, tickIntervalMs,
@@ -41,9 +39,10 @@ import {
  * re-rendering the panel (D-112) — see `useClockFrames`.
  *
  * It shows only the rows in use (D-153): the ruler and the scenes always; the
- * motion, effects, layers and music once something is on them. It collapses
- * to its header, ruler and scenes, and everything that can be added is in one
- * bar in its header.
+ * Layers and Audio groups once something is in them (D-162). It collapses to
+ * its header, ruler and scenes. Its header is the one row of actions under
+ * the picture: play, the time, Templates, + Photos and everything else that
+ * can be added, + Scene among them (D-162).
  */
 const SNAP_MS = 100;
 /** Pointer slop below which a press counts as a click rather than a drag. */
@@ -67,14 +66,15 @@ export function Timeline({
   const selectSceneClip = useEditor((s) => s.selectSceneClip);
   const sceneClipSelected = useEditor((s) => s.sceneClipSelected);
   const selectedEffect = useEditor((s) => s.selectedEffect);
+  const selectedSlot = useEditor((s) => s.selectedSlot);
   const targetTrack = useEditor((s) => s.targetTrack);
   const setTargetTrack = useEditor((s) => s.setTargetTrack);
   const openMenu = useOverlays((o) => o.openMenu);
   const openScenePicker = useOverlays((o) => o.openScenePicker);
   /*
-   * The scene-design picker, drawn here rather than in the scene bar: the bar
-   * goes when the timeline collapses, and "Add a scene after…" from a scene's
-   * menu has to work either way.
+   * The scene-design picker, drawn here, open or collapsed: + Scene in the
+   * row of actions and "Add a scene after…" or "Change design…" from a
+   * scene's menu all open it (D-162).
    */
   const scenePicker = useOverlays((o) => o.scenePicker);
   /** Picking a clip stops the preview where it is (D-110). */
@@ -376,21 +376,24 @@ export function Timeline({
     openMenu({ x, y, title: `Scene ${index + 1} · ${name}`, items: sceneMenu(index, seekTo, laneMs(x), openScenePicker) });
   };
 
-  // ── Effects (D-100, D-106) ───────────────────────────────────────────────
+  // ── Effects (D-100, D-106), in the Layers group's gaps (D-162) ───────────
 
-  const fxRows = useMemo(
-    () => packEffectRows(laneEffects(project, spans, durationMs)),
-    [project, spans, durationMs],
-  );
+  const fx = useMemo(() => {
+    const all = laneEffects(project, spans, durationMs);
+    const packed = packEffectLanes(project.overlays, all.map((e) => ({ id: e.clip.id, startMs: e.startMs, endMs: e.endMs })));
+    return { all, laneOf: packed.laneOf, lanes: packed.lanes };
+  }, [project, spans, durationMs]);
 
   // ── The rows in use, and collapsing (D-153) ──────────────────────────────
 
-  const used = useMemo(() => timelineRows(project, fxRows.length), [project, fxRows.length]);
-  // The audio as it plays, on its two rows: music, and library sound effects (D-156).
-  const audioLanes = useMemo(() => {
-    const clips = resolvedAudio(project);
-    return { music: clips.filter((clip) => laneOf(clip) === 'music'), sounds: clips.filter((clip) => laneOf(clip) === 'sounds') };
-  }, [project]);
+  const used = useMemo(() => timelineRows(project, fx.lanes), [project, fx.lanes]);
+  // The audio as it plays: music and library sounds in one group (D-156, D-162).
+  const audio = useMemo(() => resolvedAudio(project), [project]);
+  // The selected layer, and whether it moves: its motion is drawn on its clip (D-162).
+  const moving = project.overlays.find((o) => o.id === selectedOverlay && (o.poses?.length ?? 0) >= 2) ?? null;
+  // The selected template element's motion, drawn on its scene's clip (D-162).
+  const slotMoving = selectedSlot !== null
+    && (project.scenes[selectedScene]?.inputs.slotTransforms[selectedSlot]?.poses?.length ?? 0) >= 2;
   const { folded, setFolded, reveal } = useTimelineFold(!embedded);
   /*
    * Something new on the timeline opens it, for this visit: what was just
@@ -484,10 +487,10 @@ export function Timeline({
           {playing ? 'Pause' : 'Play'}
         </button>
 
-        <span ref={readout} className="tabular w-32 shrink-0 text-[11px] text-ink-muted" />
+        <span ref={readout} className="tabular w-24 shrink-0 truncate whitespace-nowrap text-[11px] text-ink-muted" />
 
-        {/* In the phone's sheet, a line of its own. */}
-        <AddBar className={embedded ? 'basis-full' : 'flex-1'} />
+        {/* In the phone's sheet, a line of its own, without the designs: the toolbar has those. */}
+        <AddBar className={embedded ? 'basis-full' : 'flex-1'} lead={!embedded} />
 
         <span data-timeline-summary className="ml-auto hidden shrink-0 text-[10px] text-ink-faint @6xl:inline">
           {project.scenes.length} scenes · {project.overlays.length} overlays
@@ -502,7 +505,7 @@ export function Timeline({
             // Not "… the timeline": the panel's own label is Timeline, and one name is one thing.
             aria-label={folded ? 'Expand' : 'Collapse'}
             title={folded
-              ? 'Expand: show the scene bar and every row in use'
+              ? 'Expand: show every row in use'
               : 'Collapse to the scenes, so the picture has more room'}
             onClick={() => { setFolded(!folded); }}
             className="ml-auto flex shrink-0 items-center gap-1 rounded-md border border-edge px-1.5 py-1 text-[11px] text-ink-muted hover:bg-panel-alt @6xl:ml-0"
@@ -512,8 +515,6 @@ export function Timeline({
           </button>
         )}
       </div>
-
-      {!folded && <SceneTools />}
 
       {/*
         * Tracks: one row per lane, its label and its content side by side.
@@ -574,34 +575,33 @@ export function Timeline({
             </div>
           </Row>
 
-          {/* Scene track. Clip widths come from the spans, so a transition
-              overlap is visible as two clips that touch rather than a gap.
-              Collapsed, its label keeps a way to add a scene (D-153). */}
-          <Row
-            name="scenes"
-            label="Scenes"
-            labelNode={folded ? (
-              <span className="flex h-full w-full items-center justify-between pl-2 pr-1">
-                Scenes
-                <button
-                  type="button"
-                  onClick={() => { openScenePicker('add'); }}
-                  title="Add a scene after this one — choose its design"
-                  aria-label="Add a scene after this one — choose its design"
-                  className="grid size-6 place-items-center rounded-md text-ink-muted hover:bg-panel-alt"
-                >
-                  <Icon name="add" size={14} />
-                </button>
-              </span>
-            ) : undefined}
-            height={36}
-          >
+          {/*
+            * Scene track. Clip widths come from the spans, so a transition
+            * overlap is visible as two clips that touch rather than a gap.
+            *
+            * What the scene bar under the add bar did is on the clip now
+            * (D-162): its menu — right-click, hold, or the "⋯" on the selected
+            * one — changes the design, the length and the transition,
+            * duplicates, moves and deletes; ⌘D, ⌥← ⌥→ and Delete do the same
+            * from the keyboard. + Scene is in the row of actions, collapsed or
+            * not, so the label no longer carries one.
+            *
+            * A selected template element that moves shows its motion here, on
+            * its scene's clip, rather than on a Motion row: the row is taller
+            * by the bar while it shows.
+            */}
+          <Row name="scenes" label="Scenes" height={slotMoving ? 48 : 36}>
             {spans.map((span) => {
               const active = span.index === selectedScene && selectedOverlay === null && selectedEffect === null;
+              const name = designName(span.scene.templateId);
+              const moves = sceneMoves(span.scene);
               return (
-                <button
+                <div
                   key={span.scene.id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
+                  // Its name and number, not the "⋯" inside it, which names itself.
+                  aria-label={`${span.index + 1}. ${name}`}
                   data-scene-clip={span.index}
                   onClick={(e) => {
                     if (sceneLongPress.current.fired || reorder.wasDrag()) return;
@@ -613,6 +613,14 @@ export function Timeline({
                     holdStill();
                   }}
                   onContextMenu={(e) => { e.preventDefault(); openSceneMenu(span.index, e.clientX, e.clientY); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectSceneClip(span.index); holdStill(); }
+                    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                      e.preventDefault();
+                      const box = e.currentTarget.getBoundingClientRect();
+                      openSceneMenu(span.index, box.left, box.bottom);
+                    }
+                  }}
                   onPointerDown={(e) => {
                     sceneLongPress.current.start(e, (x, y) => { openSceneMenu(span.index, x, y); });
                     reorder.handlers(span.index).onPointerDown(e);
@@ -621,9 +629,11 @@ export function Timeline({
                   onPointerUp={(e) => { sceneLongPress.current.cancel(); reorder.handlers(span.index).onPointerUp(e); }}
                   onPointerCancel={() => { sceneLongPress.current.cancel(); reorder.handlers(span.index).onPointerCancel(); }}
                   aria-pressed={active}
-                  title={`${designName(span.scene.templateId)} · ${formatSeconds(span.endMs - span.startMs)} — drag to rearrange`}
-                  className="absolute inset-y-1 overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
+                  title={`${name} · ${formatSeconds(span.endMs - span.startMs)}${moves ? ' · something in it moves' : ''} — drag to rearrange, right-click for more`}
+                  className="absolute cursor-pointer select-none overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
                   style={{
+                    top: 4,
+                    height: 28,
                     // Lifted while dragged (D-130): it follows the pointer, over the others.
                     ...(reorder.drag?.from === span.index
                       ? { transform: `translateX(${reorder.drag.dx}px)`, zIndex: 10, opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' }
@@ -639,8 +649,10 @@ export function Timeline({
                     WebkitTouchCallout: 'none',
                   }}
                 >
-                  <span className="block truncate leading-[26px]">
-                    {span.index + 1}. {designName(span.scene.templateId)}
+                  <span className={`flex items-center gap-1 truncate leading-[26px] ${active ? 'pr-6' : ''}`}>
+                    <span className="truncate">{span.index + 1}. {name}</span>
+                    {/* Something in this scene moves: select it to see when (D-162). */}
+                    {moves && <span aria-hidden data-scene-moves className="shrink-0 opacity-70"><Icon name="motion" size={11} /></span>}
                   </span>
                   {span.transitionIn && span.transitionIn.kind !== 'cut' && (
                     <span
@@ -652,9 +664,22 @@ export function Timeline({
                       }}
                     />
                   )}
-                </button>
+                  {active && (
+                    <MoreButton
+                      label={`More for scene ${span.index + 1}`}
+                      onOpen={(x, y) => { openSceneMenu(span.index, x, y); }}
+                    />
+                  )}
+                </div>
               );
             })}
+            {slotMoving && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-4" data-lane="true" data-slot-motion>
+                <div className="pointer-events-auto">
+                  <SlotMotionBar slotKey={selectedSlot} spans={spans} durationMs={durationMs} onSeek={seekTo} fill />
+                </div>
+              </div>
+            )}
             {reorder.drag && reorder.drag.to !== reorder.drag.from && (
               <span
                 aria-hidden
@@ -666,73 +691,52 @@ export function Timeline({
           </Row>
 
           {/*
-            * Motion, on a lane of its own: a motion is a span of time, so it
-            * belongs on the same time axis as everything. There once anything
-            * in the project moves (D-153) — not only while the selection does,
-            * which would move the picture at every click.
-            */}
-          {!folded && used.motion && (
-            <Row name="motion" label="Motion" height={28}>
-              <MotionLane spans={spans} durationMs={durationMs} onSeek={seekTo} />
-            </Row>
-          )}
-
-          {/*
-            * Effects (D-100, D-106): the timeline's own and every scene's, so
-            * none of them is hidden inside a scene. Overlapping ones stack onto
-            * rows of their own, so each can be picked up and trimmed.
-            */}
-          {!folded && used.effectRows > 0 && (
-            <div className="relative">
-              {fxRows.map((_, r) => (
-                <Row
-                  key={`fx-${r}`}
-                  name="effects"
-                  label={r === 0 ? 'Effects' : ''}
-                  title="Effects — on the timeline (solid) and on scenes (dashed)"
-                  height={ROW_PX}
-                  laneProps={{ 'data-fx-lane': r }}
-                >
-                  {null}
-                </Row>
-              ))}
-              <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LABEL_PX }} data-lane="true">
-                {fxRows.flatMap((row, r) => row.map((fx) => (
-                  <EffectClipView key={fx.clip.id} fx={fx} row={r} durationMs={durationMs} onSeek={seekTo} showScene />
-                )))}
-              </div>
-            </div>
-          )}
-
-          {/*
-            * Overlay layers, L1 first (§6.4 draws them in this order: L1 at the
-            * back). The rows are lanes to click; the clips sit in one layer over
+            * The Layers group (D-162): overlay layers, L1 first (§6.4 draws
+            * them in this order: L1 at the back), and the effects in the gaps
+            * between their clips — an effect is drawn over the whole frame, so
+            * it has no layer of its own and sits wherever there is room
+            * (`packEffectLanes`), dashed when it belongs to a scene. A lane
+            * past the layers appears only when an effect has nowhere else to
+            * go. The rows are lanes to click; the clips sit in one layer over
             * them and move between rows by position — never by being rebuilt
             * inside another row, which lost hold of the pointer mid-drag.
             */}
-          {!folded && used.layerRows > 0 && <div ref={rowsRef} className="relative">
-            {Array.from({ length: used.layerRows }, (_, row) => (
-              /* Pressing a layer's empty stretch also makes it the layer new
-                 elements go on (D-103). */
-              <Row
-                key={row}
-                name="layers"
-                height={ROW_PX}
-                labelNode={
-                  <TrackGutter
-                    track={row}
-                    target={targetTrack === row}
-                    empty={row >= used.layerRows - 1 && !project.overlays.some((o) => o.track === row)}
-                    onChoose={() => { setTargetTrack(targetTrack === row ? null : row); }}
-                  />
-                }
-                laneProps={{
-                  'data-track-row': row,
-                  style: targetTrack === row ? { background: 'color-mix(in srgb, var(--c-accent) 6%, transparent)' } : undefined,
-                }}
-              >
-                {null}
-              </Row>
+          {!folded && used.lanes > 0 && <div ref={rowsRef} className="relative">
+            {Array.from({ length: used.lanes }, (_, row) => (
+              row < used.layerRows ? (
+                /* Pressing a layer's empty stretch also makes it the layer new
+                   elements go on (D-103). */
+                <Row
+                  key={row}
+                  name="layers"
+                  height={ROW_PX}
+                  labelNode={
+                    <TrackGutter
+                      track={row}
+                      target={targetTrack === row}
+                      empty={row >= used.layerRows - 1 && !project.overlays.some((o) => o.track === row)}
+                      onChoose={() => { setTargetTrack(targetTrack === row ? null : row); }}
+                    />
+                  }
+                  laneProps={{
+                    'data-track-row': row,
+                    style: targetTrack === row ? { background: 'color-mix(in srgb, var(--c-accent) 6%, transparent)' } : undefined,
+                  }}
+                >
+                  {null}
+                </Row>
+              ) : (
+                <Row
+                  key={row}
+                  name="layers"
+                  label={row === used.layerRows ? 'Effects' : ''}
+                  title="Effects with no room beside the layers — on the timeline (solid) and on scenes (dashed)"
+                  height={ROW_PX}
+                  laneProps={{ 'data-fx-lane': row }}
+                >
+                  {null}
+                </Row>
+              )
             ))}
             <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LABEL_PX }} data-lane="true">
               {project.overlays.map((overlay) => {
@@ -760,7 +764,8 @@ export function Timeline({
                           }
                         }}
                         data-track={overlay.track}
-                        className="pointer-events-auto absolute cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
+                        data-moves={(overlay.poses?.length ?? 0) >= 2 ? '' : undefined}
+                        className={`pointer-events-auto absolute cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] ${moving?.id === overlay.id ? 'leading-[12px]' : 'leading-[18px]'}`}
                         style={{
                           top: overlay.track * ROW_PX + 4,
                           height: ROW_PX - 9,
@@ -774,6 +779,10 @@ export function Timeline({
                       >
                         <TrimHandle side="start" onDown={(e) => { beginClipDrag(e, overlay, 'trimStart'); }} onMove={onClipMove} onUp={endClipDrag} />
                         <span className="pointer-events-none block truncate px-3">{labelFor(overlay)}</span>
+                        {/* It moves: a line along its foot until it is selected, then the motion bar itself (D-162). */}
+                        {(overlay.poses?.length ?? 0) >= 2 && !active && (
+                          <span aria-hidden className="pointer-events-none absolute inset-x-3 bottom-0.5 h-0.5 rounded-full" style={{ background: 'var(--c-accent)', opacity: 0.55 }} />
+                        )}
                         {active && (
                           <MoreButton label={`More for ${labelFor(overlay)}`} onOpen={(x, y) => { openOverlayMenu(overlay, x, y); }} />
                         )}
@@ -781,24 +790,36 @@ export function Timeline({
                       </div>
                     );
                 })}
+              {fx.all.map((effect) => (
+                <EffectClipView
+                  key={effect.clip.id}
+                  fx={effect}
+                  row={fx.laneOf.get(effect.clip.id) ?? 0}
+                  durationMs={durationMs}
+                  onSeek={seekTo}
+                  showScene
+                />
+              ))}
             </div>
+            {/* The selected layer's motion, on its own clip: the lower half of its row (D-162). */}
+            {moving && (
+              <div
+                className="pointer-events-none absolute right-0 z-20 h-4"
+                style={{ left: LABEL_PX, top: moving.track * ROW_PX + 12 }}
+                data-lane="true"
+                data-overlay-motion={moving.id}
+              >
+                <div className="pointer-events-auto">
+                  <OverlayMotionBar overlay={moving} durationMs={durationMs} onSeek={seekTo} fill />
+                </div>
+              </div>
+            )}
           </div>}
 
-          {/* §1.2's dedicated music track, §10's waveform — background loops included. */}
-          {!folded && used.music && <Row name="music" label="Music" height={audioRowsHeight(audioLanes.music)}>
+          {/* The Audio group (D-162): §1.2's music and §10's waveform, and the library's sounds (D-156), stacked where they overlap. */}
+          {!folded && used.audioRows > 0 && <Row name="audio" label="Audio" height={audioRowsHeight(audio)}>
             <MusicTrack
-              clips={audioLanes.music}
-              durationMs={durationMs}
-              videoMs={videoMs}
-              laneWidth={laneWidth}
-              onSeek={seekTo}
-            />
-          </Row>}
-          {/* Sound effects from the library, at their moments (D-156). */}
-          {!folded && used.soundRows > 0 && <Row name="sounds" label="Sounds" height={audioRowsHeight(audioLanes.sounds)}>
-            <MusicTrack
-              clips={audioLanes.sounds}
-              lane="sounds"
+              clips={audio}
               durationMs={durationMs}
               videoMs={videoMs}
               laneWidth={laneWidth}
@@ -893,7 +914,7 @@ function Row({
   laneProps,
   children,
 }: {
-  /** Which row it is (`data-row`): time, scenes, motion, effects, layers, music. */
+  /** Which row it is (`data-row`): time, scenes, layers, audio. */
   name?: string;
   label?: string;
   labelNode?: React.ReactNode;

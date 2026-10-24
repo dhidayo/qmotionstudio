@@ -12,6 +12,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 // 63px taller since the tool strip moved in under the picture (D-116): the
 // pixel counts below are calibrated to the canvas size these were written for.
+// The strip and the scene bar have gone since (D-162), which leaves the
+// picture a little larger here, within what those counts allow.
 test.use({ viewport: { width: 1500, height: 1003 } });
 
 const SELECTION = '[data-selection-box]';

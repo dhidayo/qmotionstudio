@@ -48,7 +48,7 @@ test('a saved image comes into a video as a scene, from Your images (D-155)', as
   await expect(toast(page)).toContainText('New video');
   const before = await sceneClips(page).count();
 
-  await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+  await page.locator('[data-add-bar] [data-add="scene"]').click();
   const picker = page.getByRole('dialog', { name: 'Add a scene' });
   await picker.getByRole('tab', { name: 'Your images' }).click();
   const design = picker.locator('[data-my-design]').first();

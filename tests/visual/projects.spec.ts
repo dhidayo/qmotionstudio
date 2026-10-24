@@ -50,7 +50,7 @@ test.describe('+ Scene asks what kind of scene (D-097)', () => {
     await openAd(page);
     await expect(sceneClips(page)).toHaveCount(5);
 
-    await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+    await page.locator('[data-add-bar] [data-add="scene"]').click();
     const picker = page.getByRole('dialog', { name: 'Add a scene' });
     await expect(picker).toBeVisible();
 
@@ -64,7 +64,7 @@ test.describe('+ Scene asks what kind of scene (D-097)', () => {
 
   test('finds designs by name', async ({ page }) => {
     await openAd(page);
-    await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+    await page.locator('[data-add-bar] [data-add="scene"]').click();
     const picker = page.getByRole('dialog', { name: 'Add a scene' });
 
     await picker.getByLabel('Search designs').fill('quote');
@@ -74,22 +74,31 @@ test.describe('+ Scene asks what kind of scene (D-097)', () => {
 
   test('offers a blank scene to build on', async ({ page }) => {
     await openAd(page);
-    await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+    await page.locator('[data-add-bar] [data-add="scene"]').click();
     await page.getByRole('dialog', { name: 'Add a scene' }).getByRole('button', { name: /^Blank/ }).click();
     await expect(sceneClips(page).nth(1)).toHaveText(/2\. Blank/);
   });
 
   test('changes a scene’s design and keeps its length', async ({ page }) => {
     await openAd(page);
+    // The scene's length and its design are in its menu, the "⋯" on the selected clip (D-162).
+    const menu = async (item: RegExp): Promise<void> => {
+      await page.getByRole('button', { name: 'More for scene 1' }).click();
+      await page.getByRole('menuitem', { name: item }).click();
+    };
+    await menu(/^Length and transition/);
     const length = page.getByLabel('Scene length');
     const before = await length.inputValue();
+    await page.keyboard.press('Escape');
+    await expect(length).toHaveCount(0);
 
-    await page.getByRole('button', { name: "Change this scene's design" }).click();
+    await menu(/^Change design/);
     const picker = page.getByRole('dialog', { name: 'Change scene 1' });
     await picker.getByRole('button', { name: /^Big Number/ }).click();
 
     await expect(sceneClips(page)).toHaveCount(5);
     await expect(sceneClips(page).first()).toHaveText(/1\. Big Number/);
+    await menu(/^Length and transition/);
     await expect(length).toHaveValue(before);
   });
 });
@@ -99,13 +108,20 @@ test.describe('your work carries on (D-098)', () => {
     await openAd(page);
     await uploadOwnPhoto(page);
 
-    await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+    await page.locator('[data-add-bar] [data-add="scene"]').click();
     await page.getByRole('dialog', { name: 'Add a scene' }).getByRole('button', { name: /^Scatter/ }).click();
 
-    // The new scene is selected, and its photos are the uploaded one.
-    const mine = page.locator('[data-media-id]:not([data-media-id^="sample:"])');
-    await expect(mine.first()).toBeVisible();
-    await expect(page.locator('[data-media-id^="sample:"]')).toHaveCount(0);
+    /*
+     * The new scene is selected, and its first spot is the uploaded photo —
+     * once, with samples in the spots after it rather than repeats (D-152).
+     * This used to expect no samples at all, the rule before D-152, and only
+     * passed when it looked before the new scene's spots were drawn.
+     */
+    const spots = page.locator('[data-design-photos] [data-media-id]');
+    await expect(spots.first()).toHaveAttribute('data-media-id', /^upload:/);
+    await expect(page.locator('[data-design-photos] [data-media-id^="upload:"]')).toHaveCount(1);
+    await expect.poll(() => spots.count()).toBeGreaterThan(1);
+    await expect(page.locator('[data-design-photos] [data-media-id^="sample:"]')).toHaveCount(await spots.count() - 1);
   });
 });
 

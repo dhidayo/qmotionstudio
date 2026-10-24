@@ -260,12 +260,15 @@ test.describe('layers (D-103)', () => {
 test.describe('the timeline lines up and grows (D-106)', () => {
   test('every row’s label sits exactly beside its lane', async ({ page }) => {
     await openAd(page);
-    // Rows come with what is on them (D-153): a text with a motion and an
-    // effect bring the motion, effects and two layer rows beside the scenes.
+    // Rows come with what is on them (D-153): a text with a motion, an effect
+    // and music bring two layer lanes — the effect in the spare one, beside the
+    // text (D-162) — and the audio row; and the scene row grows by the motion
+    // bar while a moving template element is selected.
     await addText(page);
     await page.locator('[data-add="motion"]').click();
     await page.getByTitle(/^Add an effect at the playhead/).click();
     await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="flash"]').click();
+    await addMusic(page);
     const rows = await page.evaluate(() =>
       [...document.querySelectorAll('[aria-label="Timeline"] [data-row]')]
         .map((row) => {
@@ -281,7 +284,7 @@ test.describe('the timeline lines up and grows (D-106)', () => {
     }
   });
 
-  test('grows with its rows, so the music row stays in view', async ({ page }) => {
+  test('grows with its rows, so the audio row stays in view', async ({ page }) => {
     await openAd(page);
     await addMusic(page);
     for (const id of ['lightning', 'shake', 'flash']) {
@@ -289,7 +292,7 @@ test.describe('the timeline lines up and grows (D-106)', () => {
       await page.getByRole('dialog', { name: 'Effects' }).locator(`[data-effect="${id}"]`).click();
     }
     const panel = await page.locator('[aria-label="Timeline"]').boundingBox();
-    const music = await page.locator('[aria-label="Timeline"] [data-row="music"]').boundingBox();
+    const music = await page.locator('[aria-label="Timeline"] [data-row="audio"]').boundingBox();
     if (!panel || !music) throw new Error('no timeline');
     expect(music.y + music.height).toBeLessThanOrEqual(panel.y + panel.height + 1);
   });

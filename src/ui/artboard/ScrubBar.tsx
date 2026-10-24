@@ -7,7 +7,6 @@ import { MotionLane } from '@/ui/timeline/MotionLane';
 import { AddBar } from '@/ui/editing/AddBar';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { useClockEnded } from '@/ui/hooks/useClockEnded';
-import { continueAsVideo } from '@/ui/editing/commands';
 import { restMomentMs } from '@/templates/restMoment';
 
 /**
@@ -67,28 +66,39 @@ export function ScrubBar({
 
   return (
     <div className="shrink-0 border-t border-edge bg-panel">
-      <div className="flex items-center gap-3 px-3 py-2">
-        {/* Replay once an image has played and come to rest (D-155). */}
-        {!phone && <button
-          type="button"
-          onClick={toggle}
-          aria-label={playing ? 'Pause' : ended ? 'Replay' : 'Play'}
-          className="w-16 rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
-        >
-          {playing ? 'Pause' : ended ? 'Replay' : 'Play'}
-        </button>}
+      {/*
+        * The one row of actions under the picture (D-162): play, the time,
+        * then everything that can be done to the design — Choose a design,
+        * + Photos, the rest of the add bar, Make a video — scrolled sideways
+        * when it does not fit. A phone has its own transport and toolbar.
+        */}
+      {!phone && (
+        <div className="flex items-center gap-2 border-b border-edge px-3 py-1.5" data-control-row>
+          {/* Replay once an image has played and come to rest (D-155). */}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={playing ? 'Pause' : ended ? 'Replay' : 'Play'}
+            className="w-16 shrink-0 rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
+          >
+            {playing ? 'Pause' : ended ? 'Replay' : 'Play'}
+          </button>
+          <span ref={readout} className="tabular w-[5.5rem] shrink-0 text-[11px] text-ink-muted">
+            {format(0)} / {format(durationMs)}
+          </span>
+          <AddBar className="flex-1" />
+        </div>
+      )}
 
-        {/*
-          * The slider is Showcase's timeline, so the motion bar belongs on it.
-          *
-          * Showcase has no track timeline (§1.1) — which meant a motion added to
-          * a template photo here had nowhere to show and could only be edited
-          * through the panel. The same bar, against the same time axis, in the
-          * one place this mode has for time.
-          */}
-        {/* min-w-0, or a range input's intrinsic width pushes a phone screen
-            sideways; beside the add bar, never squeezed below a usable length. */}
-        <div ref={slider} className={`relative flex-1 ${phone ? 'min-w-0' : 'min-w-[200px]'}`} data-lane>
+      {/*
+        * The slider is Showcase's timeline (§1.1), the whole width under the
+        * row of actions, so the motion bar belongs on it: a motion added to a
+        * template photo here had nowhere else to show. The same bar, against
+        * the same time axis, in the one place this mode has for time.
+        */}
+      <div className={phone ? 'px-3 py-2' : 'px-3 pb-2 pt-3.5'}>
+        {/* min-w-0, or a range input's intrinsic width pushes a phone screen sideways. */}
+        <div ref={slider} className="relative min-w-0" data-lane>
           <input
             type="range"
             min={0}
@@ -109,23 +119,8 @@ export function ScrubBar({
             <PictureMark atMs={pictureMs} durationMs={durationMs} phone={phone} onSeek={seek} />
           )}
           {/* Template elements and overlays alike (D-153), drawn only while they move. */}
-          <MotionLane spans={spans} durationMs={durationMs} onSeek={seek} quiet />
+          <MotionLane spans={spans} durationMs={durationMs} onSeek={seek} />
         </div>
-
-        {!phone && <span ref={readout} className="tabular w-20 shrink-0 text-right text-[11px] text-ink-muted sm:w-24">
-          {format(0)} / {format(durationMs)}
-        </span>}
-        {/* Everything that can be added to a design, scrolled sideways when it does not fit (D-153). */}
-        {!phone && <AddBar className="shrink" />}
-        {!phone && <button
-          type="button"
-          data-continue-video
-          onClick={continueAsVideo}
-          title="This image becomes scene 1 of a video, animated, and you pick what comes next"
-          className="shrink-0 whitespace-nowrap rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-accent-ink hover:bg-accent-hover"
-        >
-          Make a video
-        </button>}
       </div>
       <EffectStrip durationMs={durationMs} onSeek={seek} phone={phone} under={sliderBox} />
     </div>
@@ -134,7 +129,7 @@ export function ScrubBar({
 
 /**
  * Where the slider sits in its row, so the effects under it line up with it
- * whatever is beside it — the add bar is as wide as there is room for (D-153).
+ * whatever the row's padding (D-153).
  */
 function useSliderBox(slider: React.RefObject<HTMLDivElement | null>): { left: number; width: number } | null {
   const [box, setBox] = useState<{ left: number; width: number } | null>(null);
@@ -184,8 +179,9 @@ function EffectStrip({
   if (rows.length === 0 || durationMs <= 0) return null;
 
   return (
-    <div className={`relative pb-2 ${under === null ? 'px-3' : ''}`} aria-label="Effects in this scene">
-      {!phone && <span className="absolute left-3 top-1.5 text-[10px] uppercase tracking-wide text-ink-faint">Effects</span>}
+    // No label of its own: the slider now runs the full width, and each clip says what it is (✦ Snow) (D-162).
+    <div className={`relative pb-2 ${under === null ? 'px-3' : ''} ${phone ? '' : '-mt-1'}`} aria-label="Effects in this scene">
+
       {/* One layer for every row, so a clip that changes row moves rather than being rebuilt mid-drag. */}
       <div
         className="relative"

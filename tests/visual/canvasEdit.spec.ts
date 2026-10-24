@@ -9,8 +9,9 @@ import { expect, test, type Page } from '@playwright/test';
  * a handle above to turn, arrows to nudge, and one ⌘Z per gesture.
  */
 
-// 63px taller since the tool strip moved in under the picture (D-116): the
-// drags below are measured against the canvas size these were written for.
+// 63px taller since the tool strip moved in under the picture (D-116). The strip
+// has gone again (D-162), which leaves the picture a little larger here; the
+// drags below are measured against the canvas, so they hold either way.
 test.use({ viewport: { width: 1500, height: 1003 } });
 
 /** A 1×1 opaque PNG — enough to decode, small enough to inline. */

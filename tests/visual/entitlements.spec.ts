@@ -90,7 +90,7 @@ test.describe('the duration cap (§12)', () => {
     await setTier(page, 'free');
 
     // The whole ad is still there and still editable.
-    await expect(page.getByText('Scene 1 of 8')).toBeVisible();
+    await expect(page.locator('[data-scene-clip]')).toHaveCount(8);
     await page.getByTitle('Add a text overlay').click();
     await expect(page.locator('[data-selection-box]')).toBeVisible();
   });
@@ -105,7 +105,8 @@ test.describe('the duration cap (§12)', () => {
 
     // Fewer scenes, inside the cap, and the banner has done its job and gone.
     await expect(page.locator('[data-duration-upsell]')).toHaveCount(0);
-    await expect(page.getByText(/Scene 1 of [1-7]$/)).toBeVisible();
+    await expect.poll(() => page.locator('[data-scene-clip]').count()).toBeLessThan(8);
+    await expect(page.locator('[data-scene-clip]').first()).toBeVisible();
   });
 
   test('goes away on pro', async ({ page }) => {
@@ -118,7 +119,7 @@ test.describe('the duration cap (§12)', () => {
 
     await setTier(page, 'pro');
     await expect(page.locator('[data-duration-upsell]')).toHaveCount(0);
-    await expect(page.getByText('Scene 1 of 8'), 'and nothing was deleted').toBeVisible();
+    await expect(page.locator('[data-scene-clip]'), 'and nothing was deleted').toHaveCount(8);
   });
 });
 

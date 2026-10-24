@@ -98,7 +98,7 @@ type OverlayState = {
   /**
    * The inspector as a sheet, below desktop width, and the section to bring
    * into view in it (and beside the picture on a desktop) — "Background" from
-   * the tool strip or the canvas menu (D-120).
+   * the canvas menu (D-120), or an element's own section (D-158).
    */
   inspectorSheet: boolean;
   setInspectorSheet: (open: boolean) => void;

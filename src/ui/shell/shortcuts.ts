@@ -47,6 +47,8 @@ export function shortcutGroups(apple: boolean, touchToo: boolean): readonly Help
         ['Drag its dotted ends', 'Make it shorter or longer'],
         ['Click a selected clip', 'Move the playhead there'],
         ['Click a layer name', 'Add new elements to that layer'],
+        // The scene bar's ← and → (D-162).
+        [`${keys.alt} ← →`, 'Move the selected scene earlier or later'],
         [`${keys.alt} while dragging`, 'Turn snapping off'],
       ],
     },

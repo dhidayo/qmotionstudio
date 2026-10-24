@@ -115,7 +115,7 @@ test('the scene picker\'s cards play live in the video\'s frame shape, and only 
       .__motionStudio.editor.getState().project.scenes.length);
   const before = await scenes();
 
-  await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+  await page.locator('[data-add-bar] [data-add="scene"]').click();
   const picker = page.getByRole('dialog', { name: 'Add a scene' });
   const card = picker.locator('button:has([data-card-shape="1:1"])').first();
   await expect(card).toBeVisible();

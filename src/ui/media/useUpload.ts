@@ -39,7 +39,7 @@ function nextMediaId(): string {
  * Photos panel — and put on top as a layer, and in a video added to the
  * timeline as a clip too. Now only an upload that asks for paste listens, and
  * of those only the one opened last answers: the Replace photo dialog while it
- * is open, otherwise "Add your photos".
+ * is open, otherwise + Photos (D-162).
  */
 type PasteTarget = { current: (files: readonly File[]) => Promise<void> };
 const pasteTargets: PasteTarget[] = [];
@@ -73,7 +73,7 @@ export function useUpload(
     video?: boolean;
     /** Accept music (§10). The timeline's "+ Music" picker turns this on. */
     audio?: boolean;
-    /** Take pasted pictures too — "Add your photos" and Replace photo only (D-152). */
+    /** Take pasted pictures too — + Photos and Replace photo only (D-152, D-162). */
     paste?: boolean;
   },
 ): {

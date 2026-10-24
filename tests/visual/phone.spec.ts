@@ -106,7 +106,8 @@ test.describe('the phone layout', () => {
       (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { scenes: { templateId: string }[] } } } } })
         .__motionStudio.editor.getState().project.scenes[0]?.templateId);
 
-    await page.locator('[data-start-actions]').getByRole('button', { name: 'Choose a design' }).tap();
+    // The toolbar's first tool: the row of start buttons went (D-162).
+    await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Designs', exact: true }).tap();
     const sheet = page.getByRole('dialog', { name: 'Choose a design' });
     await expect(sheet).toBeVisible();
 
@@ -135,7 +136,7 @@ test.describe('the phone layout', () => {
   test('"Choose a design" at 4:5: cards and the large preview take the project\'s frame shape (D-160)', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, LIFESTYLE.replace('aspect=1:1', 'aspect=4:5'));
-    await page.locator('[data-start-actions]').getByRole('button', { name: 'Choose a design' }).tap();
+    await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Designs', exact: true }).tap();
     const sheet = page.getByRole('dialog', { name: 'Choose a design' });
     await expect(sheet).toBeVisible();
 
@@ -285,17 +286,16 @@ test.describe('fingers on the canvas', () => {
 });
 
 test.describe('the background and the plan (D-120, D-122)', () => {
-  test('Background is one tap from the toolbar, and fits beside the other tools', async ({ page }) => {
+  test('Background is in Style, and every tool fits whole in the toolbar', async ({ page }) => {
     await open(page, LIFESTYLE);
     const toolbar = page.locator('[data-phone-toolbar="main"]');
-    // "Backdrop" in a design too, now that its row of tools has Add and is seven long (D-153).
-    const background = toolbar.getByRole('button', { name: 'Backdrop' });
-    await expect(background).toBeVisible();
+    // Each action once (D-162): Backdrop was Style opened at Background, so Style is the way in.
+    await expect(toolbar.getByRole('button', { name: 'Backdrop' })).toHaveCount(0);
     // The whole word shows: no tool's label is cut off.
     const clipped = await toolbar.locator('button span').evaluateAll((spans) => spans.some((s) => s.scrollWidth > s.clientWidth + 1));
     expect(clipped).toBe(false);
-    await background.click();
-    await expect(page.getByRole('button', { name: 'Background', expanded: true })).toBeVisible();
+    await toolbar.getByRole('button', { name: 'Style', exact: true }).tap();
+    await page.getByRole('dialog', { name: 'Style' }).getByRole('button', { name: 'Background' }).first().tap();
     await expect(page.getByRole('button', { name: 'Your picture' })).toBeVisible();
   });
 
@@ -414,9 +414,11 @@ test.describe('second round (D-111 to D-115)', () => {
   test('a photo added and reloaded straight away is still there', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await page.goto('/');
-    await page.waitForSelector('[data-start-actions]');
+    await page.waitForSelector('[data-phone-toolbar="main"]');
     await page.waitForTimeout(1_500);
-    await page.getByLabel('Add your photos').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: await stripes(page) });
+    // From Photos, where a phone adds them (D-162).
+    await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Photos', exact: true }).tap();
+    await page.getByLabel('Add photos to this scene').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: await stripes(page) });
     await expect.poll(() => photoIds(page)).toMatch(/^upload:/);
     // Well inside the autosave debounce: the photo is saved as it arrives.
     await page.waitForTimeout(400);

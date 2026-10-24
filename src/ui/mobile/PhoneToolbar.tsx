@@ -26,6 +26,8 @@ type Tool = {
   readonly icon: IconName;
   readonly onSelect: () => void;
   readonly danger?: boolean;
+  /** Where the quick start points (D-148): the designs, and adding photos. */
+  readonly tour?: string;
 };
 
 function useTools(): { tools: readonly Tool[]; context: string | null } {
@@ -173,7 +175,7 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
       context: `Scene ${s.selectedScene + 1}`,
       tools: [
         { label: 'Design', icon: 'designs', onSelect: () => { o.openScenePicker('replace'); } },
-        // Its length and how it arrives (D-133): the timeline's scene bar, on a phone.
+        // Its length and how it arrives (D-133) — on a computer, the scene menu's Length and transition (D-162).
         { label: 'Timing', icon: 'scene', onSelect: () => { o.openPhonePanel('scene'); } },
         { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target: { kind: 'scene' } }); } },
         { label: 'Copy', icon: 'copy', onSelect: () => { duplicateSelection(); } },
@@ -183,17 +185,23 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
     };
   }
 
-  const designs: Tool = { label: MODE_COPY[project.mode].tool, icon: 'designs', onSelect: () => { o.openPhonePanel('designs'); } };
-  const photos: Tool = { label: 'Photos', icon: 'photo', onSelect: () => { o.openPhonePanel('photos'); } };
+  /*
+   * Each action once (D-162). The row of big buttons above this toolbar —
+   * Choose a design, Add a scene, Add your photos — repeated three of its
+   * tools, so it went, and its height went to the picture: the designs are
+   * the first tool, + Scene heads the Add sheet, and photos are added from
+   * Photos, whose panel starts with + Add photos and Take photo and holds the
+   * design's photo spots and Your photos — so the Add sheet has no + Photos
+   * of its own. Backdrop was Style opened at its Background section; Style
+   * is here, and so is a long press on the empty picture → Change background.
+   */
+  const designs: Tool = { label: MODE_COPY[project.mode].tool, icon: 'designs', tour: 'design', onSelect: () => { o.openPhonePanel('designs'); } };
+  const add: Tool = { label: 'Add', icon: 'add', onSelect: () => { o.openPhonePanel('add'); } };
+  const photos: Tool = { label: 'Photos', icon: 'photo', tour: 'photos', onSelect: () => { o.openPhonePanel('photos'); } };
   const text: Tool = { label: 'Text', icon: 'text', onSelect: () => { o.openPhonePanel('text'); } };
   const effects: Tool = { label: 'Effects', icon: 'effects', onSelect: () => { o.openPhonePanel('effects'); } };
   const style: Tool = { label: 'Style', icon: 'style', onSelect: () => { o.openPhonePanel('style'); } };
-  const add: Tool = { label: 'Add', icon: 'add', onSelect: () => { o.openPhonePanel('add'); } };
-  // D-120: the background, one tap away. "Backdrop" fits a phone's row of seven.
-  // Both modes have seven tools now that a design has Add too (D-153).
-  const background: Tool = { label: 'Backdrop', icon: 'background', onSelect: () => { o.openPhonePanel('style', 'Background'); } };
-  // Add in both modes: a design takes text, photos, shapes, stickers and motion too (D-153).
-  return { context: null, tools: [designs, add, photos, text, effects, style, background] };
+  return { context: null, tools: [designs, add, photos, text, effects, style] };
 }
 
 export function PhoneToolbar(): React.JSX.Element {
@@ -213,6 +221,7 @@ export function PhoneToolbar(): React.JSX.Element {
           <button
             key={tool.label}
             type="button"
+            data-tour={tool.tour}
             onClick={tool.onSelect}
             className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1 text-[11px] active:bg-panel-alt"
             style={{ color: tool.danger === true ? 'var(--c-danger)' : 'var(--c-ink)' }}

@@ -29,8 +29,10 @@ test.describe('at desktop width', () => {
     await open(page);
     await expect(page.getByRole('complementary', { name: 'Template library' })).toBeVisible();
     await expect(page.locator('[data-sheet]')).toHaveCount(0);
-    // And the same way in as a phone's, under the picture (D-116); an ad is a video (D-155).
-    await expect(page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a video template' })).toBeVisible();
+    // The video templates are first in the row of actions under the picture (D-116, D-155, D-162).
+    await expect(page.locator('[data-add-bar]').getByRole('button', { name: 'Templates' })).toBeVisible();
+    // The inspector is beside the picture, so the row has no Settings of its own.
+    await expect(page.locator('[data-settings-toggle]')).toHaveCount(0);
   });
 });
 
@@ -43,8 +45,8 @@ test.describe('at tablet width', () => {
     await expect(page.getByRole('complementary', { name: 'Template library' })).toHaveCount(0);
     const wide = await canvasWidth(page);
 
-    // The tool strip's Photos opens the inspector as a sheet (D-116).
-    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Photos', exact: true }).click();
+    // Settings, at the end of the row of actions, opens the inspector as a sheet (D-116, D-162).
+    await page.locator('[data-settings-toggle]').click();
     await expect(page.getByRole('dialog', { name: 'Photos, text and style' })).toBeVisible();
 
     // The inspector's own controls are in there — the same component, not a
@@ -62,15 +64,16 @@ test.describe('at tablet width', () => {
     await open(page);
 
     // Designs opens as a window over the editor (D-116); a tap outside it closes it.
-    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Choose a video template' }).click();
+    await page.locator('[data-add-bar]').getByRole('button', { name: 'Templates' }).click();
     const designs = page.getByRole('dialog', { name: 'Choose a video template' });
     await expect(designs).toBeVisible();
     await page.mouse.click(12, 500);
     await expect(designs).toHaveCount(0);
 
-    // And the inspector sheet opens now that nothing is in the way.
-    await page.locator('[data-tool-strip]').getByRole('button', { name: 'Text', exact: true }).click();
+    // And the inspector sheet opens now that nothing is in the way, its tabs the way to each panel.
+    await page.locator('[data-settings-toggle]').click();
     await expect(page.getByRole('dialog', { name: 'Photos, text and style' })).toBeVisible();
+    await page.getByRole('tab', { name: 'Text' }).click();
     await expect(page.getByRole('tab', { name: 'Text' })).toHaveAttribute('aria-selected', 'true');
   });
 });

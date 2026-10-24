@@ -205,7 +205,7 @@ test.describe('the motion bar is a control you can see and hit', () => {
    * corner — and its ends were two-pixel strips with no shape at all.
    */
 
-  test('lives on its own lane, not inside the clip', async ({ page }) => {
+  test('is drawn on its clip, under the name, against the lane’s time axis (D-162)', async ({ page }) => {
     await overlayProject(page);
     await addMotion(page).click();
 
@@ -214,8 +214,10 @@ test.describe('the motion bar is a control you can see and hit', () => {
     const barBox = await bar(page).boundingBox();
     if (!clipBox || !barBox) throw new Error('no boxes');
 
-    // Below the clip's row, on a row of its own.
-    expect(barBox.y).not.toBeCloseTo(clipBox.y, 0);
+    // On the clip's own lane — no Motion row (D-162) — below its name.
+    await expect(page.locator('[aria-label="Timeline"] [data-row="motion"]')).toHaveCount(0);
+    expect(barBox.y).toBeGreaterThan(clipBox.y + 4);
+    expect(barBox.y + barBox.height).toBeLessThanOrEqual(clipBox.y + clipBox.height + 10);
 
     /*
      * The bar covers the same three seconds as the clip, so it is the same
@@ -278,24 +280,26 @@ test.describe('clicking the timeline moves the playhead', () => {
     await expect.poll(() => now(page)).toBeLessThan(before);
   });
 
-  test('a row\'s note never swallows a press: the motion row is a time axis like any other', async ({ page }) => {
+  test('nothing on a lane swallows a press: beside a moving clip, the lane is a time axis like any other', async ({ page }) => {
     /*
      * The music row's "No music" note once sat over most of the row and
      * swallowed the press, so the one row with nothing in it was the one row
-     * a click did nothing on. Empty rows are gone (D-153); the motion row's
-     * note, shown while the selection does not move, is the one note left on
-     * a lane, and it must let the press through just the same.
+     * a click did nothing on. Empty rows went (D-153), and the motion row and
+     * its note with them (D-162): a moving clip says so with a line along its
+     * foot, and the rest of its lane still takes a press.
      */
     await overlayProject(page);
     await page.locator('[data-add="motion"]').click();
-    // Something moves, so the row is there; with the scene chosen, it holds a note.
+    // The scene chosen: the caption is put down, and its motion bar with it.
     await page.getByRole('button', { name: /^2\. / }).click();
-    const note = page.locator('[aria-label="Timeline"] [data-row="motion"]').getByText(/^Select something that moves/);
-    const box = await note.boundingBox();
-    if (!box) throw new Error('no motion row');
+    await expect(bar(page)).toHaveCount(0);
+    await expect(page.locator('[data-overlay-clip][data-moves]')).toHaveCount(1);
+    const lane = await page.locator('[aria-label="Timeline"] [data-track-row="0"]').boundingBox();
+    if (!lane) throw new Error('no layer lane');
 
     const before = await now(page);
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    // Near the end of the video, well past the caption.
+    await page.mouse.click(lane.x + lane.width * 0.95, lane.y + lane.height / 2);
     await expect.poll(() => now(page)).not.toBe(before);
   });
 });

@@ -3,20 +3,22 @@ import { addMusic } from '../support/audio';
 
 /**
  * The timeline shows only what is used, folds away, and one row holds
- * everything that can be added (D-153).
+ * everything that can be added (D-153, D-162).
  *
  * "The timeline on desktop view has taken almost all screen … show only used
  * timeline and hide others that are not in use … can I have the + Motion
  * where you already have the + Photo, + Text, etc? … have collapsible
  * timeline in case where it is not actively used to get more view on the
  * canvas" — and "we may be having scroll of applicable elements on smaller
- * screen".
+ * screen". Then (D-162): "I would also no specialized rows for items that can
+ * stack somewhere else" — effects sit in the Layers group, music and sounds
+ * share one Audio group, and motion is drawn on the clip that moves.
  */
 
 test.use({ viewport: { width: 1500, height: 940 } });
 
-const VIDEO_ORDER = ['text', 'photo', 'video', 'shape', 'sticker', 'number', 'motion', 'effect', 'sound', 'music'];
-const DESIGN_ORDER = ['text', 'photo', 'shape', 'sticker', 'number', 'motion', 'effect'];
+const VIDEO_ORDER = ['photos', 'text', 'shape', 'sticker', 'number', 'motion', 'effect', 'sound', 'music', 'scene', 'video'];
+const DESIGN_ORDER = ['photos', 'text', 'shape', 'sticker', 'number', 'motion', 'effect'];
 
 const timeline = (page: Page): Locator => page.locator('[aria-label="Timeline"]');
 const toast = (page: Page): Locator => page.locator('[data-toast]');
@@ -29,7 +31,7 @@ async function open(page: Page, url = '/?template=quick-pitch&aspect=9:16&frozen
   await page.waitForTimeout(1_500);
 }
 
-/** The timeline's rows, top to bottom, by kind; repeated rows (layers, effects) once. */
+/** The timeline's rows, top to bottom, by kind; repeated rows (layer lanes) once. */
 async function rows(page: Page): Promise<string[]> {
   const names = await timeline(page).locator('[data-row]').evaluateAll((all) => all.map((row) => row.getAttribute('data-row') ?? ''));
   return names.filter((name, i) => names[i - 1] !== name);
@@ -47,7 +49,7 @@ test.describe('only the rows in use', () => {
     await expect(timeline(page).getByText(/No music|Effects at a moment/)).toHaveCount(0);
   });
 
-  test('each kind of thing brings its row, and takes it away again', async ({ page }) => {
+  test('each kind of thing brings its group, and takes it away again', async ({ page }) => {
     await open(page);
     const empty = await height(timeline(page));
 
@@ -58,14 +60,39 @@ test.describe('only the rows in use', () => {
     // The row's height goes back to the picture rather than staying as spare room.
     await expect.poll(() => height(timeline(page))).toBeLessThan(empty + 2);
 
+    // An effect has no row of its own: it takes a lane in the Layers group (D-162).
     await page.getByTitle(/^Add an effect at the playhead/).click();
     await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="flash"]').click();
-    expect(await rows(page)).toEqual(['time', 'scenes', 'effects']);
+    expect(await rows(page)).toEqual(['time', 'scenes', 'layers']);
+    await expect(timeline(page).locator('[data-row="effects"], [data-row="motion"]')).toHaveCount(0);
 
+    // Music joins the Audio group, which sounds share.
     await addMusic(page);
-    expect(await rows(page)).toEqual(['time', 'scenes', 'effects', 'music']);
+    expect(await rows(page)).toEqual(['time', 'scenes', 'layers', 'audio']);
     await page.getByRole('button', { name: 'Remove music' }).click();
-    expect(await rows(page)).toEqual(['time', 'scenes', 'effects']);
+    expect(await rows(page)).toEqual(['time', 'scenes', 'layers']);
+  });
+
+  test('an effect sits in a layer’s gap, and moves down a lane when a layer is in the way (D-162)', async ({ page }) => {
+    await open(page);
+    // A caption at the start, and an effect later on: one lane holds both.
+    await page.getByRole('button', { name: '+ Text' }).click();
+    await page.evaluate(() => {
+      const h = (globalThis as unknown as { __motionStudio: { editor: { getState: () => { dispatch: (a: unknown) => void } }; actions: Record<string, (...args: unknown[]) => unknown> } }).__motionStudio;
+      h.editor.getState().dispatch(h.actions['addTimelineEffect']?.(h.actions['makeEffectClip']?.('snow', { startMs: 9_000, endMs: 11_000 }, 1)));
+    });
+    const snow = timeline(page).locator('[data-fx-clip="snow"]');
+    await expect(snow).toHaveAttribute('data-fx-row', '0');
+    const clip = await timeline(page).locator('[data-overlay-clip]').boundingBox();
+    const fx = await snow.boundingBox();
+    expect(clip && fx && Math.abs(clip.y - fx.y) < 3, 'on the same lane as the caption').toBe(true);
+    // One more caption over the snow's moment, on that lane: the snow takes the next free one.
+    await page.evaluate(() => {
+      const h = (globalThis as unknown as { __motionStudio: { editor: { getState: () => { dispatch: (a: unknown) => void } }; actions: Record<string, (...args: unknown[]) => unknown> } }).__motionStudio;
+      const content = { kind: 'shape', shape: 'circle' };
+      h.editor.getState().dispatch(h.actions['addOverlay']?.({ ...(h.actions['makeOverlay']?.(content, { startMs: 9_500, endMs: 10_500, track: 0 }) as object) }));
+    });
+    await expect(snow).toHaveAttribute('data-fx-row', '1');
   });
 });
 
@@ -74,13 +101,19 @@ test.describe('+ Motion, with everything else that can be added', () => {
     await open(page);
     const ids = await bar(page).locator('[data-add]').evaluateAll((all) => all.map((chip) => chip.getAttribute('data-add')));
     expect(ids).toEqual(VIDEO_ORDER);
-    // In the header, beside Play: the timeline's own first row.
+    // Templates first, in the same row (D-162).
+    const first = await bar(page).getByRole('button').first().textContent();
+    expect(first?.trim()).toBe('Templates');
+    // In the header, beside Play: the timeline's own first row — and the only row of actions.
     const play = await timeline(page).getByRole('button', { name: 'Play' }).boundingBox();
     const chips = await bar(page).boundingBox();
     expect(Math.abs((play?.y ?? 0) + (play?.height ?? 0) / 2 - ((chips?.y ?? 99) + (chips?.height ?? 0) / 2))).toBeLessThan(4);
-    // The tool strip no longer has an Add of its own, and stays one row.
-    await expect(page.locator('[data-tool-strip]').getByRole('button', { name: 'Add', exact: true })).toHaveCount(0);
-    expect(await height(page.locator('[data-tool-strip]'))).toBeLessThan(80);
+    await expect(page.locator('[data-tool-strip], [data-start-actions]')).toHaveCount(0);
+    // Nothing between the picture and the timeline.
+    const canvas = await page.locator('canvas').first().boundingBox();
+    const panel = await timeline(page).boundingBox();
+    expect(panel && canvas && panel.y - (canvas.y + canvas.height) >= 0, 'the timeline is under the picture').toBe(true);
+    await expect(page.locator('main [data-add-bar]')).toHaveCount(1);
   });
 
   test('gives the selected element a motion in one step, and takes the playhead to its end', async ({ page }) => {
@@ -90,7 +123,9 @@ test.describe('+ Motion, with everything else that can be added', () => {
 
     await bar(page).locator('[data-add="motion"]').click();
     await expect(toast(page)).toContainText('Motion added — drag it to where it should finish.');
-    await expect(timeline(page).locator('[data-row="motion"] [data-motion-bar]')).toBeVisible();
+    // On the caption's own clip, not a row of its own (D-162).
+    await expect(timeline(page).locator('[data-overlay-motion] [data-motion-bar]')).toBeVisible();
+    expect(await rows(page)).toEqual(['time', 'scenes', 'layers']);
     // Paused at the end of the motion, ready for the drag that says where it goes.
     expect(await now(page)).toBeGreaterThan(before);
 
@@ -125,17 +160,18 @@ test.describe('folding the timeline away', () => {
   test('folds to the scenes, gives the picture the room, and is remembered', async ({ page }) => {
     await open(page);
     const canvas = page.locator('canvas').first();
-    const before = await height(canvas);
     await page.getByRole('button', { name: '+ Text' }).click();
+    // Measured with the layer showing: folding gives its room back (the scene bar that also folded away is gone, D-162).
+    await expect(timeline(page).locator('[data-row="layers"]').first()).toBeVisible();
+    const before = await height(canvas);
 
     await fold(page).click();
     await expect(timeline(page)).toHaveAttribute('data-collapsed', 'true');
     expect(await rows(page)).toEqual(['time', 'scenes']);
-    await expect(page.getByRole('button', { name: 'Remove this scene' })).toHaveCount(0);
     await expect.poll(() => height(canvas)).toBeGreaterThan(before);
 
-    // A scene can still be added from the folded timeline.
-    await page.getByRole('button', { name: /^Add a scene after this one/ }).click();
+    // A scene can still be added from the folded timeline: + Scene is in the header's row.
+    await bar(page).locator('[data-add="scene"]').click();
     await expect(page.getByRole('dialog', { name: 'Add a scene' })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('dialog', { name: 'Add a scene' })).toHaveCount(0);
@@ -145,7 +181,7 @@ test.describe('folding the timeline away', () => {
     await expect(timeline(page)).toHaveAttribute('data-collapsed', 'true');
     await fold(page).click();
     await expect(timeline(page)).not.toHaveAttribute('data-collapsed', 'true');
-    await expect(page.getByRole('button', { name: 'Remove this scene' })).toBeVisible();
+    await expect(timeline(page).locator('[data-scene-clip]').first()).toBeVisible();
   });
 
   test('dragging its top edge right down folds it', async ({ page }) => {
@@ -172,7 +208,7 @@ test.describe('folding the timeline away', () => {
       await page.getByRole('dialog', { name: 'Effects' }).locator('[data-effect="flash"]').click();
       // What was just added is part of the work now: the timeline opens to show it.
       await expect(timeline(page)).not.toHaveAttribute('data-collapsed', 'true');
-      expect(await rows(page)).toEqual(['time', 'scenes', 'effects']);
+      expect(await rows(page)).toEqual(['time', 'scenes', 'layers']);
       expect(await page.evaluate(() => localStorage.getItem('ms.timeline'))).toBeNull();
     });
   });
@@ -189,7 +225,7 @@ test.describe('on a narrow screen', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
 
     const at = async (): Promise<number> => row.evaluate((el) => el.scrollLeft);
-    // The add bar's own arrow: in a video the tool strip below may scroll too, with an arrow of its own.
+    // The add bar's own arrow.
     await row.locator('xpath=..').locator('[data-side-scroll="end"]').click();
     await expect.poll(at).toBeGreaterThan(0);
 
@@ -206,14 +242,21 @@ test.describe('on a narrow screen', () => {
 });
 
 test.describe('in a design', () => {
-  test('the add bar sits beside the scrubber, with what a design can take', async ({ page }) => {
+  test('the add bar is the row over the scrubber, with what a design can take', async ({ page }) => {
     await open(page, '/?template=pop-float&aspect=1:1&frozen=1000');
     await expect(timeline(page)).toHaveCount(0);
     const ids = await bar(page).locator('[data-add]').evaluateAll((all) => all.map((chip) => chip.getAttribute('data-add')));
     expect(ids).toEqual(DESIGN_ORDER);
-    const scrub = await page.getByLabel('Scrub').boundingBox();
+    // Choose a design first and Make a video last, in the same row as Play (D-162).
+    const labels = await bar(page).getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
+    expect(labels[0]).toBe('Choose a design');
+    expect(labels[labels.length - 1]).toBe('Make a video');
+    const play = await page.locator('[data-control-row]').getByRole('button', { name: 'Play' }).boundingBox();
     const chips = await bar(page).boundingBox();
-    expect(Math.abs((scrub?.y ?? 0) + (scrub?.height ?? 0) / 2 - ((chips?.y ?? 99) + (chips?.height ?? 0) / 2))).toBeLessThan(12);
+    expect(Math.abs((play?.y ?? 0) + (play?.height ?? 0) / 2 - ((chips?.y ?? 99) + (chips?.height ?? 0) / 2))).toBeLessThan(4);
+    // The slider runs the full width under it.
+    const scrub = await page.getByLabel('Scrub').boundingBox();
+    expect(scrub && chips && scrub.y > chips.y + chips.height, 'the scrubber under the row').toBe(true);
   });
 
   test('+ Motion on a template photo puts its bar on the scrubber', async ({ page }) => {
@@ -233,7 +276,7 @@ test.describe('in a design', () => {
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('the Add sheet is the same list, a scene first in a video', async ({ page }) => {
+  test('the Add sheet is the same list, a scene first in a video, photos left to the Photos tool', async ({ page }) => {
     await open(page);
     // Counts of nothing are not shown: the summary says what the full timeline holds.
     const summary = page.locator('[data-phone-timeline]');
@@ -242,7 +285,7 @@ test.describe('on a phone', () => {
 
     await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Add', exact: true }).tap();
     const ids = await page.getByRole('group', { name: 'Add' }).locator('[data-add]').evaluateAll((all) => all.map((tile) => tile.getAttribute('data-add')));
-    expect(ids).toEqual(['scene', ...VIDEO_ORDER]);
+    expect(ids).toEqual(['scene', ...VIDEO_ORDER.filter((id) => id !== 'photos' && id !== 'scene')]);
 
     await page.getByRole('group', { name: 'Add' }).locator('[data-add="text"]').tap();
     await expect(summary).toContainText('Layers · 1');
@@ -252,7 +295,7 @@ test.describe('on a phone', () => {
     await open(page, '/?template=pop-float&aspect=4:5&frozen=1000');
     await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Add', exact: true }).tap();
     const ids = await page.getByRole('group', { name: 'Add' }).locator('[data-add]').evaluateAll((all) => all.map((tile) => tile.getAttribute('data-add')));
-    expect(ids).toEqual(DESIGN_ORDER);
+    expect(ids).toEqual(DESIGN_ORDER.filter((id) => id !== 'photos'));
   });
 
   test('a selected text has Motion among its tools', async ({ page }) => {

@@ -51,7 +51,7 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
     document.querySelector('[data-logo-section]')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
   }, [selectedLogo]);
 
-  // "Background" from the tool strip or the canvas menu (D-120): its section, in view.
+  // "Change background…" from the canvas menu (D-120): its section, in view.
   const focus = useOverlays((o) => o.inspectorSection);
   useEffect(() => {
     if (focus === null) return;

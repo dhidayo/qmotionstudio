@@ -134,14 +134,14 @@ test.describe('undo has a floor', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(2_500);
 
-    await expect(page.getByText('Scene 1 of 5')).toBeVisible();
+    await expect(page.locator('[data-scene-clip]')).toHaveCount(5);
 
     for (let i = 0; i < 12; i++) {
       await page.keyboard.press('ControlOrMeta+z');
       await page.waitForTimeout(60);
     }
 
-    await expect(page.getByText('Scene 1 of 5'), 'still the ad it opened').toBeVisible();
+    await expect(page.locator('[data-scene-clip]'), 'still the ad it opened').toHaveCount(5);
     await expect(page.getByText('__placeholder__')).toHaveCount(0);
   });
 
@@ -156,7 +156,7 @@ test.describe('undo has a floor', () => {
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect(page.locator('[data-selection-box]')).toHaveCount(0);
-    await expect(page.getByText('Scene 1 of 5')).toBeVisible();
+    await expect(page.locator('[data-scene-clip]')).toHaveCount(5);
   });
 });
 

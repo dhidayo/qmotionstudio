@@ -42,6 +42,7 @@ export function MotionBar({
   onChange,
   onCommit,
   onSeek,
+  fill = false,
 }: {
   span: MotionSpan;
   poseTimes: readonly number[];
@@ -51,6 +52,12 @@ export function MotionBar({
   onChange: (change: Change) => void;
   onCommit: () => void;
   onSeek: (atMs: number) => void;
+  /**
+   * The full height of the strip it is drawn in, rather than inset from it:
+   * on a clip, or under a scene's name, the strip is only as tall as the grips
+   * need (D-162).
+   */
+  fill?: boolean;
 }): React.JSX.Element {
   const drag = useRef<{ mode: 'move' | 'start' | 'end'; fromMs: number; moved: boolean } | null>(null);
 
@@ -116,7 +123,7 @@ export function MotionBar({
       onPointerUp={end}
       onPointerCancel={end}
       onKeyDown={(event) => { if (event.key === 'Enter') onSeek(span.startMs); }}
-      className="absolute inset-y-1 cursor-grab select-none active:cursor-grabbing"
+      className={`absolute ${fill ? 'inset-y-0' : 'inset-y-1'} cursor-grab select-none active:cursor-grabbing`}
       style={{ left: `${left}%`, width: `${width}%` }}
     >
       {/* The rail. Inset by half a grip so the diamonds sit over its ends. */}

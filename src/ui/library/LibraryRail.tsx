@@ -187,7 +187,7 @@ export function LibraryRail({
           */}
         {mode === 'motionAd' && (
           <p data-library-note className={`mt-2 leading-snug text-ink-muted ${sheet ? 'text-[13px]' : 'text-[11px]'}`}>
-            A video template is a whole video — several scenes. Using one replaces your scenes. To add one scene, use Add a scene.
+            A video template is a whole video — several scenes. Using one replaces your scenes. To add one scene, use + Scene.
           </p>
         )}
       </div>

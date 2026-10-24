@@ -39,7 +39,6 @@ import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
 import { PhonePanels } from '@/ui/mobile/PhonePanels';
-import { ToolStrip } from './ToolStrip';
 import { usePlayOnce } from './usePlayOnce';
 
 /*
@@ -404,7 +403,11 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
             <Artboard project={project} clock={clock} rig={rig} media={media} />
             {(import.meta.env.DEV || renderParams().perf) && <PerfOverlay rig={rig} />}
           </div>
-          <ToolStrip onOpenPanel={layout === 'desktop' ? undefined : () => { setSheet(true); }} />
+          {/*
+            * One row of actions under the picture, in the timeline's header or
+            * above the slider (D-162) — no strip of tools: the inspector's tabs
+            * are the way to Photos, Text, Effects and Style.
+            */}
           {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}
         </main>
 
@@ -423,7 +426,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
           </Sheet>
         </>
       )}
-      {/* Designs and Add, opened from the tool strip, as windows (D-116). */}
+      {/* Designs, opened from the row of actions, and a scene's timing, as windows (D-116, D-162). */}
       <PhonePanels clock={clock} scenePicker={false} />
       </>}
       <Suspense fallback={null}>

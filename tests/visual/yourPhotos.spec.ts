@@ -50,6 +50,7 @@ const distinctOwn = async (page: Page): Promise<number> => new Set((await shown(
 /** The design's own spots in Photos (D-150): `upload:` for yours, `sample:` for the samples. */
 const spots = (page: Page, kind: 'upload' | 'sample') => page.locator(`[data-design-photos] [data-media-id^="${kind}:"]`);
 
+/** The phone's Photos tool: where photos are added, spots set and Your photos kept (D-162). */
 async function openPhotos(page: Page): Promise<void> {
   await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Photos', exact: true }).click();
   await expect(page.locator('[data-design-photos]')).toBeVisible();
@@ -64,6 +65,8 @@ async function openYourPhotos(page: Page): Promise<void> {
 test('photos taken one at a time build up instead of replacing each other', async ({ page }) => {
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
   await open(page, LIFESTYLE);
+  // Photos is where a phone adds them, the camera included (D-162).
+  await openPhotos(page);
   // Each camera shot arrives as one file, on its own, and takes the next sample's place (D-150).
   await page.getByLabel('Take a photo').first().setInputFiles(await picture(page, '#ff2d55'));
   await expect.poll(() => distinctOwn(page)).toBe(1);
@@ -73,7 +76,6 @@ test('photos taken one at a time build up instead of replacing each other', asyn
   expect(ids.slice(0, 2).every((id) => id.startsWith('upload:')), 'the first two spots').toBe(true);
   expect(ids.slice(2).every((id) => id.startsWith('sample:')), 'samples in the rest').toBe(true);
 
-  await openPhotos(page);
   await expect(spots(page, 'upload')).toHaveCount(2);
   await expect(spots(page, 'sample')).toHaveCount(2);
   // Both are in the design, so Your photos has nothing to offer and stays out of the way.
@@ -83,14 +85,14 @@ test('photos taken one at a time build up instead of replacing each other', asyn
 test('four spots and three photos: three of yours and one sample; + adds a sample spot (D-150)', async ({ page }) => {
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
   await open(page, LIFESTYLE);
-  await page.getByLabel('Add your photos').first().setInputFiles([
+  await openPhotos(page);
+  await page.getByLabel('Add photos to this scene').setInputFiles([
     await picture(page, '#ff2d55'), await picture(page, '#2dd4ff'), await picture(page, '#22c55e'),
   ]);
   await expect.poll(() => distinctOwn(page)).toBe(3);
   await expect(page.locator('[data-toast]')).toContainText('Your 3 photos replaced 3 samples.');
   expect((await shown(page))[3]).toMatch(/^sample:/);
 
-  await openPhotos(page);
   await page.getByRole('button', { name: 'Increase Photo spots' }).click();
   await expect(spots(page, 'sample')).toHaveCount(2);
   await expect.poll(async () => (await shown(page)).length).toBe(5);
@@ -100,9 +102,9 @@ test('four spots and three photos: three of yours and one sample; + adds a sampl
 test('a photo can be taken out of the design, put back, and deleted from the project', async ({ page }) => {
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
   await open(page, LIFESTYLE);
-  await page.getByLabel('Add your photos').first().setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
-  await expect.poll(() => distinctOwn(page)).toBe(2);
   await openPhotos(page);
+  await page.getByLabel('Add photos to this scene').setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
+  await expect.poll(() => distinctOwn(page)).toBe(2);
 
   // Out of the design: a sample goes back in its spot, and the photo waits in Your photos.
   await page.getByRole('button', { name: 'Take your photo out of spot 1' }).click();
@@ -130,9 +132,9 @@ test('a photo can be taken out of the design, put back, and deleted from the pro
 test('photos kept only in Your photos are still there after a reload', async ({ page }) => {
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
   await open(page, LIFESTYLE);
-  await page.getByLabel('Add your photos').first().setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
-  await expect.poll(() => distinctOwn(page)).toBe(2);
   await openPhotos(page);
+  await page.getByLabel('Add photos to this scene').setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
+  await expect.poll(() => distinctOwn(page)).toBe(2);
   await page.getByRole('button', { name: 'Take your photo out of spot 2' }).click();
   await expect.poll(() => distinctOwn(page)).toBe(1);
   await page.waitForTimeout(2_500);
@@ -179,7 +181,12 @@ test.describe('the quick start', () => {
     await expect(tour).toHaveAttribute('data-quick-step', '3');
     await expect(tour).toContainText('Add your photos');
 
-    await page.getByLabel('Add your photos').first().setInputFiles(await picture(page, '#ff2d55'));
+    // It points at Photos, where a phone adds them (D-162).
+    await expect(page.locator('[data-phone-toolbar="main"] [data-tour="photos"]')).toHaveText('Photos');
+    await page.locator('[data-tour="photos"]').first().tap();
+    // Typewriter is words only, so its Photos panel adds them on top, as extra photos.
+    await page.getByLabel('Add a photo on top of the design').setInputFiles(await picture(page, '#ff2d55'));
+    await page.keyboard.press('Escape');
     await expect(tour).toHaveAttribute('data-quick-step', '4');
     await expect(tour).toContainText('Export');
 
