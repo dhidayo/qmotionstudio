@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AudioClip } from '@/document/types';
 import {
   audioEndMs, clipDurationMs, clipEndMs, dbToGain, envelopeFrom, gainAt, gainToDb,
-  isActiveAt, resolvedFades,
+  isActiveAt, isLooping, loopPhaseOf, resolvedFades, sourceMsAt,
 } from './envelope';
 
 /**
@@ -162,5 +162,44 @@ describe('envelopeFrom — starting playback mid-clip', () => {
     const points = envelopeFrom(clip({ trimEndMs: 4_000 }), 99_000);
     expect(points).toHaveLength(1);
     expect(points[0]?.atMs).toBe(4_000);
+  });
+});
+
+describe('loops (D-156)', () => {
+  const loop = clip({ trimStartMs: 100, trimEndMs: 4_100, loop: true, lengthMs: 10_000 });
+
+  it('runs for its own length, not its section’s', () => {
+    expect(clipDurationMs(loop)).toBe(10_000);
+    expect(clipEndMs(loop)).toBe(12_000);
+    expect(audioEndMs([clip(), loop])).toBe(12_000);
+  });
+
+  it('plays its section round and round', () => {
+    expect(sourceMsAt(loop, 0)).toBe(100);
+    expect(sourceMsAt(loop, 3_999)).toBe(4_099);
+    expect(sourceMsAt(loop, 4_000)).toBe(100);
+    expect(sourceMsAt(loop, 9_500)).toBe(1_600);
+  });
+
+  it('starts part-way round when it has a phase, wrapped into the section', () => {
+    const phased = { ...loop, loopPhaseMs: 5_000 };
+    expect(loopPhaseOf(phased)).toBe(1_000);
+    expect(sourceMsAt(phased, 0)).toBe(1_100);
+    expect(sourceMsAt({ ...loop, loopPhaseMs: -500 }, 0)).toBe(3_600);
+  });
+
+  it('fades over the whole clip, not each time round', () => {
+    const faded = { ...loop, fadeOutMs: 2_000 };
+    expect(gainAt(faded, 7_000)).toBe(1);
+    expect(gainAt(faded, 9_000)).toBeCloseTo(0.5, 5);
+    expect(envelopeFrom(faded, 0).at(-1)).toEqual({ atMs: 10_000, gain: 0 });
+  });
+
+  it('is a one-shot to anything that does not know about loops, and when its section is empty', () => {
+    expect(isLooping(clip())).toBe(false);
+    expect(isLooping({ ...loop, trimEndMs: 100 })).toBe(false);
+    // An older project, or a build that ignores `loop`, plays the section once.
+    expect(clipDurationMs({ ...loop, loop: false })).toBe(4_000);
+    expect(sourceMsAt(clip({ trimStartMs: 300 }), 1_000)).toBe(1_300);
   });
 });

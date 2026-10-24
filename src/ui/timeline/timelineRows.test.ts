@@ -47,7 +47,7 @@ function withSlotPoses(project: Project, index: number, key: string, poses: read
 const fxRows = (project: Project): number =>
   packEffectRows(laneEffects(project, sceneSpans(project.scenes), timelineSpanMs(project))).length;
 
-const NONE: TimelineRows = { motion: false, effectRows: 0, layerRows: 0, music: false };
+const NONE: TimelineRows = { motion: false, effectRows: 0, layerRows: 0, music: false, soundRows: 0 };
 
 describe('the rows a project uses', () => {
   it('a new video uses none of the optional rows', () => {
@@ -78,6 +78,17 @@ describe('the rows a project uses', () => {
     expect(timelineRows({ ...ad(), audio: [clip] }, 0).music).toBe(true);
   });
 
+  it('sounds: library effects on a row of their own, stacked where they overlap (D-156)', () => {
+    const whoosh = actions.makeAudioClip('sound:whoosh', { startMs: 1_000, durationMs: 1_000 });
+    const pop = actions.makeAudioClip('sound:pop', { startMs: 1_500, durationMs: 300 });
+    const rows = timelineRows({ ...ad(), audio: [whoosh, pop] }, 0);
+    expect(rows.soundRows).toBe(2);
+    // Effects alone are not music: the Music row stays away.
+    expect(rows.music).toBe(false);
+    const background = actions.makeAudioClip('sound:lofi-haze', { durationMs: 12_200, loop: { startMs: 100, endMs: 12_100 }, lengthMs: 12_000 });
+    expect(timelineRows({ ...ad(), audio: [background] }, 0)).toMatchObject({ music: true, soundRows: 0 });
+  });
+
   it('effects: the packed rows, timeline and scene effects together', () => {
     const scope = { sceneIndex: 1 };
     let project = ad();
@@ -96,6 +107,8 @@ describe('a new kind of row', () => {
     expect(newRowKinds(NONE, { ...NONE, layerRows: 2 })).toBe(true);
     expect(newRowKinds(NONE, { ...NONE, motion: true })).toBe(true);
     expect(newRowKinds(NONE, { ...NONE, music: true })).toBe(true);
+    expect(newRowKinds(NONE, { ...NONE, soundRows: 1 })).toBe(true);
+    expect(newRowKinds({ ...NONE, soundRows: 1 }, { ...NONE, soundRows: 2 })).toBe(false);
     expect(newRowKinds({ ...NONE, effectRows: 1 }, { ...NONE, effectRows: 3 })).toBe(false);
     expect(newRowKinds({ ...NONE, layerRows: 2 }, { ...NONE, layerRows: 3 })).toBe(false);
   });

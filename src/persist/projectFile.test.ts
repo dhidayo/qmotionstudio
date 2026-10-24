@@ -33,6 +33,17 @@ describe('the project file (D-141)', () => {
     expect(a?.blob.type).toBe('image/png');
   });
 
+  it('leaves library sounds out, as it does the samples, and does not call them missing (D-156)', async () => {
+    const base = createProject({ name: 'With music', mode: 'motionAd' });
+    const clip = { id: 'aud_1', mediaId: 'sound:lofi-haze', startMs: 0, trimStartMs: 100, trimEndMs: 12_100, gainDb: -3, fadeInMs: 0, fadeOutMs: 1_200, loop: true, lengthMs: 30_000, fitsVideo: true };
+    const project = { ...base, audio: [clip] };
+    const { blob, missing } = await writeProjectFile(project, storeOf({}));
+    expect(missing).toEqual([]);
+    const opened = await readProjectFile(blob);
+    expect(opened.media).toEqual([]);
+    expect(opened.project.audio).toEqual([clip]);
+  });
+
   it('refuses a file that is not a project, and says so', async () => {
     await expect(readProjectFile(new Blob(['hello']))).rejects.toThrow(/not a Q Motion Studio project/);
     const other = makeZip([{ name: 'readme.txt', data: new TextEncoder().encode('hi') }]);

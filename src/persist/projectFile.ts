@@ -1,7 +1,7 @@
 import { SCHEMA_VERSION, type Project } from '@/document/types';
 import { referencedMedia, usedUserFonts } from '@/document/select/media';
 import { migrate } from '@/document/migrate';
-import { isSampleId } from '@/media/samples';
+import { isBundledMediaId } from '@/media/sounds';
 import type { MediaKind, MediaStore } from '@/media/store';
 import { makeZip, readZip } from '@/export/zip';
 import { readFont, readMedia, type StoredFont, type StoredMedia } from './db';
@@ -12,8 +12,8 @@ import { readFont, readMedia, type StoredFont, type StoredMedia } from './db';
  * Projects otherwise live only in this browser, which a phone may clear, a
  * new laptop does not have, and a colleague cannot open. A `.qmotion` file is
  * a ZIP holding the document and every photo, clip and track it uses, so it
- * opens anywhere exactly as it was saved. The samples are not included — they
- * come with the app.
+ * opens anywhere exactly as it was saved. The samples and library sounds are
+ * not included — they come with the app (D-156).
  */
 export const PROJECT_FILE_EXTENSION = '.qmotion';
 const FORMAT = 'q-motion-studio-project';
@@ -35,7 +35,7 @@ export async function writeProjectFile(project: Project, store: MediaStore): Pro
   const missing: string[] = [];
   let n = 0;
   for (const id of referencedMedia(project)) {
-    if (isSampleId(id) || id.startsWith('__empty_')) continue;
+    if (isBundledMediaId(id) || id.startsWith('__empty_')) continue;
     const entry = store.get(id) ?? (await readMedia(id));
     if (!entry) { missing.push(id); continue; }
     const file = `media/${String(++n).padStart(3, '0')}`;

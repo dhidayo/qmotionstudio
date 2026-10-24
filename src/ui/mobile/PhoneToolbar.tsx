@@ -1,5 +1,6 @@
 import * as actions from '@/document/actions';
 import { totalDurationMs } from '@/document/select/timeline';
+import { soundFor } from '@/audio/library';
 import { useEditor } from '@/state/store';
 import { useShallow } from 'zustand/react/shallow';
 import { useOverlays } from '@/ui/shell/overlays';
@@ -141,8 +142,10 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
 
   if (s.selectedAudio !== null) {
     const id = s.selectedAudio;
+    // A library sound effect is a sound, not music (D-156).
+    const effect = soundFor(s.project.audio.find((c) => c.id === id)?.mediaId ?? '')?.kind === 'effect';
     return {
-      context: 'Music',
+      context: effect ? 'Sound' : 'Music',
       tools: [
         { label: 'Settings', icon: 'settings', onSelect: () => { o.openPhonePanel('element'); } },
         { label: 'Split', icon: 'split', onSelect: () => { s.dispatch(actions.splitAudio(id, useEditor.getState().playheadMs)); } },

@@ -5,7 +5,9 @@ import { isAnimated, poseAt, poseIndexAt } from '../select/overlay';
 import { nudgeAt, nudgePoses } from '@/core/render/slots';
 import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../select/motion';
 import { MAX_TRACKS, compactTracks, overlapsOn, placeNew, settleTrack, usedTracks } from '../select/tracks';
-import { sceneLengthMs, sceneSpans } from '../select/timeline';
+import { sceneLengthMs, sceneSpans, totalDurationMs } from '../select/timeline';
+import { MIN_AUDIO_CLIP_MS, fitClip } from '../select/audio';
+import { MAX_LOOP_LENGTH_MS, clipDurationMs, isLooping, loopPhaseOf, loopWindowMs } from '@/core/audio/envelope';
 import { projectPhotos } from '../select/media';
 import { layersInSpan, placeAmong } from '../select/sceneLayers';
 import { MODE_LABEL } from '../modeNames';
@@ -1942,16 +1944,19 @@ export function makeOverlay(
 // ── Audio (§10) ─────────────────────────────────────────────────────────────
 
 /**
- * §5 gives a project an `audio` array and §10 says "one track for now". The
- * array stays, because the shape is right and a second track is a UI problem
- * rather than a model one — but `addAudio` replaces rather than appends, so
- * the timeline never shows two clips fighting over one row.
+ * Edits one clip, as it plays.
+ *
+ * A background loop that runs to the end of the video (`fitsVideo`, D-156)
+ * has no length of its own until it is read; it is handed to `edit` with its
+ * length filled in from the video as it is now, so a trim or a split measures
+ * from what is on screen rather than from a length stored some edits ago.
  */
 function editAudio(project: Project, id: string, edit: (clip: AudioClip) => AudioClip): Project {
   const index = project.audio.findIndex((c) => c.id === id);
-  const current = project.audio[index];
-  if (!current) return project;
+  const stored = project.audio[index];
+  if (!stored) return project;
 
+  const current = fitClip(stored, totalDurationMs(project));
   const next = edit(current);
   if (next === current) return project;
 
@@ -1960,21 +1965,68 @@ function editAudio(project: Project, id: string, edit: (clip: AudioClip) => Audi
   return { ...project, audio, updatedAt: Date.now() };
 }
 
-export function makeAudioClip(
-  mediaId: string,
-  options: { startMs?: number; durationMs: number },
-): AudioClip {
+/** `value` wrapped into `[0, size)`, negative values too. */
+const wrapMs = (value: number, size: number): number =>
+  size <= 0 ? 0 : ((Math.round(value) % size) + size) % size;
+
+/** The same clip with a length of its own: it no longer follows the end of the video. */
+function unfitted(clip: AudioClip): AudioClip {
+  if (clip.fitsVideo === undefined) return clip;
+  const { fitsVideo: _fits, ...rest } = clip;
+  return rest;
+}
+
+export type AudioClipOptions = {
+  readonly startMs?: number;
+  /** How long the source is — or, with `loop`, how long the loop runs if `lengthMs` is not given. */
+  readonly durationMs: number;
+  /** Repeat this part of the source (D-156): a library loop's own loop points. */
+  readonly loop?: { readonly startMs: number; readonly endMs: number };
+  /** How long a loop runs on the timeline. */
+  readonly lengthMs?: number;
+  /** Run to the end of the video, however long it becomes. Loops only. */
+  readonly fitsVideo?: boolean;
+  readonly gainDb?: number;
+  readonly fadeInMs?: number;
+  readonly fadeOutMs?: number;
+};
+
+export function makeAudioClip(mediaId: string, options: AudioClipOptions): AudioClip {
+  const startMs = Math.max(0, Math.round(options.startMs ?? 0));
+  const gainDb = options.gainDb ?? 0;
+  const fadeInMs = Math.max(0, Math.round(options.fadeInMs ?? 0));
+
+  if (options.loop) {
+    const trimStartMs = Math.max(0, Math.round(options.loop.startMs));
+    const trimEndMs = Math.max(trimStartMs + 1, Math.round(options.loop.endMs));
+    const lengthMs = clamp(Math.round(options.lengthMs ?? options.durationMs), MIN_CLIP_MS, MAX_LOOP_LENGTH_MS);
+    return {
+      id: newId('aud'),
+      mediaId,
+      startMs,
+      trimStartMs,
+      trimEndMs,
+      gainDb,
+      fadeInMs,
+      fadeOutMs: Math.max(0, Math.round(options.fadeOutMs ?? Math.min(1_200, lengthMs / 4))),
+      loop: true,
+      lengthMs,
+      ...(options.fitsVideo === true ? { fitsVideo: true } : {}),
+    };
+  }
+
+  const duration = Math.max(0, Math.round(options.durationMs));
   return {
     id: newId('aud'),
     mediaId,
-    startMs: Math.max(0, Math.round(options.startMs ?? 0)),
+    startMs,
     trimStartMs: 0,
-    trimEndMs: Math.max(0, Math.round(options.durationMs)),
-    gainDb: 0,
-    fadeInMs: 0,
+    trimEndMs: duration,
+    gainDb,
+    fadeInMs,
     // A short tail by default. Music that stops dead at the end of an ad is
     // the single most common way an otherwise finished piece sounds unfinished.
-    fadeOutMs: Math.min(1_200, Math.round(options.durationMs / 4)),
+    fadeOutMs: Math.max(0, Math.round(options.fadeOutMs ?? Math.min(1_200, duration / 4))),
   };
 }
 
@@ -1983,12 +2035,34 @@ export function makeAudioClip(
  *
  * §10's "one track for now" is about tracks, not clips — splitting a clip and
  * dropping a second passage onto the same row are both ordinary things to want,
- * and the mixdown has always summed whatever the array holds.
+ * and the mixdown has always summed whatever the array holds. The label says
+ * what was added: music, or a sound from the library (D-156).
  */
-export function addAudio(clip: AudioClip): Action {
+export function addAudio(clip: AudioClip, label = 'Add music'): Action {
   return {
-    label: 'Add music',
+    label,
     apply: (project) => ({ ...project, audio: [...project.audio, clip], updatedAt: Date.now() }),
+  };
+}
+
+/**
+ * Swaps clips for one in a single undo step: choosing a different background
+ * sound replaces the one already under the video — or every piece of it, if
+ * it was split (D-156). The new clip takes the first one's place; it is added
+ * if none of them is left.
+ */
+export function replaceAudio(ids: string | readonly string[], clip: AudioClip, label = 'Change sound'): Action {
+  const replaced = new Set(typeof ids === 'string' ? [ids] : ids);
+  return {
+    label,
+    apply: (project) => {
+      const index = project.audio.findIndex((c) => replaced.has(c.id));
+      const audio = project.audio.filter((c, i) => i === index || !replaced.has(c.id));
+      const at = audio.findIndex((c) => replaced.has(c.id));
+      if (at < 0) audio.push(clip);
+      else audio[at] = clip;
+      return { ...project, audio, updatedAt: Date.now() };
+    },
   };
 }
 
@@ -2025,10 +2099,15 @@ export function setAudioStart(id: string, startMs: number): Action {
  * single pointermove pushed a fresh undo entry: one drag could push a hundred
  * and evict the user's real history off the end of MAX_HISTORY. Each gesture
  * is now one action carrying one key.
+ *
+ * A clip that loops (D-156) is trimmed differently: its length is its own, so
+ * its edges move freely, up to MAX_LOOP_LENGTH_MS, rather than stopping where
+ * the file does — and its phase moves with the left edge, so the sound under
+ * the cursor stays where it is.
  */
 
 /** Keeps a trim window inside the source and never shorter than this. */
-const MIN_CLIP_MS = 300;
+const MIN_CLIP_MS = MIN_AUDIO_CLIP_MS;
 
 function clampWindow(
   trimStartMs: number,
@@ -2054,6 +2133,19 @@ export function trimAudioStart(id: string, deltaMs: number, sourceMs: number): A
     coalesceKey: `audioEdge:${id}`,
     apply: (project) =>
       editAudio(project, id, (clip) => {
+        if (isLooping(clip)) {
+          const length = clipDurationMs(clip);
+          const applied = clamp(Math.round(deltaMs), Math.max(-clip.startMs, length - MAX_LOOP_LENGTH_MS), length - MIN_CLIP_MS);
+          if (applied === 0) return clip;
+          // A loop that runs to the end of the video still does: only its start moves.
+          return {
+            ...clip,
+            startMs: clip.startMs + applied,
+            lengthMs: length - applied,
+            loopPhaseMs: wrapMs(loopPhaseOf(clip) + applied, loopWindowMs(clip)),
+          };
+        }
+
         const window = clampWindow(clip.trimStartMs + deltaMs, clip.trimEndMs, sourceMs);
         // Whatever the clamp actually allowed, not what was asked for.
         const applied = window.trimStartMs - clip.trimStartMs;
@@ -2081,6 +2173,13 @@ export function trimAudioEnd(id: string, deltaMs: number, sourceMs: number): Act
     coalesceKey: `audioEdge:${id}`,
     apply: (project) =>
       editAudio(project, id, (clip) => {
+        if (isLooping(clip)) {
+          // Past the end of the file, round again: that is what a loop is for.
+          const length = clipDurationMs(clip);
+          const next = clamp(Math.round(length + deltaMs), MIN_CLIP_MS, MAX_LOOP_LENGTH_MS);
+          return next === length ? clip : { ...unfitted(clip), lengthMs: next };
+        }
+
         const window = clampWindow(clip.trimStartMs, clip.trimEndMs + deltaMs, sourceMs);
         // Symmetrically: the clamp may move the start, and dropping that would
         // invert the window from the other direction.
@@ -2098,6 +2197,7 @@ export function trimAudioEnd(id: string, deltaMs: number, sourceMs: number): Act
  * with trim alone the only way to reach a chorus ninety seconds in is to cut
  * away the ninety seconds before it — which also moves the clip. Slipping
  * holds the clip's position and length still and slides the source underneath.
+ * A loop slides round its own section instead, so it never runs out.
  */
 export function slipAudio(id: string, deltaMs: number, sourceMs: number): Action {
   return {
@@ -2105,6 +2205,11 @@ export function slipAudio(id: string, deltaMs: number, sourceMs: number): Action
     coalesceKey: `audioSlip:${id}`,
     apply: (project) =>
       editAudio(project, id, (clip) => {
+        if (isLooping(clip)) {
+          const phase = wrapMs(loopPhaseOf(clip) + deltaMs, loopWindowMs(clip));
+          return phase === loopPhaseOf(clip) ? clip : { ...clip, loopPhaseMs: phase };
+        }
+
         const length = clip.trimEndMs - clip.trimStartMs;
         const limit = Math.max(MIN_CLIP_MS, sourceMs);
 
@@ -2119,10 +2224,13 @@ export function slipAudio(id: string, deltaMs: number, sourceMs: number): Action
 }
 
 /**
- * Trims the clip to exactly cover the video, from wherever it currently starts.
+ * Makes the clip cover the video exactly, from its start.
  *
  * The one-click answer to the common case: a track far longer than the piece,
  * which otherwise needs a drag with the far edge somewhere off in the overhang.
+ * A track *shorter* than the video used to stop early and leave the rest
+ * silent; it now loops its section to fill the video, and keeps filling it as
+ * scenes come and go (D-156).
  */
 export function fitAudioToProject(id: string, projectMs: number, sourceMs: number): Action {
   return {
@@ -2130,14 +2238,17 @@ export function fitAudioToProject(id: string, projectMs: number, sourceMs: numbe
     apply: (project) =>
       editAudio(project, id, (clip) => {
         const wanted = Math.max(MIN_CLIP_MS, Math.round(projectMs));
+        if (isLooping(clip)) return { ...clip, startMs: 0, lengthMs: wanted, fitsVideo: true };
+
         const available = Math.max(MIN_CLIP_MS, sourceMs);
+        if (available < wanted) {
+          return { ...clip, startMs: 0, loop: true, lengthMs: wanted, loopPhaseMs: 0, fitsVideo: true };
+        }
 
         // Prefer keeping the chosen section's start; pull it back only if the
         // source runs out before the video does.
-        const length = Math.min(wanted, available);
-        const start = clamp(clip.trimStartMs, 0, Math.max(0, available - length));
-
-        return { ...clip, startMs: 0, trimStartMs: start, trimEndMs: start + length };
+        const start = clamp(clip.trimStartMs, 0, available - wanted);
+        return { ...clip, startMs: 0, trimStartMs: start, trimEndMs: start + wanted };
       }),
   };
 }
@@ -2151,7 +2262,8 @@ export function fitAudioToProject(id: string, projectMs: number, sourceMs: numbe
  * three-minute track would take six full drags. Absolute addressing is the
  * only way to say "start at 1:30" and mean it.
  *
- * Length is preserved, so this moves the window rather than resizing it.
+ * Length is preserved, so this moves the window rather than resizing it. On a
+ * loop the window is the section that repeats.
  */
 export function setAudioSection(id: string, sourceStartMs: number, sourceMs: number): Action {
   return {
@@ -2169,7 +2281,7 @@ export function setAudioSection(id: string, sourceStartMs: number, sourceMs: num
   };
 }
 
-/** Sets how much of the track is used, from wherever the section starts. */
+/** Sets how much of the track is used — on a loop, how long the repeating section is. */
 export function setAudioLength(id: string, lengthMs: number, sourceMs: number): Action {
   return {
     label: 'Change music length',
@@ -2186,6 +2298,49 @@ export function setAudioLength(id: string, lengthMs: number, sourceMs: number): 
 }
 
 /**
+ * How long a loop runs on the timeline (D-156), from the panel's slider. A
+ * length chosen by hand no longer follows the end of the video.
+ */
+export function setAudioClipLength(id: string, lengthMs: number): Action {
+  return {
+    label: 'Change loop length',
+    coalesceKey: `audioClipLength:${id}`,
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        if (!isLooping(clip)) return clip;
+        const next = clamp(Math.round(lengthMs), MIN_CLIP_MS, MAX_LOOP_LENGTH_MS);
+        return next === clipDurationMs(clip) && clip.fitsVideo !== true
+          ? clip
+          : { ...unfitted(clip), lengthMs: next };
+      }),
+  };
+}
+
+/**
+ * Turns looping on or off (D-156).
+ *
+ * On, the clip keeps its length and sound, and can now be dragged longer than
+ * its section. Off, it plays its section once from where it was in the loop,
+ * so the opening is unchanged — and stops where the file does.
+ */
+export function setAudioLoop(id: string, on: boolean, sourceMs: number): Action {
+  return {
+    label: on ? 'Loop music' : 'Stop looping',
+    apply: (project) =>
+      editAudio(project, id, (clip) => {
+        if (on) return clip.loop === true ? clip : { ...clip, loop: true, lengthMs: clipDurationMs(clip) };
+        if (clip.loop !== true) return clip;
+
+        const { loop: _loop, lengthMs: _length, loopPhaseMs: _phase, fitsVideo: _fits, ...once } = clip;
+        const limit = Math.max(MIN_CLIP_MS, sourceMs);
+        const start = clamp(clip.trimStartMs + loopPhaseOf(clip), 0, limit - MIN_CLIP_MS);
+        const end = clamp(start + clipDurationMs(clip), start + MIN_CLIP_MS, limit);
+        return { ...once, trimStartMs: start, trimEndMs: end };
+      }),
+  };
+}
+
+/**
  * Splits a clip in two at a point on the project timeline.
  *
  * What "cut a section out of the music" actually needs: split twice and delete
@@ -2195,32 +2350,42 @@ export function setAudioLength(id: string, lengthMs: number, sourceMs: number): 
  *
  * Refuses rather than producing a sliver: either side shorter than the minimum
  * would be a clip too small to grab, which is how a split becomes a way to
- * lose audio.
+ * lose audio. A loop splits into two loops that carry on exactly where the
+ * one was: the right half starts its section where the cut fell.
  */
 export function splitAudio(id: string, atMs: number): Action {
   return {
     label: 'Split music',
     apply: (project) => {
       const index = project.audio.findIndex((c) => c.id === id);
-      const clip = project.audio[index];
-      if (!clip) return project;
+      const stored = project.audio[index];
+      if (!stored) return project;
+      const clip = fitClip(stored, totalDurationMs(project));
 
       const offset = Math.round(atMs) - clip.startMs;
-      const length = clip.trimEndMs - clip.trimStartMs;
+      const length = clipDurationMs(clip);
       if (offset < MIN_CLIP_MS || length - offset < MIN_CLIP_MS) return project;
-
-      const cut = clip.trimStartMs + offset;
 
       // Fades belong to the outer edges: the left keeps its fade in, the right
       // its fade out, and the new inner edges are butt joins.
-      const left: AudioClip = { ...clip, trimEndMs: cut, fadeOutMs: 0 };
-      const right: AudioClip = {
-        ...clip,
-        id: newId('aud'),
-        startMs: clip.startMs + offset,
-        trimStartMs: cut,
-        fadeInMs: 0,
-      };
+      let left: AudioClip;
+      let right: AudioClip;
+      if (isLooping(clip)) {
+        left = { ...unfitted(clip), lengthMs: offset, fadeOutMs: 0 };
+        // The right half still reaches the end of the video if the whole did.
+        right = {
+          ...clip,
+          id: newId('aud'),
+          startMs: clip.startMs + offset,
+          lengthMs: length - offset,
+          loopPhaseMs: wrapMs(loopPhaseOf(clip) + offset, loopWindowMs(clip)),
+          fadeInMs: 0,
+        };
+      } else {
+        const cut = clip.trimStartMs + offset;
+        left = { ...clip, trimEndMs: cut, fadeOutMs: 0 };
+        right = { ...clip, id: newId('aud'), startMs: clip.startMs + offset, trimStartMs: cut, fadeInMs: 0 };
+      }
 
       const audio = [...project.audio];
       audio.splice(index, 1, left, right);
@@ -2229,15 +2394,15 @@ export function splitAudio(id: string, atMs: number): Action {
   };
 }
 
+/** "Use all": the whole file — on a loop, the whole file repeating, from its start. */
 export function resetAudioTrim(id: string, sourceMs: number): Action {
   return {
     label: 'Reset music trim',
     apply: (project) =>
-      editAudio(project, id, (clip) => ({
-        ...clip,
-        trimStartMs: 0,
-        trimEndMs: Math.max(MIN_CLIP_MS, Math.round(sourceMs)),
-      })),
+      editAudio(project, id, (clip) => {
+        const { loopPhaseMs: _phase, ...rest } = clip;
+        return { ...rest, trimStartMs: 0, trimEndMs: Math.max(MIN_CLIP_MS, Math.round(sourceMs)) };
+      }),
   };
 }
 

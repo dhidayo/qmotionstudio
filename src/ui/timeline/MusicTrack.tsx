@@ -1,6 +1,8 @@
 import { useCallback, useRef } from 'react';
 import type { AudioClip } from '@/document/types';
-import { clipDurationMs, gainAt, resolvedFades } from '@/core/audio/envelope';
+import { clipDurationMs, gainAt, isLooping, loopPhaseOf, loopWindowMs, resolvedFades, sourceMsAt } from '@/core/audio/envelope';
+import { soundFor } from '@/audio/library';
+import { packRows, type AudioLane } from '@/document/select/audio';
 import { peakAt } from '@/media/audio/waveform';
 import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
@@ -48,21 +50,36 @@ const SNAP_MS = 100;
 const MIN_CLIP_MS = 300;
 /** How many columns the waveform is drawn with. Beyond this it is mush. */
 const COLUMNS = 160;
+/** One row of clips; overlapping clips stack onto more rows. */
+export const AUDIO_ROW_PX = 28;
+
+/** How tall a row of these clips is: one row, or more where clips overlap. */
+export function audioRowsHeight(clips: readonly AudioClip[]): number {
+  return AUDIO_ROW_PX * Math.max(1, packRows(clips).rows);
+}
 
 /**
- * The music row.
+ * The Music row, and the Sounds row (D-156).
  *
- * Renders every clip in `project.audio`, not just the first — splitting a clip
- * to cut a passage out is only useful if both halves are then on screen.
+ * Renders every clip it is given, not just the first — splitting a clip to
+ * cut a passage out is only useful if both halves are then on screen. Clips
+ * that overlap in time stack onto rows of their own, so a whoosh under a pop,
+ * or two tracks crossing, are each there to grab.
+ *
+ * `clips` are as they play (`resolvedAudio`): a background loop that fits
+ * the video is drawn to the video's end.
  */
 export function MusicTrack({
   clips,
+  lane = 'music',
   durationMs,
   videoMs,
   laneWidth,
   onSeek,
 }: {
   clips: readonly AudioClip[];
+  /** Which row this is: the names it gives its clips depend on it. */
+  lane?: AudioLane;
   /** The lane's span, which includes anything past the end of the video. */
   durationMs: number;
   /** What actually renders and exports. */
@@ -70,13 +87,16 @@ export function MusicTrack({
   laneWidth: number;
   onSeek: (projectMs: number) => void;
 }): React.JSX.Element {
-  // Only drawn once there is music: the timeline shows the rows in use (D-153).
+  // Only drawn once there is something on it: the timeline shows the rows in use (D-153).
+  const { rowOf } = packRows(clips);
   return (
     <div className="relative h-full" data-lane>
       {clips.map((clip) => (
         <MusicClip
           key={clip.id}
           clip={clip}
+          lane={lane}
+          row={rowOf.get(clip.id) ?? 0}
           durationMs={durationMs}
           videoMs={videoMs}
           laneWidth={laneWidth}
@@ -89,12 +109,16 @@ export function MusicTrack({
 
 function MusicClip({
   clip,
+  lane,
+  row,
   durationMs,
   videoMs,
   laneWidth,
   onSeek,
 }: {
   clip: AudioClip;
+  lane: AudioLane;
+  row: number;
   durationMs: number;
   videoMs: number;
   laneWidth: number;
@@ -113,10 +137,12 @@ function MusicClip({
   /** Picking a clip stops the preview where it is (D-110). */
   const holdStill = useHoldStill();
 
+  const sound = soundFor(clip.mediaId);
+
   const openClipMenu = (x: number, y: number, element: HTMLElement): void => {
     selectAudio(clip.id);
     holdStill();
-    openMenu({ x, y, title: 'Music', items: audioMenu(clip.id, onSeek, laneMs(x, element)) });
+    openMenu({ x, y, title: sound?.name ?? 'Music', items: audioMenu(clip.id, onSeek, laneMs(x, element)) });
   };
 
   const laneMs = useCallback(
@@ -129,6 +155,8 @@ function MusicClip({
     [durationMs],
   );
 
+  const name = sound?.name ?? media.get(clip.mediaId)?.name ?? clip.mediaId;
+  const looping = isLooping(clip);
   const sourceMs = media.durationMsOf(clip.mediaId);
   const waveform = media.getWaveform(clip.mediaId);
   const length = clipDurationMs(clip);
@@ -201,7 +229,8 @@ function MusicClip({
       return;
     }
 
-    if (!sourceMs) return;
+    // A loop's edges do not depend on its file, so it can be trimmed while that loads.
+    if (!sourceMs && !looping) return;
 
     /*
      * Trimming moves the window into the *source*, not the clip's place on the
@@ -210,12 +239,14 @@ function MusicClip({
      */
     if (drag.mode === 'trimStart') {
       const delta = snap(next.startMs, SNAP_MS, free) - clip.startMs;
-      dispatch(actions.trimAudioStart(clip.id, delta, sourceMs));
+      dispatch(actions.trimAudioStart(clip.id, delta, sourceMs ?? 0));
       return;
     }
 
-    const delta = snap(next.endMs, SNAP_MS, free) - (clip.startMs + length);
-    dispatch(actions.trimAudioEnd(clip.id, delta, sourceMs));
+    // A loop may be drawn out past the end of the lane — that is how it grows.
+    const endMs = looping ? drag.endMs + rawDelta : next.endMs;
+    const delta = snap(endMs, SNAP_MS, free) - (clip.startMs + length);
+    dispatch(actions.trimAudioEnd(clip.id, delta, sourceMs ?? 0));
   };
 
   const end = (event: React.PointerEvent<HTMLElement>): void => {
@@ -233,15 +264,35 @@ function MusicClip({
     endInteraction();
   };
 
-  // Where in the source each drawn column sits, so a trim scrolls the shape.
+  // Where in the source each drawn column sits, so a trim scrolls the shape
+  // and a loop draws its section over and over — what is drawn is what plays.
   const sourceLength = sourceMs ?? 0;
   const columnAt = (column: number): number => {
     if (sourceLength <= 0) return 0;
     const intoClip = (column / COLUMNS) * length;
-    return (clip.trimStartMs + intoClip) / sourceLength;
+    return sourceMsAt(clip, intoClip) / sourceLength;
   };
 
   const { inMs, outMs } = resolvedFades(clip);
+
+  /*
+   * Where a loop goes round again, as faint marks — only while they are far
+   * enough apart to read as marks rather than a texture.
+   */
+  const seams: number[] = [];
+  if (looping && laneWidth > 0) {
+    const window = loopWindowMs(clip);
+    const widthPx = (length / Math.max(1, durationMs)) * laneWidth;
+    if ((window / Math.max(1, length)) * widthPx >= 8) {
+      for (let at = window - loopPhaseOf(clip); at < length && seams.length < 400; at += window) {
+        if (at > 0) seams.push(at / length);
+      }
+    }
+  }
+  const seconds = (length / 1000).toFixed(1);
+  const label = lane === 'sounds'
+    ? `Sound clip, ${name}, ${seconds} seconds`
+    : `Music clip, ${seconds} seconds${looping ? ', loops' : ''}${sound ? `, ${sound.name}` : ''}`;
 
   return (
     <>
@@ -249,16 +300,19 @@ function MusicClip({
         role="button"
         tabIndex={0}
         aria-pressed={active}
-        aria-label={`Music clip, ${(length / 1000).toFixed(1)} seconds`}
-        title={`${media.get(clip.mediaId)?.name ?? clip.mediaId} · ${(length / 1000).toFixed(1)}s`}
+        aria-label={label}
+        title={`${name} · ${seconds}s${looping ? ' · loops' : ''}`}
+        data-audio-clip={clip.id}
         onPointerDown={(e) => { begin(e, e.altKey ? 'slip' : 'move'); }}
         onPointerMove={move}
         onPointerUp={end}
         onPointerCancel={end}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectAudio(clip.id); }}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); openClipMenu(e.clientX, e.clientY, e.currentTarget); }}
-        className="absolute inset-y-1 cursor-grab touch-none select-none overflow-hidden rounded-sm border"
+        className="absolute cursor-grab touch-none select-none overflow-hidden rounded-sm border"
         style={{
+          top: row * AUDIO_ROW_PX + 4,
+          height: AUDIO_ROW_PX - 8,
           left: `${left}%`,
           width: `${width}%`,
           borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
@@ -293,9 +347,30 @@ function MusicClip({
             })}
         </svg>
 
+        {seams.map((at) => (
+          <span
+            key={at}
+            aria-hidden
+            className="pointer-events-none absolute inset-y-0 w-px"
+            style={{ left: `${at * 100}%`, background: active ? 'var(--c-accent)' : 'var(--c-edge-strong)', opacity: 0.6 }}
+          />
+        ))}
+
         {waveform === null && (
           <span className="pointer-events-none absolute inset-0 truncate px-2 text-[10px] leading-[18px] text-ink-faint">
-            Decoding…
+            {sound ? `Loading ${sound.name}…` : 'Decoding…'}
+          </span>
+        )}
+        {/* Library sounds say which they are: a waveform alone does not. */}
+        {waveform !== null && sound && (
+          <span
+            className="pointer-events-none absolute left-1.5 top-1/2 max-w-[calc(100%-12px)] -translate-y-1/2 truncate rounded-sm px-1 text-[9px] font-medium leading-[13px]"
+            style={{
+              color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
+              background: active ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
+            }}
+          >
+            {sound.name}{looping ? ' · loops' : ''}
           </span>
         )}
 
@@ -326,8 +401,9 @@ function MusicClip({
         <TrimHandle side="end" onDown={(e) => { begin(e, 'trimEnd'); }} onMove={move} onUp={end} />
       </div>
 
-      {laneWidth > 0 && width < 3 && (
-        <span className="pointer-events-none absolute inset-y-0 right-2 text-[9px] leading-7 text-ink-faint">
+      {/* A short sound effect is meant to be short; only music says so. */}
+      {laneWidth > 0 && width < 3 && lane === 'music' && (
+        <span className="pointer-events-none absolute right-2 text-[9px] leading-7 text-ink-faint" style={{ top: row * AUDIO_ROW_PX, height: AUDIO_ROW_PX }}>
           clip is very short
         </span>
       )}

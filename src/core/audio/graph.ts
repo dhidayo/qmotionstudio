@@ -1,5 +1,5 @@
 import type { AudioClip } from '@/document/types';
-import { clipDurationMs, clipEndMs, envelopeFrom } from './envelope';
+import { clipDurationMs, clipEndMs, envelopeFrom, isLooping, sourceMsAt } from './envelope';
 
 /**
  * Builds the Web Audio graph for a set of clips (§10).
@@ -64,9 +64,10 @@ export function scheduleClips(
      * failing usefully.
      */
     const sourceLengthMs = buffer.duration * 1000;
-    const offsetMs = Math.min(clip.trimStartMs + intoClip, sourceLengthMs);
-    const playableMs = Math.max(0, Math.min(remainingMs, sourceLengthMs - offsetMs));
-    if (playableMs <= 0) continue;
+    const plan = isLooping(clip)
+      ? loopPlan(clip, intoClip, remainingMs, sourceLengthMs)
+      : oncePlan(clip, intoClip, remainingMs, sourceLengthMs);
+    if (!plan) continue;
 
     // Where on the context's clock this clip begins.
     const when = atContextTime + Math.max(0, clip.startMs - fromMs) / 1000;
@@ -87,12 +88,71 @@ export function scheduleClips(
     source.buffer = buffer;
     source.connect(gain);
     gain.connect(destination);
-    source.start(when, offsetMs / 1000, playableMs / 1000);
+    if (plan.loop) {
+      /*
+       * The node does the repeating, so a loop costs one source however many
+       * times it goes round. Stopped explicitly rather than through start()'s
+       * duration, which older WebKit ignores on a looping source (D-156).
+       */
+      source.loop = true;
+      source.loopStart = plan.loopStartMs / 1000;
+      source.loopEnd = plan.loopEndMs / 1000;
+      source.start(when, plan.offsetMs / 1000);
+      source.stop(when + plan.playMs / 1000);
+    } else {
+      source.start(when, plan.offsetMs / 1000, plan.playMs / 1000);
+    }
 
     scheduled.push({ clip, source, gain });
   }
 
   return scheduled;
+}
+
+/** What one clip asks of its buffer source: where to begin and how long to sound. */
+export type SourcePlan =
+  | { readonly loop: false; readonly offsetMs: number; readonly playMs: number }
+  | {
+      readonly loop: true;
+      readonly offsetMs: number;
+      readonly playMs: number;
+      readonly loopStartMs: number;
+      readonly loopEndMs: number;
+    };
+
+/** A window shorter than this cannot loop usefully; it would buzz rather than repeat. */
+export const MIN_LOOP_WINDOW_MS = 20;
+
+/** A clip that plays its window once: the source runs out, or the clip does. */
+export function oncePlan(
+  clip: AudioClip,
+  intoClip: number,
+  remainingMs: number,
+  sourceLengthMs: number,
+): SourcePlan | null {
+  const offsetMs = Math.min(clip.trimStartMs + intoClip, sourceLengthMs);
+  const playMs = Math.max(0, Math.min(remainingMs, sourceLengthMs - offsetMs));
+  return playMs > 0 ? { loop: false, offsetMs, playMs } : null;
+}
+
+/**
+ * A clip that repeats its window (D-156).
+ *
+ * The window is clamped to the source like a one-shot's trim, and the
+ * starting offset always falls inside it, wherever in the clip playback
+ * begins. The clip, not the source, decides when it stops.
+ */
+export function loopPlan(
+  clip: AudioClip,
+  intoClip: number,
+  remainingMs: number,
+  sourceLengthMs: number,
+): SourcePlan | null {
+  const loopStartMs = Math.min(clip.trimStartMs, sourceLengthMs);
+  const loopEndMs = Math.min(clip.trimEndMs, sourceLengthMs);
+  if (loopEndMs - loopStartMs < MIN_LOOP_WINDOW_MS || remainingMs <= 0) return null;
+  const offsetMs = sourceMsAt({ ...clip, trimStartMs: loopStartMs, trimEndMs: loopEndMs }, intoClip);
+  return { loop: true, offsetMs, playMs: remainingMs, loopStartMs, loopEndMs };
 }
 
 /** Stops and disconnects everything a `scheduleClips` call produced. */

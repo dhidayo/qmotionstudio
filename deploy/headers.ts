@@ -55,13 +55,14 @@ export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
  * Everything under /assets has a content hash in its name, so it never changes
  * and can be kept for a year. The page, the service worker and the manifest
  * must always be checked, or people keep yesterday's version for days after an
- * update. Thumbnails, samples and fonts have fixed names but rarely change, and
- * the service worker re-fetches them by revision anyway.
+ * update. Thumbnails, samples, sounds and fonts have fixed names but rarely
+ * change, and the service worker re-fetches them by revision anyway.
  */
 export const CACHE_RULES: readonly { readonly pattern: string; readonly value: string }[] = [
   { pattern: '/assets/*', value: 'public, max-age=31536000, immutable' },
   { pattern: '/thumbs/*', value: 'public, max-age=86400' },
   { pattern: '/samples/*', value: 'public, max-age=86400' },
+  { pattern: '/sounds/*', value: 'public, max-age=86400' },
   { pattern: '/fonts/*', value: 'public, max-age=2592000' },
   { pattern: '/index.html', value: 'no-cache' },
   { pattern: '/sw.js', value: 'no-cache' },
@@ -103,6 +104,7 @@ export function apacheHtaccess(): string {
     'AddType application/manifest+json .webmanifest',
     'AddType video/webm .webm',
     'AddType image/webp .webp',
+    'AddType audio/wav .wav',
     'AddType font/woff2 .woff2',
     'AddType text/javascript .js .mjs',
     '',

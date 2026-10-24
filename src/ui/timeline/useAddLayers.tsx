@@ -30,7 +30,6 @@ export function useAddLayers(): {
   const media = useMediaStore();
   const dispatch = useEditor((s) => s.dispatch);
   const selectOverlay = useEditor((s) => s.selectOverlay);
-  const selectAudio = useEditor((s) => s.selectAudio);
   const { limits } = useEntitlements(useEditor((s) => s.project.mode));
 
   /*
@@ -70,19 +69,7 @@ export function useAddLayers(): {
     video: true,
   });
 
-  // Music (§10): one track per project, so adding replaces.
-  const audioInput = useRef<HTMLInputElement>(null);
-  const onAudioAdded = useCallback((ids: string[]) => {
-    const first = ids[0];
-    if (first === undefined) return;
-    const clip = actions.makeAudioClip(first, { startMs: 0, durationMs: media.durationMsOf(first) ?? 0 });
-    dispatch(actions.addAudio(clip));
-    selectAudio(clip.id);
-  }, [media, dispatch, selectAudio]);
-  const { state: audioUpload, addFiles: addAudioFiles } = useUpload(media, onAudioAdded, {
-    artboardLongestEdge: 1920,
-    audio: true,
-  });
+  const music = useMusicUpload();
 
   const inputs = (
     <>
@@ -97,17 +84,7 @@ export function useAddLayers(): {
           e.target.value = '';
         }}
       />
-      <input
-        ref={audioInput}
-        type="file"
-        accept={AUDIO_ACCEPT_ATTRIBUTE}
-        hidden
-        aria-label="Add a music track"
-        onChange={(e) => {
-          void addAudioFiles([...(e.target.files ?? [])]);
-          e.target.value = '';
-        }}
-      />
+      {music.input}
     </>
   );
 
@@ -115,11 +92,54 @@ export function useAddLayers(): {
     addText,
     addPhoto,
     pickVideo: () => { videoInput.current?.click(); },
-    pickMusic: () => { audioInput.current?.click(); },
+    pickMusic: music.pick,
     canVideo: limits.customMedia,
     videoBusy: videoUpload.busy,
-    musicBusy: audioUpload.busy,
-    error: videoUpload.error ?? audioUpload.error,
+    musicBusy: music.busy,
+    error: videoUpload.error ?? music.error,
     inputs,
   };
+}
+
+/**
+ * Music from the device (§10): a hidden file input and what happens once a
+ * track is decoded — a clip from the start of the video, selected. The add
+ * bar's "+ Music" uses it, and so does the sound library's "Use a music file
+ * from your device…" (D-156), each with an input of its own name.
+ */
+export function useMusicUpload(label = 'Add a music track'): {
+  pick: () => void;
+  busy: boolean;
+  error: string | null;
+  input: React.JSX.Element;
+} {
+  const media = useMediaStore();
+  const dispatch = useEditor((s) => s.dispatch);
+  const selectAudio = useEditor((s) => s.selectAudio);
+  const audioInput = useRef<HTMLInputElement>(null);
+  const onAudioAdded = useCallback((ids: string[]) => {
+    const first = ids[0];
+    if (first === undefined) return;
+    const clip = actions.makeAudioClip(first, { startMs: 0, durationMs: media.durationMsOf(first) ?? 0 });
+    dispatch(actions.addAudio(clip));
+    selectAudio(clip.id);
+  }, [media, dispatch, selectAudio]);
+  const { state, addFiles } = useUpload(media, onAudioAdded, {
+    artboardLongestEdge: 1920,
+    audio: true,
+  });
+  const input = (
+    <input
+      ref={audioInput}
+      type="file"
+      accept={AUDIO_ACCEPT_ATTRIBUTE}
+      hidden
+      aria-label={label}
+      onChange={(e) => {
+        void addFiles([...(e.target.files ?? [])]);
+        e.target.value = '';
+      }}
+    />
+  );
+  return { pick: () => { audioInput.current?.click(); }, busy: state.busy, error: state.error, input };
 }

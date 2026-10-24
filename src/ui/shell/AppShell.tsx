@@ -9,7 +9,7 @@ import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { pendingAdTemplateId, useEditor } from '@/state/store';
 import * as documentActions from '@/document/actions';
-import { timelineSpanMs } from '@/document/select/timeline';
+import { resolvedAudio, timelineSpanMs } from '@/document/select/timeline';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { watermarked } from '@/entitlements';
 import { ClockProvider } from './ClockProvider';
@@ -18,6 +18,7 @@ import { useOverlays } from './overlays';
 import { useLayout } from './useLayout';
 import type { MediaStore } from '@/media/store';
 import { loadSamples, sampleNamesIn, type SampleName } from '@/media/samples';
+import { loadSounds, soundIdsIn } from '@/media/sounds';
 import { loadTemplate } from '@/templates/registry';
 import { DEMO_TEMPLATE_ID, PLACEHOLDER_TEMPLATE_ID } from '@/document/defaults';
 import { renderParams } from '@/dev/renderParams';
@@ -32,6 +33,7 @@ import { PurposeBar } from './PurposeBar';
 import { PaneResizer, restorePaneWidths } from './PaneResizer';
 import { ContextMenu } from './ContextMenu';
 import { EffectPicker } from '@/ui/effects/EffectPicker';
+import { SoundPicker } from '@/ui/audio/SoundPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
@@ -291,6 +293,24 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
     return () => { cancelled = true; };
   }, [neededKey, media]);
 
+  /*
+   * The library sounds the project uses (D-156), fetched the same way: only
+   * those referenced, and each once. One that cannot be fetched — offline,
+   * before it was ever played — says so; its clip shows that it is loading,
+   * and an export refuses rather than leaving it out.
+   */
+  const neededSounds = soundIdsIn(project.audio).join(',');
+  useEffect(() => {
+    if (neededSounds.length === 0) return;
+    let cancelled = false;
+    loadSounds(media, neededSounds.split(',')).catch((error: unknown) => {
+      if (cancelled) return;
+      console.error('Failed to load a library sound.', error);
+      useEditor.getState().showToast(error instanceof Error ? error.message : 'A sound could not be loaded.');
+    });
+    return () => { cancelled = true; };
+  }, [neededSounds, media]);
+
   // Dev-only handle so the visual suite can assert on the real renderer's
   // counters — in particular that build() is not running per frame (§16).
   useEffect(() => {
@@ -304,6 +324,8 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
        */
       editor: useEditor,
       actions: documentActions,
+      /** The pickers and sheets, so a test can open one directly. */
+      overlays: useOverlays,
       textCacheSize: () => rig.textCache.size,
       /*
        * §10 budgets under one frame of drift across a sixty-second preview,
@@ -330,7 +352,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
    * so the visual loop follows the audio device rather than the other way
    * round (D-054).
    */
-  useAudioPlayback(clock, project.audio, media, duration);
+  useAudioPlayback(clock, resolvedAudio(project), media, duration);
 
   /*
    * §13. Reopen the last project, then keep saving it.
@@ -411,6 +433,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
       <Toast />
       <ContextMenu />
       <EffectPicker />
+      <SoundPicker />
       <PhotoPickerDialog />
       <ShortcutsDialog />
       </ClockProvider>

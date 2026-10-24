@@ -3,7 +3,7 @@ import { SCHEMA_VERSION, type Project } from '@/document/types';
 import { referencedMedia } from '@/document/select/media';
 import type { MediaStore } from '@/media/store';
 import { persistMedia } from '@/persist/media';
-import { isSampleId } from '@/media/samples';
+import { isBundledMediaId } from '@/media/sounds';
 import { writeLastOpened, writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
 import type { SaveState } from './saveState';
@@ -81,7 +81,9 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
     if (!enabled) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const unsubscribe = media.subscribe(() => {
-      const fresh = media.ids().some((id) => !known.current.has(id) && !isSampleId(id));
+      // Bundled media is never written, so it never becomes known: without
+      // this, every library sound arriving would start a save (D-156).
+      const fresh = media.ids().some((id) => !known.current.has(id) && !isBundledMediaId(id));
       if (!fresh || timer !== null) return;
       timer = setTimeout(() => {
         timer = null;

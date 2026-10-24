@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Overlay } from '@/document/types';
-import { sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
+import { resolvedAudio, sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
+import { laneOf } from '@/document/select/audio';
 import * as actions from '@/document/actions';
 import { summaryFor } from '@/templates/manifest';
 import { MAX_TRACKS } from '@/document/select/tracks';
@@ -19,7 +20,7 @@ import { SceneTools } from './SceneTools';
 import { ScenePicker } from './ScenePicker';
 import { MotionLane } from './MotionLane';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
-import { MusicTrack } from './MusicTrack';
+import { MusicTrack, audioRowsHeight } from './MusicTrack';
 import { useSceneReorder } from './useSceneReorder';
 import { newRowKinds, timelineRows } from './timelineRows';
 import { useTimelineFold } from './timelineFold';
@@ -385,6 +386,11 @@ export function Timeline({
   // ── The rows in use, and collapsing (D-153) ──────────────────────────────
 
   const used = useMemo(() => timelineRows(project, fxRows.length), [project, fxRows.length]);
+  // The audio as it plays, on its two rows: music, and library sound effects (D-156).
+  const audioLanes = useMemo(() => {
+    const clips = resolvedAudio(project);
+    return { music: clips.filter((clip) => laneOf(clip) === 'music'), sounds: clips.filter((clip) => laneOf(clip) === 'sounds') };
+  }, [project]);
   const { folded, setFolded, reveal } = useTimelineFold(!embedded);
   /*
    * Something new on the timeline opens it, for this visit: what was just
@@ -778,10 +784,21 @@ export function Timeline({
             </div>
           </div>}
 
-          {/* §1.2's dedicated music track, §10's waveform. */}
-          {!folded && project.audio.length > 0 && <Row name="music" label="Music" height={28}>
+          {/* §1.2's dedicated music track, §10's waveform — background loops included. */}
+          {!folded && used.music && <Row name="music" label="Music" height={audioRowsHeight(audioLanes.music)}>
             <MusicTrack
-              clips={project.audio}
+              clips={audioLanes.music}
+              durationMs={durationMs}
+              videoMs={videoMs}
+              laneWidth={laneWidth}
+              onSeek={seekTo}
+            />
+          </Row>}
+          {/* Sound effects from the library, at their moments (D-156). */}
+          {!folded && used.soundRows > 0 && <Row name="sounds" label="Sounds" height={audioRowsHeight(audioLanes.sounds)}>
+            <MusicTrack
+              clips={audioLanes.sounds}
+              lane="sounds"
               durationMs={durationMs}
               videoMs={videoMs}
               laneWidth={laneWidth}

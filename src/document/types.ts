@@ -334,6 +334,18 @@ export type AudioClip = {
   readonly gainDb: number;
   readonly fadeInMs: number;
   readonly fadeOutMs: number;
+  /**
+   * Looping (D-156): the source window `[trimStartMs, trimEndMs)` repeats
+   * until `lengthMs` has played. All four are optional, so older projects
+   * need no migration, and an older build plays the window once.
+   */
+  readonly loop?: boolean;
+  /** Length on the timeline while looping; ignored otherwise. */
+  readonly lengthMs?: number;
+  /** Where in the window the clip starts, so a split or a left trim stays continuous. */
+  readonly loopPhaseMs?: number;
+  /** A loop that runs to the end of the video, however long it becomes. */
+  readonly fitsVideo?: boolean;
 };
 
 export type Brand = {

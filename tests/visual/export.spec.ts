@@ -658,6 +658,68 @@ test.describe('audio export (§10, M6)', () => {
   }
 });
 
+/**
+ * Clips that loop (D-156), through the export's offline mix — the same
+ * graph the preview plays, so a loop that sounds right in the editor must
+ * come out of the file the same way.
+ */
+test.describe('looping audio export (D-156)', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(EXPORT_TIMEOUT_MS + 90_000);
+    await captureDownloads(page);
+    await page.addInitScript({ content: RMS_SOURCE });
+  });
+
+  const levelsAt = (page: Page, points: readonly number[]) => page.evaluate(async (at: number[]) => {
+    const { blob } = (globalThis as unknown as { __exported: { blob: Blob } }).__exported;
+    const rms = (globalThis as unknown as {
+      __rmsAt: (b: Blob, p: number[], w: number) => Promise<{ durationS: number; levels: number[] }>;
+    }).__rmsAt;
+    return rms(blob, at, 0.3);
+  }, [...points]);
+
+  test('a track shorter than the video, fitted to it, goes round again in the file', async ({ page }) => {
+    await page.goto('/?template=quick-pitch&aspect=9:16');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+
+    // Twelve seconds of bursts under a fifteen-second video, looped to fill it.
+    await addMusic(page);
+    await page.getByLabel('Music inspector').getByRole('button', { name: 'Fit to video' }).click();
+    await expect(page.getByRole('button', { name: /^Music clip, 15\.0 seconds, loops$/ })).toBeVisible();
+
+    await runExport(page, 'webm');
+    await waitForExport(page, 140_000);
+
+    // Second time round: 12.5s is the track's 0.5s, a burst; 13.5s its 1.5s, a silence.
+    const analysis = await levelsAt(page, [12.5, 13.5, 14.5]);
+    expect(analysis.durationS).toBeGreaterThan(14);
+    const [first, gap, second] = analysis.levels;
+    expect(first, '12.5s should be a burst, the loop going round').toBeGreaterThan(0.05);
+    expect(gap, '13.5s should be silent').toBeLessThan(0.02);
+    expect(second, '14.5s should be a burst').toBeGreaterThan(0.05);
+  });
+
+  test('a library background is fetched for the export and loops past its own length', async ({ page }) => {
+    await page.goto('/?template=quick-pitch&aspect=9:16');
+    await page.waitForSelector('canvas');
+    await page.waitForTimeout(2_000);
+
+    await page.locator('[aria-label="Timeline"] [data-add="sound"]').click();
+    await page.getByRole('dialog', { name: 'Sounds' }).getByRole('button', { name: 'Add Lo-fi Haze' }).click();
+
+    await runExport(page, 'webm');
+    await waitForExport(page, 140_000);
+
+    // Lo-fi Haze loops every twelve seconds; the video is fifteen.
+    const analysis = await levelsAt(page, [2, 6, 10, 13, 14]);
+    expect(analysis.durationS).toBeGreaterThan(14);
+    for (const [index, level] of analysis.levels.entries()) {
+      expect(level, `music at point ${index}`).toBeGreaterThan(0.01);
+    }
+  });
+});
+
 test.describe('saving to Photos on a phone (D-125)', () => {
   test.beforeEach(async ({ page }) => {
     test.setTimeout(EXPORT_TIMEOUT_MS);

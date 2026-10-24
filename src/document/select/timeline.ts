@@ -1,5 +1,6 @@
-import type { Overlay, Project, Scene, Transition } from '@/document/types';
+import type { AudioClip, Overlay, Project, Scene, Transition } from '@/document/types';
 import { audioEndMs } from '@/core/audio/envelope';
+import { fittedClips } from './audio';
 
 /**
  * Scene placement on the global timeline.
@@ -165,7 +166,17 @@ export function trackCount(overlays: readonly Overlay[]): number {
  * see the part that will be cut.
  */
 export function timelineSpanMs(project: Project): number {
-  return Math.max(totalDurationMs(project), audioEndMs(project.audio));
+  return Math.max(totalDurationMs(project), audioEndMs(resolvedAudio(project)));
+}
+
+/**
+ * The project's audio as it plays: a background loop that runs to the end of
+ * the video given the length the video has now (D-156). What preview, export
+ * and the timeline all read. The same array comes back while nothing changes,
+ * so playback is not rescheduled by edits that do not touch the sound.
+ */
+export function resolvedAudio(project: Project): readonly AudioClip[] {
+  return fittedClips(project.audio, totalDurationMs(project));
 }
 
 /** True when there is content past the end of the video. */

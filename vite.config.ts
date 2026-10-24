@@ -99,6 +99,20 @@ export default defineConfig({
               expiration: { maxEntries: 600 },
             },
           },
+          {
+            /*
+             * The sound library (D-156), the same way: each sound is cached
+             * the first time it is listened to or used, so a project that
+             * uses it plays offline, and nobody downloads 4MB of sounds they
+             * never chose.
+             */
+            urlPattern: ({ url }) => /^\/sounds\/[^/]+\.wav$/.test(url.pathname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'sounds',
+              expiration: { maxEntries: 40 },
+            },
+          },
         ],
         // A 30s 1080p encode is nothing next to the WASM decoder; the default
         // 2MB cap would silently skip it and break HEIC on a second visit.

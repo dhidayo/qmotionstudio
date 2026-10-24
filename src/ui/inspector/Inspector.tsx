@@ -6,6 +6,7 @@ import { LookTab } from './tabs/LookTab';
 import { OverlayPanel } from './OverlayPanel';
 import { AudioPanel } from './AudioPanel';
 import { TimelineEffectPanel } from '@/ui/effects/EffectEditors';
+import { soundFor } from '@/audio/library';
 
 /*
  * Logo became part of Look, and its place went to Motion — the template's
@@ -35,6 +36,11 @@ export function Inspector(): React.JSX.Element {
    */
   const editingOverlay = useEditor((s) => s.selectedOverlay !== null);
   const editingAudio = useEditor((s) => s.selectedAudio !== null);
+  // A sound effect from the library is a sound, not music (D-156).
+  const editingSound = useEditor((s) => {
+    const clip = s.project.audio.find((c) => c.id === s.selectedAudio);
+    return clip !== undefined && soundFor(clip.mediaId)?.kind === 'effect';
+  });
   const editingEffect = useEditor((s) => s.selectedEffect !== null);
 
   if (editingEffect) {
@@ -54,7 +60,7 @@ export function Inspector(): React.JSX.Element {
       <aside
         className="flex shrink-0 flex-col overflow-y-auto border-l border-edge bg-panel p-3"
         style={{ width: 'var(--w-inspector)' }}
-        aria-label="Music inspector"
+        aria-label={editingSound ? 'Sound inspector' : 'Music inspector'}
       >
         <AudioPanel />
       </aside>

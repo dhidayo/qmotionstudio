@@ -1,9 +1,11 @@
-import { clipDurationMs, dbToGain } from '@/core/audio/envelope';
+import { clipDurationMs, dbToGain, isLooping } from '@/core/audio/envelope';
 import * as actions from '@/document/actions';
 import { totalDurationMs } from '@/document/select/timeline';
+import { fitClip } from '@/document/select/audio';
+import { soundFor } from '@/audio/library';
 import { useEditor, useSelectedAudio } from '@/state/store';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
-import { Button, EmptyNote, Row, Section, Slider } from './controls';
+import { Button, EmptyNote, Row, Section, Slider, Toggle } from './controls';
 import { isApplePlatform, keysFor, useInputCaps } from '@/ui/shell/platform';
 
 /**
@@ -12,9 +14,14 @@ import { isApplePlatform, keysFor, useInputCaps } from '@/ui/shell/platform';
  * Trim is absent on purpose, like the overlay panel's timing: dragging the
  * clip's edges on the timeline is how a trim is set, and a pair of number
  * fields saying the same thing is a second source of truth to keep in step.
+ *
+ * Music can loop (D-156): its section repeats for as long as the clip runs,
+ * set here or by dragging the clip's end. A sound from the library keeps its
+ * own loop points — the section controls are for the person's own music,
+ * where choosing the part that repeats is the point.
  */
 export function AudioPanel(): React.JSX.Element {
-  const clip = useSelectedAudio();
+  const selected = useSelectedAudio();
   const dispatch = useEditor((s) => s.dispatch);
   const selectAudio = useEditor((s) => s.selectAudio);
   const media = useMediaStore();
@@ -23,12 +30,17 @@ export function AudioPanel(): React.JSX.Element {
   const videoMs = useEditor((state) => totalDurationMs(state.project));
   const playheadMs = useEditor((state) => state.playheadMs);
 
-  if (!clip) {
+  if (!selected) {
     return <EmptyNote>That clip is gone. Pick another on the timeline.</EmptyNote>;
   }
 
+  // As it plays: a loop that fits the video is as long as the video now is.
+  const clip = fitClip(selected, videoMs);
   const { id } = clip;
-  const name = media.get(clip.mediaId)?.name ?? clip.mediaId;
+  const sound = soundFor(clip.mediaId);
+  const effect = sound?.kind === 'effect';
+  const looping = isLooping(clip);
+  const name = sound?.name ?? media.get(clip.mediaId)?.name ?? clip.mediaId;
   const sourceMs = media.durationMsOf(clip.mediaId);
   const length = clipDurationMs(clip);
   const decoded = media.getAudioBuffer(clip.mediaId) !== null;
@@ -47,23 +59,27 @@ export function AudioPanel(): React.JSX.Element {
         >
           ← Scene
         </button>
-        <span className="truncate text-[12px] font-semibold">Music</span>
+        <span className="truncate text-[12px] font-semibold">{effect ? 'Sound' : sound ? 'Background music' : 'Music'}</span>
       </div>
 
-      <Section title="Track">
+      <Section title={effect ? 'Sound' : 'Track'}>
         <p className="truncate text-[12px]">{name}</p>
+        {sound && <p className="mt-0.5 text-[11px] text-ink-muted">{sound.blurb}</p>}
 
         {/*
           * Which section is playing, in clock time. Without this the only
           * indication of *where* in a four-minute track you are is the shape
-          * of the waveform, which is not something anyone can read.
+          * of the waveform, which is not something anyone can read. A library
+          * sound plays its own section, so it has nothing to say here.
           */}
-        <p className="tabular mt-0.5 text-[11px] text-ink-muted">
-          {clock(clip.trimStartMs)} – {clock(clip.trimEndMs)}
-          {sourceMs !== null && <span className="text-ink-faint"> of {clock(sourceMs)}</span>}
-        </p>
+        {!sound && (
+          <p className="tabular mt-0.5 text-[11px] text-ink-muted">
+            {clock(clip.trimStartMs)} – {clock(clip.trimEndMs)}
+            {sourceMs !== null && <span className="text-ink-faint"> of {clock(sourceMs)}</span>}
+          </p>
+        )}
         <p className="tabular mt-0.5 text-[10px] text-ink-faint">
-          {(length / 1000).toFixed(1)}s used · video is {(videoMs / 1000).toFixed(1)}s
+          {(length / 1000).toFixed(1)}s {looping ? 'on the timeline' : 'used'} · video is {(videoMs / 1000).toFixed(1)}s
         </p>
 
         {overruns && (
@@ -72,34 +88,77 @@ export function AudioPanel(): React.JSX.Element {
             from the export.
           </EmptyNote>
         )}
-        {!decoded && <EmptyNote>Still decoding — playback starts when it lands.</EmptyNote>}
+        {!decoded && (
+          <EmptyNote>
+            {sound ? 'Still loading — playback starts when it arrives.' : 'Still decoding — playback starts when it lands.'}
+          </EmptyNote>
+        )}
 
-        <div className="mt-2 flex gap-1.5">
-          <Button
-            onClick={() => {
-              if (sourceMs !== null) dispatch(actions.fitAudioToProject(id, videoMs, sourceMs));
-            }}
-            disabled={sourceMs === null}
-          >
-            Fit to video
-          </Button>
-          <Button
-            onClick={() => {
-              if (sourceMs !== null) dispatch(actions.resetAudioTrim(id, sourceMs));
-            }}
-            disabled={sourceMs === null}
-          >
-            Use all
-          </Button>
-        </div>
+        {/* An effect is a moment: it is not fitted to the video or opened out to its whole file. */}
+        {!effect && (
+          <div className="mt-2 flex gap-1.5">
+            <Button
+              onClick={() => {
+                if (sourceMs !== null) dispatch(actions.fitAudioToProject(id, videoMs, sourceMs));
+              }}
+              disabled={sourceMs === null || (clip.fitsVideo === true && clip.startMs === 0)}
+            >
+              Fit to video
+            </Button>
+            {!sound && (
+              <Button
+                onClick={() => {
+                  if (sourceMs !== null) dispatch(actions.resetAudioTrim(id, sourceMs));
+                }}
+                disabled={sourceMs === null}
+              >
+                Use all
+              </Button>
+            )}
+          </div>
+        )}
 
         <EmptyNote>
           <DragHint />
         </EmptyNote>
       </Section>
 
-      {sourceMs !== null && (
-        <Section title="Section of the track">
+      {!effect && (
+        <Section title="Loop">
+          <Toggle
+            checked={looping}
+            onChange={(on) => { dispatch(actions.setAudioLoop(id, on, sourceMs ?? clip.trimEndMs)); }}
+            label="Loop to fill the clip"
+          />
+          {looping ? (
+            <>
+              <div className="mt-2">
+                {/* In seconds, to a tenth: a length of "30000" says nothing at a glance. */}
+                <Slider
+                  value={Math.round(length / 100) / 10}
+                  min={0.3}
+                  max={Math.max(60, Math.ceil(videoMs / 1000), Math.ceil(length / 1000))}
+                  step={0.1}
+                  onChange={(seconds) => { dispatch(actions.setAudioClipLength(id, seconds * 1000)); }}
+                  label="Length on timeline"
+                  suffix="s"
+                />
+              </div>
+              <EmptyNote>
+                {clip.fitsVideo === true
+                  ? 'Runs to the end of the video, and follows it as scenes are added or removed. Setting a length here, or dragging the end, fixes it.'
+                  : 'Repeats its section for as long as the clip runs. Drag the clip’s end on the timeline, or set the length here.'}
+              </EmptyNote>
+            </>
+          ) : (
+            <EmptyNote>Repeats the section for as long as the clip runs, so it can be drawn out past the end of the track.</EmptyNote>
+          )}
+        </Section>
+      )}
+
+      {/* The person's own music: which part plays, or which part repeats. */}
+      {sourceMs !== null && !sound && (
+        <Section title={looping ? 'Loop section' : 'Section of the track'}>
           {/*
             * Absolute, and spanning the whole track — which dragging cannot do.
             * A slip drag maps pixels against the lane, so on a fifteen-second
@@ -121,16 +180,16 @@ export function AudioPanel(): React.JSX.Element {
           </p>
 
           <Slider
-            value={length}
+            value={clip.trimEndMs - clip.trimStartMs}
             min={300}
             max={Math.max(300, sourceMs - clip.trimStartMs)}
             step={100}
             onChange={(next) => { dispatch(actions.setAudioLength(id, next, sourceMs)); }}
-            label="Length used"
+            label={looping ? 'Section length' : 'Length used'}
             suffix=""
           />
           <p className="tabular -mt-1 text-[10px] text-ink-faint">
-            {(length / 1000).toFixed(1)}s — ends at {clock(clip.trimEndMs)}
+            {((clip.trimEndMs - clip.trimStartMs) / 1000).toFixed(1)}s — ends at {clock(clip.trimEndMs)}
           </p>
         </Section>
       )}
@@ -138,7 +197,7 @@ export function AudioPanel(): React.JSX.Element {
       <Section title="Cut">
         <EmptyNote>
           Splits this clip at the playhead. Split twice and remove the middle piece to take a
-          section out of the music.
+          section out of the {effect ? 'sound' : 'music'}.
         </EmptyNote>
         <div className="mt-2 flex gap-1.5">
           <Button
@@ -205,7 +264,7 @@ export function AudioPanel(): React.JSX.Element {
             variant="danger"
             onClick={() => { dispatch(actions.removeAudio(id)); selectAudio(null); }}
           >
-            Remove music
+            {effect ? 'Remove sound' : 'Remove music'}
           </Button>
         </div>
       </Section>

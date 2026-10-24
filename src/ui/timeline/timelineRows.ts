@@ -1,4 +1,5 @@
 import type { Project } from '@/document/types';
+import { laneOf, packRows } from '@/document/select/audio';
 import { rowCount } from './timelineGeometry';
 
 /**
@@ -21,6 +22,8 @@ export type TimelineRows = {
   /** Layer rows, with the spare one to drop onto (D-103); none without overlays. */
   readonly layerRows: number;
   readonly music: boolean;
+  /** Rows of sound effects from the library, overlapping ones stacked (D-156); none without any. */
+  readonly soundRows: number;
 };
 
 /**
@@ -42,7 +45,8 @@ export function timelineRows(project: Project, effectRowCount: number): Timeline
     motion: anyMotion(project),
     effectRows: Math.max(0, effectRowCount),
     layerRows: project.overlays.length > 0 ? rowCount(project.overlays) : 0,
-    music: project.audio.length > 0,
+    music: project.audio.some((clip) => laneOf(clip) === 'music'),
+    soundRows: packRows(project.audio.filter((clip) => laneOf(clip) === 'sounds')).rows,
   };
 }
 
@@ -56,5 +60,6 @@ export function newRowKinds(before: TimelineRows, after: TimelineRows): boolean 
   return (!before.motion && after.motion)
     || (before.effectRows === 0 && after.effectRows > 0)
     || (before.layerRows === 0 && after.layerRows > 0)
-    || (!before.music && after.music);
+    || (!before.music && after.music)
+    || (before.soundRows === 0 && after.soundRows > 0);
 }

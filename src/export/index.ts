@@ -14,7 +14,7 @@ import {
   type ExportResult,
 } from './types';
 import { canUseRealtimeExport, startRealtimeExport } from './fallback/mediaRecorder';
-import { renderMixdown } from '@/core/audio/mixdown';
+import { AudioNotReadyError, mixForExport } from './audioMix';
 import { usedUserFonts } from '@/document/select/media';
 import { readFont } from '@/persist/db';
 
@@ -191,7 +191,7 @@ export function startExport(options: {
   const fontsUsed = Promise.all([...usedUserFonts(project)].map((id) => readFont(id)))
     .then((found) => found.filter((font): font is NonNullable<typeof font> => font !== null));
 
-  void Promise.all([renderMixdown(project.audio, (id) => media.getAudioBuffer(id), { durationMs }), fontsUsed])
+  void Promise.all([mixForExport(project, media, durationMs), fontsUsed])
     .then(([mix, fonts]) => {
       if (cancelled) return;
 
@@ -214,8 +214,8 @@ export function startExport(options: {
     })
     .catch((error: unknown) => {
       // §11.8, §16: an audio failure fails the export rather than quietly
-      // producing a silent file.
-      fail?.(new Error(
+      // producing a silent file. A sound that is not there says which (D-156).
+      fail?.(error instanceof AudioNotReadyError ? error : new Error(
         'Could not render the audio mix.',
         { cause: error },
       ));

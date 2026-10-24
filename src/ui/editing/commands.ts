@@ -1,7 +1,9 @@
 import * as actions from '@/document/actions';
 import { effectName } from '@/core/effects/catalog';
 import type { EffectClip, Overlay, Project } from '@/document/types';
-import { sceneLengthMs, sceneSpans, totalDurationMs } from '@/document/select/timeline';
+import { resolvedAudio, sceneLengthMs, sceneSpans, totalDurationMs } from '@/document/select/timeline';
+import { clipEndMs } from '@/core/audio/envelope';
+import { soundFor } from '@/audio/library';
 import { summaryFor } from '@/templates/manifest';
 import { useEditor } from '@/state/store';
 import { useOverlays, type MenuItem } from '@/ui/shell/overlays';
@@ -55,9 +57,10 @@ export function deleteSelection(): boolean {
     return true;
   }
   if (s.selectedAudio !== null) {
+    const sound = soundFor(project.audio.find((c) => c.id === s.selectedAudio)?.mediaId ?? '');
     s.dispatch(actions.removeAudio(s.selectedAudio));
     s.selectAudio(null);
-    s.showToast(`Deleted the music clip. ${undoHint()}`);
+    s.showToast(`Deleted ${sound ? `“${sound.name}”` : 'the music clip'}. ${undoHint()}`);
     return true;
   }
   if (s.selectedLogo) {
@@ -209,13 +212,15 @@ export function sceneMenu(index: number, seek: Seek, atMs: number, openDesigns: 
 
 export function audioMenu(clipId: string, seek: Seek, atMs: number): readonly MenuItem[] {
   const s = useEditor.getState();
-  const clip = s.project.audio.find((c) => c.id === clipId);
-  const inside = clip !== undefined && s.playheadMs > clip.startMs && s.playheadMs < clip.startMs + (clip.trimEndMs - clip.trimStartMs);
+  // As it plays, so a loop is as long as it is drawn (D-156).
+  const clip = resolvedAudio(s.project).find((c) => c.id === clipId);
+  const inside = clip !== undefined && s.playheadMs > clip.startMs && s.playheadMs < clipEndMs(clip);
+  const sound = soundFor(clip?.mediaId ?? '');
   return [
     { label: 'Move playhead here', onSelect: () => { seek(atMs); } },
     { label: 'Split at playhead', disabled: !inside, onSelect: () => { s.dispatch(actions.splitAudio(clipId, s.playheadMs)); } },
     { kind: 'separator' },
-    { label: 'Delete music clip', keys: 'Delete', danger: true, onSelect: () => { s.selectAudio(clipId); deleteSelection(); } },
+    { label: sound?.kind === 'effect' ? 'Delete sound' : 'Delete music clip', keys: 'Delete', danger: true, onSelect: () => { s.selectAudio(clipId); deleteSelection(); } },
   ];
 }
 

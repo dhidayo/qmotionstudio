@@ -23,9 +23,57 @@ export function gainToDb(gain: number): number {
   return 20 * Math.log10(gain);
 }
 
-/** How long the clip plays for, after trimming. */
-export function clipDurationMs(clip: AudioClip): number {
+/**
+ * The longest a looping clip may run on the timeline: ten minutes, the same
+ * as the longest track that can be imported (D-156).
+ */
+export const MAX_LOOP_LENGTH_MS = 10 * 60_000;
+
+/** The part of the source a clip plays — once, or over and over when it loops. */
+export function loopWindowMs(clip: AudioClip): number {
   return Math.max(0, clip.trimEndMs - clip.trimStartMs);
+}
+
+/** True for a clip that repeats its window (D-156). An empty window never loops. */
+export function isLooping(clip: AudioClip): boolean {
+  return clip.loop === true && loopWindowMs(clip) > 0;
+}
+
+/**
+ * How long the clip plays for, after trimming.
+ *
+ * A loop's length is its own (`lengthMs`) and may be any multiple, or
+ * fraction, of its window; everything else plays its window once.
+ */
+export function clipDurationMs(clip: AudioClip): number {
+  const window = loopWindowMs(clip);
+  if (!isLooping(clip)) return window;
+  return Math.max(0, clip.lengthMs ?? window);
+}
+
+/** `value` wrapped into `[0, size)`, for negative values too. */
+function wrap(value: number, size: number): number {
+  if (size <= 0) return 0;
+  const r = value % size;
+  return r < 0 ? r + size : r;
+}
+
+/** Where in its window a loop starts, wrapped into the window. */
+export function loopPhaseOf(clip: AudioClip): number {
+  return wrap(clip.loopPhaseMs ?? 0, loopWindowMs(clip));
+}
+
+/**
+ * Which moment of the source plays `localMs` into the clip.
+ *
+ * For a loop this wraps round the window, starting at its phase — which is
+ * what lets a split or a left-edge trim leave the sound exactly where it was.
+ * The waveform on the timeline and the scheduler both read it, so what is
+ * drawn is what plays (D-052).
+ */
+export function sourceMsAt(clip: AudioClip, localMs: number): number {
+  if (!isLooping(clip)) return clip.trimStartMs + localMs;
+  return clip.trimStartMs + wrap(loopPhaseOf(clip) + localMs, loopWindowMs(clip));
 }
 
 /** Where the clip stops on the project timeline. */
