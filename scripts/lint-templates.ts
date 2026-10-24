@@ -26,7 +26,8 @@ import { lookPreset } from '../src/templates/_shared/look';
 const TEMPLATE_ROOT = resolve(process.cwd(), 'src/templates');
 // The catalogue's data and family code are not template files (D-119); the
 // templates they make are checked below, from the catalogue itself.
-const IGNORED_DIRS = new Set(['_shared', '_demo', '_catalog', '_families']);
+// Helpers, not templates; `_test` holds the measuring tools tests share (D-157).
+const IGNORED_DIRS = new Set(['_shared', '_demo', '_catalog', '_families', '_test']);
 
 async function templateFiles(): Promise<string[]> {
   const entries = await readdir(TEMPLATE_ROOT, { withFileTypes: true });

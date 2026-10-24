@@ -14,43 +14,49 @@ const variant = (family: FamilyId, category: string) => (
   durationMs = 12_000,
 ): SceneVariant => ({ id, name, category, family, blurb, params, photos, durationMs, isNew: true });
 
+/**
+ * Where a photo design's still is taken, and where it rests as an image: a
+ * moment when one photo is clearly in focus (D-157).
+ */
+const focusedAt = (posterAtMs: number, v: SceneVariant): SceneVariant => ({ ...v, posterAtMs });
+
 const ring = variant('orbit', 'Ring Path');
 
 const RINGS: readonly SceneVariant[] = [
-  ring('ring-wide', 'Wide Ring', 'Photos travel a wide ring, passing in front of and behind each other.', { shape: 'ring', radius: 0.4, tilt: 0.3, headline: 'The collection' }),
-  ring('ring-tight-focus', 'Tight Ring Focus', 'A tight ring that turns one step at a time onto the front photo.', { shape: 'ring', radius: 0.24, tilt: 0.4, snap: true, card: 0.4, headline: 'One at a time' }, { min: 3, max: 6, default: 4 }),
-  ring('ring-snap-front', 'Snap-Front Ring', 'The ring turns and settles each photo at the front in turn.', { shape: 'ring', radius: 0.36, tilt: 0.32, snap: true, headline: 'Meet the range' }),
-  ring('ring-tilted-parade', 'Tilted Ring Parade', 'Many photos parade round a steeply tilted ring.', { shape: 'ring', radius: 0.38, tilt: 0.55, card: 0.26, headline: 'Everything we make' }, { min: 6, max: 12, default: 10 }),
-  ring('ring-soft-orbit', 'Soft Orbit', 'A calm, flat orbit with photos facing forward.', { shape: 'ring', radius: 0.38, tilt: 0.2, face: false, laps: 0.6, headline: 'Quietly beautiful' }),
-  ring('ring-ferris-wheel', 'Ferris Wheel', 'Photos ride a big wheel, upright all the way round.', { shape: 'wheel', radius: 0.34, face: false, card: 0.26, headline: 'Round and round' }, { min: 4, max: 10, default: 8 }),
-  ring('ring-low-wheel', 'Low Wheel', 'A wheel turning from below the frame, its top arc on show.', { shape: 'wheel', radius: 0.34, low: true, card: 0.28, headline: 'On a roll', textBelow: false }, { min: 4, max: 10, default: 8 }),
-  ring('ring-infinity', 'Infinity Path', 'Photos travel a smooth figure of eight.', { shape: 'infinity', radius: 0.4, tilt: 0.45, headline: 'Endless ideas' }, { min: 4, max: 10, default: 8 }, 14_000),
-  ring('ring-planet-moons', 'Planetary Moons', 'One lead photo at the centre, the rest orbiting it.', { shape: 'moons', radius: 0.36, tilt: 0.32, card: 0.36, headline: 'The flagship and friends' }, { min: 3, max: 9, default: 7 }, 14_000),
-  ring('ring-dual-cross', 'Dual Ring Cross', 'Two tilted rings counter-rotate through each other.', { shape: 'dual', radius: 0.36, tilt: 0.3, card: 0.26, headline: 'Two worlds, one brand' }, { min: 6, max: 12, default: 10 }, 14_000),
-  ring('ring-pendulum', 'Pendulum Swing', 'A fan of photos swings like a pendulum, beat by beat.', { shape: 'pendulum', laps: 1, card: 0.3, headline: 'Find your rhythm' }, { min: 3, max: 7, default: 5 }),
-  ring('ring-halo-pulse', 'Halo Rings', 'Two rings of photos turn opposite ways and breathe.', { shape: 'halo', card: 0.26, headline: 'Our community' }, { min: 6, max: 12, default: 12 }),
-  ring('ring-roulette', 'Roulette Stop', 'The ring spins fast, then eases onto the next photo.', { shape: 'roulette', radius: 0.36, tilt: 0.32, headline: 'And the winner is' }),
-  ring('ring-crescent-arc', 'Crescent Arc', 'Photos travel a crescent, largest at its crown.', { shape: 'crescent', laps: 1, card: 0.34, headline: 'Rising stars' }, { min: 4, max: 10, default: 7 }),
-  ring('ring-bloom', 'Bloom Into Ring', 'A stack blooms into a ring, turns, and gathers again.', { shape: 'bloom', radius: 0.36, tilt: 0.32, headline: 'It all opens up' }, { min: 4, max: 10, default: 8 }),
+  focusedAt(3_400, ring('ring-wide', 'Wide Ring', 'Photos travel a wide ring, each growing large as it reaches the front.', { shape: 'ring', radius: 0.4, tilt: 0.3, headline: 'The collection' })),
+  focusedAt(3_200, ring('ring-tight-focus', 'Tight Ring Focus', 'A tight ring that turns one step at a time onto the front photo.', { shape: 'ring', radius: 0.24, tilt: 0.4, snap: true, card: 0.4, headline: 'One at a time' }, { min: 3, max: 6, default: 4 })),
+  focusedAt(3_200, ring('ring-snap-front', 'Snap-Front Ring', 'The ring turns and settles each photo at the front in turn.', { shape: 'ring', radius: 0.36, tilt: 0.32, snap: true, headline: 'Meet the range' })),
+  focusedAt(3_800, ring('ring-tilted-parade', 'Tilted Ring Parade', 'Many photos parade round a steeply tilted ring, each taking the front in turn.', { shape: 'ring', radius: 0.38, tilt: 0.55, card: 0.26, headline: 'Everything we make' }, { min: 6, max: 12, default: 10 })),
+  focusedAt(3_200, ring('ring-soft-orbit', 'Soft Orbit', 'A calm, flat orbit, each photo growing as it comes to the front.', { shape: 'ring', radius: 0.38, tilt: 0.2, face: false, laps: 0.6, headline: 'Quietly beautiful' })),
+  focusedAt(2_800, ring('ring-ferris-wheel', 'Ferris Wheel', 'Photos ride a big wheel, upright all the way round, each featured at the bottom.', { shape: 'wheel', radius: 0.34, face: false, card: 0.26, headline: 'Round and round' }, { min: 4, max: 10, default: 8 })),
+  focusedAt(2_800, ring('ring-low-wheel', 'Low Wheel', 'A wheel turning from below the frame, each photo featured at the top.', { shape: 'wheel', radius: 0.34, low: true, card: 0.28, headline: 'On a roll', textBelow: false }, { min: 4, max: 10, default: 8 })),
+  focusedAt(3_500, ring('ring-infinity', 'Infinity Path', 'Photos travel a smooth figure of eight, each featured as it crosses the middle.', { shape: 'infinity', radius: 0.4, tilt: 0.45, headline: 'Endless ideas' }, { min: 4, max: 10, default: 8 }, 14_000)),
+  focusedAt(2_500, ring('ring-planet-moons', 'Planetary Moons', 'One lead photo at the centre, the rest orbiting it.', { shape: 'moons', radius: 0.36, tilt: 0.32, card: 0.36, headline: 'The flagship and friends' }, { min: 3, max: 9, default: 7 }, 14_000)),
+  focusedAt(2_900, ring('ring-dual-cross', 'Dual Ring Cross', 'Two tilted rings counter-rotate through each other, taking turns at the front.', { shape: 'dual', radius: 0.36, tilt: 0.3, card: 0.26, headline: 'Two worlds, one brand' }, { min: 6, max: 12, default: 10 }, 14_000)),
+  focusedAt(3_500, ring('ring-pendulum', 'Pendulum Swing', 'A fan of photos swings like a pendulum, featuring each photo as it hangs straight down.', { shape: 'pendulum', laps: 1, card: 0.3, headline: 'Find your rhythm' }, { min: 3, max: 7, default: 5 })),
+  focusedAt(2_600, ring('ring-halo-pulse', 'Halo Rings', 'Two rings of photos turn opposite ways and breathe, each photo featured at the foot.', { shape: 'halo', card: 0.26, headline: 'Our community' }, { min: 6, max: 12, default: 12 })),
+  focusedAt(3_200, ring('ring-roulette', 'Roulette Stop', 'The ring spins fast, then eases onto the next photo, which grows to fill the front.', { shape: 'roulette', radius: 0.36, tilt: 0.32, headline: 'And the winner is' })),
+  focusedAt(2_400, ring('ring-crescent-arc', 'Crescent Arc', 'Photos travel a crescent, largest at its crown.', { shape: 'crescent', laps: 1, card: 0.34, headline: 'Rising stars' }, { min: 4, max: 10, default: 7 })),
+  focusedAt(3_200, ring('ring-bloom', 'Bloom Into Ring', 'A stack blooms into a ring, turns photo by photo, and gathers again.', { shape: 'bloom', radius: 0.36, tilt: 0.32, headline: 'It all opens up' }, { min: 4, max: 10, default: 8 })),
 ];
 
 const flow = variant('flow', 'Flow Track');
 
 const FLOWS: readonly SceneVariant[] = [
-  flow('flow-coverflow', 'Coverflow Glide', 'The classic coverflow: side photos turned away, the centre one facing you, gliding.', { shape: 'coverflow', laps: 1, headline: 'Browse the range' }),
-  flow('flow-coverflow-snap', 'Coverflow Snap', 'Coverflow that holds each photo at the centre, then moves on.', { shape: 'coverflow', snap: true, headline: 'One highlight at a time' }),
-  flow('flow-soft-coverflow', 'Soft Coverflow', 'A gentler coverflow with shallow turns and wide spacing.', { shape: 'coverflow', tilt: 35, gap: 0.75, laps: 0.6, headline: 'Take your time' }),
-  flow('flow-vertical-gallery', 'Vertical Tilt Gallery', 'A coverflow running top to bottom, tipping toward you.', { shape: 'vertical', snap: true, card: 0.38, headline: 'Scroll the story' }),
-  flow('flow-diagonal-lane', 'Diagonal Lane', 'Photos travel a diagonal lane through the frame.', { shape: 'diagonal', laps: 1, headline: 'On the move' }),
-  flow('flow-center-lock', 'Centre Lock Row', 'A row slides along, the centre photo locking large.', { shape: 'centerLock', snap: true, headline: 'Featured today' }),
-  flow('flow-product-shelf', 'Perspective Shelf', 'A shelf of photos recedes into the distance, scrolling past.', { shape: 'shelf', laps: 1, card: 0.5, headline: 'Fresh on the shelf' }, { min: 4, max: 10, default: 8 }),
-  flow('flow-conveyor', 'Conveyor', 'Photos ride a lane from far away right up to the lens.', { shape: 'conveyor', laps: 1, card: 0.5, headline: 'Coming your way' }, { min: 4, max: 10, default: 7 }),
-  flow('flow-escalator', 'Escalator Rise', 'Photos ride a diagonal escalator up and out of frame.', { shape: 'escalator', laps: 1, card: 0.4, headline: 'Level up' }, { min: 4, max: 10, default: 7 }),
-  flow('flow-sine-scroll', 'Sine Scroll', 'A marquee of photos riding a soft wave.', { shape: 'sine', laps: 1, card: 0.36, headline: 'Go with the flow' }, { min: 4, max: 10, default: 8 }),
-  flow('flow-polaroid-pass', 'Polaroid Pass', 'Tilted prints drift past at their own depths.', { shape: 'polaroid', laps: 1, card: 0.4, headline: 'Moments worth keeping' }, { min: 4, max: 10, default: 7 }),
-  flow('flow-stack-push', 'Stack Push', 'Each photo slides onto the pile like a new notification.', { shape: 'stackPush', card: 0.55, headline: 'What is new' }, { min: 3, max: 8, default: 6 }),
-  flow('flow-zipper-lanes', 'Zipper Lanes', 'Two lanes of photos running opposite ways.', { shape: 'zipper', laps: 1, card: 0.38, headline: 'Both sides of the story' }, { min: 4, max: 12, default: 8 }),
-  flow('flow-river', 'River Flow', 'Photos drift down a meandering river toward you.', { shape: 'river', laps: 1, card: 0.42, headline: 'Let it flow' }, { min: 4, max: 10, default: 7 }),
+  focusedAt(3_300, flow('flow-coverflow', 'Coverflow Glide', 'The classic coverflow: side photos turned away, the centre one facing you, gliding.', { shape: 'coverflow', laps: 1, headline: 'Browse the range' })),
+  focusedAt(3_200, flow('flow-coverflow-snap', 'Coverflow Snap', 'Coverflow that holds each photo at the centre, then moves on.', { shape: 'coverflow', snap: true, headline: 'One highlight at a time' })),
+  focusedAt(3_200, flow('flow-soft-coverflow', 'Soft Coverflow', 'A gentler coverflow with shallow turns and wide spacing.', { shape: 'coverflow', tilt: 35, gap: 0.75, laps: 0.6, headline: 'Take your time' })),
+  focusedAt(3_200, flow('flow-vertical-gallery', 'Vertical Tilt Gallery', 'A coverflow running top to bottom, tipping toward you.', { shape: 'vertical', snap: true, card: 0.38, headline: 'Scroll the story' })),
+  focusedAt(3_300, flow('flow-diagonal-lane', 'Diagonal Lane', 'Photos travel a diagonal lane, each featured as it passes the middle.', { shape: 'diagonal', laps: 1, headline: 'On the move' })),
+  focusedAt(3_200, flow('flow-center-lock', 'Centre Lock Row', 'A row slides along, the centre photo locking large.', { shape: 'centerLock', snap: true, headline: 'Featured today' })),
+  focusedAt(3_300, flow('flow-product-shelf', 'Perspective Shelf', 'A shelf of photos recedes into the distance, each turning to face you as it passes.', { shape: 'shelf', laps: 1, card: 0.5, headline: 'Fresh on the shelf' }, { min: 4, max: 10, default: 8 })),
+  focusedAt(3_000, flow('flow-conveyor', 'Conveyor', 'Photos ride a lane from far away right up to the lens.', { shape: 'conveyor', laps: 1, card: 0.5, headline: 'Coming your way' }, { min: 4, max: 10, default: 7 })),
+  focusedAt(2_400, flow('flow-escalator', 'Escalator Rise', 'Photos ride a diagonal escalator, each featured halfway up.', { shape: 'escalator', laps: 1, card: 0.4, headline: 'Level up' }, { min: 4, max: 10, default: 7 })),
+  focusedAt(3_400, flow('flow-sine-scroll', 'Sine Scroll', 'A marquee of photos riding a soft wave, each featured at its crest.', { shape: 'sine', laps: 1, card: 0.36, headline: 'Go with the flow' }, { min: 4, max: 10, default: 8 })),
+  focusedAt(2_500, flow('flow-polaroid-pass', 'Polaroid Pass', 'Tilted prints drift past at their own depths; each rises to the middle and straightens as it passes.', { shape: 'polaroid', laps: 1, card: 0.4, headline: 'Moments worth keeping' }, { min: 4, max: 10, default: 7 })),
+  focusedAt(3_200, flow('flow-stack-push', 'Stack Push', 'Each photo slides onto the pile like a new notification.', { shape: 'stackPush', card: 0.55, headline: 'What is new' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(3_400, flow('flow-zipper-lanes', 'Zipper Lanes', 'Two lanes of photos running opposite ways, taking turns at the centre.', { shape: 'zipper', laps: 1, card: 0.38, headline: 'Both sides of the story' }, { min: 4, max: 12, default: 8 })),
+  focusedAt(2_600, flow('flow-river', 'River Flow', 'Photos drift down a meandering river toward you, each featured mid-stream.', { shape: 'river', laps: 1, card: 0.42, headline: 'Let it flow' }, { min: 4, max: 10, default: 7 })),
 ];
 
 const depth = variant('depth', 'Depth Stage');
@@ -73,47 +79,47 @@ const DEPTHS: readonly SceneVariant[] = [
 const lanes = variant('marquee', 'Flow Track');
 
 const MARQUEES: readonly SceneVariant[] = [
-  lanes('mq-endless-ticker', 'Endless Ticker', 'A single row of photos that never stops scrolling.', { shape: 'ticker', loops: 1, headline: 'Always something new' }, { min: 3, max: 10, default: 6 }),
-  lanes('mq-tilted-rows', 'Tilted Marquee Rows', 'Tilted rows of photos running opposite ways, edge to edge.', { shape: 'tilted', lanes: 3, angle: -12, loops: 1, headline: 'Made with love' }, { min: 4, max: 12, default: 8 }),
-  lanes('mq-offset-mosaic', 'Offset Mosaic Scroll', 'Rows of photos offset like brickwork, scrolling at different speeds.', { shape: 'mosaic', lanes: 3, loops: 1, headline: 'Our portfolio' }, { min: 4, max: 12, default: 9 }),
-  lanes('mq-drift-columns', 'Drift Columns', 'Columns of photos drifting upward at their own pace.', { shape: 'columns', lanes: 3, loops: 1, headline: 'In full colour' }, { min: 4, max: 12, default: 9 }),
-  lanes('mq-photo-wall', 'Photo Wall', 'Four columns of photos scrolling in opposite directions.', { shape: 'wall', lanes: 4, loops: 1, headline: 'The wall of fame' }, { min: 6, max: 12, default: 12 }),
-  lanes('mq-rising-pillar', 'Rising Pillar', 'A single column of photos rising in a loop.', { shape: 'pillar', loops: 1, headline: 'Rise up' }, { min: 3, max: 8, default: 6 }),
-  lanes('mq-film-strip', 'Film Strip', 'Photos framed on a film strip with sprocket holes, rolling past.', { shape: 'filmstrip', loops: 1, headline: 'Behind the scenes' }, { min: 3, max: 10, default: 7 }),
+  focusedAt(6_000, lanes('mq-endless-ticker', 'Endless Ticker', 'A single row of photos that never stops scrolling, each featured as it passes the middle.', { shape: 'ticker', loops: 1, headline: 'Always something new' }, { min: 3, max: 10, default: 6 })),
+  focusedAt(4_900, lanes('mq-tilted-rows', 'Tilted Marquee Rows', 'Tilted rows of photos running opposite ways, the middle row featuring each photo in turn.', { shape: 'tilted', lanes: 3, angle: -12, loops: 1, headline: 'Made with love' }, { min: 4, max: 12, default: 8 })),
+  focusedAt(4_500, lanes('mq-offset-mosaic', 'Offset Mosaic Scroll', 'Rows of photos offset like brickwork, the middle row featuring each photo in turn.', { shape: 'mosaic', lanes: 3, loops: 1, headline: 'Our portfolio' }, { min: 4, max: 12, default: 9 })),
+  focusedAt(6_000, lanes('mq-drift-columns', 'Drift Columns', 'Columns of photos drifting upward at their own pace, the middle one featuring each photo.', { shape: 'columns', lanes: 3, loops: 1, headline: 'In full colour' }, { min: 4, max: 12, default: 9 })),
+  focusedAt(3_000, lanes('mq-photo-wall', 'Photo Wall', 'Four columns of photos scrolling in opposite directions, the middle two taking turns to feature one.', { shape: 'wall', lanes: 4, loops: 1, headline: 'The wall of fame' }, { min: 6, max: 12, default: 12 })),
+  focusedAt(2_200, lanes('mq-rising-pillar', 'Rising Pillar', 'A single column of photos rising in a loop, each featured at the centre.', { shape: 'pillar', loops: 1, headline: 'Rise up' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(4_700, lanes('mq-film-strip', 'Film Strip', 'Photos framed on a film strip with sprocket holes, each frame lifting as it passes the middle.', { shape: 'filmstrip', loops: 1, headline: 'Behind the scenes' }, { min: 3, max: 10, default: 7 })),
 ];
 
 const tiles = variant('tiles', 'Tile Field');
 
 const TILES: readonly SceneVariant[] = [
-  tiles('tile-stagger', 'Staggered Lattice', 'Photos pop into a lattice one after another, then fall away and return.', { shape: 'stagger', headline: 'Our work' }, { min: 4, max: 12, default: 9 }, 10_000),
-  tiles('tile-pulse', 'Pulse Lattice', 'A wave of light pulses across a lattice of photos.', { shape: 'pulse', headline: 'Alive with ideas' }, { min: 4, max: 12, default: 9 }, 10_000),
-  tiles('tile-flip-wave', 'Flip Wave', 'Tiles turn over in a wave to show the next photos.', { shape: 'flipWave', beats: 3, headline: 'Turn the page' }, { min: 4, max: 12, default: 9 }, 10_000),
-  tiles('tile-spotlight', 'Lattice Spotlight', 'One tile at a time zooms to the centre, then returns.', { shape: 'spotlight', beats: 6, headline: 'In the spotlight' }, { min: 4, max: 9, default: 6 }),
-  tiles('tile-checker', 'Checker Flip', 'Four big tiles flip in a checkerboard to the next photos.', { shape: 'checker', beats: 3, fill: 0.96, headline: 'Two sides' }, { min: 4, max: 8, default: 8 }, 10_000),
-  tiles('tile-domino', 'Domino Wave', 'Tiles tip back like dominoes, one after another, and stand again.', { shape: 'domino', beats: 3, headline: 'One thing leads to another' }, { min: 4, max: 12, default: 8 }, 10_000),
-  tiles('tile-spiral', 'Spiral Unlock', 'The lattice unlocks from the centre outward, then closes again.', { shape: 'spiral', headline: 'Unlock more' }, { min: 4, max: 12, default: 9 }, 10_000),
-  tiles('tile-column-fall', 'Column Fall', 'Columns of photos slide down and restack with each beat.', { shape: 'columnFall', beats: 4, headline: 'Fresh every week' }, { min: 3, max: 12, default: 6 }, 10_000),
-  tiles('tile-slot-reels', 'Slot Reels', 'Reels spin and settle like a slot machine, column by column.', { shape: 'reels', beats: 3, headline: 'Spin to win' }, { min: 3, max: 9, default: 3 }, 10_000),
-  tiles('tile-masonry', 'Masonry Rise', 'Brickwork columns of photos rise and settle at their own pace.', { shape: 'masonry', headline: 'Built with care' }, { min: 4, max: 12, default: 9 }),
-  tiles('tile-radar', 'Radar Sweep', 'A radar arm sweeps the lattice, lighting each photo it passes.', { shape: 'radar', headline: 'Always scanning' }, { min: 6, max: 12, default: 9 }),
-  tiles('tile-honeycomb', 'Honeycomb Pulse', 'A honeycomb of photos with a pulse travelling across it.', { shape: 'honeycomb', headline: 'Better together' }, { min: 6, max: 12, default: 10 }),
+  focusedAt(2_600, tiles('tile-stagger', 'Staggered Lattice', 'Photos pop into a lattice and are featured one after another, then fall away and return.', { shape: 'stagger', headline: 'Our work' }, { min: 4, max: 12, default: 9 }, 10_000)),
+  focusedAt(2_600, tiles('tile-pulse', 'Pulse Lattice', 'A gentle wave runs across a lattice of photos as each in turn lifts forward.', { shape: 'pulse', headline: 'Alive with ideas' }, { min: 4, max: 12, default: 9 }, 10_000)),
+  focusedAt(3_200, tiles('tile-flip-wave', 'Flip Wave', 'Tiles turn over in a wave to show the next photos, one featured at a time.', { shape: 'flipWave', beats: 3, headline: 'Turn the page' }, { min: 4, max: 12, default: 9 }, 10_000)),
+  focusedAt(3_000, tiles('tile-spotlight', 'Lattice Spotlight', 'One tile at a time zooms to the centre, then returns.', { shape: 'spotlight', beats: 6, headline: 'In the spotlight' }, { min: 4, max: 9, default: 6 })),
+  focusedAt(3_200, tiles('tile-checker', 'Checker Flip', 'Four big tiles flip in a checkerboard to the next photos, one featured at a time.', { shape: 'checker', beats: 3, fill: 0.96, headline: 'Two sides' }, { min: 4, max: 8, default: 8 }, 10_000)),
+  focusedAt(3_200, tiles('tile-domino', 'Domino Wave', 'Tiles tip back like dominoes while one stays standing, featured, and they stand again.', { shape: 'domino', beats: 3, headline: 'One thing leads to another' }, { min: 4, max: 12, default: 8 }, 10_000)),
+  focusedAt(2_600, tiles('tile-spiral', 'Spiral Unlock', 'The lattice unlocks from the centre outward, features a few photos, then closes again.', { shape: 'spiral', headline: 'Unlock more' }, { min: 4, max: 12, default: 9 }, 10_000)),
+  focusedAt(2_700, tiles('tile-column-fall', 'Column Fall', 'Columns of photos slide down and restack, featuring a new photo with each beat.', { shape: 'columnFall', beats: 4, headline: 'Fresh every week' }, { min: 3, max: 12, default: 6 }, 10_000)),
+  focusedAt(3_200, tiles('tile-slot-reels', 'Slot Reels', 'Reels spin and settle like a slot machine, lighting up a winner each time.', { shape: 'reels', beats: 3, headline: 'Spin to win' }, { min: 3, max: 9, default: 3 }, 10_000)),
+  focusedAt(3_100, tiles('tile-masonry', 'Masonry Rise', 'Brickwork columns of photos rise and settle, each photo featured in turn.', { shape: 'masonry', headline: 'Built with care' }, { min: 4, max: 12, default: 9 })),
+  focusedAt(3_900, tiles('tile-radar', 'Radar Sweep', 'A radar arm sweeps the lattice, lighting each photo it passes.', { shape: 'radar', headline: 'Always scanning' }, { min: 6, max: 12, default: 9 })),
+  focusedAt(3_200, tiles('tile-honeycomb', 'Honeycomb Pulse', 'A honeycomb of photos, each lifting forward in turn.', { shape: 'honeycomb', headline: 'Better together' }, { min: 6, max: 12, default: 10 })),
 ];
 
 const deck = variant('deck', 'Deck Motion');
 
 const DECKS: readonly SceneVariant[] = [
-  deck('deck-cascade', 'Deck Cascade', 'The deck cascades into a fanned staircase, then gathers.', { shape: 'cascade', headline: 'Pick a card' }),
-  deck('deck-spring', 'Spring Deck', 'Photos spring out of the deck one by one into a neat layout.', { shape: 'spring', card: 0.32, headline: 'Out of the box' }),
-  deck('deck-deal-arc', 'Deal Arc', 'Photos are dealt from the deck into a sweeping arc.', { shape: 'deal', card: 0.32, headline: 'Dealt with care' }, { min: 3, max: 9, default: 7 }),
-  deck('deck-magician-fan', "Magician's Fan", 'A fan of photos opens, every card turns over, and it closes again.', { shape: 'magician', card: 0.42, headline: 'A little magic' }, { min: 3, max: 8, default: 6 }),
-  deck('deck-radial-burst', 'Radial Burst', 'Photos burst out of the centre into a circle, then pull back in.', { shape: 'burst', card: 0.3, headline: 'Out with a bang' }, { min: 4, max: 10, default: 8 }),
-  deck('deck-shuffle', 'Shuffle Restack', 'The deck explodes into a shuffle, then snaps back into a stack.', { shape: 'shuffle', card: 0.38, headline: 'Mix it up' }, { min: 3, max: 9, default: 7 }),
-  deck('deck-bounce', 'Bounce Settle', 'Photos drop in from above and bounce gently into a grid.', { shape: 'bounce', card: 0.32, headline: 'Landing soon' }, { min: 3, max: 8, default: 6 }),
-  deck('deck-story-pile', 'Story Pile', 'Like stories: the top photo lifts away and the next rises up.', { shape: 'storyPile', card: 0.6, headline: 'Swipe up' }, { min: 3, max: 8, default: 5 }),
-  deck('deck-scrapbook', 'Scrapbook Drift', 'A scatter of rotated prints that gently breathes.', { shape: 'scrapbook', card: 0.4, headline: 'Our favourite moments' }, { min: 4, max: 10, default: 6 }),
-  deck('deck-spin-toss', 'Spin Toss', 'Photos are tossed in from both sides, spinning onto a pile.', { shape: 'toss', card: 0.42, headline: 'Catch this' }),
-  deck('deck-swap-dance', 'Swap Dance', 'A row of photos swapping places in pairs, arching past each other.', { shape: 'swap', card: 0.34, headline: 'Switch it up' }, { min: 3, max: 6, default: 5 }),
-  deck('deck-tower', 'Tower Rebuild', 'A tower of photos builds up, topples, and builds itself again.', { shape: 'tower', card: 0.3, headline: 'Built to bounce back' }, { min: 3, max: 7, default: 5 }),
+  focusedAt(3_100, deck('deck-cascade', 'Deck Cascade', 'The deck cascades into a fanned staircase, each card lifting out in turn, then gathers.', { shape: 'cascade', headline: 'Pick a card' })),
+  focusedAt(3_100, deck('deck-spring', 'Spring Deck', 'Photos spring out of the deck one by one into a neat layout, each lifted in turn.', { shape: 'spring', card: 0.32, headline: 'Out of the box' })),
+  focusedAt(3_200, deck('deck-deal-arc', 'Deal Arc', 'Photos are dealt from the deck into a sweeping arc, each lifted in turn.', { shape: 'deal', card: 0.32, headline: 'Dealt with care' }, { min: 3, max: 9, default: 7 })),
+  focusedAt(3_100, deck('deck-magician-fan', "Magician's Fan", 'A fan of photos opens, every card turns over, one at a time slides out, and it closes again.', { shape: 'magician', card: 0.42, headline: 'A little magic' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(3_200, deck('deck-radial-burst', 'Radial Burst', 'Photos burst out of the centre into a circle, each taking the middle in turn.', { shape: 'burst', card: 0.3, headline: 'Out with a bang' }, { min: 4, max: 10, default: 8 })),
+  focusedAt(3_200, deck('deck-shuffle', 'Shuffle Restack', 'The deck explodes into a shuffle, then snaps back into a stack.', { shape: 'shuffle', card: 0.38, headline: 'Mix it up' }, { min: 3, max: 9, default: 7 })),
+  focusedAt(3_200, deck('deck-bounce', 'Bounce Settle', 'Photos drop in from above and bounce gently into a grid, each lifted in turn.', { shape: 'bounce', card: 0.32, headline: 'Landing soon' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(3_200, deck('deck-story-pile', 'Story Pile', 'Like stories: the top photo lifts away and the next rises up.', { shape: 'storyPile', card: 0.6, headline: 'Swipe up' }, { min: 3, max: 8, default: 5 })),
+  focusedAt(3_300, deck('deck-scrapbook', 'Scrapbook Drift', 'A scatter of rotated prints that gently breathes, each lifted and straightened in turn.', { shape: 'scrapbook', card: 0.4, headline: 'Our favourite moments' }, { min: 4, max: 10, default: 6 })),
+  focusedAt(3_200, deck('deck-spin-toss', 'Spin Toss', 'Photos are tossed in from both sides, spinning onto a pile.', { shape: 'toss', card: 0.42, headline: 'Catch this' })),
+  focusedAt(3_200, deck('deck-swap-dance', 'Swap Dance', 'A row of photos swapping places in pairs, arching past each other, the middle one featured.', { shape: 'swap', card: 0.34, headline: 'Switch it up' }, { min: 3, max: 6, default: 5 })),
+  focusedAt(3_200, deck('deck-tower', 'Tower Rebuild', 'A tower of photos builds up, topples, and builds itself again.', { shape: 'tower', card: 0.3, headline: 'Built to bounce back' }, { min: 3, max: 7, default: 5 })),
 ];
 
 const hero = variant('hero', 'Hero Stage');
@@ -160,14 +166,14 @@ const CUTS: readonly SceneVariant[] = [
 const collage = variant('halo', 'Photo Collage');
 
 const COLLAGES: readonly SceneVariant[] = [
-  collage('halo-float', 'Idea Halo Float', 'Tilted photos float around a centred headline.', { shape: 'float', headline: 'Big ideas start here', subline: 'A studio for bold brands' }, { min: 4, max: 9, default: 7 }),
-  collage('halo-assemble', 'Idea Halo Assemble', 'Photos fly in from the edges and settle into a halo, then leave.', { shape: 'assemble', headline: 'It all comes together', subline: 'Strategy, design and film' }, { min: 4, max: 9, default: 7 }),
-  collage('halo-spin', 'Idea Halo Spin', 'The whole constellation slowly orbits the headline.', { shape: 'spin', headline: 'Around the world', subline: 'Stories from 40 countries' }, { min: 4, max: 9, default: 7 }),
-  collage('halo-pulse', 'Idea Halo Pulse', 'Each photo in the halo lifts forward in turn.', { shape: 'pulse', headline: 'Meet the makers', subline: 'The people behind the work' }, { min: 4, max: 9, default: 7 }),
-  collage('halo-breathe', 'Idea Halo Breathe', 'The halo gently expands and contracts around the words.', { shape: 'breathe', headline: 'Take a breath', subline: 'Wellness for busy teams' }, { min: 4, max: 9, default: 7 }),
-  collage('halo-scatter', 'Idea Halo Scatter', 'Photos scatter outward, then magnetically reform.', { shape: 'scatter', headline: 'Break the mould', subline: 'Then make a better one' }, { min: 4, max: 9, default: 7 }),
-  collage('halo-cascade', 'Idea Halo Cascade', 'Photos appear one by one around the ring.', { shape: 'cascade', headline: 'Built step by step', subline: 'Our process' }, { min: 4, max: 9, default: 7 }),
-  collage('halo-parallax', 'Idea Halo Parallax', 'Layered drift: near photos move more than far ones.', { shape: 'parallax', headline: 'Depth in every detail', subline: 'Crafted with care' }, { min: 4, max: 9, default: 7 }),
+  focusedAt(2_000, collage('halo-float', 'Idea Halo Float', 'Tilted photos float around a centred headline, each lifting forward in turn.', { shape: 'float', headline: 'Big ideas start here', subline: 'A studio for bold brands' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(3_200, collage('halo-assemble', 'Idea Halo Assemble', 'Photos fly in from the edges and settle into a halo, then leave.', { shape: 'assemble', headline: 'It all comes together', subline: 'Strategy, design and film' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(2_000, collage('halo-spin', 'Idea Halo Spin', 'The whole constellation slowly orbits the headline, each photo featured in turn.', { shape: 'spin', headline: 'Around the world', subline: 'Stories from 40 countries' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(3_200, collage('halo-pulse', 'Idea Halo Pulse', 'Each photo in the halo lifts forward in turn.', { shape: 'pulse', headline: 'Meet the makers', subline: 'The people behind the work' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(3_200, collage('halo-breathe', 'Idea Halo Breathe', 'The halo gently expands and contracts around the words as each photo lifts forward.', { shape: 'breathe', headline: 'Take a breath', subline: 'Wellness for busy teams' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(3_400, collage('halo-scatter', 'Idea Halo Scatter', 'Photos scatter outward while one holds its place, then magnetically reform.', { shape: 'scatter', headline: 'Break the mould', subline: 'Then make a better one' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(7_100, collage('halo-cascade', 'Idea Halo Cascade', 'Photos appear one by one around the ring.', { shape: 'cascade', headline: 'Built step by step', subline: 'Our process' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(2_000, collage('halo-parallax', 'Idea Halo Parallax', 'Layered drift: near photos move more than far ones.', { shape: 'parallax', headline: 'Depth in every detail', subline: 'Crafted with care' }, { min: 4, max: 9, default: 7 })),
 ];
 
 const timeline = variant('timeline', 'Timeline');
