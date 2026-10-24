@@ -71,7 +71,7 @@ export function useUpload(
      * panel turns it on (§9's custom media).
      */
     video?: boolean;
-    /** Accept music (§10). The timeline's "+ Music" picker turns this on. */
+    /** Accept music (§10). + Sound's "Upload your own sound or music" turns this on (D-163). */
     audio?: boolean;
     /** Take pasted pictures too — + Photos and Replace photo only (D-152, D-162). */
     paste?: boolean;

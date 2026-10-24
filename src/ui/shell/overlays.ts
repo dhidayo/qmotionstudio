@@ -67,7 +67,7 @@ export type PhonePanel =
 
 /**
  * The elements picker (D-158): shapes, stickers and numbers. Opens on a
- * category — "+ Shape" in the add bar opens on shapes — or, with `replace`,
+ * category — the add bar's "+ Element" opens on all of them (D-163) — or, with `replace`,
  * swaps the content of an element already on the picture.
  */
 export type ElementPickerCategory = 'Shapes' | 'Stickers' | 'Numbers';

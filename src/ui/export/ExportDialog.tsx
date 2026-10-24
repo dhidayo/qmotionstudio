@@ -22,7 +22,8 @@ import {
   type ImageFormat, type ImagePreset,
 } from '@/export/imagePresets';
 import { pictureMomentMs, type PictureMoment } from '@/export/picture';
-import { restMomentMs } from '@/templates/restMoment';
+import { chosenMomentMs, restMomentMs } from '@/templates/restMoment';
+import { playedAudio } from '@/document/select/videoSound';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
 import { isAppleTouch } from '@/ui/shell/platform';
 import { Button, Row, Section, Segmented } from '@/ui/inspector/controls';
@@ -171,7 +172,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
             real-time recording — WebM only. It takes as long as the clip and
             the result may drop frames.
             {/* The recording films the canvas alone: say so before the music is missed (D-155). */}
-            {project.audio.length > 0 && <> It is also <strong style={{ color: 'var(--c-ink)' }} data-export-silent>without sound</strong>: your music will not be in the file.</>}
+            {playedAudio(project, media.videoSoundOf).length > 0 && <> It is also <strong style={{ color: 'var(--c-ink)' }} data-export-silent>without sound</strong>: your music and your videos’ sound will not be in the file.</>}
           </p>
         )}
 
@@ -305,6 +306,7 @@ function savesToPhotos(file: File | readonly File[]): boolean {
 function usePictureMoment(clock: PreviewClock | null, project: Project): PictureMoment {
   const videoMs = totalDurationMs(project);
   const restMs = restMomentMs(project);
+  const chosen = chosenMomentMs(project) !== null;
   const subscribe = useCallback(
     (onChange: () => void) => (clock === null ? () => undefined : clock.subscribe(onChange)),
     [clock],
@@ -317,11 +319,12 @@ function usePictureMoment(clock: PreviewClock | null, project: Project): Picture
       clockMs: clock?.timeMs ?? 0,
       playing: clock?.playing ?? false,
       ended: clock?.ended ?? false,
+      chosen,
     });
     return `${moment.atMs}|${moment.source}`;
   });
   const [at, source] = key.split('|');
-  return { atMs: Number(at), source: source === 'paused' ? 'paused' : 'rest' };
+  return { atMs: Number(at), source: source === 'paused' || source === 'chosen' ? source : 'rest' };
 }
 
 /** In whole hundredths, as the slider's readout says it: the last frame of 10s is 9.99s, not 10.00s. */
@@ -411,10 +414,15 @@ function ImageExport({
       <div className="mb-3 flex items-center gap-3">
         <StillPreview project={project} media={media} atMs={moment.atMs} watermark={limits.watermark} />
         <div className="min-w-0 flex-1 text-[11px] leading-relaxed text-ink-muted" data-picture-moment={moment.source}>
-          {moment.source === 'rest' ? (
+          {moment.source === 'chosen' ? (
+            <>
+              <p className="font-semibold text-ink">Your chosen frame · {seconds(moment.atMs)}</p>
+              <p>Where the design comes to rest, chosen with “Use this frame”. Pause on another frame to save that one instead.</p>
+            </>
+          ) : moment.source === 'rest' ? (
             <>
               <p className="font-semibold text-ink">Picture moment · {seconds(moment.atMs)}</p>
-              <p>Where the design comes to rest. Pause on another frame to save that one instead.</p>
+              <p>Where the design comes to rest. Pause on another frame to save that one, or choose it with “Use this frame”.</p>
             </>
           ) : (
             <>
@@ -425,7 +433,7 @@ function ImageExport({
                   onClick={() => { clock.pause(); clock.seek(restMs); }}
                   className="mt-1 rounded-md border border-edge px-2 py-0.5 text-[11px] hover:bg-panel-alt"
                 >
-                  Use the picture moment
+                  {chosenMomentMs(project) === null ? 'Use the picture moment' : 'Use your chosen frame'}
                 </button>
               )}
             </>

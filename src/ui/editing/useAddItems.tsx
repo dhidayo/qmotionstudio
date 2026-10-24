@@ -40,7 +40,7 @@ type ItemSpec = Omit<AddItem, 'id' | 'busy' | 'pro' | 'ready' | 'primary' | 'pic
  * The add bar's items for the project's mode, with what each one does — the
  * one list behind the bar on a computer and the sheet on a phone (D-153).
  *
- * `inputs` are the hidden file inputs for photos, video and music, to be
+ * `inputs` are the hidden file inputs for photos and video, to be
  * rendered once by whoever draws the items: two copies on one page would give
  * two controls of the same name. `note` is the Pro explanation or an upload
  * error, when there is one. `order` is the bar's, or the phone sheet's, which
@@ -115,26 +115,17 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
         layers.pickVideo();
       },
     },
-    shape: {
-      label: 'Shape',
+    /*
+     * Shapes, stickers and numbers are one library (D-158), so one item opens
+     * it, on all three (D-163): "I should have only one button to represent
+     * the Shape, Sticker, and Number … to save space."
+     */
+    element: {
+      label: 'Element',
       icon: 'shape',
-      title: 'Add a shape — a box, a circle, a line, an arrow…',
-      hint: 'A box, circle, line or arrow',
-      run: () => { overlays().openElementPicker({ category: 'Shapes' }); },
-    },
-    sticker: {
-      label: 'Sticker',
-      icon: 'sticker',
-      title: 'Add an animated sticker — like, subscribe, follow…',
-      hint: 'Like, subscribe, follow and more',
-      run: () => { overlays().openElementPicker({ category: 'Stickers' }); },
-    },
-    number: {
-      label: 'Number',
-      icon: 'number',
-      title: 'Add a number — a step, a rank or a figure',
-      hint: 'A step, a rank or a figure',
-      run: () => { overlays().openElementPicker({ category: 'Numbers' }); },
+      title: 'Add an element — a shape, an animated sticker or a number',
+      hint: 'A shape, a sticker or a number',
+      run: () => { overlays().openElementPicker({}); },
     },
     motion: {
       label: 'Motion',
@@ -158,18 +149,10 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
     sound: {
       label: 'Sound',
       icon: 'sound',
-      title: 'Add a sound — a background or an effect, looped to fit',
-      hint: 'Backgrounds and effects',
+      // Your own music too (D-163): the library opens on "Upload your own sound or music".
+      title: 'Add a sound — a background, an effect, or your own sound or music',
+      hint: 'The library, or your own file',
       run: () => { overlays().openSoundPicker(true); },
-    },
-    music: {
-      label: 'Music',
-      icon: 'music',
-      title: 'Add a music track',
-      hint: 'A track from your device',
-      busy: layers.musicBusy ? 'Decoding…' : null,
-      picksFile: true,
-      run: layers.pickMusic,
     },
     // What the scene bar's "+ Scene" was, beside everything else (D-162).
     scene: {

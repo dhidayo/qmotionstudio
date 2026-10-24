@@ -28,9 +28,9 @@ async function open(page: Page, url = '/?template=el-cta-button&aspect=1:1&froze
 
 const picker = (page: Page): Locator => page.getByRole('dialog', { name: 'Elements' });
 
-/** "+ Shape", "+ Sticker" or "+ Number" in the add bar, then a tile. */
-async function add(page: Page, chip: 'shape' | 'sticker' | 'number', tile: string): Promise<void> {
-  await page.locator(`[data-add-bar] [data-add="${chip}"]`).first().click();
+/** "+ Element" in the add bar — shapes, stickers and numbers alike (D-163) — then a tile. */
+async function add(page: Page, tile: string): Promise<void> {
+  await page.locator('[data-add-bar] [data-add="element"]').first().click();
   await expect(picker(page)).toBeVisible();
   await picker(page).locator(`[data-element-tile="${tile}"]`).click();
   await expect(picker(page)).toHaveCount(0);
@@ -84,11 +84,14 @@ const difference = (a: number[], b: number[]): number => a.reduce((sum, v, i) =>
 test.describe('on a computer', () => {
   test.use({ viewport: DESKTOP });
 
-  test('the add bar opens the library on its own kind, which searches and switches', async ({ page }) => {
+  test('one + Element opens the library on everything, which searches and switches (D-163)', async ({ page }) => {
     await open(page);
-    await page.locator('[data-add-bar] [data-add="shape"]').first().click();
+    // One chip for the one library, not three (D-163).
+    for (const gone of ['shape', 'sticker', 'number']) await expect(page.locator(`[data-add-bar] [data-add="${gone}"]`)).toHaveCount(0);
+    await page.locator('[data-add-bar] [data-add="element"]').first().click();
     const dialog = picker(page);
-    await expect(dialog.getByRole('tab', { name: 'Shapes' })).toHaveAttribute('aria-selected', 'true');
+    await expect(dialog.getByRole('tab', { name: 'All' })).toHaveAttribute('aria-selected', 'true');
+    await dialog.getByRole('tab', { name: 'Shapes' }).click();
     await expect(dialog.locator('[data-element-tile="shape:star"]')).toBeVisible();
     await expect(dialog.locator('[data-element-tile^="counter:"]')).toHaveCount(0);
 
@@ -108,7 +111,7 @@ test.describe('on a computer', () => {
 
   test('a shape is added, styled, and stretched by its sides in one undo step', async ({ page }) => {
     await open(page);
-    await add(page, 'shape', 'shape:star');
+    await add(page, 'shape:star');
     await expect(page.locator('section[data-section="Shape"]')).toBeVisible();
 
     // A colour of the look restyles the picture.
@@ -139,17 +142,17 @@ test.describe('on a computer', () => {
 
   test('a line has two ends to pull, and a sticker only corners', async ({ page }) => {
     await open(page);
-    await add(page, 'shape', 'shape:line');
+    await add(page, 'shape:line');
     const grips = async (): Promise<string[]> =>
       page.locator(`${SELECTION} [data-grip]`).evaluateAll((all) => all.map((g) => g.getAttribute('data-grip') ?? ''));
     expect((await grips()).sort()).toEqual(['e', 'rotate', 'w']);
-    await add(page, 'sticker', 'sticker:check');
+    await add(page, 'sticker:check');
     expect((await grips()).sort()).toEqual(['ne', 'nw', 'rotate', 'se', 'sw']);
   });
 
   test('a sticker plays, holds still when asked, and can be changed for another', async ({ page }) => {
     await open(page);
-    await add(page, 'sticker', 'sticker:check');
+    await add(page, 'sticker:check');
     await expect(page.locator('section[data-section="Sticker"]')).toBeVisible();
 
     // The middle of the tick's circle, where the design behind does not show.
@@ -174,7 +177,7 @@ test.describe('on a computer', () => {
 
   test('a number counts, keeps its box while it counts, and counts to what is typed', async ({ page }) => {
     await open(page);
-    await add(page, 'number', 'counter:followers');
+    await add(page, 'counter:followers');
     await expect(page.locator('section[data-section="Number"]')).toBeVisible();
 
     await seek(page, 300);
@@ -195,7 +198,7 @@ test.describe('on a computer', () => {
 
   test('the picture’s menu adds an element, and the library lists what is on it', async ({ page }) => {
     await open(page);
-    await add(page, 'shape', 'shape:heart');
+    await add(page, 'shape:heart');
     await page.keyboard.press('Escape');
     const canvas = await page.locator('canvas').boundingBox();
     if (!canvas) throw new Error('no canvas');
@@ -213,9 +216,9 @@ test.describe('on a computer', () => {
   test('elements are kept when the page is reloaded', async ({ page }) => {
     // No design in the address, so a reload reopens the saved project.
     await open(page, '/');
-    await add(page, 'shape', 'shape:badge');
-    await add(page, 'sticker', 'sticker:check');
-    await add(page, 'number', 'counter:rating');
+    await add(page, 'shape:badge');
+    await add(page, 'sticker:check');
+    await add(page, 'counter:rating');
     // Past the autosave's wait, and written (persistence.spec's `settled`).
     await page.waitForTimeout(1_200);
     await expect(page.locator('[data-save-state]')).toHaveAttribute('data-save-state', 'saved', { timeout: 10_000 });
@@ -226,7 +229,7 @@ test.describe('on a computer', () => {
 
   test('in a video an element is a clip named for what it is, and stays when the video becomes an image', async ({ page }) => {
     await open(page, '/?template=quick-pitch&aspect=9:16&frozen=1000');
-    await add(page, 'sticker', 'sticker:check');
+    await add(page, 'sticker:check');
     await expect(page.locator('[data-overlay-clip]').first()).toHaveAttribute('aria-label', /^Check tick, layer 1/);
     await page.getByRole('group', { name: 'Mode' }).getByRole('button', { name: 'Image', exact: true }).click();
     await expect.poll(async () => (await overlays(page)).map((o) => o.kind)).toEqual(['sticker']);
@@ -313,10 +316,9 @@ test.describe('on a phone', () => {
   test('the Add sheet opens the library as a sheet that scrolls; a tap adds and selects', async ({ page }) => {
     await open(page, '/?template=pop-float&aspect=1:1&frozen=3000');
     await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Add', exact: true }).tap();
-    await page.locator('[data-add="sticker"]').tap();
+    await page.locator('[data-add="element"]').tap();
     const dialog = picker(page);
-    await expect(dialog.getByRole('tab', { name: 'Stickers' })).toHaveAttribute('aria-selected', 'true');
-    await dialog.getByRole('tab', { name: 'All' }).tap();
+    await expect(dialog.getByRole('tab', { name: 'All' })).toHaveAttribute('aria-selected', 'true');
     const grid = dialog.locator('[data-element-grid]');
     const scrolls = await grid.evaluate((el) => el.scrollHeight > el.clientHeight + 10);
     expect(scrolls).toBe(true);

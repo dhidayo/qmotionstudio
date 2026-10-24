@@ -44,8 +44,29 @@ window.__recordBands = function (options) {
   if (!ctx) throw new Error('no 2d context');
 
   const stream = canvas.captureStream(options.fps);
-  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-    ? 'video/webm;codecs=vp9'
+  /*
+   * With sound (D-163): a 440Hz tone through the red and blue bands, silence
+   * through green and yellow — the same loud-quiet shape as beat-bands.wav, so
+   * a test can tell whether a video's sound is in the mix, and in step with
+   * its picture, from an RMS window.
+   */
+  let audio = null;
+  let level = null;
+  if (options.sound) {
+    audio = new AudioContext({ sampleRate: 48000 });
+    const tone = audio.createOscillator();
+    tone.frequency.value = 440;
+    level = audio.createGain();
+    level.gain.value = 0;
+    const out = audio.createMediaStreamDestination();
+    tone.connect(level);
+    level.connect(out);
+    tone.start();
+    out.stream.getAudioTracks().forEach(function (track) { stream.addTrack(track); });
+  }
+  const codecs = options.sound ? 'vp9,opus' : 'vp9';
+  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=' + codecs)
+    ? 'video/webm;codecs=' + codecs
     : 'video/webm';
   const recorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 1200000 });
   const chunks = [];
@@ -56,6 +77,7 @@ window.__recordBands = function (options) {
     };
     recorder.onerror = function () { rejectPromise(new Error('MediaRecorder failed')); };
     recorder.onstop = function () {
+      if (audio) void audio.close();
       const blob = new Blob(chunks, { type: 'video/webm' });
       const reader = new FileReader();
       reader.onloadend = function () { resolvePromise(String(reader.result)); };
@@ -70,6 +92,7 @@ window.__recordBands = function (options) {
 
     recorder.start();
     const began = performance.now();
+    let lastBand = -1;
 
     const paint = function () {
       const elapsed = performance.now() - began;
@@ -79,6 +102,11 @@ window.__recordBands = function (options) {
         return;
       }
       const index = Math.min(options.bands.length - 1, Math.floor(elapsed / options.bandMs));
+      if (audio && index !== lastBand) {
+        // Switched with the picture, on the same frame, so the two stay in step.
+        level.gain.setValueAtTime(index % 2 === 0 ? 0.5 : 0, audio.currentTime);
+      }
+      lastBand = index;
       ctx.fillStyle = options.bands[index].css;
       ctx.fillRect(0, 0, options.size, options.size);
       requestAnimationFrame(paint);
@@ -167,32 +195,41 @@ async function main(): Promise<void> {
     `${LONG_SECONDS}s at ${LONG_RATE}Hz, for the overhang case.`,
   );
 
-  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  // PW_CHROMIUM points at a browser of your own, where Playwright's is not installed.
+  const executablePath = process.env['PW_CHROMIUM'];
+  const browser = await chromium.launch({
+    args: ['--autoplay-policy=no-user-gesture-required'],
+    ...(executablePath ? { executablePath } : {}),
+  });
   const page = await browser.newPage();
   await page.setContent('<!doctype html><meta charset="utf-8"><body></body>');
   await page.addScriptTag({ content: PAGE_SOURCE });
 
-  const dataUrl = await page.evaluate(
-    (options: { size: number; fps: number; bandMs: number; bands: readonly { name: string; css: string }[] }) =>
+  const record = (sound: boolean): Promise<string> => page.evaluate(
+    (options: { size: number; fps: number; bandMs: number; sound: boolean; bands: readonly { name: string; css: string }[] }) =>
       (globalThis as unknown as {
         __recordBands: (o: typeof options) => Promise<string>;
       }).__recordBands(options),
-    { size: SIZE, fps: FPS, bandMs: BAND_MS, bands: BANDS },
+    { size: SIZE, fps: FPS, bandMs: BAND_MS, sound, bands: BANDS },
   );
+  const silent = await record(false);
+  const withSound = await record(true);
 
   await browser.close();
 
-  const base64 = dataUrl.split(',')[1];
-  if (!base64) throw new Error('the recording produced no data');
-  const bytes = Buffer.from(base64, 'base64');
-
-  const path = resolve(OUT_DIR, 'colour-bands.webm');
-  await writeFile(path, bytes);
-
-  console.log(
-    `Wrote tests/fixtures/colour-bands.webm — ${(bytes.length / 1024).toFixed(0)} KB, ` +
-    `${BANDS.length * BAND_MS}ms of ${BANDS.map((b) => b.name).join(', ')}.`,
-  );
+  for (const [file, dataUrl, what] of [
+    ['colour-bands.webm', silent, 'no sound'],
+    ['colour-bands-sound.webm', withSound, 'a 440Hz tone through red and blue, silence through green and yellow'],
+  ] as const) {
+    const base64 = dataUrl.split(',')[1];
+    if (!base64) throw new Error('the recording produced no data');
+    const bytes = Buffer.from(base64, 'base64');
+    await writeFile(resolve(OUT_DIR, file), bytes);
+    console.log(
+      `Wrote tests/fixtures/${file} — ${(bytes.length / 1024).toFixed(0)} KB, ` +
+      `${BANDS.length * BAND_MS}ms of ${BANDS.map((b) => b.name).join(', ')}; ${what}.`,
+    );
+  }
 }
 
 main().catch((error: unknown) => {

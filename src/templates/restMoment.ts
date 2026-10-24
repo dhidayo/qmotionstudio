@@ -14,6 +14,12 @@ import { summaryFor } from './manifest';
  * none rests on its last frame, which is where playing once ends anyway, so
  * nothing jumps.
  *
+ * D-163 lets the person choose it: "let the animation stop on a specific
+ * image so that it can be the basis for export to JPG." Paused on a frame,
+ * "Use this frame" makes it the picture (`Project.pictureAtMs`) — the design
+ * plays once and rests there, and Export → Image saves it — and "Reset"
+ * goes back to the design's own.
+ *
  * Pure, so it is tested in Node and shared by the preview and the export.
  */
 
@@ -29,6 +35,27 @@ const clampSpeed = (speed: number): number => Math.max(0.25, Math.min(3, speed |
  * on its end) and divided by the speed (§8.4's speed is a time remap, D-006).
  */
 export function restMomentMs(project: Project): number | null {
+  const own = designMomentMs(project);
+  if (own === null) return null;
+  const chosen = chosenMomentMs(project);
+  return chosen ?? own;
+}
+
+/**
+ * The frame the person chose with "Use this frame" (D-163), kept inside the
+ * scene as it is now — a design made shorter or faster since rests on its
+ * last frame rather than on nothing. Null when none is chosen, or in a video.
+ */
+export function chosenMomentMs(project: Project): number | null {
+  if (project.mode !== 'showcase') return null;
+  const chosen = project.pictureAtMs;
+  const scene = project.scenes[0];
+  if (chosen === undefined || !Number.isFinite(chosen) || !scene) return null;
+  return Math.max(0, Math.min(sceneLengthMs(scene) - 1, Math.round(chosen)));
+}
+
+/** The design's own picture moment, whatever the person has chosen (D-155) — where "Reset" goes back to. */
+export function designMomentMs(project: Project): number | null {
   if (project.mode !== 'showcase') return null;
   const scene = project.scenes[0];
   if (!scene) return null;

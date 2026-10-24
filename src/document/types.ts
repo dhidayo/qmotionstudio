@@ -277,12 +277,25 @@ export type Scene = {
   readonly inputs: SceneInputs;
 };
 
+/**
+ * A video layer (Pro, §9). Its sound plays with it (D-163): `volumeDb` from
+ * −40 to +6, 0 — as recorded — when unset, and `muted` silences it. Both are
+ * optional, so older projects need no migration; their videos, silent until
+ * D-163, now play their sound at 0 dB.
+ */
+export type CustomMediaContent = {
+  readonly kind: 'customMedia';
+  readonly mediaId: string;
+  readonly volumeDb?: number;
+  readonly muted?: boolean;
+};
+
 export type AnimPreset = 'none' | 'fade' | 'riseIn' | 'popIn' | 'slideIn' | 'wipeIn';
 
 export type OverlayContent =
   | { readonly kind: 'photo'; readonly mediaId: string }
   | { readonly kind: 'text'; readonly text: string; readonly style: TextStyle }
-  | { readonly kind: 'customMedia'; readonly mediaId: string }
+  | CustomMediaContent
   | ShapeContent
   | StickerContent
   | CounterContent;
@@ -466,6 +479,14 @@ export type Project = {
    * which read it from their scenes.
    */
   readonly photoLibrary?: readonly string[];
+  /**
+   * The frame an image rests on and saves as its picture, chosen by the
+   * person (D-163): "let the animation stop on a specific image so that it
+   * can be the basis for export to JPG". On the project clock, in ms. Absent
+   * — as on every project saved before it — the design's own picture moment
+   * is used (D-155). Image mode only; a video ignores it.
+   */
+  readonly pictureAtMs?: number;
   /**
    * D-013. Set when the project was expanded from a multi-scene ad template.
    * Provenance only — scenes stay a flat array, exactly as §5 specifies.

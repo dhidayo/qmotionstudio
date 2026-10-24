@@ -9,7 +9,7 @@ import { useMediaStore } from '@/ui/media/MediaProvider';
 import { AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 
 /**
- * Adding layers and music, from anywhere (D-109): the add bar on a computer,
+ * Adding layers, from anywhere (D-109): the add bar on a computer,
  * the Add sheet on a phone (D-153). One implementation, so a caption added on
  * a phone lands exactly where one added on a computer would.
  *
@@ -19,10 +19,8 @@ import { AUDIO_ACCEPT_ATTRIBUTE, VIDEO_ACCEPT_ATTRIBUTE, useUpload } from '@/ui/
 export function useAddLayers(): {
   addText: () => void;
   pickVideo: () => void;
-  pickMusic: () => void;
   canVideo: boolean;
   videoBusy: boolean;
-  musicBusy: boolean;
   error: string | null;
   inputs: React.JSX.Element;
 } {
@@ -60,42 +58,35 @@ export function useAddLayers(): {
     video: true,
   });
 
-  const music = useMusicUpload();
-
   const inputs = (
-    <>
-      <input
-        ref={videoInput}
-        type="file"
-        accept={VIDEO_ACCEPT_ATTRIBUTE}
-        hidden
-        aria-label="Add a video overlay"
-        onChange={(e) => {
-          void addVideoFiles([...(e.target.files ?? [])]);
-          e.target.value = '';
-        }}
-      />
-      {music.input}
-    </>
+    <input
+      ref={videoInput}
+      type="file"
+      accept={VIDEO_ACCEPT_ATTRIBUTE}
+      hidden
+      aria-label="Add a video overlay"
+      onChange={(e) => {
+        void addVideoFiles([...(e.target.files ?? [])]);
+        e.target.value = '';
+      }}
+    />
   );
 
   return {
     addText,
     pickVideo: () => { videoInput.current?.click(); },
-    pickMusic: music.pick,
     canVideo: limits.customMedia,
     videoBusy: videoUpload.busy,
-    musicBusy: music.busy,
-    error: videoUpload.error ?? music.error,
+    error: videoUpload.error,
     inputs,
   };
 }
 
 /**
- * Music from the device (§10): a hidden file input and what happens once a
- * track is decoded — a clip from the start of the video, selected. The add
- * bar's "+ Music" uses it, and so does the sound library's "Use a music file
- * from your device…" (D-156), each with an input of its own name.
+ * Sound or music from the device (§10): a hidden file input and what happens
+ * once a track is decoded — a clip from the start of the video, selected.
+ * The sound library's "Upload your own sound or music" uses it (D-156,
+ * D-163), the one way to add a file of your own now that + Music has gone.
  */
 export function useMusicUpload(label = 'Add a music track'): {
   pick: () => void;

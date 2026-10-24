@@ -11,6 +11,13 @@ import { resolve } from 'node:path';
 
 export const FIXTURE = resolve(process.cwd(), 'tests/fixtures/colour-bands.webm');
 
+/**
+ * The same four bands with sound (D-163): a 440Hz tone through red and blue,
+ * silence through green and yellow. So loud half a second into the clip,
+ * quiet at one and a half, loud again at two and a half.
+ */
+export const SOUND_FIXTURE = resolve(process.cwd(), 'tests/fixtures/colour-bands-sound.webm');
+
 /** Where each band sits inside the four-second clip, sampled mid-band. */
 export const BAND = { red: 500, green: 1_500, blue: 2_500, yellow: 3_500 } as const;
 
@@ -74,8 +81,8 @@ export async function openProAd(page: Page, frozenMs: number): Promise<void> {
 }
 
 /** Uploads the fixture and neutralises the overlay's entrance and exit. */
-export async function addClip(page: Page): Promise<void> {
-  await page.getByLabel('Add a video overlay').setInputFiles(FIXTURE);
+export async function addClip(page: Page, fixture = FIXTURE): Promise<void> {
+  await page.getByLabel('Add a video overlay').setInputFiles(fixture);
   await expect(page.getByLabel('Overlay inspector')).toBeVisible({ timeout: 15_000 });
 
   for (const group of ['Entrance', 'Exit']) {

@@ -1,5 +1,6 @@
 import type { MediaEntry } from '../store';
 import type { VideoClip } from './clip';
+import { decodeSoundTrack } from '../audio/decode';
 
 /**
  * Custom media decode (§9).
@@ -90,6 +91,13 @@ export async function decodeVideo(
     );
   }
 
+  /*
+   * Its sound, decoded with the picture so the entry lands whole (D-163): an
+   * export that finds the video ready finds its sound ready too, and one with
+   * no sound track lands without, which the mix reads as "nothing to hear".
+   */
+  const audio = await decodeSoundTrack(blob);
+
   return {
     id: options.id,
     kind: 'video',
@@ -97,6 +105,7 @@ export async function decodeVideo(
     blob,
     bitmap: null,
     clip,
+    ...(audio ? { audio } : {}),
     width: clip.width,
     height: clip.height,
     durationMs: clip.durationMs,

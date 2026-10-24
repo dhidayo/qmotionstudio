@@ -6,13 +6,23 @@ import { ADD_ORDER, addItemIds, gridItemIds } from './addItems';
 describe('the add bar’s items', () => {
   it('a video has everything, in the agreed order, photos first', () => {
     expect(addItemIds('motionAd')).toEqual([
-      'photos', 'text', 'shape', 'sticker', 'number', 'motion', 'effect', 'sound', 'music', 'scene', 'video',
+      'photos', 'text', 'element', 'motion', 'effect', 'sound', 'scene', 'video',
     ]);
   });
 
-  it('a design has no video layer, sound, music or scene, and keeps the order of the rest', () => {
+  it('has no + Music, and one + Element for shapes, stickers and numbers (D-163)', () => {
+    for (const mode of ['motionAd', 'showcase'] as const) {
+      for (const gone of ['music', 'shape', 'sticker', 'number']) {
+        expect(addItemIds(mode)).not.toContain(gone);
+        expect(gridItemIds(mode)).not.toContain(gone);
+      }
+      expect(addItemIds(mode).filter((id) => id === 'element')).toHaveLength(1);
+    }
+  });
+
+  it('a design has no video layer, sound or scene, and keeps the order of the rest', () => {
     const ids = addItemIds('showcase');
-    expect(ids).toEqual(['photos', 'text', 'shape', 'sticker', 'number', 'motion', 'effect']);
+    expect(ids).toEqual(['photos', 'text', 'element', 'motion', 'effect']);
     const positions = ids.map((id) => ADD_ORDER.indexOf(id));
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
   });

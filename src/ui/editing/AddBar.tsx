@@ -30,8 +30,10 @@ import { useAddItems, type AddItem } from './useAddItems';
  * and a line saying what each one does, + Scene first — and no + Photos, which
  * on a phone is the Photos tool's (see `gridItemIds`).
  *
- * Draw one per screen. It renders the hidden file inputs for photos, video
- * and music, and two of those would be two controls of the same name.
+ * Draw one per screen. It renders the hidden file inputs for photos and
+ * video, and two of those would be two controls of the same name. Music has
+ * no item of its own any more (D-163): it is + Sound's "Upload your own sound
+ * or music", whose input lives with the sound library.
  */
 export function AddBar({
   variant = 'bar',
@@ -88,7 +90,7 @@ export function AddBar({
             data-choose-design={mode}
             onClick={() => { useOverlays.getState().openPhonePanel('designs'); }}
             title={copy.chooseHint}
-            className={`${CHIP} flex items-center gap-1.5 border-edge-strong font-medium text-ink`}
+            className={`${CHIP} ${PLAIN}`}
           >
             <Icon name="designs" size={14} /> {copy.bar}
           </button>
@@ -100,10 +102,9 @@ export function AddBar({
             data-continue-video
             onClick={continueAsVideo}
             title="This image becomes scene 1 of a video, animated, and you pick what comes next"
-            className={`${CHIP} font-semibold`}
-            style={{ borderColor: 'var(--c-accent)', color: 'var(--c-accent)' }}
+            className={`${CHIP} ${ACCENT}`}
           >
-            Make a video
+            <Icon name="video" size={14} /> Make a video
           </button>
         )}
       </SideScroll>
@@ -114,10 +115,31 @@ export function AddBar({
   );
 }
 
-const CHIP = 'shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1 text-[12px] hover:bg-panel-alt disabled:opacity-40';
+/*
+ * Every button in the row is drawn one way (D-163): "The + Text, + Shape, etc.
+ * needs to be very clear to the eyes; just like how you represented
+ * Templates", and "fix the hover on Photo. Make the UI consistent with other
+ * buttons there." So each — Templates or Choose a design, every add item,
+ * Make a video — is the same height and shape: its icon, the words at a
+ * medium weight, a border that can be seen, the panel behind. Only the
+ * colour of the words and border differs, and they all hover alike, to the
+ * accent's soft tint with an accent border. + Photos used to be a solid
+ * accent button whose hover the shared one overrode, white on white.
+ */
+const CHIP = 'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border bg-panel px-2.5 text-[12px] font-medium transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-40';
+/** Templates, and every add item that is not lit: ink, with a clear border. */
+const PLAIN = 'border-edge-strong text-ink';
+/** + Photos, the main action, and Make a video: the accent's words and border, nothing filled. */
+const ACCENT = 'border-accent font-semibold text-accent';
+/** + Motion with something selected: the accent, tinted, so it says it is ready. */
+const READY = 'border-accent bg-accent-soft text-accent';
 
-/** One action in the bar: "+ Text". + Photos, the main one, in the accent colour. */
+/**
+ * One action in the bar: its icon and "+ Text". + Photos, the main one, in
+ * the accent colour; + Motion tinted with it once there is something to move.
+ */
 function Chip({ item }: { item: AddItem }): React.JSX.Element {
+  const look = item.primary ? ACCENT : item.ready ? READY : PLAIN;
   return (
     <button
       type="button"
@@ -126,12 +148,9 @@ function Chip({ item }: { item: AddItem }): React.JSX.Element {
       onClick={item.run}
       disabled={item.busy !== null}
       title={item.title}
-      className={`${CHIP} ${item.primary ? 'border-transparent bg-accent font-semibold text-accent-ink hover:bg-accent-hover' : ''}`}
-      style={item.primary ? undefined : {
-        borderColor: item.ready ? 'var(--c-accent)' : 'var(--c-edge)',
-        color: item.ready ? 'var(--c-accent)' : 'var(--c-ink-muted)',
-      }}
+      className={`${CHIP} ${look}`}
     >
+      <Icon name={item.icon} size={14} />
       {item.busy ?? `+ ${item.label}`}
       {item.pro && <ProBadge />}
     </button>
@@ -152,7 +171,7 @@ function SettingsToggle(): React.JSX.Element {
       aria-expanded={open}
       onClick={() => { useOverlays.getState().setInspectorSheet(!open); }}
       title="Photos, text, effects and style — the settings for the design and whatever is selected"
-      className="flex shrink-0 items-center gap-1 rounded-md border border-edge px-2 py-1 text-[12px] font-medium text-ink hover:bg-panel-alt"
+      className={`${CHIP} ${PLAIN}`}
     >
       <Icon name="settings" size={14} /> Settings
     </button>

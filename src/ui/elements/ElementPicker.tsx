@@ -14,9 +14,9 @@ import { elementTiles, stickerCategories, tileMatches, type ElementTile } from '
 /**
  * The elements library (D-158): shapes, animated stickers and numbers.
  *
- * One window for every way in — "+ Shape", "+ Sticker" and "+ Number" in the
- * add bar each open it on their own chip, "Add an element…" on the picture's
- * menu opens it on everything — modelled on the effects library: a sheet from
+ * One window for every way in — "+ Element" in the add bar (once three
+ * chips, "+ Shape", "+ Sticker" and "+ Number", D-163) and "Add an element…"
+ * on the picture's menu both open it on everything — modelled on the effects library: a sheet from
  * the bottom on a phone, a window on a computer, chips that scroll sideways
  * on a narrow screen and a grid of live previews that scrolls down.
  *

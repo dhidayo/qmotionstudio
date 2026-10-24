@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { addClip, BAND, DROPPED_AT_MS, nearestBand } from '../support/customMedia';
+import { addClip, BAND, DROPPED_AT_MS, nearestBand, openProAd, SOUND_FIXTURE } from '../support/customMedia';
 import { addMusic, EXPECTED, RMS_SOURCE } from '../support/audio';
 
 /**
@@ -717,6 +717,53 @@ test.describe('looping audio export (D-156)', () => {
     for (const [index, level] of analysis.levels.entries()) {
       expect(level, `music at point ${index}`).toBeGreaterThan(0.01);
     }
+  });
+});
+
+/**
+ * A video layer's own sound (D-163), through the same offline mix as music.
+ * The fixture's tone sounds through its red and blue seconds and is silent
+ * through green and yellow, so a sound in step with its picture is loud
+ * half a second into the clip and quiet a second later. Muted, the file has
+ * no sound at all.
+ */
+test.describe('video sound export (D-163)', () => {
+  test.beforeEach(async ({ page }) => {
+    test.setTimeout(2 * EXPORT_TIMEOUT_MS + 90_000);
+    await captureDownloads(page);
+    await page.addInitScript({ content: RMS_SOURCE });
+  });
+
+  const levelsAt = (page: Page, points: readonly number[]) => page.evaluate(async (at: number[]) => {
+    const { blob } = (globalThis as unknown as { __exported: { blob: Blob } }).__exported;
+    const rms = (globalThis as unknown as {
+      __rmsAt: (b: Blob, p: number[], w: number) => Promise<{ durationS: number; levels: number[] }>;
+    }).__rmsAt;
+    // A file with no sound track will not decode as audio: that is silence too.
+    return rms(blob, at, 0.3).then((result) => result.levels, () => at.map(() => 0));
+  }, [...points]);
+
+  test('a video’s sound is in the file, in step with its picture, and muting it silences it', async ({ page }) => {
+    await openProAd(page, DROPPED_AT_MS);
+    await addClip(page, SOUND_FIXTURE);
+
+    await runExport(page, 'webm');
+
+    await waitForExport(page, 140_000);
+    const at = [BAND.red, BAND.green, BAND.blue].map((ms) => (DROPPED_AT_MS + ms) / 1000);
+    const [red, green, blue, before] = await levelsAt(page, [...at, 1.0]);
+    expect(red, 'the red second should sound').toBeGreaterThan(0.05);
+    expect(green, 'the green second should be quiet').toBeLessThan(0.02);
+    expect(blue, 'the blue second should sound').toBeGreaterThan(0.05);
+    expect(before, 'before the layer starts, nothing').toBeLessThan(0.02);
+
+    await page.getByRole('dialog', { name: 'Export' }).getByRole('button', { name: 'Close' }).first().click();
+    await page.getByLabel('Overlay inspector').getByRole('switch', { name: 'Mute' }).click();
+    await page.evaluate(() => { delete (globalThis as unknown as { __exported?: unknown }).__exported; });
+    await runExport(page, 'webm');
+    await waitForExport(page, 140_000);
+    const muted = await levelsAt(page, at);
+    for (const level of muted) expect(level, 'muted, the file is silent').toBeLessThan(0.02);
   });
 });
 

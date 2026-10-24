@@ -91,4 +91,26 @@ export async function decodeAudio(
   };
 }
 
+/**
+ * A video's own sound (D-163): the audio track of an MP4 or WebM, decoded
+ * whole like an imported track, so the video layer can play it in step with
+ * its picture. `decodeAudioData` reads a video container's audio and ignores
+ * the picture.
+ *
+ * Null, not an error, when there is nothing to hear: a video with no sound
+ * track (a screen recording, a GIF made into an MP4) simply has none, and
+ * Web Audio says so by refusing to decode. Null too where Web Audio does not
+ * exist — the export worker opens videos for their frames only, and its mix
+ * was made on the main thread (D-053).
+ */
+export async function decodeSoundTrack(blob: Blob): Promise<AudioBuffer | null> {
+  if (typeof OfflineAudioContext === 'undefined') return null;
+  try {
+    const buffer = await decodingContext().decodeAudioData(await blob.arrayBuffer());
+    return buffer.duration > 0 && buffer.length > 0 ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
 export type { Waveform };
