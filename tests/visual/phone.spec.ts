@@ -354,7 +354,7 @@ test.describe('Corporate Ads on a phone', () => {
     await expect(strip.locator('[data-phone-scene]')).toHaveCount(5);
     const note = strip.getByRole('note');
     await expect(note).toContainText('larger screen');
-    await note.getByRole('button', { name: 'Got it' }).tap();
+    await note.getByRole('button', { name: 'Close tip' }).tap();
     await expect(note).toHaveCount(0);
 
     await strip.getByRole('button', { name: 'Open the full timeline' }).tap();
@@ -365,6 +365,17 @@ test.describe('Corporate Ads on a phone', () => {
     await sheet.getByRole('button', { name: 'Close timeline' }).tap();
 
     // Once is enough.
+    await page.reload();
+    await page.waitForSelector('[data-phone-timeline]');
+    await expect(page.locator('[data-phone-timeline]').getByRole('note')).toHaveCount(0);
+  });
+
+  test('the note closes by itself after ten seconds, and stays closed (D-163)', async ({ page }) => {
+    test.slow();
+    await open(page, AD);
+    const note = page.locator('[data-phone-timeline]').getByRole('note');
+    await expect(note).toBeVisible();
+    await expect(note).toHaveCount(0, { timeout: 15_000 });
     await page.reload();
     await page.waitForSelector('[data-phone-timeline]');
     await expect(page.locator('[data-phone-timeline]').getByRole('note')).toHaveCount(0);

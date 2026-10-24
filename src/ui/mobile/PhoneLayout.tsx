@@ -180,6 +180,8 @@ function clockTime(ms: number): string {
 }
 
 const TIP_KEY = 'ms.phoneTimelineTip';
+/** How long the timeline note stays before it closes itself — long enough to read twice. */
+const TIP_SHOWN_MS = 10_000;
 
 /**
  * Corporate Ads' timeline, folded (point 8). A phone is too narrow for five
@@ -197,6 +199,14 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
   const durationMs = Math.max(1, timelineSpanMs(project));
   const spans = useMemo(() => sceneSpans(project.scenes), [project.scenes]);
   const [tip, setTip] = useState(() => !readTipSeen());
+  const closeTip = useCallback(() => { setTip(false); rememberTipSeen(); }, []);
+  // "Space management is important": the note gives the timeline its room
+  // back after a few seconds, closed or not, and is not shown again (D-163).
+  useEffect(() => {
+    if (!tip) return undefined;
+    const id = setTimeout(closeTip, TIP_SHOWN_MS);
+    return () => { clearTimeout(id); };
+  }, [tip, closeTip]);
   const lane = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLSpanElement>(null);
 
@@ -310,12 +320,20 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
         </button>
       </div>
       {tip && (
-        <div className="mt-1.5 flex items-start gap-2 rounded-lg px-2 py-1.5 text-[11px]" style={{ background: 'var(--c-accent-soft)' }} role="note">
+        <div className="mt-1.5 flex items-center gap-1 rounded-lg py-1 pl-2 pr-1 text-[11px]" style={{ background: 'var(--c-accent-soft)' }} role="note">
           <span className="min-w-0 flex-1">
             Detailed timing work is easier on a larger screen. Everything still works here — tap Timeline to open it.
           </span>
-          <button type="button" onClick={() => { setTip(false); rememberTipSeen(); }} className="font-semibold text-accent">
-            Got it
+          {/* A quiet ×, not a second call to action: the note is a hint, and it goes by itself anyway (D-163). */}
+          <button
+            type="button"
+            onClick={closeTip}
+            aria-label="Close tip"
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-ink-muted hover:bg-panel-alt"
+          >
+            <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+            </svg>
           </button>
         </div>
       )}
