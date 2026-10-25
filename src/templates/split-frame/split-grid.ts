@@ -1,4 +1,4 @@
-import { colorFill, roleFill, type Keyframe, type Layer } from '@/core/types';
+import { colorFill, roleFill, type Keyframe, type Layer, type Tracks } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import type { SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
@@ -6,7 +6,9 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { backgroundLayer } from '../_shared/chrome';
+import { backgroundLayer, contentFloor } from '../_shared/chrome';
+import { depthGroup, serpentine } from '../_families/kit';
+import { emphasisedAfter, focusIn, turnsAlong } from '../_families/emphasis';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -71,7 +73,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   // instead of sitting on top of it.
   const typeH = headRun.height + capRun.height + unit * 0.02;
   const gridTop = safe.y + typeH + unit * 0.05;
-  const gridH = Math.max(unit * 0.3, safe.y + safe.h - gridTop);
+  // Down to the content floor, clear of the caption band.
+  const gridH = Math.max(unit * 0.3, contentFloor(design, safe) - gridTop);
 
   /*
    * Columns from the count, so the last row is never short.
@@ -90,6 +93,16 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const cells = ctx.grid(count, { cols, cellW, cellH, gapX: gap, gapY: gap, center: true });
   const centreX = safe.x + safe.w / 2;
   const centreY = gridTop + gridH / 2;
+
+  /*
+   * Once the sheet is down, one photograph at a time is picked out (D-157),
+   * snaking along the rows so the focus only moves to a neighbour: it grows a
+   * little over the gap, in front of the others, which settle back and darken.
+   * A cell at the edge steps inward as it grows, so it never leaves the sheet.
+   */
+  const sheet = { cx: centreX, cy: centreY, w: safe.w, h: gridH };
+  const assembledMs = 620 + ctx.stagger(count - 1, count, 90, 'start') + 620;
+  const cellsLayers: Layer[] = [];
 
   ctx.repeat(photos, (photo, index) => {
     const cell = cells[index];
@@ -116,22 +129,25 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     // someone reads it.
     const delay = 620 + ctx.stagger(index, count, 90, 'start');
 
-    layers.push({
+    const written: Tracks = {
+      x: [kf(0, x)],
+      y: [kf(delay, y + unit * 0.05), kf(delay + 620, y, 'outCubic')],
+      scaleX: [kf(delay, 0.88), kf(delay + 620, 1, { kind: 'spring', stiffness: 220, damping: 20, mass: 1 })],
+      scaleY: [kf(delay, 0.88), kf(delay + 620, 1, { kind: 'spring', stiffness: 220, damping: 20, mass: 1 })],
+      opacity: [kf(delay, 0), kf(delay + 280, 1)],
+    };
+    const order = serpentine(index % cols, Math.floor(index / cols), cols);
+    cellsLayers.push({
       id: ctx.id('cell'),
       type: 'image',
       startMs: 0,
       endMs: durationMs,
-      tracks: {
-        x: [kf(0, x)],
-        y: [kf(delay, y + unit * 0.05), kf(delay + 620, y, 'outCubic')],
-        scaleX: [kf(delay, 0.88), kf(delay + 620, 1, { kind: 'spring', stiffness: 220, damping: 20, mass: 1 })],
-        scaleY: [kf(delay, 0.88), kf(delay + 620, 1, { kind: 'spring', stiffness: 220, damping: 20, mass: 1 })],
-        opacity: [kf(delay, 0), kf(delay + 280, 1)],
-      },
+      tracks: emphasisedAfter(written, assembledMs, durationMs, (base, ms) => focusIn(base, turnsAlong(ms, order, count, assembledMs, durationMs, 900), sheet, { w: cell.w, h: cell.h }, 1.14)),
       props: { ...props, w: cell.w, h: cell.h },
     });
     return null;
   });
+  layers.push(depthGroup(ctx, 'sheet', cellsLayers));
 
   layers.push({
     id: ctx.id('headline'),

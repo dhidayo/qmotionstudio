@@ -6,6 +6,8 @@ import type { SceneTemplate } from '../schema';
 import { FULL_BLEED_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
+import { FOCUS, lerp } from '../_families/kit';
+import { emphasisedAfter, turnsAlong } from '../_families/emphasis';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -59,6 +61,15 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const panelW = columns ? design.w / count : design.w;
   const panelH = columns ? design.h : design.h / count;
 
+  /*
+   * Once every photograph is in, the panels take turns (D-157), one after the
+   * next along the frame: the photo in turn leans in — a slow push inside its
+   * window — and stays bright while the others darken. The windows never
+   * move or scale; the emphasis is on the photograph itself (D-085), so it
+   * can still be dragged where it should go.
+   */
+  const arrivedMs = ctx.stagger(count - 1, count, 130, 'start') + 900;
+
   photos.forEach((photo, index) => {
     const cx = columns ? panelW * (index + 0.5) : design.w / 2;
     const cy = columns ? design.h / 2 : panelH * (index + 0.5);
@@ -84,7 +95,7 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
           type: 'image',
           startMs: 0,
           endMs: durationMs,
-          tracks: {
+          tracks: emphasisedAfter({
             x: [
               kf(0, columns ? 0 : travel * towards),
               kf(delay, columns ? 0 : travel * towards),
@@ -100,7 +111,11 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
             scaleX: [kf(delay + 900, 1, 'inOutSine'), kf(durationMs, 1.06, 'inOutSine')],
             scaleY: [kf(delay + 900, 1, 'inOutSine'), kf(durationMs, 1.06, 'inOutSine')],
             opacity: [kf(0, 0), kf(delay, 0), kf(delay + 300, 1)],
-          },
+          }, arrivedMs, durationMs, (base, ms) => {
+            const f = turnsAlong(ms, index, count, arrivedMs, durationMs, 900);
+            const push = lerp(1, 1.08, f);
+            return { ...base, scaleX: (base.scaleX ?? 1) * push, scaleY: (base.scaleY ?? 1) * push, shade: (1 - f) * FOCUS.dim };
+          }),
           props,
         },
       ],
@@ -136,6 +151,9 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     maxWidthPx: safe.w * 0.86,
     reveal: { kind: 'perWord', startMs: 900, durationMs: 460, staggerMs: 70 },
     lineHeight: 1.08,
+    // The band behind it is always dark, whatever the look: the look's own
+    // ink, dark on a light look, disappeared into it (D-157).
+    fallbackFill: colorFill('#ffffff'),
   });
   const caption = textFor(SLOTS.caption, inputs, {
     baseSizePx: unit * 0.021,

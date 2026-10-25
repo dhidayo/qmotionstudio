@@ -5,13 +5,18 @@ import { pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate, TextSlotDef } from '../schema';
 import { backgroundLayer } from '../_shared/chrome';
 import { fillSlots } from '../_shared/photo';
-import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOutBack, headlineAndStage, headlineSlot, isTall, kf, labelSlot, lerp, placeText, rect, sampled, type Pose } from './kit';
+import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOutBack, FOCUS, headlineAndStage, headlineSlot, isTall, kf, labelSlot, lerp, placeText, rect, sampled, type Pose } from './kit';
+import { focusIn, roomyPoint, scaled } from './emphasis';
 
 /**
  * Timeline (D-119): a story in milestones — a company's history, a project's
  * phases, a year in review. A line runs through the photographs and a
  * playhead travels it, bringing each milestone forward as it arrives, with
  * its label (a year, a phase) beside it.
+ *
+ * The milestone the playhead is at is the one in focus (D-157): it grows away
+ * from the line — the edge nearest the line stays put, so it never covers the
+ * line or a label — while the others step back and darken.
  */
 
 type Shape = 'track' | 'arc' | 'zigzag' | 'spine' | 'metro' | 'hang' | 'focus';
@@ -80,22 +85,28 @@ export function create(variant: SceneVariant): SceneTemplate {
       const side = shape === 'zigzag' || vertical ? (i % 2 === 0 ? -1 : 1) : -1;
       const offset = shape === 'hang' ? size * 0.62 : shape === 'metro' ? size * 0.75 : shape === 'track' || shape === 'focus' ? -size * 0.7 : size * 0.72 * side;
       const home = vertical ? { x: at.x + side * size * 0.85, y: at.y } : { x: at.x, y: at.y + (shape === 'zigzag' || shape === 'arc' ? (shape === 'arc' ? -size * 0.75 : offset) : offset) };
+      const props = shape === 'hang' ? { ...cardProps(photo, size, inputs, u), border: { inset: 0, paint: roleFill('ink', 0.9), width: Math.max(5, u * 0.012) } } : cardProps(photo, size, inputs, u);
+      const box = { w: props.w, h: props.h };
+      // Which way is away from the line: the card grows that way.
+      const away = vertical ? { x: side, y: 0 } : { x: 0, y: Math.sign(home.y - at.y) || -1 };
+      // Out of focus a milestone is a little smaller than its card (the shared
+      // rest size); the Focus timeline keeps its others smaller still.
+      const rest = shape === 'focus' ? 0.72 : 0.87;
       const pose = (ms: number): Pose => {
         const head = playhead(ms);
         const near = 1 - Math.min(1, Math.abs(head - s) * Math.max(1, n - 1));
         const arrived = clamp01((head - s) * Math.max(1, n - 1) + 1);
-        const pop = easeOutBack(arrived);
+        const pop = Math.max(0.001, easeOutBack(arrived));
         const sway = shape === 'hang' ? Math.sin(ms / 700 + i) * 5 : 0;
-        return {
-          x: home.x,
-          y: home.y + (shape === 'hang' ? 0 : -near * size * 0.08 * (vertical ? 0 : 1)),
-          scale: (shape === 'focus' ? lerp(0.62, 1.15, near) : lerp(0.75, 1.08, near)) * Math.max(0.001, pop),
-          rotation: (shape === 'hang' ? at.angle * 0.5 + sway : 0),
-          opacity: clamp01(arrived * 2) * (shape === 'focus' ? lerp(0.55, 1, near) : 1),
-          z: near,
-        };
+        const base: Pose = { x: home.x, y: home.y, scale: rest, rotation: shape === 'hang' ? at.angle * 0.5 + sway : 0, opacity: clamp01(arrived * 2), z: near };
+        const f = easeInOut(near);
+        const focused = focusIn(base, f, stage, box, shape === 'focus' ? 1.2 : 1.12);
+        // Grown from the edge nearest the line rather than from the middle.
+        const grow = ((focused.scaleY ?? 1) - rest * FOCUS.rest) / 2;
+        const from = roomyPoint(stage, { x: focused.x + away.x * grow * box.w, y: focused.y + away.y * grow * box.h }, box, focused.scaleY ?? 1);
+        return scaled({ ...focused, x: from.x, y: from.y }, Math.min(1, pop) + Math.max(0, pop - 1) * (1 - f));
       };
-      cards.push({ id: ctx.id('milestone'), type: 'image', startMs: 0, endMs: durationMs, tracks: sampled(0, durationMs, 70, pose), props: shape === 'hang' ? { ...cardProps(photo, size, inputs, u), border: { inset: 0, paint: roleFill('ink', 0.9), width: Math.max(5, u * 0.012) } } : cardProps(photo, size, inputs, u) });
+      cards.push({ id: ctx.id('milestone'), type: 'image', startMs: 0, endMs: durationMs, tracks: sampled(0, durationMs, 70, pose), props });
 
       // The station, and its label.
       layers.push(rect(ctx, 'stop', {

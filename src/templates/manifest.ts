@@ -360,6 +360,8 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 2, max: 6 },
     blurb: 'Photos on receding planes drifting at different speeds.',
+    // The default moment, named: the nearest plane leads throughout (D-157).
+    posterAtMs: 3_200,
   },
   {
     id: 'depth-stack',
@@ -426,7 +428,8 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     tier: 'free',
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 3, max: 8 },
-    blurb: 'Photos fanned across an arc, springing in from the centre.',
+    blurb: 'Photos fanned across an arc, springing in from the centre, then lifted one by one.',
+    posterAtMs: 3_200,
   },
   {
     id: 'angle-tilt',
@@ -437,7 +440,8 @@ export const TEMPLATE_MANIFEST: readonly TemplateSummary[] = [
     tier: 'pro',
     supportedAspects: ['16:9', '4:3', '1:1', '4:5', '9:16'],
     photoSlots: { min: 2, max: 6 },
-    blurb: 'A tilted row sweeping past, nearest photo largest.',
+    blurb: 'A tilted row sweeping past, slowing as each photo grows upright at the centre.',
+    posterAtMs: 3_200,
   },
   {
     id: 'angle-cascade',

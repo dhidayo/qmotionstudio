@@ -1,4 +1,6 @@
-import { clamp01, emphasise, FOCUS, linger, roomFor, turnFocus, type Pose, type Stage } from './kit';
+import { createProps, resolveProps } from '@/core/anim/interpolate';
+import type { Tracks } from '@/core/types';
+import { appendAfter, clamp01, emphasise, FOCUS, linger, roomFor, sampled, turnFocus, type Pose, type Stage } from './kit';
 
 /**
  * Emphasis helpers for the photo families (D-157), beside the shared ones in
@@ -55,6 +57,34 @@ export function heldTurns(
 export function loopTurns(ms: number, index: number, count: number, durationMs: number, edge = 0.22): number {
   const turn = durationMs / Math.max(1, count);
   return turnFocus(ms + turn / 2, index, count, 0, durationMs, edge, true);
+}
+
+/**
+ * Turns shared out along a row of `count` across `[fromMs, toMs]`, none
+ * shorter than `minTurnMs`: when there is not time for every card to have a
+ * turn — a short scene in a film — the turns go to cards spread evenly along
+ * the row rather than flickering through all of them. The first turn eases in
+ * over the 400ms before `fromMs`; the last holds to the end.
+ */
+export function turnsAlong(ms: number, index: number, count: number, fromMs: number, toMs: number, minTurnMs = 700): number {
+  const visits = Math.max(1, Math.min(count, Math.floor((toMs - fromMs) / minTurnMs)));
+  let f = 0;
+  for (let k = 0; k < visits; k++) {
+    if (Math.round(((k + 0.5) * count) / visits - 0.5) === index) f = Math.max(f, heldTurns(ms, k, visits, fromMs, toMs, { rampInMs: 400 }));
+  }
+  return f;
+}
+
+/**
+ * A pose at rest — full size, undimmed — until `rampMs` before `settledMs`,
+ * easing into `shown` (its emphasised self) by then: for cards that arrive
+ * at their own size and only then start taking turns.
+ */
+export function settleInto(shown: Pose, ms: number, settledMs: number, rampMs = 400): Pose {
+  const before = 1 - clamp01((ms - settledMs + rampMs) / rampMs);
+  if (before <= 0) return shown;
+  const l = (x: number, y: number): number => x + (y - x) * before;
+  return { ...shown, scaleX: l(shown.scaleX ?? shown.scale ?? 1, 1), scaleY: l(shown.scaleY ?? shown.scale ?? 1, 1), shade: l(shown.shade ?? 0, 0) };
 }
 
 /**
@@ -137,4 +167,52 @@ export function mixPose(a: Pose, b: Pose, u: number): Pose {
 /** A pose's size multiplied, for presence (an arrival, a departure) applied on top of emphasis. */
 export function scaled(pose: Pose, k: number): Pose {
   return { ...pose, scaleX: (pose.scaleX ?? pose.scale ?? 1) * k, scaleY: (pose.scaleY ?? pose.scale ?? 1) * k };
+}
+
+/** Where a layer's own tracks put it at `ms`, as a pose. */
+export function poseOf(tracks: Tracks, ms: number): Pose {
+  const p = resolveProps(tracks, ms, createProps());
+  return { x: p.x, y: p.y, scaleX: p.scaleX, scaleY: p.scaleY, rotation: p.rotation, opacity: p.opacity, z: p.z, turnY: p.turnY, turnX: p.turnX, blur: p.blur, shade: p.shade };
+}
+
+/**
+ * For hand-keyframed designs (D-157): a layer's tracks kept as written up to
+ * `fromMs` — its entrance — then sampled with emphasis on top until `toMs`.
+ * `apply` is given where the written tracks would have the layer at each
+ * moment and returns it emphasised; the emphasis eases in over `rampMs` from
+ * `fromMs`, so nothing jumps where the entrance hands over.
+ */
+export function emphasisedAfter(tracks: Tracks, fromMs: number, toMs: number, apply: (base: Pose, ms: number) => Pose, rampMs = 400): Tracks {
+  if (toMs <= fromMs) return tracks;
+  const after = sampled(fromMs, toMs, 70, (ms) => {
+    const base = poseOf(tracks, ms);
+    return mixPose(base, apply(base, ms), smoother((ms - fromMs) / rampMs));
+  });
+  const out: Tracks = { ...tracks };
+  for (const [prop, keys] of Object.entries(after)) {
+    const shifted = keys.map((key) => ({ ...key, t: key.t + fromMs }));
+    const written = tracks[prop as keyof Tracks];
+    out[prop as keyof Tracks] = written && written.length > 0 ? appendAfter(written, fromMs, shifted) : shifted;
+  }
+  return out;
+}
+
+/**
+ * Turns that walk along a row and back — the middle card first, then on to
+ * one end, back to the other and home — `minTurnMs` or longer each, so the
+ * focus only ever moves to a neighbour. `start` is the card that goes first.
+ */
+export function walkTurns(ms: number, index: number, count: number, fromMs: number, toMs: number, start = Math.floor(count / 2), minTurnMs = 1_000): number {
+  if (count <= 1) return 1;
+  const cycle: number[] = [];
+  for (let k = start; k < count; k++) cycle.push(k);
+  // Starting from an end, the walk comes back only as far as the second card, so the first never has two turns in a row.
+  for (let k = count - 2; k >= (start === 0 ? 1 : 0); k--) cycle.push(k);
+  for (let k = 1; k < start; k++) cycle.push(k);
+  const visits = Math.max(1, Math.floor((toMs - fromMs) / minTurnMs));
+  let f = 0;
+  for (let v = 0; v < visits; v++) {
+    if (cycle[v % cycle.length] === index) f = Math.max(f, heldTurns(ms, v, visits, fromMs, toMs));
+  }
+  return f;
 }

@@ -1,4 +1,4 @@
-import { colorFill, roleFill, type Keyframe, type Layer } from '@/core/types';
+import { colorFill, roleFill, type Keyframe, type Layer, type Tracks } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import type { SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
@@ -6,7 +6,9 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { backgroundLayer } from '../_shared/chrome';
+import { backgroundLayer, contentFloor } from '../_shared/chrome';
+import { depthGroup } from '../_families/kit';
+import { emphasisedAfter, focusIn, turnsAlong } from '../_families/emphasis';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -64,11 +66,23 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const cx = safe.x + safe.w / 2;
   const cy = safe.y + safe.h / 2;
 
-  const radius = shortSafe * 0.37;
+  // A little inside the safe edge, so the photo in focus has room to grow (D-157).
+  const radius = shortSafe * 0.34;
   const photoBase = Math.min(shortSafe * 0.27, ((2 * Math.PI * radius) / count) * 0.95);
 
   const pitchDeg = 360 / count;
   const SAMPLES = 20;
+
+  /*
+   * One photograph in focus at a time (D-157): once the ring is out, the
+   * focus goes round it, one spoke after the next. The spoke in turn grows
+   * where it stands and comes forward; the rest settle back and darken. It
+   * may grow only as far as the safe area and the content floor allow.
+   */
+  const floor = contentFloor(design, safe);
+  const stage = { cx, cy: (safe.y + floor) / 2, w: safe.w, h: floor - safe.y };
+  const outMs = 200 + ctx.stagger(count - 1, count, 90, 'start') + 720;
+  const spokes: Layer[] = [];
 
   photos.forEach((photo, index) => {
     const baseDeg = -90 + index * pitchDeg;
@@ -88,24 +102,27 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
       shadow: { blur: unit * 0.04, offsetX: 0, offsetY: unit * 0.01, paint: colorFill('rgba(0,0,0,0.5)') },
     });
 
-    layers.push({
+    const written: Tracks = {
+      x: xTrack,
+      y: yTrack,
+      // +90 is what "facing outward" means: the photograph's own up points
+      // away from the hub.
+      rotation: [kf(0, baseDeg + 90), kf(durationMs, baseDeg + 90 + pitchDeg, 'linear')],
+      scaleX: [kf(0, 0), kf(delay, 0), kf(delay + 720, 1, { kind: 'spring', stiffness: 180, damping: 16, mass: 1 })],
+      scaleY: [kf(0, 0), kf(delay, 0), kf(delay + 720, 1, { kind: 'spring', stiffness: 180, damping: 16, mass: 1 })],
+      opacity: [kf(0, 0), kf(delay, 0), kf(delay + 200, 1)],
+    };
+    const box = { w: props.w, h: props.h };
+    spokes.push({
       id: ctx.id('spoke'),
       type: 'image',
       startMs: 0,
       endMs: durationMs,
-      tracks: {
-        x: xTrack,
-        y: yTrack,
-        // +90 is what "facing outward" means: the photograph's own up points
-        // away from the hub.
-        rotation: [kf(0, baseDeg + 90), kf(durationMs, baseDeg + 90 + pitchDeg, 'linear')],
-        scaleX: [kf(0, 0), kf(delay, 0), kf(delay + 720, 1, { kind: 'spring', stiffness: 180, damping: 16, mass: 1 })],
-        scaleY: [kf(0, 0), kf(delay, 0), kf(delay + 720, 1, { kind: 'spring', stiffness: 180, damping: 16, mass: 1 })],
-        opacity: [kf(0, 0), kf(delay, 0), kf(delay + 200, 1)],
-      },
+      tracks: emphasisedAfter(written, outMs, durationMs, (base, ms) => focusIn(base, turnsAlong(ms, index, count, outMs, durationMs, 900), stage, box, 1.22)),
       props,
     });
   });
+  layers.push(depthGroup(ctx, 'ring', spokes));
 
   const headline = textFor(SLOTS.headline, inputs, {
     baseSizePx: unit * 0.052,

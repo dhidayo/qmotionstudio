@@ -1,4 +1,4 @@
-import { colorFill, roleFill, type Keyframe, type Layer } from '@/core/types';
+import { colorFill, roleFill, type Keyframe, type Layer, type Tracks } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import type { SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
@@ -6,7 +6,9 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { backgroundLayer } from '../_shared/chrome';
+import { backgroundLayer, contentFloor } from '../_shared/chrome';
+import { depthGroup } from '../_families/kit';
+import { emphasisedAfter, focusIn, walkTurns } from '../_families/emphasis';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -71,7 +73,9 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
 
   const typeH = headRun.height + capRun.height + unit * 0.024;
   const stageTop = safe.y + typeH + unit * 0.045;
-  const stageH = Math.max(unit * 0.28, safe.y + safe.h - stageTop);
+  // Down to the content floor, so the foot of the stair stays clear of the caption band.
+  const floor = contentFloor(design, safe);
+  const stageH = Math.max(unit * 0.28, floor - stageTop);
 
   /*
    * Cards sized so the stair fits, then the stair spread over whatever is left.
@@ -93,6 +97,17 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const originX = safe.x + cardW / 2;
   const originY = stageTop + cardH / 2;
 
+  /*
+   * Then one print at a time is picked up from the stair (D-157): the last to
+   * land first, walking back up the stair and down again. The print in turn
+   * grows, straightens a little and comes in front of its neighbours; the
+   * rest settle back and darken. Draw order is now depth, not arrival — the
+   * arrival order is the depth until a print is picked up.
+   */
+  const stage = { cx: safe.x + safe.w / 2, cy: stageTop + stageH / 2, w: safe.w, h: stageH };
+  const landedMs = 320 + ctx.stagger(count - 1, count, 150, 'start') + 700;
+  const cards: Layer[] = [];
+
   photos.forEach((photo, index) => {
     const x = originX + stepX * index;
     const y = originY + stepY * index;
@@ -110,25 +125,30 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     // A single settle, then a long slow lean. Springing the position as well as
     // the rotation makes seven cards look like a nervous tic; the bounce belongs
     // on one property only.
-    layers.push({
+    const written: Tracks = {
+      x: [kf(0, x - unit * 0.05), kf(delay, x - unit * 0.05), kf(delay + landMs, x, 'outExpo')],
+      y: [kf(0, y - stageH - cardH), kf(delay, y - stageH - cardH), kf(delay + landMs, y, 'outExpo')],
+      rotation: [
+        kf(0, lean * 2.4),
+        kf(delay, lean * 2.4),
+        kf(delay + landMs, lean, { kind: 'spring', stiffness: 170, damping: 15, mass: 1 }),
+        kf(durationMs, lean * 0.6, 'inOutSine'),
+      ],
+      opacity: [kf(0, 0), kf(delay, 0), kf(delay + 220, 1)],
+      z: [kf(0, index)],
+    };
+    const box = { w: props.w, h: props.h };
+    cards.push({
       id: ctx.id('card'),
       type: 'image',
       startMs: 0,
       endMs: durationMs,
-      tracks: {
-        x: [kf(0, x - unit * 0.05), kf(delay, x - unit * 0.05), kf(delay + landMs, x, 'outExpo')],
-        y: [kf(0, y - stageH - cardH), kf(delay, y - stageH - cardH), kf(delay + landMs, y, 'outExpo')],
-        rotation: [
-          kf(0, lean * 2.4),
-          kf(delay, lean * 2.4),
-          kf(delay + landMs, lean, { kind: 'spring', stiffness: 170, damping: 15, mass: 1 }),
-          kf(durationMs, lean * 0.6, 'inOutSine'),
-        ],
-        opacity: [kf(0, 0), kf(delay, 0), kf(delay + 220, 1)],
-      },
+      tracks: emphasisedAfter(written, landedMs, durationMs, (base, ms) =>
+        focusIn(base, walkTurns(ms, index, count, landedMs, durationMs, count - 1, 900), stage, box, 1.2, { straighten: 0.5 })),
       props,
     });
   });
+  layers.push(depthGroup(ctx, 'stair', cards));
 
   layers.push({
     id: ctx.id('headline'),

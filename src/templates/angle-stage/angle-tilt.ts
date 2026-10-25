@@ -6,7 +6,8 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { backgroundLayer } from '../_shared/chrome';
+import { backgroundLayer, contentFloor } from '../_shared/chrome';
+import { depthGroup, emphasise, focusCurve, linger, roomFor, sampled, wrapSteps, type Pose } from '../_families/kit';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -37,6 +38,10 @@ const SLOTS = {
  *
  * The row wraps: it travels exactly one photo-pitch per turn and the photos
  * repeat, so the loop has no seam.
+ *
+ * The photo at the centre is the one in focus (D-157): the row slows as each
+ * photo reaches the middle, and there it grows, stands upright, sharpens and
+ * comes in front of its neighbours, which settle back and darken.
  */
 function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const { design, safe, durationMs } = ctx;
@@ -65,7 +70,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
   const typeTop = safe.y;
   const typeH = kickerRun.height + headRun.height + unit * 0.022;
   const stageTop = typeTop + typeH + unit * 0.055;
-  const stageH = Math.max(unit * 0.26, safe.y + safe.h - stageTop);
+  // Down to the content floor, so the photo in focus grows clear of the caption band.
+  const stageH = Math.max(unit * 0.26, contentFloor(design, safe) - stageTop);
   const stageCentreY = stageTop + stageH / 2;
 
   const cardSize = Math.min(stageH * 0.82, unit * 0.44);
@@ -78,6 +84,10 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
 
   const centreX = design.w / 2;
 
+  const stage = { cx: centreX, cy: stageCentreY, w: safe.w, h: stageH };
+  const half = rowSpan / 2;
+  const cards: Layer[] = [];
+
   for (let i = 0; i < count; i++) {
     const photo = photos[i];
     if (!photo) continue;
@@ -86,56 +96,34 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
       cornerRadius: inputs.look.cornerRadius,
       shadow: { blur: unit * 0.055, offsetX: 0, offsetY: unit * 0.018, paint: colorFill('rgba(0,0,0,0.6)') },
     });
+    const peak = roomFor(stage, { x: stage.cx, y: stage.cy }, { w: props.w, h: props.h }, 1.3);
 
-    // Sample the traverse rather than keyframing only the endpoints: scale and
-    // rotation depend on *position*, and a straight interpolation between two
-    // endpoints would miss the swell through the centre entirely.
-    const STEPS = 24;
-    const xTrack: Keyframe[] = [];
-    const scaleTrack: Keyframe[] = [];
-    const rotTrack: Keyframe[] = [];
-    const blurTrack: Keyframe[] = [];
-    const opacityTrack: Keyframe[] = [];
-
-    for (let step = 0; step <= STEPS; step++) {
-      const t = step / STEPS;
-      const at = t * durationMs;
-
-      // Start each photo at its own offset and travel exactly one full span,
-      // so the arrangement at t=1 is identical to t=0.
-      const raw = i * pitch - t * rowSpan;
-      // Wrap into a window centred on the frame.
-      const half = rowSpan / 2;
-      const wrapped = ((((raw + half) % rowSpan) + rowSpan) % rowSpan) - half;
-
+    // Sampled finely rather than keyframed at the ends: scale and rotation
+    // depend on *position*, and the swell through the centre is the point.
+    const tracks = sampled(0, durationMs, 70, (ms) => {
+      // Each photo starts at its own offset and travels exactly one full span,
+      // lingering as it reaches the middle, so the arrangement at the end is
+      // identical to the start. The offset is in pitches, wrapped round the frame.
+      const steps = wrapSteps(i - linger((ms / durationMs) * count), count);
+      const wrapped = steps * pitch;
       const distance = Math.abs(wrapped) / half;
       const nearness = 1 - Math.min(1, distance);
+      const base: Pose = {
+        x: centreX + wrapped,
+        y: stageCentreY,
+        scale: 0.68 + nearness * 0.32,
+        rotation: (-wrapped / half) * 9,
+        blur: (1 - nearness) * unit * 0.008,
+        // Fade at the very edges so photos do not pop in and out at the wrap.
+        opacity: distance > 0.88 ? 0 : Math.min(1, (1 - distance) * 4),
+        z: -Math.abs(steps),
+      };
+      return emphasise(base, focusCurve(steps), peak, { straighten: 1 });
+    }, half);
 
-      xTrack.push(kf(at, centreX + wrapped, 'linear'));
-      scaleTrack.push(kf(at, 0.68 + nearness * 0.32, 'linear'));
-      rotTrack.push(kf(at, -wrapped / half * 9, 'linear'));
-      blurTrack.push(kf(at, (1 - nearness) * unit * 0.008, 'linear'));
-      // Fade at the very edges so photos do not pop in and out at the wrap.
-      opacityTrack.push(kf(at, distance > 0.88 ? 0 : Math.min(1, (1 - distance) * 4), 'linear'));
-    }
-
-    layers.push({
-      id: ctx.id('card'),
-      type: 'image',
-      startMs: 0,
-      endMs: durationMs,
-      tracks: {
-        x: xTrack,
-        y: [kf(0, stageCentreY)],
-        scaleX: scaleTrack,
-        scaleY: scaleTrack,
-        rotation: rotTrack,
-        blur: blurTrack,
-        opacity: opacityTrack,
-      },
-      props,
-    });
+    cards.push({ id: ctx.id('card'), type: 'image', startMs: 0, endMs: durationMs, tracks, props });
   }
+  layers.push(depthGroup(ctx, 'row', cards));
 
   layers.push({
     id: ctx.id('kicker'),

@@ -5,7 +5,8 @@ import { num, pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
 import { fillSlots, photoProps } from '../_shared/photo';
-import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOut, easeOutBack, glow, headlineAndStage, headlineSlot, isTall, lerp, measureSlot, placeText, rect, sampled, type Pose } from './kit';
+import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOut, easeOutBack, FOCUS, glow, headlineAndStage, headlineSlot, isTall, lerp, measureSlot, placeText, rect, sampled, type Pose } from './kit';
+import { focusIn, type Box } from './emphasis';
 
 /**
  * Hero Stage and Photo Reveal (D-119): one photograph at a time, each given
@@ -76,10 +77,11 @@ export function create(variant: SceneVariant): SceneTemplate {
         }), props: cardProps(photo, card, inputs, u) });
         return;
       }
+      const props = shape === 'polaroid' ? polaroid(photo, card, inputs, u) : cardProps(photo, card, inputs, u);
       cards.push({
         id: ctx.id('hero'), type: 'image', startMs: 0, endMs: durationMs,
-        tracks: sampled(0, durationMs, 60, (ms) => stagePose(shape, i, ms, at, n, stage, card), stage.w * 0.7),
-        props: shape === 'polaroid' ? polaroid(photo, card, inputs, u) : cardProps(photo, card, inputs, u),
+        tracks: sampled(0, durationMs, 60, (ms) => stagePose(shape, i, ms, at, n, stage, card, props), stage.w * 0.7),
+        props,
       });
     });
     return [backgroundLayer(inputs, ctx), glow(ctx, { x: stage.cx, y: stage.cy }, Math.min(stage.w, stage.h) * 1.4, 0.2), depthGroup(ctx, 'stage', cards), head];
@@ -135,7 +137,7 @@ function fullPose(shape: Shape, i: number, ms: number, at: At, design: { w: numb
   }
 }
 
-function stagePose(shape: Shape, i: number, ms: number, at: At, n: number, stage: { cx: number; cy: number; w: number; h: number }, card: number): Pose {
+function stagePose(shape: Shape, i: number, ms: number, at: At, n: number, stage: { cx: number; cy: number; w: number; h: number }, card: number, box: Box): Pose {
   const { index, local } = at(ms);
   const rank = (i - index + n) % n; // 0 is the current photo, 1 the next, n-1 the previous
   const move = easeInOut((local - 0.75) / 0.25);
@@ -158,20 +160,26 @@ function stagePose(shape: Shape, i: number, ms: number, at: At, n: number, stage
     }
     case 'polaroid': {
       // Each print drops onto the table and stays; the pile builds, then
-      // slides away at the end so the loop starts on a clear table.
+      // slides away at the end so the loop starts on a clear table. The
+      // newest print is the one in focus (D-157): it lands a little larger,
+      // and the prints under it settle back and darken as the next arrives.
       const u = (index + local) / n;
-      const land = easeOutBack(((u - i / n) * n) / 0.35);
+      const landing = (k: number): number => ((u - k / n) * n) / 0.35;
+      const land = easeOutBack(landing(i));
       const clear = easeInOut((u - 0.9) / 0.1);
       const angle = ((i * 37) % 23) - 11;
       const spot = { x: stage.cx + (((i * 53) % 17) - 8) * card * 0.03, y: stage.cy + (((i * 29) % 13) - 6) * card * 0.03 };
-      return {
+      const base: Pose = {
         x: spot.x,
-        y: lerp(stage.cy - stage.h, spot.y, clamp01(land)) + clear * stage.h,
+        y: lerp(stage.cy - stage.h, spot.y, clamp01(land)),
         rotation: angle,
         scale: lerp(1.3, 1, clamp01(land)),
-        opacity: (u >= i / n ? 1 : 0) * (1 - clear),
+        opacity: u >= i / n ? 1 : 0,
         z: i,
       };
+      const f = easeInOut(landing(i)) * (i < n - 1 ? 1 - easeInOut(landing(i + 1)) : 1) * (1 - easeInOut((u - 0.9) / 0.03));
+      const focused = focusIn(base, f, stage, box, 1.16);
+      return { ...focused, y: focused.y + clear * stage.h, opacity: (base.opacity ?? 1) * (1 - easeInOut((u - 0.9) / 0.06)) };
     }
     case 'stamp': {
       const mine = rank === 0;
@@ -187,13 +195,14 @@ function stagePose(shape: Shape, i: number, ms: number, at: At, n: number, stage
       return { x: stage.cx, y: stage.cy + rank * card * 0.025, scale: 1 - rank * 0.03, rotation: rank % 2 === 0 ? 2 : -2, opacity: clamp01(3 - rank), z: n - rank };
     }
     case 'lightbox': {
-      // A dim grid of all of them, the current one lifted large in the middle.
+      // A dim grid of all of them, the current one lifted large in the middle;
+      // the rest darkened rather than faded (D-157), so they stay solid.
       const cols = Math.ceil(Math.sqrt(n));
       const rows = Math.ceil(n / cols);
       const gx = stage.cx + ((i % cols) - (cols - 1) / 2) * card * 0.52;
       const gy = stage.cy + (Math.floor(i / cols) - (rows - 1) / 2) * card * 0.66;
       const lifted = rank === 0 ? easeInOut(local / 0.2) * (1 - move) : 0;
-      return { x: lerp(gx, stage.cx, lifted), y: lerp(gy, stage.cy, lifted), scale: lerp(0.45, 1.05, lifted), opacity: lerp(0.35, 1, lifted), z: lifted };
+      return { x: lerp(gx, stage.cx, lifted), y: lerp(gy, stage.cy, lifted), scale: lerp(0.45, 1.05, lifted), shade: (1 - lifted) * (FOCUS.dim + 0.15), z: lifted };
     }
     case 'rackFocus': {
       // A row of photos; focus racks along it, the rest soft and dim.

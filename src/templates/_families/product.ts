@@ -5,14 +5,29 @@ import { pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate, TextSlotDef } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
 import { fillSlots, photoProps, untagged } from '../_shared/photo';
-import { cardProps, defineScene, glow, headlineSlot, kf, labelSlot, measureSlot, placeText, rect, sampled, sublineSlot } from './kit';
+import { cardProps, defineScene, FOCUS, glow, headlineSlot, kf, labelSlot, lerp, measureSlot, placeText, rect, sampled, sublineSlot, type Pose, type Stage } from './kit';
+import { focusIn, roomyPoint, settleInto, turnsAlong, type Box } from './emphasis';
 
 /**
  * Product Display (D-119): one product, or a few, shown the way a launch
  * page shows them — in a spotlight, with callouts pointing at what matters,
  * in every colour it comes in, on a shelf, before and after, turning on a
  * plinth, beside its specs, with its price.
+ *
+ * Where several products share the frame — the finishes, the lineup, the
+ * range — once they have all arrived the light moves from one to the next
+ * (D-157): the one in turn grows up from where it stands, so it never leaves
+ * its shelf or covers its name, and the others step back and darken.
  */
+
+/** Emphasis for a product standing on something: it grows upward, its foot where it was. */
+function grownUp(base: Pose, f: number, area: Stage, box: Box, wanted: number): Pose {
+  const focused = focusIn(base, f, area, box, wanted);
+  const size = focused.scaleY ?? 1;
+  const lift = ((size - (base.scaleY ?? base.scale ?? 1) * FOCUS.rest) * box.h) / 2;
+  const at = roomyPoint(area, { x: focused.x, y: focused.y - lift }, box, size);
+  return { ...focused, x: at.x, y: at.y };
+}
 
 type Kind =
   | 'spotlight' | 'callouts' | 'finishes' | 'lineup' | 'compare' | 'turntable'
@@ -157,6 +172,9 @@ export function create(variant: SceneVariant): SceneTemplate {
         const cellH = stageH / rows;
         const size = Math.min(cellW * 0.82, cellH * (kind === 'range' ? 0.7 : 0.72));
         const swatches = [roleFill('accent'), roleFill('ink'), roleFill('inkMuted'), colorFill('#c9a227'), roleFill('surface')];
+        const area: Stage = { cx, cy: stageCy, w: safe.w, h: stageH };
+        // Once every product is in, the light moves along them.
+        const settled = 400 + (count - 1) * 180 + (kind === 'range' ? 700 : 500);
         photos.forEach((_, i) => {
           const col = i % cols;
           const row = Math.floor(i / cols);
@@ -165,20 +183,30 @@ export function create(variant: SceneVariant): SceneTemplate {
           const x = cx + cellW * (col - (inRow - 1) / 2);
           const y = stageTop + cellH * (row + 0.45);
           const at = 400 + i * 180;
+          const photo = photos[i] ?? photos[0];
+          const box: Box = photo ? cardProps(photo, size, inputs, u) : { w: size, h: size };
+          const lit = (ms: number): number => turnsAlong(ms, i, count, settled, durationMs);
           if (kind === 'finishes') {
             // The spotlight moves from one finish to the next.
-            const turn = durationMs / count;
             layers.push(hero(size, { x, y }, {
-              ...sampled(0, durationMs, 100, (ms) => {
-                const active = Math.floor(ms / turn) % count === i;
+              ...sampled(0, durationMs, 80, (ms) => {
                 const arrive = Math.min(1, Math.max(0, (ms - at) / 500));
-                return { x, y: y + (1 - arrive) * u * 0.06, scale: active ? 1.06 : 0.94, opacity: arrive * (active ? 1 : 0.7) };
+                const f = lit(ms);
+                const shown = grownUp({ x, y: y + (1 - arrive) * u * 0.06, opacity: arrive }, f, area, box, 1.16);
+                return settleInto(shown, ms, settled);
               }),
             }, i));
             layers.push(rect(ctx, 'swatch', { w: u * 0.035, h: u * 0.035, x, y: y + size * 0.62, ellipse: true, fill: swatches[i % swatches.length] ?? roleFill('accent'), stroke: { paint: roleFill('ink', 0.4), width: Math.max(2, u * 0.003) }, tracks: { scaleX: [kf(at + 300, 0), kf(at + 600, 1, 'outBack')], scaleY: [kf(at + 300, 0), kf(at + 600, 1, 'outBack')] } }));
           } else {
-            layers.push(hero(size, { x, y }, { y: [kf(at, y + u * 0.08), kf(at + 700, y, 'outExpo')], opacity: [kf(at, 0), kf(at + 400, 1)] }, i));
-            layers.push(placeText(ctx, slot(`name${i + 1}`), inputs, { sizePx: u * 0.04, maxWidthPx: cellW * 0.9, x, y: y + size * 0.62, reveal: LINE(at + 500) }).layer);
+            const rise = (ms: number): number => 1 - (1 - Math.min(1, Math.max(0, (ms - at) / 700))) ** 4;
+            layers.push(hero(size, { x, y }, sampled(0, durationMs, 80, (ms) => {
+              const shown = grownUp({ x, y: y + (1 - rise(ms)) * u * 0.08, opacity: Math.min(1, Math.max(0, (ms - at) / 400)) }, lit(ms), area, box, 1.16);
+              return settleInto(shown, ms, settled);
+            }), i));
+            // The name under the product in turn stays bright; the others quieten.
+            const name = placeText(ctx, slot(`name${i + 1}`), inputs, { sizePx: u * 0.04, maxWidthPx: cellW * 0.9, x, y: y + size * 0.62, reveal: LINE(at + 500) }).layer;
+            const quiet = sampled(settled - 400, durationMs, 100, (ms) => ({ x, y: 0, opacity: lerp(1, lerp(0.55, 1, lit(ms)), Math.min(1, Math.max(0, (ms - settled + 400) / 400))) })).opacity;
+            layers.push(quiet ? { ...name, tracks: { ...name.tracks, opacity: quiet.map((key) => ({ ...key, t: key.t + settled - 400 })) } } : name);
           }
         });
         if (kind === 'finishes') bottomSubline(1500);
@@ -196,6 +224,8 @@ export function create(variant: SceneVariant): SceneTemplate {
         for (let sh = 0; sh < shelves; sh++) {
           layers.push(rect(ctx, 'shelf', { w: safe.w, h: Math.max(4, u * 0.008), x: cx, y: stageTop + shelfGap * (sh + 0.8), fill: roleFill('ink', 0.25), tracks: { scaleX: [kf(100 + sh * 200, 0), kf(700 + sh * 200, 1, 'outExpo')] } }));
         }
+        // The light starts on the last to slide in and moves back along the row.
+        const settled = 500 + (count - 1) * 220 + 400;
         photos.forEach((_, i) => {
           const sh = Math.floor(i / perShelf);
           const onShelf = Math.min(perShelf, count - sh * perShelf);
@@ -203,10 +233,15 @@ export function create(variant: SceneVariant): SceneTemplate {
           const x = cx + (safe.w / perShelf) * ((i % perShelf) - (onShelf - 1) / 2);
           const y = shelfY - size * 0.62;
           const at = 500 + i * 220;
-          layers.push(hero(size, { x, y }, sampled(0, durationMs, 100, (ms) => {
+          // Each shelf is the room its products may grow into, standing on it.
+          const area: Stage = { cx, cy: shelfY - shelfGap * 0.4, w: safe.w, h: shelfGap * 0.8 };
+          const photo = photos[i] ?? photos[0];
+          const box: Box = photo ? cardProps(photo, size, inputs, u) : { w: size, h: size };
+          layers.push(hero(size, { x, y }, sampled(0, durationMs, 80, (ms) => {
             const arrive = Math.min(1, Math.max(0, (ms - at) / 700));
             const e = 1 - (1 - arrive) ** 3;
-            return { x: x + (1 - e) * design.w * 0.6, y: y + Math.sin(ms / 900 + i) * u * 0.006 * e, opacity: Math.min(1, arrive * 2) };
+            const shown = grownUp({ x: x + (1 - e) * design.w * 0.6, y: y + Math.sin(ms / 900 + i) * u * 0.006 * e, opacity: Math.min(1, arrive * 2) }, turnsAlong(ms, count - 1 - i, count, settled, durationMs), area, box, 1.2);
+            return settleInto(shown, ms, settled);
           }), i));
         });
         bottomSubline(1600);

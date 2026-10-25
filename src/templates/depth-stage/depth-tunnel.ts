@@ -61,7 +61,34 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
 
   const cx = design.w / 2;
   const cy = design.h / 2;
+  const headline = textFor(SLOTS.headline, inputs, {
+    baseSizePx: unit * 0.068,
+    maxWidthPx: safe.w * 0.86,
+    reveal: { kind: 'perWord', startMs: 240, durationMs: 460, staggerMs: 70 },
+    lineHeight: 1.08,
+  });
+  const caption = textFor(SLOTS.caption, inputs, {
+    baseSizePx: unit * 0.024,
+    maxWidthPx: safe.w * 0.7,
+    reveal: { kind: 'fade', startMs: 900, durationMs: 620 },
+    fallbackFill: roleFill('inkMuted'),
+  });
+
+  const headRun = ctx.measure(specFor(headline, fontString(headline.fontId, headline.fontSizePx, headline.weight)));
+  const capRun = ctx.measure(specFor(caption, fontString(caption.fontId, caption.fontSizePx, caption.weight)));
+
+  // The nearest station sits in the room between the headline and the content
+  // floor, and a photo there is no larger than that room (D-157), so the photo
+  // in focus is whole, clear of the words.
+  const floor = contentFloor(design, safe);
+  const roomTop = safe.y + headRun.height + unit * 0.04;
+  const nearAt = { x: cx, y: (roomTop + floor) / 2 };
   const baseSize = unit * 0.66;
+  const sizeFor = (photo: Parameters<typeof photoProps>[0]): number => {
+    const probe = photoProps(photo, baseSize);
+    // A little short of the room: the photo leans, and arrives from off the axis.
+    return baseSize * Math.min(1, ((floor - roomTop) * 0.9) / probe.h, (safe.w * 0.9) / probe.w);
+  };
 
   /*
    * How much smaller the furthest station is than the nearest.
@@ -93,7 +120,24 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     return { cos: Math.cos(radians), sin: Math.sin(radians) };
   };
 
-  for (let leg = 0; leg < count; leg++) {
+  /*
+   * One photograph in focus at every moment (D-157): the one reaching the
+   * nearest station. Its last leg in curves back to the middle of the frame
+   * and eases into life size there, so it is held, whole and facing you,
+   * while the next one is still far off; then it flies out past the camera,
+   * fast and well off-axis, fading as it goes. The far stations are a little
+   * darker the further they are, so depth reads as distance and the near
+   * photo as the subject.
+   */
+  const near = count - 1;
+  const offAxis = (station: number): number => (station === near ? 0 : station > near ? scaleAt(station) * 1.5 : scaleAt(station));
+  const shadeAt = (station: number): number => Math.min(0.5, Math.max(0, near - 1 - station) * 0.12);
+
+  // Drawn far to near, except that the photo arriving at the nearest station
+  // is drawn over the one leaving it: the subject is the one coming in.
+  const legOrder = Array.from({ length: count }, (_, k) => k);
+  if (count >= 2) legOrder.splice(count - 2, 2, count - 1, count - 2);
+  for (const leg of legOrder) {
     const fromScale = scaleAt(leg);
     const toScale = scaleAt(leg + 1);
     // One extra sample at the geometric mean. Interpolating a geometric ramp
@@ -115,8 +159,9 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
       const from = turn * legMs;
 
       const { cos, sin } = bearing(photoIndex);
-      const px = (scale: number): number => cx + cos * driftPx * scale;
-      const py = (scale: number): number => cy + sin * driftPx * scale;
+      // Off the axis by `along`; the axis bends to the nearest station's spot as it nears it.
+      const px = (along: number, station: number): number => (station >= near ? nearAt.x : cx) + cos * driftPx * along;
+      const py = (along: number, station: number): number => (station >= near ? nearAt.y : cy) + sin * driftPx * along;
 
       /*
        * A hairline border, and it is not decoration.
@@ -125,17 +170,26 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
        * and without an edge it reads as a smudge rather than as a photograph
        * arriving. The border is what makes the distance legible.
        */
-      const props = photoProps(photo, baseSize, {
+      const props = photoProps(photo, sizeFor(photo), {
         cornerRadius: inputs.look.cornerRadius,
         shadow: { blur: unit * 0.05, offsetX: 0, offsetY: unit * 0.012, paint: colorFill('rgba(0,0,0,0.5)') },
         border: { inset: 0, paint: roleFill('ink', 0.22), width: Math.max(1, unit * 0.0022) },
       });
 
+      // The leg out past the camera leaves fast and is gone by half way, so
+      // the next photo has the frame to itself as it settles.
       const opacity: Keyframe[] = isFirst
         ? [kf(0, 0), kf(legMs * 0.55, 1, 'outQuad')]
         : isLast
-          ? [kf(0, 1), kf(legMs * 0.4, 1), kf(legMs, 0, 'inQuad')]
+          ? [kf(0, 1), kf(legMs * 0.5, 0, 'outQuad')]
           : [kf(0, 1)];
+
+      // The leg into the nearest station, and the leg out of it, ease: fast,
+      // then slow into life size; fast away from it. The rest glide.
+      const eased = leg >= near - 1;
+      const keys = (a: number, b: number, mid: number): Keyframe[] =>
+        eased ? [kf(0, a, 'linear'), kf(legMs, b, 'outCubic')] : [kf(0, a, 'linear'), kf(legMs / 2, mid, 'linear'), kf(legMs, b, 'linear')];
+      const midAlong = (offAxis(leg) + offAxis(leg + 1)) / 2;
 
       layers.push({
         id: ctx.id(`leg${leg}`),
@@ -143,34 +197,20 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
         startMs: from,
         endMs: from + legMs,
         tracks: {
-          x: [kf(0, px(fromScale), 'linear'), kf(legMs / 2, px(midScale), 'linear'), kf(legMs, px(toScale), 'linear')],
-          y: [kf(0, py(fromScale), 'linear'), kf(legMs / 2, py(midScale), 'linear'), kf(legMs, py(toScale), 'linear')],
-          scaleX: [kf(0, fromScale, 'linear'), kf(legMs / 2, midScale, 'linear'), kf(legMs, toScale, 'linear')],
-          scaleY: [kf(0, fromScale, 'linear'), kf(legMs / 2, midScale, 'linear'), kf(legMs, toScale, 'linear')],
+          x: keys(px(offAxis(leg), leg), px(offAxis(leg + 1), leg + 1), px(eased ? midAlong : midScale, leg)),
+          y: keys(py(offAxis(leg), leg), py(offAxis(leg + 1), leg + 1), py(eased ? midAlong : midScale, leg)),
+          scaleX: keys(fromScale, toScale, midScale),
+          scaleY: keys(fromScale, toScale, midScale),
           // A fixed lean per photo, so the tunnel is not a column of squares.
           rotation: [kf(0, (photoIndex % 2 === 0 ? 1 : -1) * 3)],
           opacity,
+          ...(shadeAt(leg) > 0 || shadeAt(leg + 1) > 0 ? { shade: [kf(0, shadeAt(leg), 'linear'), kf(legMs, shadeAt(leg + 1), 'linear')] } : {}),
         },
         props,
       });
     }
   }
 
-  const headline = textFor(SLOTS.headline, inputs, {
-    baseSizePx: unit * 0.068,
-    maxWidthPx: safe.w * 0.86,
-    reveal: { kind: 'perWord', startMs: 240, durationMs: 460, staggerMs: 70 },
-    lineHeight: 1.08,
-  });
-  const caption = textFor(SLOTS.caption, inputs, {
-    baseSizePx: unit * 0.024,
-    maxWidthPx: safe.w * 0.7,
-    reveal: { kind: 'fade', startMs: 900, durationMs: 620 },
-    fallbackFill: roleFill('inkMuted'),
-  });
-
-  const headRun = ctx.measure(specFor(headline, fontString(headline.fontId, headline.fontSizePx, headline.weight)));
-  const capRun = ctx.measure(specFor(caption, fontString(caption.fontId, caption.fontSizePx, caption.weight)));
 
   // Photographs pass over both ends of the frame, so the type needs its own
   // ground rather than trusting whatever happens to be behind it that second.
@@ -192,7 +232,6 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     },
   });
 
-  const floor = contentFloor(design, safe);
   const topH = headRun.height + unit * 0.12;
   const bottomH = capRun.height + unit * 0.14;
   layers.push(scrim(topH / 2, topH, 90, 'scrim-top'));

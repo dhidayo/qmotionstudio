@@ -1,4 +1,4 @@
-import { colorFill, roleFill, type Keyframe, type Layer } from '@/core/types';
+import { colorFill, roleFill, type Keyframe, type Layer, type Tracks } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import { SPRINGS } from '@/core/anim/spring';
 import type { SceneInputs } from '@/document/types';
@@ -7,7 +7,9 @@ import type { SceneTemplate } from '../schema';
 import { FULL_LOOK, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { backgroundLayer } from '../_shared/chrome';
+import { backgroundLayer, contentFloor } from '../_shared/chrome';
+import { depthGroup } from '../_families/kit';
+import { emphasisedAfter, focusIn, walkTurns } from '../_families/emphasis';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -99,6 +101,17 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     ({ i }) => -Math.abs(i - middle),
   );
 
+  /*
+   * One card in focus at a time (D-157). Once the fan is open, the focus walks
+   * along it from the middle card, a neighbour at a time: the card in turn
+   * lifts, grows, straightens a little and comes to the front while the rest
+   * settle back and darken. The stage it may grow into ends at the content
+   * floor, so it never drops onto the caption band.
+   */
+  const stage = { cx: design.w / 2, cy: (stageTop + contentFloor(design, safe)) / 2, w: safe.w, h: contentFloor(design, safe) - stageTop };
+  const openMs = ctx.stagger(count - 1, count, 62, 'center') + 760;
+  const cards: Layer[] = [];
+
   for (const { photo, i, placement } of ordered) {
     if (!placement) continue;
 
@@ -114,27 +127,36 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     const phase = (i / Math.max(1, count)) * Math.PI * 2;
     const sway = Math.sin(phase) * 1.8;
 
-    layers.push({
+    const written: Tracks = {
+      x: [kf(0, placement.x)],
+      y: [kf(delay, placement.y + unit * 0.1), kf(delay + 760, placement.y, SPRINGS.snappy)],
+      rotation: [
+        kf(delay, placement.rotation - 14),
+        kf(delay + 760, placement.rotation + sway, SPRINGS.gentle),
+        kf(durationMs / 2, placement.rotation - sway, 'inOutSine'),
+        kf(durationMs, placement.rotation + sway, 'inOutSine'),
+      ],
+      scaleX: [kf(delay, 0.72), kf(delay + 760, 1, SPRINGS.bouncy)],
+      scaleY: [kf(delay, 0.72), kf(delay + 760, 1, SPRINGS.bouncy)],
+      opacity: [kf(delay, 0), kf(delay + 240, 1)],
+      // Middle cards in front, as the fan was always drawn.
+      z: [kf(0, -Math.abs(i - middle))],
+    };
+    const box = { w: props.w, h: props.h };
+    cards.push({
       id: ctx.id('card'),
       type: 'image',
       startMs: 0,
       endMs: durationMs,
-      tracks: {
-        x: [kf(0, placement.x)],
-        y: [kf(delay, placement.y + unit * 0.1), kf(delay + 760, placement.y, SPRINGS.snappy)],
-        rotation: [
-          kf(delay, placement.rotation - 14),
-          kf(delay + 760, placement.rotation + sway, SPRINGS.gentle),
-          kf(durationMs / 2, placement.rotation - sway, 'inOutSine'),
-          kf(durationMs, placement.rotation + sway, 'inOutSine'),
-        ],
-        scaleX: [kf(delay, 0.72), kf(delay + 760, 1, SPRINGS.bouncy)],
-        scaleY: [kf(delay, 0.72), kf(delay + 760, 1, SPRINGS.bouncy)],
-        opacity: [kf(delay, 0), kf(delay + 240, 1)],
-      },
+      tracks: emphasisedAfter(written, openMs, durationMs, (base, ms) => {
+        const f = walkTurns(ms, i, count, openMs, durationMs);
+        const lifted = focusIn(base, f, stage, box, 1.22, { straighten: 0.6 });
+        return { ...lifted, y: lifted.y - unit * 0.035 * f };
+      }),
       props,
     });
   }
+  layers.push(depthGroup(ctx, 'fan', cards));
 
   layers.push({
     id: ctx.id('headline'),

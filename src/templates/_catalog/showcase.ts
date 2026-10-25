@@ -62,18 +62,18 @@ const FLOWS: readonly SceneVariant[] = [
 const depth = variant('depth', 'Depth Stage');
 
 const DEPTHS: readonly SceneVariant[] = [
-  depth('dp-flythrough', 'Flythrough Corridor', 'Photos line the walls of a corridor you fly through.', { shape: 'tunnel', laps: 1, headline: 'Step inside' }, { min: 6, max: 12, default: 12 }),
-  depth('dp-receding-hall', 'Receding Hall', 'Photos rush toward you from a deep vanishing point.', { shape: 'hall', laps: 1, headline: 'Here it comes' }, { min: 5, max: 12, default: 10 }),
-  depth('dp-warp-rush', 'Warp Rush', 'Photos streak past in a hyperspace rush toward the lens.', { shape: 'warp', laps: 1, headline: 'Full speed ahead' }, { min: 6, max: 12, default: 12 }, 10_000),
-  depth('dp-helix', 'Helix Climb', 'Photos climb a spiral, turning to face you as they pass the front.', { shape: 'helix', laps: 1, radius: 0.34, headline: 'Ever upward' }, { min: 5, max: 12, default: 10 }),
-  depth('dp-double-helix', 'Double Helix', 'Two strands of photos corkscrew together.', { shape: 'doubleHelix', laps: 1, radius: 0.3, card: 0.28, headline: 'In our DNA' }, { min: 6, max: 12, default: 12 }),
-  depth('dp-cylinder-roll', 'Cylinder Roll', 'Photos wrap a cylinder that rolls toward you.', { shape: 'cylinder', laps: 1, radius: 0.34, headline: 'Keep it rolling' }, { min: 6, max: 12, default: 10 }),
-  depth('dp-ribbon-wave', 'Ribbon Wave', 'A ribbon of photos rides a rolling wave.', { shape: 'wave', laps: 1, card: 0.3, headline: 'Ride the wave' }, { min: 5, max: 12, default: 9 }),
-  depth('dp-dome-mosaic', 'Dome Mosaic', 'Photos mapped onto a turning sphere.', { shape: 'dome', laps: 1, radius: 0.36, card: 0.22, headline: 'Around the world' }, { min: 9, max: 12, default: 12 }, 14_000),
-  depth('dp-floating-stack', 'Floating Stack', 'A loose stack of photos drifting in parallax.', { shape: 'floating', card: 0.36, headline: 'Layer by layer' }, { min: 4, max: 9, default: 6 }),
-  depth('dp-depth-carousel', 'Depth Carousel', 'A carousel that pushes the front photo out toward you.', { shape: 'carousel', laps: 1, radius: 0.34, headline: 'Front and centre' }),
-  depth('dp-vanishing-fan', 'Vanishing Fan', 'Photos fan out from a far point toward the camera, then gather.', { shape: 'fan', card: 0.38, headline: 'Open it up' }, { min: 4, max: 9, default: 7 }),
-  depth('dp-accordion-fold', 'Accordion Fold', 'Photos side by side, folding open and shut like an accordion.', { shape: 'accordion', laps: 1, card: 0.3, headline: 'Unfolding now' }, { min: 4, max: 8, default: 6 }),
+  focusedAt(2_900, depth('dp-flythrough', 'Flythrough Corridor', 'Photos line the walls of a corridor you fly through.', { shape: 'tunnel', laps: 1, headline: 'Step inside' }, { min: 6, max: 12, default: 12 })),
+  focusedAt(3_500, depth('dp-receding-hall', 'Receding Hall', 'Photos rush toward you from a deep vanishing point.', { shape: 'hall', laps: 1, headline: 'Here it comes' }, { min: 5, max: 12, default: 10 })),
+  focusedAt(1_800, depth('dp-warp-rush', 'Warp Rush', 'Photos streak past in a hyperspace rush toward the lens.', { shape: 'warp', laps: 1, headline: 'Full speed ahead' }, { min: 6, max: 12, default: 12 }, 10_000)),
+  focusedAt(3_600, depth('dp-helix', 'Helix Climb', 'Photos climb a spiral, turning to face you as they pass the front.', { shape: 'helix', laps: 1, radius: 0.34, headline: 'Ever upward' }, { min: 5, max: 12, default: 10 })),
+  focusedAt(3_600, depth('dp-double-helix', 'Double Helix', 'Two strands of photos corkscrew together.', { shape: 'doubleHelix', laps: 1, radius: 0.3, card: 0.28, headline: 'In our DNA' }, { min: 6, max: 12, default: 12 })),
+  focusedAt(3_600, depth('dp-cylinder-roll', 'Cylinder Roll', 'Photos wrap a cylinder that rolls toward you.', { shape: 'cylinder', laps: 1, radius: 0.34, headline: 'Keep it rolling' }, { min: 6, max: 12, default: 10 })),
+  focusedAt(5_100, depth('dp-ribbon-wave', 'Ribbon Wave', 'A ribbon of photos rides a rolling wave.', { shape: 'wave', laps: 1, card: 0.3, headline: 'Ride the wave' }, { min: 5, max: 12, default: 9 })),
+  focusedAt(3_500, depth('dp-dome-mosaic', 'Dome Mosaic', 'Photos mapped onto a turning sphere.', { shape: 'dome', laps: 1, radius: 0.36, card: 0.22, headline: 'Around the world' }, { min: 9, max: 12, default: 12 }, 14_000)),
+  focusedAt(3_100, depth('dp-floating-stack', 'Floating Stack', 'A loose stack of photos drifting in parallax.', { shape: 'floating', card: 0.36, headline: 'Layer by layer' }, { min: 4, max: 9, default: 6 })),
+  focusedAt(4_000, depth('dp-depth-carousel', 'Depth Carousel', 'A carousel that pushes the front photo out toward you.', { shape: 'carousel', laps: 1, radius: 0.34, headline: 'Front and centre' })),
+  focusedAt(3_200, depth('dp-vanishing-fan', 'Vanishing Fan', 'Photos fan out from a far point toward the camera, then gather.', { shape: 'fan', card: 0.38, headline: 'Open it up' }, { min: 4, max: 9, default: 7 })),
+  focusedAt(3_200, depth('dp-accordion-fold', 'Accordion Fold', 'Photos side by side, folding open and shut like an accordion.', { shape: 'accordion', laps: 1, card: 0.3, headline: 'Unfolding now' }, { min: 4, max: 8, default: 6 })),
 ];
 
 const lanes = variant('marquee', 'Flow Track');
@@ -126,22 +126,22 @@ const hero = variant('hero', 'Hero Stage');
 const reveal = variant('hero', 'Photo Reveal');
 
 const HEROES: readonly SceneVariant[] = [
-  hero('hero-soft-crossfade', 'Soft Focus Crossfade', 'One photo at a time on a stage, breathing gently, dissolving to the next.', { shape: 'crossfade', headline: 'The story so far' }, { min: 2, max: 8, default: 4 }, 10_000),
-  hero('hero-with-flanks', 'Hero With Flanks', 'A hero photo centre stage, its neighbours at the sides, shifting along.', { shape: 'flanks', card: 0.6, headline: 'Centre of attention' }, { min: 3, max: 8, default: 5 }),
-  hero('hero-triptych', 'Triptych Shift', 'Three panels, the centre one featured, shifting each beat.', { shape: 'triptych', card: 0.5, headline: 'Three of a kind' }, { min: 3, max: 8, default: 6 }),
-  hero('hero-polaroid-drop', 'Polaroid Drop', 'Prints drop onto the table one by one and pile up.', { shape: 'polaroid', card: 0.56, headline: 'Memories in the making' }, { min: 3, max: 8, default: 5 }),
-  hero('hero-billboard-spin', 'Billboard Spin', 'A billboard turns on its axis to show the next photo.', { shape: 'billboard', card: 0.62, headline: 'Turn it around' }, { min: 2, max: 8, default: 4 }, 10_000),
-  hero('hero-stamp-press', 'Stamp Press', 'Each photo stamps down onto the stage with a punchy landing.', { shape: 'stamp', card: 0.6, headline: 'Make an impression' }, { min: 2, max: 8, default: 5 }),
-  hero('hero-peel-deck', 'Peel Off Deck', 'The top photo peels away to reveal the next beneath it.', { shape: 'peel', card: 0.62, headline: 'Peel back the layers' }, { min: 2, max: 8, default: 5 }),
-  hero('hero-lightbox', 'Lightbox Swap', 'A dim grid of photos, each lifted large in turn.', { shape: 'lightbox', card: 0.62, headline: 'Picked for you' }, { min: 4, max: 9, default: 6 }),
-  hero('hero-rack-focus', 'Rack Focus', 'Focus racks along a row of photos, the rest soft and dim.', { shape: 'rackFocus', card: 0.55, headline: 'Bring it into focus' }, { min: 3, max: 7, default: 5 }),
-  hero('hero-depth-dissolve', 'Depth Dissolve', 'Each photo sinks back as the next rises forward.', { shape: 'dissolve', card: 0.62, headline: 'Next up' }, { min: 2, max: 8, default: 5 }),
-  reveal('reveal-ken-burns', 'Ken Burns Relay', 'Full-frame photos, each with a slow pan and zoom, relaying to the next.', { shape: 'kenBurns', headline: 'Every picture tells a story' }, { min: 2, max: 8, default: 4 }),
-  reveal('reveal-velvet-push', 'Velvet Push', 'The camera pushes through each photo into the next.', { shape: 'velvetPush', headline: 'Go deeper' }, { min: 2, max: 8, default: 4 }),
-  reveal('reveal-close-up', 'Close-Up Reveal', 'Starts tight on a detail, then opens out to the full picture.', { shape: 'closeUp', headline: 'The details matter' }, { min: 2, max: 8, default: 4 }),
-  reveal('reveal-silk-pullback', 'Silk Pullback', 'A buttery pull back from a close-up to a wide, settled frame.', { shape: 'pullback', headline: 'See the bigger picture' }, { min: 2, max: 8, default: 4 }),
-  reveal('reveal-portrait-lift', 'Portrait Lift', 'Rises from the lower third into a soft close-up.', { shape: 'lift', headline: 'Meet the team' }, { min: 2, max: 8, default: 4 }),
-  reveal('reveal-side-glide', 'Side Glide', 'Each photo glides in from the side and settles.', { shape: 'glide', headline: 'Smooth from start to finish' }, { min: 2, max: 8, default: 4 }),
+  focusedAt(3_200, hero('hero-soft-crossfade', 'Soft Focus Crossfade', 'One photo at a time on a stage, breathing gently, dissolving to the next.', { shape: 'crossfade', headline: 'The story so far' }, { min: 2, max: 8, default: 4 }, 10_000)),
+  focusedAt(3_200, hero('hero-with-flanks', 'Hero With Flanks', 'A hero photo centre stage, its neighbours at the sides, shifting along.', { shape: 'flanks', card: 0.6, headline: 'Centre of attention' }, { min: 3, max: 8, default: 5 })),
+  focusedAt(3_200, hero('hero-triptych', 'Triptych Shift', 'Three panels, the centre one featured, shifting each beat.', { shape: 'triptych', card: 0.5, headline: 'Three of a kind' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(5_600, hero('hero-polaroid-drop', 'Polaroid Drop', 'Prints drop onto the table one by one and pile up, the newest on top.', { shape: 'polaroid', card: 0.56, headline: 'Memories in the making' }, { min: 3, max: 8, default: 5 })),
+  focusedAt(3_200, hero('hero-billboard-spin', 'Billboard Spin', 'A billboard turns on its axis to show the next photo.', { shape: 'billboard', card: 0.62, headline: 'Turn it around' }, { min: 2, max: 8, default: 4 }, 10_000)),
+  focusedAt(3_200, hero('hero-stamp-press', 'Stamp Press', 'Each photo stamps down onto the stage with a punchy landing.', { shape: 'stamp', card: 0.6, headline: 'Make an impression' }, { min: 2, max: 8, default: 5 })),
+  focusedAt(3_200, hero('hero-peel-deck', 'Peel Off Deck', 'The top photo peels away to reveal the next beneath it.', { shape: 'peel', card: 0.62, headline: 'Peel back the layers' }, { min: 2, max: 8, default: 5 })),
+  focusedAt(3_200, hero('hero-lightbox', 'Lightbox Swap', 'A dim grid of photos, each lifted large in turn.', { shape: 'lightbox', card: 0.62, headline: 'Picked for you' }, { min: 4, max: 9, default: 6 })),
+  focusedAt(3_200, hero('hero-rack-focus', 'Rack Focus', 'Focus racks along a row of photos, the rest soft and dim.', { shape: 'rackFocus', card: 0.55, headline: 'Bring it into focus' }, { min: 3, max: 7, default: 5 })),
+  focusedAt(3_200, hero('hero-depth-dissolve', 'Depth Dissolve', 'Each photo sinks back as the next rises forward.', { shape: 'dissolve', card: 0.62, headline: 'Next up' }, { min: 2, max: 8, default: 5 })),
+  focusedAt(3_200, reveal('reveal-ken-burns', 'Ken Burns Relay', 'Full-frame photos, each with a slow pan and zoom, relaying to the next.', { shape: 'kenBurns', headline: 'Every picture tells a story' }, { min: 2, max: 8, default: 4 })),
+  focusedAt(3_200, reveal('reveal-velvet-push', 'Velvet Push', 'The camera pushes through each photo into the next.', { shape: 'velvetPush', headline: 'Go deeper' }, { min: 2, max: 8, default: 4 })),
+  focusedAt(3_200, reveal('reveal-close-up', 'Close-Up Reveal', 'Starts tight on a detail, then opens out to the full picture.', { shape: 'closeUp', headline: 'The details matter' }, { min: 2, max: 8, default: 4 })),
+  focusedAt(3_200, reveal('reveal-silk-pullback', 'Silk Pullback', 'A buttery pull back from a close-up to a wide, settled frame.', { shape: 'pullback', headline: 'See the bigger picture' }, { min: 2, max: 8, default: 4 })),
+  focusedAt(3_200, reveal('reveal-portrait-lift', 'Portrait Lift', 'Rises from the lower third into a soft close-up.', { shape: 'lift', headline: 'Meet the team' }, { min: 2, max: 8, default: 4 })),
+  focusedAt(3_200, reveal('reveal-side-glide', 'Side Glide', 'Each photo glides in from the side and settles.', { shape: 'glide', headline: 'Smooth from start to finish' }, { min: 2, max: 8, default: 4 })),
 ];
 
 const cut = variant('cuts', 'Scene Cuts');
@@ -179,13 +179,13 @@ const COLLAGES: readonly SceneVariant[] = [
 const timeline = variant('timeline', 'Timeline');
 
 const TIMELINES: readonly SceneVariant[] = [
-  timeline('tl-track', 'Milestone Track', 'A playhead travels the line, bringing each milestone forward with its year.', { shape: 'track', headline: 'Our journey', milestones: '2019, 2020, 2021, 2022, 2023, 2024, 2025' }, { min: 3, max: 8, default: 6 }),
-  timeline('tl-arc', 'Timeline Arc', 'Milestones on a rising arch, lifted as the playhead reaches them.', { shape: 'arc', headline: 'How far we have come', milestones: 'Founded, First client, 10 staff, New office, Award, Today' }, { min: 3, max: 7, default: 6 }),
-  timeline('tl-zigzag', 'Timeline Zigzag', 'Photos alternate above and below the line as the story moves along.', { shape: 'zigzag', headline: 'A decade of growth', milestones: '2016, 2018, 2020, 2022, 2024, 2026' }, { min: 3, max: 8, default: 6 }),
-  timeline('tl-spine', 'Timeline Spine', 'A vertical spine with milestones branching left and right.', { shape: 'spine', headline: 'Project roadmap', milestones: 'Discover, Define, Design, Build, Launch, Grow' }, { min: 3, max: 8, default: 6 }),
-  timeline('tl-metro', 'Metro Line', 'A transit-map line; each station lights up as the train arrives.', { shape: 'metro', headline: 'Next stop: success', milestones: 'Plan, Prepare, Pitch, Win, Deliver, Celebrate' }, { min: 3, max: 7, default: 6 }),
-  timeline('tl-clothesline', 'Clothesline', 'Prints hang on a sagging line and sway as the playhead passes.', { shape: 'hang', headline: 'Our year in pictures', milestones: 'Jan, Mar, May, Jul, Sep, Nov' }, { min: 3, max: 7, default: 6 }),
-  timeline('tl-focus', 'Timeline Focus', 'Every photo stays on the track; the playhead enlarges each in turn.', { shape: 'focus', headline: 'Moments that made us', milestones: '2020, 2021, 2022, 2023, 2024, 2025' }, { min: 3, max: 8, default: 6 }),
+  focusedAt(6_400, timeline('tl-track', 'Milestone Track', 'A playhead travels the line, bringing each milestone forward with its year.', { shape: 'track', headline: 'Our journey', milestones: '2019, 2020, 2021, 2022, 2023, 2024, 2025' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(6_400, timeline('tl-arc', 'Timeline Arc', 'Milestones on a rising arch, lifted as the playhead reaches them.', { shape: 'arc', headline: 'How far we have come', milestones: 'Founded, First client, 10 staff, New office, Award, Today' }, { min: 3, max: 7, default: 6 })),
+  focusedAt(6_400, timeline('tl-zigzag', 'Timeline Zigzag', 'Photos alternate above and below the line as the story moves along.', { shape: 'zigzag', headline: 'A decade of growth', milestones: '2016, 2018, 2020, 2022, 2024, 2026' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(6_400, timeline('tl-spine', 'Timeline Spine', 'A vertical spine with milestones branching left and right.', { shape: 'spine', headline: 'Project roadmap', milestones: 'Discover, Define, Design, Build, Launch, Grow' }, { min: 3, max: 8, default: 6 })),
+  focusedAt(6_400, timeline('tl-metro', 'Metro Line', 'A transit-map line; each station lights up as the train arrives.', { shape: 'metro', headline: 'Next stop: success', milestones: 'Plan, Prepare, Pitch, Win, Deliver, Celebrate' }, { min: 3, max: 7, default: 6 })),
+  focusedAt(6_400, timeline('tl-clothesline', 'Clothesline', 'Prints hang on a sagging line and sway as the playhead passes.', { shape: 'hang', headline: 'Our year in pictures', milestones: 'Jan, Mar, May, Jul, Sep, Nov' }, { min: 3, max: 7, default: 6 })),
+  focusedAt(6_400, timeline('tl-focus', 'Timeline Focus', 'Every photo stays on the track; the playhead enlarges each in turn.', { shape: 'focus', headline: 'Moments that made us', milestones: '2020, 2021, 2022, 2023, 2024, 2025' }, { min: 3, max: 8, default: 6 })),
 ];
 
 export const SHOWCASE_SCENES: readonly SceneVariant[] = [
