@@ -1,5 +1,8 @@
 import type { StickerCategory, StickerDef } from './types';
+import { SOCIAL } from './social';
+import { REACTIONS } from './reactions';
 import { BADGES } from './badges';
+import { POINTERS } from './pointers';
 
 /**
  * The sticker library (D-158), in picker order. Each entry's art lives in the
@@ -7,7 +10,7 @@ import { BADGES } from './badges';
  * sticker is never renamed, only added; an id this build does not know draws
  * nothing rather than failing.
  */
-export const STICKERS: readonly StickerDef[] = [...BADGES];
+export const STICKERS: readonly StickerDef[] = [...SOCIAL, ...REACTIONS, ...BADGES, ...POINTERS];
 
 export const STICKER_CATEGORIES: readonly StickerCategory[] = ['Social', 'Reactions', 'Badges', 'Pointers'];
 

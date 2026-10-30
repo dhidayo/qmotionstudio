@@ -24,6 +24,8 @@ export type ElementContent = ShapeContent | StickerContent | CounterContent;
 
 /** How much of the tile the element fills. */
 const FILL = 0.74;
+/** How much of the tile's width a sticker may take, when it is wider than tall. */
+const WIDE_FILL = 0.94;
 
 type Built = { readonly layer: Layer; readonly loopMs: number; readonly stillMs: number };
 
@@ -45,7 +47,9 @@ function build(content: ElementContent, size: number, measurer: TextMeasurer, se
 
     case 'sticker': {
       const box = stickerSize(content.sticker, 1);
-      const unit = room / Math.max(0.01, box.w, box.h);
+      // A wide sticker (Subscribe, Follow) takes nearly the whole width: at
+      // the square margin it was a sliver too small to read (D-158).
+      const unit = Math.min((size * WIDE_FILL) / Math.max(0.01, box.w), room / Math.max(0.01, box.h));
       const def = stickerDef(content.sticker);
       const speed = Math.max(0.1, content.speed);
       return {

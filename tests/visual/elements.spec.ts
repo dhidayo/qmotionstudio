@@ -291,8 +291,8 @@ test.describe('in the export', () => {
         if (!ctx) throw new Error('no 2d');
         ctx.drawImage(video, 0, 0, 100, 100);
         const at = (x: number, y: number): number[] => [...ctx.getImageData(x, y, 1, 1).data].slice(0, 3);
-        // The tick sits at (25, 25), its circle 22 across; this is near the circle's edge.
-        return { green: at(80, 80), tick: at(42, 25) };
+        // The tick sticker sits at (25, 25), about 45 across; this is on the tick's long stroke.
+        return { green: at(80, 80), tick: at(29, 25) };
       };
       const early = await grab(0.1);
       const later = await grab(1.3);
@@ -304,7 +304,7 @@ test.describe('in the export', () => {
     expect(g).toBeGreaterThan(200);
     expect(r).toBeLessThan(60);
     expect(b).toBeLessThan(60);
-    // At 0.1s the tick's circle is still growing and has not reached here; by 1.3s it has.
+    // At 0.1s the tick has not begun to draw on over its circle; by 1.3s it has (D-158).
     const moved = frames.early.tick.reduce((sum, v, i) => sum + Math.abs(v - (frames.later.tick[i] ?? 0)), 0);
     expect(moved).toBeGreaterThan(60);
   });
