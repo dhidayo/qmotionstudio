@@ -40,13 +40,21 @@ export function resolveStyle(slot: TextSlotDef, inputs: SceneInputs): TextStyle 
   return { ...DEFAULTS, ...slot.defaultStyle, ...inputs.styleOverrides.texts[slot.id] };
 }
 
+/**
+ * A slot's words: what the person typed, or what the slot works out from the
+ * other texts (D-159), or its placeholder.
+ */
+export function slotWords(slot: TextSlotDef, inputs: Pick<SceneInputs, 'texts'>): string {
+  return inputs.texts[slot.id] ?? slot.derive?.(inputs.texts) ?? slot.placeholder;
+}
+
 export function textFor(
   slot: TextSlotDef,
   inputs: SceneInputs,
   options: TextSlotOptions,
 ): TextProps {
   const style = resolveStyle(slot, inputs);
-  const raw = inputs.texts[slot.id] ?? slot.placeholder;
+  const raw = slotWords(slot, inputs);
   const text = raw.slice(0, slot.maxChars);
 
   const fontSizePx = options.baseSizePx * (style.sizePct / 100);
@@ -79,6 +87,8 @@ export function textFor(
     // Same reasoning as photoProps: this is the funnel every template's text
     // passes through, and it is handed the slot's identity already.
     slot: { kind: 'text', key: slot.id },
+    // So the slot's colour reaches it after the build, wherever it is drawn (D-159).
+    styleOf: slot.id,
     fontId: style.fontId,
     fontSizePx,
     weight: style.weight,

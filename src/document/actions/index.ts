@@ -13,6 +13,8 @@ import { VIDEO_VOLUME_MAX_DB, VIDEO_VOLUME_MIN_DB } from '../select/videoSound';
 import { layersInSpan, placeAmong } from '../select/sceneLayers';
 import { MODE_LABEL } from '../modeNames';
 import { LOGO_KEY } from '../types';
+import type { ElementColor, ShapeOverride } from '../types';
+import { withListItem } from '@/templates/_shared/numbering';
 import type {
   AnimPreset,
   AudioClip,
@@ -900,6 +902,119 @@ export function resetSceneLayout(): Action {
           ? inputs
           : { ...inputs, slotTransforms: {} },
       ),
+  };
+}
+
+// ── A design's own parts (D-159) ───────────────────────────────────────────
+
+/**
+ * One part's changes, with empty entries removed so that "untouched" stays
+ * absent — the document of a project that never touched a part is exactly
+ * what it was.
+ */
+function editShape(
+  inputs: SceneInputs,
+  key: SlotKey,
+  edit: (current: ShapeOverride) => ShapeOverride,
+): SceneInputs {
+  const all = inputs.shapeOverrides ?? {};
+  const current = all[key] ?? {};
+  const next = edit(current);
+  if (JSON.stringify(next) === JSON.stringify(current)) return inputs;
+  const { [key]: _old, ...rest } = all;
+  const kept = Object.keys(next).length === 0 ? rest : { ...rest, [key]: next };
+  if (Object.keys(kept).length === 0) {
+    const { shapeOverrides: _gone, ...without } = inputs;
+    return without;
+  }
+  return { ...inputs, shapeOverrides: kept };
+}
+
+/** A part's own colour; null puts the design's back. One undo step per drag of the picker. */
+export function setShapeColor(key: SlotKey, color: NonNullable<ElementColor> | null): Action {
+  return {
+    label: 'Change shape colour',
+    coalesceKey: `shapeColor:${key}`,
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => editShape(inputs, key, ({ color: _c, ...rest }) => (color === null ? rest : { ...rest, color }))),
+  };
+}
+
+/** The colour of a part's edge, where it has one of another colour. */
+export function setShapeOutline(key: SlotKey, outline: NonNullable<ElementColor> | null): Action {
+  return {
+    label: 'Change outline colour',
+    coalesceKey: `shapeOutline:${key}`,
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => editShape(inputs, key, ({ outline: _o, ...rest }) => (outline === null ? rest : { ...rest, outline }))),
+  };
+}
+
+/** "Delete shape": the part leaves the design, and anything that sits on it with it. */
+export function hideShape(key: SlotKey): Action {
+  return {
+    label: 'Delete shape',
+    apply: (project, scope) => editInputs(project, scope, (inputs) => editShape(inputs, key, (current) => ({ ...current, hidden: true }))),
+  };
+}
+
+/** "Put back": a deleted part returns as it was before it was deleted. */
+export function showShape(key: SlotKey): Action {
+  return {
+    label: 'Put shape back',
+    apply: (project, scope) => editInputs(project, scope, (inputs) => editShape(inputs, key, ({ hidden: _h, ...rest }) => rest)),
+  };
+}
+
+/** A part exactly as the design made it: its colours, its place and its stacking. */
+export function resetShape(key: SlotKey): Action {
+  return {
+    label: 'Reset shape',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const cleared = editShape(inputs, key, () => ({}));
+        if (!(key in cleared.slotTransforms)) return cleared;
+        const { [key]: _t, ...slotTransforms } = cleared.slotTransforms;
+        return { ...cleared, slotTransforms };
+      }),
+  };
+}
+
+/** Every deleted part put back, in one step. */
+export function showAllShapes(): Action {
+  return {
+    label: 'Put every shape back',
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) =>
+        Object.keys(inputs.shapeOverrides ?? {}).reduce((next, key) => editShape(next, key, ({ hidden: _h, ...rest }) => rest), inputs),
+      ),
+  };
+}
+
+/**
+ * One entry of a list text typed into (D-159): a pillar, a step, a number.
+ *
+ * The whole list is written back, so the slot's text stays the one thing the
+ * Text tab shows and edits. `current` is what the design shows now (the typed
+ * text or the placeholder) and `count` how many entries it draws; a numbered
+ * list is written out in full — editing the third of "01" gives
+ * "01, 02, 5, 04". Null takes the entry out: a word goes, a number's place
+ * is left empty. Typing coalesces with the slot's own field.
+ */
+export function setListItem(
+  slotId: string,
+  item: number,
+  words: string | null,
+  options: { readonly current: string; readonly count: number; readonly numbered: boolean },
+): Action {
+  return {
+    label: words === null ? 'Remove from the list' : 'Edit text',
+    coalesceKey: `text:${slotId}`,
+    apply: (project, scope) =>
+      editInputs(project, scope, (inputs) => {
+        const text = withListItem(inputs.texts[slotId] ?? options.current, item, words, options);
+        return inputs.texts[slotId] === text ? inputs : { ...inputs, texts: { ...inputs.texts, [slotId]: text } };
+      }),
   };
 }
 

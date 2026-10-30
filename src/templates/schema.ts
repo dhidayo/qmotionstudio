@@ -22,6 +22,18 @@ export type TextSlotDef = {
   readonly defaultStyle: Partial<TextStyle>;
   /** Templates that support §6.3's `swap` reveal offer a second phrase (§8.2). */
   readonly supportsAlt?: boolean;
+  /**
+   * The words while the person has never typed any, worked out from the
+   * other texts (D-159): a brand mark's letter is the company name's first
+   * until someone types a letter of their own. Falls back to `placeholder`.
+   */
+  readonly derive?: (texts: Readonly<Record<string, string>>) => string;
+  /**
+   * A list the design draws an entry at a time (D-159): `words` separated by
+   * commas — pillars, steps — or `numbers`, a pattern such as "01" the
+   * design counts on from (numbering.ts). Each entry is typed into on its own.
+   */
+  readonly list?: 'words' | 'numbers';
 };
 
 export type NamedPalette = { readonly id: string; readonly label: string; readonly palette: Palette };
@@ -162,6 +174,13 @@ export function structureKey(
         style?.align ?? null,
         style?.wrap ?? null,
         style?.pill ?? null,
+        // Whether it has a colour of its own, and its shadow and outline: the
+        // build writes those in. The colour's *value* is put on after the
+        // build (D-159, parts.ts), so dragging a colour picker never rebuilds —
+        // and leaving it out entirely kept the preview showing an old colour.
+        (style?.color ?? '') !== '',
+        style?.shadow ?? null,
+        style?.outline ?? null,
       ];
     });
 

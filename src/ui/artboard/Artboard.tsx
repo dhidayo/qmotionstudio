@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { aspectValue, fitContain } from '@/core/math/aspect';
 import type { RenderRig } from '@/core/render/rig';
 import type { PreviewClock } from '@/core/time/clock';
@@ -13,6 +13,7 @@ import { useDevicePixelRatio } from '@/ui/hooks/useDevicePixelRatio';
 import { usePreviewLoop } from './usePreviewLoop';
 import { CanvasSelection } from './CanvasSelection';
 import { RestFade } from './RestFade';
+import { useDrawnScene } from './drawnScene';
 import { QUALITY_STEPS, previewSizes } from './previewResolution';
 
 type Props = {
@@ -79,6 +80,8 @@ export function Artboard({ project, clock, rig, media, padding = 24 }: Props): R
     canvas, project, clock, rig, media, sizes,
     canStepDown ? () => { setSlow({ aspect, step: step + 1 }); } : null,
   );
+  // The panels' view of the design's parts (D-159): published as it changes, not per frame.
+  useEffect(() => { useDrawnScene.getState().setDrawn(drawn); }, [drawn]);
   // A pinch on a phone zooms the view, never the document (D-110).
   const zoom = useOverlays((o) => o.viewZoom);
   const setZoom = useOverlays((o) => o.setViewZoom);

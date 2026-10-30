@@ -8,7 +8,8 @@ import { FontPicker } from '../FontPicker';
 import { TextGallery } from '@/ui/text/TextGallery';
 import { useEditor } from '@/state/store';
 import type { SceneTemplate, TextSlotDef } from '@/templates/schema';
-import { resolveStyle } from '@/templates/_shared/text';
+import { resolveStyle, slotWords } from '@/templates/_shared/text';
+import { parseSlotKey } from '@/core/render/slots';
 import { Button, ColorField, EmptyNote, NoSectionTabs, Row, Section, Segmented, Slider, TextInput, Toggle } from '../controls';
 import { SlotPlacement } from '../SlotPlacement';
 
@@ -35,7 +36,12 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
   const selectedSlot = useEditor((s) => s.selectedSlot);
   const overlays = useEditor((s) => s.project.overlays);
   const corporate = useEditor((s) => s.project.mode === 'motionAd');
-  const [open, setOpen] = useState<string | null>(() => (selectedSlot?.startsWith('text:') === true ? selectedSlot : null));
+  // An entry of a list — a pillar, a step (D-159) — opens its list's tile.
+  const tileOf = (key: string | null): string | null => {
+    const parsed = key === null ? null : parseSlotKey(key);
+    return parsed?.kind === 'text' ? `text:${parsed.id}` : null;
+  };
+  const [open, setOpen] = useState<string | null>(() => tileOf(selectedSlot));
   // "+ Add text" opens the gallery of ready-made styles (D-145).
   const [gallery, setGallery] = useState(false);
 
@@ -44,12 +50,14 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
   const [seen, setSeen] = useState(selectedSlot);
   if (selectedSlot !== seen) {
     setSeen(selectedSlot);
-    if (selectedSlot?.startsWith('text:') === true) setOpen(selectedSlot);
+    const tile = tileOf(selectedSlot);
+    if (tile !== null) setOpen(tile);
   }
+  const selectedTile = tileOf(selectedSlot);
   useEffect(() => {
-    if (selectedSlot?.startsWith('text:') !== true) return;
-    document.querySelector(`[data-text-tile="${CSS.escape(selectedSlot)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [selectedSlot]);
+    if (selectedTile === null) return;
+    document.querySelector(`[data-text-tile="${CSS.escape(selectedTile)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedTile]);
 
   if (!template) {
     return (
@@ -145,11 +153,13 @@ function TileHead({
 function SlotTile({ slot, open, onToggle }: { slot: TextSlotDef; open: boolean; onToggle: () => void }): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
   const value = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.texts[slot.id]);
+  // What the design shows: typed, worked out (a brand mark's letter, D-159) or the design's own.
+  const texts = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs.texts);
   const selectSlot = useEditor((s) => s.selectSlot);
   const key = `text:${slot.id}`;
   // An empty text is a removed one: the design draws nothing there.
   const removed = value === '';
-  const says = removed ? 'Removed' : value ?? slot.placeholder;
+  const says = removed ? 'Removed' : slotWords(slot, { texts: texts ?? {} });
 
   return (
     <div data-text-tile={key} className="rounded-lg border" style={{ borderColor: open ? 'var(--c-accent)' : 'var(--c-edge)' }}>
@@ -283,6 +293,11 @@ function seconds(ms: number): string {
 function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
   const dispatch = useEditor((s) => s.dispatch);
   const inputs = useEditor((s) => s.project.scenes[s.selectedScene]?.inputs);
+  // The entry picked on the canvas, when it is one of this list's (D-159): its placement is the one shown.
+  const entryKey = useEditor((s) => {
+    const parsed = s.selectedSlot === null ? null : parseSlotKey(s.selectedSlot);
+    return parsed?.kind === 'text' && parsed.id === slot.id && parsed.item !== undefined ? s.selectedSlot : null;
+  });
   if (!inputs) return <EmptyNote>No scene.</EmptyNote>;
 
   const style = resolveStyle(slot, inputs);
@@ -302,11 +317,14 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
         <TextInput
           label={slot.label}
           value={value}
-          placeholder={slot.placeholder}
+          placeholder={slot.derive?.(inputs.texts) ?? slot.placeholder}
           maxLength={slot.maxChars}
           multiline={slot.maxChars > 48}
           onChange={(next) => { dispatch(actions.setText(slot.id, next)); }}
         />
+        {slot.list === 'numbers' && (
+          <p className="mt-1 text-[10px] text-ink-faint">Type the first — 1, 01, A, i, Step 1 — and the rest follow. Or type each one, separated by commas.</p>
+        )}
         <p className="tabular mt-1 text-right text-[10px] text-ink-faint">
           {value.length}/{slot.maxChars}
         </p>
@@ -427,7 +445,7 @@ function TextSlotBlock({ slot }: { slot: TextSlotDef }): React.JSX.Element {
     </div>
     {/* Where it sits, its motion and its stacking: after what it says and how it looks. */}
     <div className="mt-3">
-      <SlotPlacement slotKey={`text:${slot.id}`} />
+      <SlotPlacement slotKey={entryKey ?? `text:${slot.id}`} />
     </div>
     </>
   );

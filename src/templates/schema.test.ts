@@ -43,11 +43,17 @@ describe('structureKey — what must NOT invalidate the build (D-006)', () => {
     expect(keyOf(inputs({ look: { ...DEFAULT_LOOK, speed: 2 } }))).toBe(base);
   });
 
-  it('ignores a text colour override', () => {
-    const recoloured = inputs({
-      styleOverrides: { texts: { headline: { color: '#00ff00', shadow: true, outline: true } } },
-    });
-    expect(keyOf(recoloured)).toBe(base);
+  /*
+   * A colour changes without a rebuild: its value is put on after the build
+   * (D-159, parts.ts). Whether there is one at all, and the shadow and
+   * outline, are written in by the build, so those are in the key — leaving
+   * them out kept the preview on an old colour while the export had the new.
+   */
+  it('ignores which colour a coloured text is', () => {
+    const green = inputs({ styleOverrides: { texts: { headline: { color: '#00ff00', shadow: true, outline: true } } } });
+    const red = inputs({ styleOverrides: { texts: { headline: { color: '#ff0000', shadow: true, outline: true } } } });
+    expect(keyOf(red)).toBe(keyOf(green));
+    expect(keyOf(green)).not.toBe(base);
   });
 
   it('ignores sizePct while the size mode is "template", where it means nothing', () => {

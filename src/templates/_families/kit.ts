@@ -1,4 +1,4 @@
-import { colorFill, roleFill, type Aspect, type ImageProps, type Keyframe, type Layer, type Paint, type Reveal, type TextProps, type Tracks } from '@/core/types';
+import { colorFill, roleFill, type Aspect, type ImageProps, type Keyframe, type Layer, type Paint, type PaletteRole, type Rect, type Reveal, type SlotRef, type TextProps, type Tracks } from '@/core/types';
 import { fontString } from '@/fonts/registry';
 import type { SceneInputs, TextStyle } from '@/document/types';
 import type { BuildContext } from '../buildContext';
@@ -86,6 +86,11 @@ export function placeText(
     readonly startMs?: number;
     readonly endMs?: number;
     readonly pill?: { readonly x: number; readonly y: number; readonly radius: number };
+    /** One entry of a list text, typed into on its own (D-159), and what the selection calls it. */
+    readonly item?: number;
+    readonly label?: string;
+    /** The slot key of a sibling it moves with (D-159): a chip's number with the chip's words. */
+    readonly follows?: string;
   },
 ): PlacedText {
   const props: TextProps = textFor(slot, inputs, {
@@ -99,6 +104,9 @@ export function placeText(
   const run = ctx.measure(specFor(props, fontString(props.fontId, props.fontSizePx, props.weight)));
   const anchorX = options.anchorX ?? 0.5;
   const anchorY = options.anchorY ?? 0;
+  const entry = options.item === undefined
+    ? {}
+    : { slot: { kind: 'text' as const, key: slot.id, item: options.item, ...(options.label === undefined ? {} : { label: options.label }) } };
   return {
     width: run.width,
     height: run.height,
@@ -110,7 +118,8 @@ export function placeText(
       anchorX,
       anchorY,
       tracks: { x: [kf(0, options.x)], y: [kf(0, options.y)], ...options.tracks },
-      props,
+      props: { ...props, ...entry },
+      ...(options.follows === undefined ? {} : { follows: options.follows }),
     },
   };
 }
@@ -148,11 +157,16 @@ export function rect(
     readonly startMs?: number;
     readonly endMs?: number;
     readonly ellipse?: boolean;
+    /** A part the person can pick, recolour, move and delete (D-159): see `shapeSlot`. */
+    readonly slot?: SlotRef;
+    /** The slot key of the sibling it sits behind and moves with (D-159). */
+    readonly follows?: string;
   },
 ): Layer {
   return {
     id: ctx.id(prefix),
     type: 'shape',
+    ...(options.follows === undefined ? {} : { follows: options.follows }),
     startMs: options.startMs ?? 0,
     endMs: options.endMs ?? ctx.durationMs,
     anchorX: options.anchorX ?? 0.5,
@@ -165,11 +179,88 @@ export function rect(
       fill: options.fill,
       ...(options.radius === undefined ? {} : { cornerRadius: options.radius }),
       ...(options.stroke ? { stroke: options.stroke } : {}),
+      ...(options.slot ? { slot: options.slot } : {}),
     },
   };
 }
 
 export const CLEAR: Paint = colorFill('rgba(0,0,0,0)');
+
+// ── Parts (D-159) ───────────────────────────────────────────────────────────
+//
+// "When you select some templates, they have some elements that are fixed and
+// cannot be selected or moved, or deleted." A design's own decoration becomes
+// a part by carrying a shape slot: a name the template chooses (never a layer
+// id, which shifts as the inputs change), what the selection calls it, and the
+// palette role that is its colour. A part made of several pieces — a tile and
+// its letter, a button and its sheen — is one group (`part`), so it is picked,
+// moved and recoloured whole. A part that sits behind words `follows` them.
+
+/** A part's slot: its name, its label and the role that is its colour (accent unless said). */
+export function shapeSlot(
+  name: string,
+  label: string,
+  extra: { readonly tint?: PaletteRole; readonly text?: { readonly slot: string; readonly item?: number }; readonly pick?: false } = {},
+): SlotRef {
+  return { kind: 'shape', key: name, label, tint: extra.tint ?? 'accent', ...(extra.text ? { text: extra.text } : {}), ...(extra.pick === false ? { pick: false as const } : {}) };
+}
+
+/**
+ * Several pieces as one part: a group at `centre`, the pieces re-based round
+ * it so they draw exactly where they did, and a `box` round them at rest so
+ * the part is picked by all of it rather than its first piece. The group
+ * stands still — the pieces keep their own motion — so a nudge scales and
+ * turns the part about its centre. Nothing inside may carry a slot (D-090).
+ */
+export function part(
+  ctx: BuildContext,
+  prefix: string,
+  ref: SlotRef,
+  centre: { readonly x: number; readonly y: number },
+  children: readonly Layer[],
+  options: { readonly follows?: string } = {},
+): Layer {
+  const rebased = children.map((child) => rebase(child, centre));
+  return {
+    id: ctx.id(prefix),
+    type: 'group',
+    startMs: 0,
+    endMs: ctx.durationMs,
+    tracks: { x: [kf(0, centre.x)], y: [kf(0, centre.y)] },
+    ...(options.follows === undefined ? {} : { follows: options.follows }),
+    props: { slot: ref, ...boxAround(rebased) },
+    children: rebased,
+  };
+}
+
+function rebase(layer: Layer, by: { readonly x: number; readonly y: number }): Layer {
+  const move = (track: readonly Keyframe[] | undefined, d: number): readonly Keyframe[] =>
+    track && track.length > 0 ? track.map((key) => ({ ...key, v: key.v - d })) : [kf(0, -d, 'linear')];
+  return { ...layer, tracks: { ...layer.tracks, x: move(layer.tracks.x, by.x), y: move(layer.tracks.y, by.y) } };
+}
+
+/** The pieces' rectangles where they come to rest, together. Words and glows are inside them. */
+function boxAround(layers: readonly Layer[]): { box?: Rect } {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  const last = (track: readonly Keyframe[] | undefined, fallback: number): number => track?.[track.length - 1]?.v ?? fallback;
+  for (const layer of layers) {
+    if (layer.type !== 'shape' && layer.type !== 'mask' && layer.type !== 'image') continue;
+    const sx = Math.abs(last(layer.tracks.scaleX, 1));
+    const sy = Math.abs(last(layer.tracks.scaleY, 1));
+    const w = layer.props.w * sx;
+    const h = layer.props.h * sy;
+    const left = last(layer.tracks.x, 0) - w * (layer.anchorX ?? 0.5);
+    const top = last(layer.tracks.y, 0) - h * (layer.anchorY ?? 0.5);
+    x0 = Math.min(x0, left);
+    y0 = Math.min(y0, top);
+    x1 = Math.max(x1, left + w);
+    y1 = Math.max(y1, top + h);
+  }
+  return Number.isFinite(x0) ? { box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } } : {};
+}
 
 // ── Photo cards ─────────────────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-import type { Paint, Palette } from '@/core/types';
+import { roleFill, type Paint, type Palette } from '@/core/types';
 
 /**
  * D-006. Resolves a Paint to a canvas fill string at draw time.
@@ -9,6 +9,13 @@ import type { Paint, Palette } from '@/core/types';
  */
 export function resolvePaint(paint: Paint, palette: Palette): string {
   if (paint.kind === 'color') return paint.value;
+  // What reads on another paint (D-159): a recoloured part's lettering.
+  if (paint.kind === 'on') {
+    // Against the colour itself, never a see-through version of it.
+    const under = paint.of.kind === 'role' ? roleFill(paint.of.role) : paint.of.kind === 'on' ? { kind: 'on' as const, of: paint.of.of } : paint.of;
+    const on = onAccent(resolvePaint(under, palette));
+    return paint.alpha === undefined ? on : withAlpha(on, paint.alpha);
+  }
   const base = paint.role === 'onAccent' ? onAccent(palette.accent) : palette[paint.role];
   return paint.alpha === undefined ? base : withAlpha(base, paint.alpha);
 }

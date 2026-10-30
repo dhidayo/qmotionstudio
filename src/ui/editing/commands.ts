@@ -12,6 +12,9 @@ import { useEditor } from '@/state/store';
 import { useOverlays, type MenuItem } from '@/ui/shell/overlays';
 import { undoSentence } from '@/ui/shell/platform';
 import { currentLayout, type Layout } from '@/ui/shell/useLayout';
+import { parseSlotKey } from '@/core/render/slots';
+import { labelIn } from '@/core/render/parts';
+import { editPart, entryEditing, selectedSceneLayers } from './parts';
 
 /**
  * What can be done to a thing on the timeline or the canvas (D-104), in one
@@ -208,17 +211,35 @@ export function arrangeSelection(to: 'front' | 'back'): boolean {
  */
 export function deleteSlot(key: string): boolean {
   const s = useEditor.getState();
-  const text = /^text:(.+)$/.exec(key);
-  if (text?.[1] !== undefined) {
-    s.dispatch(actions.setText(text[1], ''));
+  const parsed = parseSlotKey(key);
+  // A part of the design (D-159): it goes, and Style lists it to put back.
+  if (parsed?.kind === 'shape') {
+    s.dispatch(actions.hideShape(key));
+    s.endInteraction();
+    s.selectSlot(null);
+    s.showToast(`Shape deleted. ${undoHint()} Or Style → Shapes in this design → Put back.`);
+    return true;
+  }
+  // One entry of a list: that entry leaves the list (a number leaves its place empty).
+  if (parsed?.kind === 'text' && parsed.item !== undefined) {
+    const inputs = s.project.scenes[s.selectedScene]?.inputs;
+    const editing = inputs ? entryEditing({ slot: parsed.id, item: parsed.item }, inputs, s.template, selectedSceneLayers()) : null;
+    if (!editing) return false;
+    s.dispatch(editing.write(null));
+    s.endInteraction();
+    s.selectSlot(null);
+    s.showToast(`Removed from the list. ${undoHint()} Or edit the list in Text.`);
+    return true;
+  }
+  if (parsed?.kind === 'text') {
+    s.dispatch(actions.setText(parsed.id, ''));
     s.endInteraction();
     s.selectSlot(null);
     s.showToast(`Text removed. ${undoHint()} Or type it back in Text.`);
     return true;
   }
-  const photo = /^photo:(\d+)$/.exec(key);
-  if (photo?.[1] !== undefined) {
-    const index = Number(photo[1]);
+  if (parsed?.kind === 'photo') {
+    const index = parsed.index;
     const scene = s.project.scenes[s.selectedScene];
     const min = s.template?.photoSlots.min ?? 1;
     const count = scene?.inputs.photos.length ?? 0;
@@ -380,12 +401,31 @@ function sceneLengthAt(index: number): number {
 }
 
 /** For a template element picked on the canvas. */
-export function slotMenu(key: string, label: string): readonly MenuItem[] {
+export function slotMenu(key: string, label: string, options: { readonly typed?: boolean } = {}): readonly MenuItem[] {
   const s = useEditor.getState();
   const o = useOverlays.getState();
   const target = { kind: 'slot' as const, key };
-  const photo = /^photo:(\d+)$/.exec(key);
-  const isText = key.startsWith('text:');
+  const parsed = parseSlotKey(key);
+  const photo = parsed?.kind === 'photo' ? [key, String(parsed.index)] : null;
+  const isText = parsed?.kind === 'text';
+  // A design's own part (D-159): its colour, its letter or number, where it sits, deleting it.
+  if (parsed?.kind === 'shape') {
+    return [
+      ...(options.typed === true ? [{ label: 'Edit', keys: 'Enter', onSelect: () => { o.openTextEdit(key); } }] : []),
+      { label: 'Colour…', onSelect: () => { editPart(key); } },
+      { kind: 'separator' },
+      { label: 'Effects…', onSelect: () => { o.openPicker({ target: { kind: 'element', target, label } }); } },
+      { label: 'Entrance effect…', onSelect: () => { o.openPicker({ target: { kind: 'element', target, label }, category: 'Entrance' }); } },
+      { label: 'Exit effect…', onSelect: () => { o.openPicker({ target: { kind: 'element', target, label }, category: 'Exit' }); } },
+      { label: 'Motion properties', onSelect: () => { s.selectSlot(key, 'motion'); } },
+      { kind: 'separator' },
+      { label: 'Bring to front', keys: ']', onSelect: () => { s.dispatch(actions.arrangeSlot(key, 'front')); } },
+      { label: 'Send to back', keys: '[', onSelect: () => { s.dispatch(actions.arrangeSlot(key, 'back')); } },
+      { label: 'Reset to the design', onSelect: () => { s.dispatch(actions.resetShape(key)); } },
+      { kind: 'separator' },
+      { label: 'Delete shape', keys: 'Delete', danger: true, onSelect: () => { deleteSlot(key); } },
+    ];
+  }
   return [
     ...(isText ? [{ label: 'Edit text', keys: 'Enter', onSelect: () => { o.openTextEdit(key); } }] : []),
     ...(photo?.[1] !== undefined
@@ -405,6 +445,21 @@ export function slotMenu(key: string, label: string): readonly MenuItem[] {
     { kind: 'separator' },
     { label: isText ? 'Remove text' : 'Delete photo', keys: 'Delete', danger: true, onSelect: () => { deleteSlot(key); } },
   ];
+}
+
+/** What a design's element is called in a sentence: "the brand mark", "pillar 2", "photo 1", "the headline". */
+export function slotName(key: string): string {
+  const s = useEditor.getState();
+  const layers = selectedSceneLayers();
+  const named = layers === null ? null : labelIn(layers, key);
+  const parsed = parseSlotKey(key);
+  if (parsed?.kind === 'photo') return `photo ${parsed.index + 1}`;
+  if (named !== null) return parsed?.kind === 'shape' ? `the ${named.charAt(0).toLowerCase()}${named.slice(1)}` : named.toLowerCase();
+  if (parsed?.kind === 'text') {
+    const def = s.template?.textSlots.find((slot) => slot.id === parsed.id);
+    return def ? `the ${def.label.toLowerCase()}` : 'this text';
+  }
+  return parsed?.kind === 'shape' ? 'this shape' : 'this element';
 }
 
 export function logoMenu(): readonly MenuItem[] {

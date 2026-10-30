@@ -14,6 +14,7 @@ import { saveBrandKit, useBrandKit } from '@/ui/brand/brandKit';
 import { restoreMedia } from '@/persist/media';
 import { SceneLayoutReset } from '../SlotPlacement';
 import { LogoSection } from '../LogoSection';
+import { DesignShapes, SelectedPart } from '../PartPanel';
 
 /**
  * What each colour paints, said plainly (D-126) — "please confirm that all the
@@ -68,6 +69,8 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
 
   return (
     <div>
+      {/* The design's part picked on the canvas comes first (D-159). */}
+      <SelectedPart />
       <MyBrandSection />
 
       {looks.length > 0 && <LooksSection looks={looks} />}
@@ -139,6 +142,8 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
           }}
         />
       </Section>
+
+      <DesignShapes />
 
       <SceneLayoutReset />
     </div>

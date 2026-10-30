@@ -21,16 +21,51 @@ import { sampleTrack } from '@/core/anim/interpolate';
  */
 
 export function slotKey(slot: SlotRef): SlotKey {
-  return slot.kind === 'photo' ? `photo:${slot.index}` : `text:${slot.key}`;
+  switch (slot.kind) {
+    case 'photo':
+      return `photo:${slot.index}`;
+    case 'text':
+      // One entry of a list text has a key of its own (D-159): `text:steps#2`.
+      return slot.item === undefined ? `text:${slot.key}` : `text:${slot.key}#${slot.item}`;
+    case 'shape':
+      return `shape:${slot.key}`;
+  }
+}
+
+/** A slot key taken apart (D-159). */
+export type ParsedSlotKey =
+  | { readonly kind: 'photo'; readonly index: number }
+  | { readonly kind: 'text'; readonly id: string; readonly item?: number }
+  | { readonly kind: 'shape'; readonly name: string };
+
+/**
+ * The one place a slot key is read back (D-159). Callers used to slice
+ * `text:` or match `photo:(\d+)` by hand, which a third kind of key — and a
+ * list entry's `#2` — would have quietly broken. Null for anything else,
+ * such as the logo's key.
+ */
+export function parseSlotKey(key: SlotKey): ParsedSlotKey | null {
+  const photo = /^photo:(\d+)$/.exec(key);
+  if (photo?.[1] !== undefined) return { kind: 'photo', index: Number(photo[1]) };
+  const text = /^text:([^#]+)(?:#(\d+))?$/.exec(key);
+  if (text?.[1] !== undefined) {
+    return text[2] === undefined ? { kind: 'text', id: text[1] } : { kind: 'text', id: text[1], item: Number(text[2]) };
+  }
+  const shape = /^shape:(.+)$/.exec(key);
+  if (shape?.[1] !== undefined) return { kind: 'shape', name: shape[1] };
+  return null;
 }
 
 /** The slot a drawable belongs to, or null if the template did not tag it. */
 export function slotOf(layer: Layer): SlotRef | null {
   switch (layer.type) {
+    // With a design's own parts, shapes and gradients too (D-159).
     case 'image':
     case 'text':
     case 'group':
     case 'mask':
+    case 'shape':
+    case 'gradient':
       return layer.props.slot ?? null;
     default:
       return null;
@@ -77,7 +112,7 @@ export function applySlotTransforms(
 ): readonly Layer[] {
   if (!hasSlotTransforms(transforms)) return layers;
 
-  const moved = layers.map((layer) => applyToLayer(layer, transforms, design));
+  const moved = layers.map((layer) => applyToLayer(layer, transforms, design, layers));
   const next = restack(moved, transforms);
 
   // Identity when nothing matched, so the caller's cache can keep the original
@@ -105,7 +140,14 @@ function restack(
   const slots: { layer: Layer; index: number; z: number }[] = [];
   layers.forEach((layer, index) => {
     const slot = slotOf(layer);
-    if (slot) slots.push({ layer, index, z: transforms[slotKey(slot)]?.z ?? 0 });
+    const own = slot ? transforms[slotKey(slot)]?.z ?? 0 : 0;
+    /*
+     * A part that follows another (D-159) is restacked with it: its own lift
+     * plus its leader's. The sort is stable, so a pill brought to the front
+     * with its words stays directly behind them.
+     */
+    if (layer.follows !== undefined) slots.push({ layer, index, z: own + (transforms[layer.follows]?.z ?? 0) });
+    else if (slot) slots.push({ layer, index, z: own });
   });
 
   if (slots.length < 2 || slots.every((entry) => entry.z === 0)) return layers;
@@ -123,6 +165,7 @@ function applyToLayer(
   layer: Layer,
   transforms: Readonly<Record<SlotKey, SlotTransform>>,
   design: Size,
+  siblings: readonly Layer[],
 ): Layer {
   /*
    * A container is a coordinate space, so a nudge applied to its tracks moves
@@ -137,15 +180,143 @@ function applyToLayer(
     return children === layer.children ? layer : { ...layer, children };
   })();
 
-  const slot = slotOf(walked);
-  if (!slot) return walked;
+  // Carried by what it sits behind first (D-159), then moved on its own.
+  const carried = carriedBy(walked, transforms, design, siblings);
+
+  const slot = slotOf(carried);
+  if (!slot) return carried;
 
   const transform = transforms[slotKey(slot)];
   // `z` is handled by `restack`, not here — a layer that has only been
   // restacked needs no new tracks.
-  if (!transform || isIdentity(transform)) return walked;
+  if (!transform || isIdentity(transform)) return carried;
 
-  return { ...walked, tracks: nudgeTracks(walked.tracks, transform, design) };
+  return { ...carried, tracks: nudgeTracks(carried.tracks, transform, design) };
+}
+
+/** The sibling a follower follows (D-159): the layer carrying that slot, which follows nothing itself. */
+export function leaderOf(layer: Layer, siblings: readonly Layer[]): Layer | null {
+  const key = layer.follows;
+  if (key === undefined) return null;
+  return siblings.find((sibling) => {
+    const slot = slotOf(sibling);
+    return slot !== null && sibling.follows === undefined && slotKey(slot) === key;
+  }) ?? null;
+}
+
+/**
+ * A follower moved with its leader (D-159): a pill with its words, a print's
+ * white border with its photograph.
+ *
+ * The leader's nudge is a rigid move about the leader's own anchor A, which
+ * is where `drawLayer` scales and turns it from: a point P of the follower
+ * goes to A + o + R(r)·s·(P − A), and the follower's own scale and turn take
+ * s and r too, so the pair moves as if it were one thing.
+ */
+function carriedBy(
+  layer: Layer,
+  transforms: Readonly<Record<SlotKey, SlotTransform>>,
+  design: Size,
+  siblings: readonly Layer[],
+): Layer {
+  const transform = layer.follows === undefined ? undefined : transforms[layer.follows];
+  if (!transform || isIdentity(transform)) return layer;
+  const leader = leaderOf(layer, siblings);
+  if (!leader) return layer;
+  return { ...layer, tracks: followTracks(layer, leader, transform, design) };
+}
+
+/** How often a carried path is sampled where it cannot be mapped exactly. */
+const DENSE_MS = 33;
+
+/**
+ * The follower's tracks, carried. Kept exact where they can be — a move, or a
+ * resize of a leader that stands still, maps every keyframe and keeps its
+ * easing — and otherwise sampled every 33 ms and at every keyframe either
+ * side has, so an overshooting entrance keeps its overshoot. (Resampling only
+ * at the union of keyframes, as a moving nudge does, flattened it.)
+ */
+export function followTracks(layer: Layer, leader: Layer, t: SlotTransform, design: Size): Tracks {
+  const { tracks } = layer;
+  // The follower's local time, on the leader's clock.
+  const shiftMs = layer.startMs - leader.startMs;
+  const still = (track: readonly Keyframe[] | undefined): boolean =>
+    !track || track.length === 0 || track.every((key) => key.v === track[0]?.v);
+  const anchorStill = still(leader.tracks.x) && still(leader.tracks.y);
+  const anchor = (ms: number): { x: number; y: number } => pointAt(leader.tracks, ms + shiftMs);
+
+  if (!animatedNudge(t)) {
+    const n = nudgeAt(t, 0);
+    const sized: Tracks = n.scale === 1 ? {} : { scaleX: multiply(tracks.scaleX, n.scale), scaleY: multiply(tracks.scaleY, n.scale) };
+    const turned: Tracks = n.rotation === 0 ? {} : { rotation: shift(tracks.rotation, n.rotation, 0) };
+    if (n.rotation === 0 && (n.scale === 1 || anchorStill)) {
+      // x' = (1 − s)·A + o + s·x, keyframe by keyframe.
+      const a = anchor(0);
+      const map = (track: readonly Keyframe[] | undefined, at: number, o: number): readonly Keyframe[] =>
+        n.scale === 1
+          ? shift(track, o, 0)
+          : (track && track.length > 0 ? track : [{ t: 0, v: 0, ease: 'linear' as const }])
+            .map((key) => ({ ...key, v: (1 - n.scale) * at + o + n.scale * key.v }));
+      return { ...tracks, x: map(tracks.x, a.x, n.offsetX * design.w), y: map(tracks.y, a.y, n.offsetY * design.h), ...sized };
+    }
+    if (anchorStill && still(tracks.x) && still(tracks.y)) {
+      const p = carry(pointAt(tracks, 0), anchor(0), n, design);
+      return { ...tracks, x: [{ t: 0, v: p.x, ease: 'linear' }], y: [{ t: 0, v: p.y, ease: 'linear' }], ...sized, ...turned };
+    }
+    const at = denseTimes(layer, leader, t, shiftMs);
+    const points = at.map((ms) => carry(pointAt(tracks, ms), anchor(ms), n, design));
+    return {
+      ...tracks,
+      x: at.map((ms, i) => ({ t: ms, v: points[i]?.x ?? 0, ease: 'linear' })),
+      y: at.map((ms, i) => ({ t: ms, v: points[i]?.y ?? 0, ease: 'linear' })),
+      ...sized,
+      ...turned,
+    };
+  }
+
+  // A keyframed nudge: everything it changes, sampled.
+  const at = denseTimes(layer, leader, t, shiftMs);
+  const nudges = at.map((ms) => nudgeAt(t, ms + shiftMs));
+  const points = at.map((ms, i) => carry(pointAt(tracks, ms), anchor(ms), nudges[i] ?? NO_SLOT_TRANSFORM, design));
+  const keys = (pick: (ms: number, i: number) => number): Keyframe[] => at.map((ms, i) => ({ t: ms, v: pick(ms, i), ease: 'linear' }));
+  return {
+    ...tracks,
+    x: keys((_, i) => points[i]?.x ?? 0),
+    y: keys((_, i) => points[i]?.y ?? 0),
+    scaleX: keys((ms, i) => (sampleTrack(tracks.scaleX ?? [], ms) ?? 1) * (nudges[i]?.scale ?? 1)),
+    scaleY: keys((ms, i) => (sampleTrack(tracks.scaleY ?? [], ms) ?? 1) * (nudges[i]?.scale ?? 1)),
+    rotation: keys((ms, i) => (sampleTrack(tracks.rotation ?? [], ms) ?? 0) + (nudges[i]?.rotation ?? 0)),
+  };
+}
+
+function pointAt(tracks: Tracks, ms: number): { x: number; y: number } {
+  return { x: sampleTrack(tracks.x ?? [], ms) ?? 0, y: sampleTrack(tracks.y ?? [], ms) ?? 0 };
+}
+
+/** Where a leader's nudge takes a point: A + o + R(r)·s·(P − A). */
+export function carry(
+  p: { readonly x: number; readonly y: number },
+  a: { readonly x: number; readonly y: number },
+  n: Omit<SlotPose, 'atMs'>,
+  design: Size,
+): { x: number; y: number } {
+  const radians = (n.rotation * Math.PI) / 180;
+  const dx = (p.x - a.x) * n.scale;
+  const dy = (p.y - a.y) * n.scale;
+  return {
+    x: a.x + n.offsetX * design.w + dx * Math.cos(radians) - dy * Math.sin(radians),
+    y: a.y + n.offsetY * design.h + dx * Math.sin(radians) + dy * Math.cos(radians),
+  };
+}
+
+function denseTimes(layer: Layer, leader: Layer, t: SlotTransform, shiftMs: number): readonly number[] {
+  const span = Math.max(0, layer.endMs - layer.startMs);
+  const times = new Set<number>([0, span]);
+  for (let ms = 0; ms <= span; ms += DENSE_MS) times.add(ms);
+  for (const track of Object.values(layer.tracks)) for (const key of track) times.add(key.t);
+  for (const key of [...(leader.tracks.x ?? []), ...(leader.tracks.y ?? [])]) times.add(key.t - shiftMs);
+  for (const pose of t.poses ?? []) times.add(pose.atMs - shiftMs);
+  return [...times].filter((ms) => ms >= 0 && ms <= span).sort((a, b) => a - b);
 }
 
 function isIdentity(t: SlotTransform): boolean {

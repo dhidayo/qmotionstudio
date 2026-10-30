@@ -6,6 +6,9 @@ import type { SceneTemplate } from '@/templates/schema';
 import { ElementEffectsEditor, SceneEffectsEditor } from '@/ui/effects/EffectEditors';
 import { Button, EmptyNote, Row, Section, Segmented, Slider } from '../controls';
 import { SlotKeyframes } from '../SlotKeyframes';
+import { parseSlotKey } from '@/core/render/slots';
+import { labelIn } from '@/core/render/parts';
+import { useDrawnScene } from '@/ui/artboard/drawnScene';
 
 /**
  * Effects (D-132; "Motion" before it): "I'm not sure what motion does on the
@@ -33,14 +36,22 @@ const FEELS: readonly { value: MotionFeel; label: string }[] = [
 ];
 
 export function slotLabel(key: string, template: SceneTemplate | null): string {
-  const photo = /^photo:(\d+)$/.exec(key);
-  if (photo) return `photo ${Number(photo[1]) + 1}`;
-  const text = /^text:(.+)$/.exec(key);
-  if (text) {
-    const def = template?.textSlots.find((slot) => slot.id === text[1]);
+  const parsed = parseSlotKey(key);
+  if (parsed?.kind === 'photo') return `photo ${parsed.index + 1}`;
+  // A part, or an entry of a list, by the name the design gives it (D-159).
+  const named = namedInDesign(key);
+  if (named !== null) return parsed?.kind === 'shape' ? `the ${named.charAt(0).toLowerCase()}${named.slice(1)}` : named.toLowerCase();
+  if (parsed?.kind === 'text') {
+    const def = template?.textSlots.find((slot) => slot.id === parsed.id);
     return def ? `the ${def.label.toLowerCase()}` : 'this text';
   }
-  return 'this element';
+  return parsed?.kind === 'shape' ? 'this shape' : 'this element';
+}
+
+/** What the design on the canvas calls an element, if it names it. */
+function namedInDesign(key: string): string | null {
+  const { drawn } = useDrawnScene.getState();
+  return drawn ? labelIn(drawn.layers, key) : null;
 }
 
 export function MotionTab({ template }: { template: SceneTemplate | null }): React.JSX.Element {
@@ -87,11 +98,12 @@ export function MotionTab({ template }: { template: SceneTemplate | null }): Rea
 
 /** What a picked element is called on its section bar: "Photo 2", "Headline", "Logo". */
 function slotName(key: string, template: SceneTemplate | null): string {
-  const photo = /^photo:(\d+)$/.exec(key);
-  if (photo) return `Photo ${Number(photo[1]) + 1}`;
-  const text = /^text:(.+)$/.exec(key);
-  if (text) return template?.textSlots.find((slot) => slot.id === text[1])?.label ?? 'This text';
-  return 'This element';
+  const parsed = parseSlotKey(key);
+  if (parsed?.kind === 'photo') return `Photo ${parsed.index + 1}`;
+  const named = namedInDesign(key);
+  if (named !== null) return named;
+  if (parsed?.kind === 'text') return template?.textSlots.find((slot) => slot.id === parsed.id)?.label ?? 'This text';
+  return parsed?.kind === 'shape' ? 'This shape' : 'This element';
 }
 
 function TuningControls({

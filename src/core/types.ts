@@ -52,7 +52,14 @@ export type PaintRole = PaletteRole | 'onAccent';
 
 export type Paint =
   | { readonly kind: 'color'; readonly value: string }
-  | { readonly kind: 'role'; readonly role: PaintRole; readonly alpha?: number };
+  | { readonly kind: 'role'; readonly role: PaintRole; readonly alpha?: number }
+  /**
+   * Whatever reads on `of` (D-159): white or near-black, worked out like
+   * `onAccent` but against another paint. A part someone has recoloured keeps
+   * its letter or number legible — a brand mark turned yellow gets dark
+   * lettering without anybody choosing it. `alpha` keeps a sheen a sheen.
+   */
+  | { readonly kind: 'on'; readonly of: Paint; readonly alpha?: number };
 
 export const roleFill = (role: PaintRole, alpha?: number): Paint =>
   alpha === undefined ? { kind: 'role', role } : { kind: 'role', role, alpha };
@@ -271,6 +278,8 @@ export type ShapeProps = {
   readonly tail?: 'left' | 'center' | 'right';
   /** A dashed outline or line. */
   readonly dash?: boolean;
+  /** A template part the person can pick, recolour, move and delete (D-159). */
+  readonly slot?: SlotRef;
 };
 
 /**
@@ -290,6 +299,8 @@ export type GradientProps = {
   readonly stops: readonly GradientStop[];
   /** Degrees, clockwise from left-to-right. Linear only. */
   readonly angle?: number;
+  /** As on a shape (D-159). Never on anything that fills the frame. */
+  readonly slot?: SlotRef;
 };
 
 /**
@@ -305,7 +316,48 @@ export type GradientProps = {
  */
 export type SlotRef =
   | { readonly kind: 'photo'; readonly index: number }
-  | { readonly kind: 'text'; readonly key: string };
+  | {
+      readonly kind: 'text';
+      readonly key: string;
+      /**
+       * One entry of a list text — a pillar, a step, a number (D-159). Its
+       * words are entry `item` of the slot's comma-separated text, and typing
+       * into it rewrites just that entry.
+       */
+      readonly item?: number;
+      /** What the selection calls it, when the slot's own name will not do: "Pillar 2". */
+      readonly label?: string;
+    }
+  /**
+   * A template's own decoration, made editable (D-159): a pill, a button, a
+   * brand mark, a backing behind the photograph. `key` is a name the template
+   * chooses — never a layer id, which shifts as inputs change — so the
+   * person's changes stay with the part across rebuilds.
+   */
+  | {
+      readonly kind: 'shape';
+      readonly key: string;
+      /** "Brand mark", "Box behind the highlighted words". */
+      readonly label: string;
+      /**
+       * The palette role that is the part's colour. Recolouring repaints every
+       * paint of this role in the part and leaves the rest — a chip's hairline
+       * edge, a sheen — as designed.
+       */
+      readonly tint?: PaletteRole;
+      /**
+       * The letter or number the part draws, as a text slot (and entry): the
+       * brand mark's initial, a step's number. Double-clicking the part types
+       * into it.
+       */
+      readonly text?: { readonly slot: string; readonly item?: number };
+      /**
+       * Listed in Style and recolourable there, but never picked on the
+       * canvas: scattered decoration — confetti, pulses — whose boxes would
+       * swallow clicks meant for the background (D-120).
+       */
+      readonly pick?: false;
+    };
 
 export type ImageProps = {
   readonly slot?: SlotRef;
@@ -338,6 +390,12 @@ export type TextProps = {
   readonly outline?: Stroke;
   readonly pill?: { readonly paint: Paint; readonly paddingX: number; readonly paddingY: number; readonly radius: number };
   readonly reveal: Reveal;
+  /**
+   * The text slot whose style this text is set in (D-159). Set by `textFor`
+   * and kept on list entries that are drawn without a slot of their own, so
+   * a colour chosen for the slot reaches every entry without a rebuild.
+   */
+  readonly styleOf?: string;
 };
 
 /**
@@ -435,6 +493,13 @@ type LayerBase = {
    * logo — so no template ever has to know effects exist.
    */
   readonly fx?: readonly FxInstance[];
+  /**
+   * The slot key of a sibling this layer sits behind or beside (D-159): a
+   * pill behind its words, a shadow under its photograph. When the person
+   * moves, resizes or turns that sibling, this layer is carried with it, as
+   * if the two were one. One level only — a leader never follows anything.
+   */
+  readonly follows?: string;
 };
 
 export type ShapeLayer = LayerBase & { readonly type: 'shape'; readonly props: ShapeProps };

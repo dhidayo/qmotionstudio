@@ -7,9 +7,12 @@ import { useOverlays } from '@/ui/shell/overlays';
 import { MODE_COPY } from '@/ui/shell/modeLabels';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
 import {
-  changeSticker, deleteSelection, deleteSlot, duplicateSelection, editElement, findEffect, overlayLabel, overlayThis,
+  changeSticker, deleteSelection, deleteSlot, duplicateSelection, editElement, findEffect, overlayLabel, overlayThis, slotName,
 } from '@/ui/editing/commands';
 import { addMotionToSelection } from '@/ui/editing/motion';
+import { editPart, selectedSceneLayers } from '@/ui/editing/parts';
+import { parseSlotKey } from '@/core/render/slots';
+import { partsIn } from '@/core/render/parts';
 import { Icon, type IconName } from './Icon';
 
 /**
@@ -103,6 +106,25 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
         ],
       };
     }
+  }
+
+  if (s.selectedSlot !== null && parseSlotKey(s.selectedSlot)?.kind === 'shape') {
+    // A design's own part (D-159): its colour first, as an added shape's style is.
+    const key = s.selectedSlot;
+    const name = slotName(key);
+    const typed = partsIn(selectedSceneLayers() ?? []).find((p) => p.key === key)?.text !== undefined;
+    const target = { kind: 'element' as const, target: { kind: 'slot' as const, key }, label: name };
+    return {
+      context: name.replace(/^the /, '').replace(/^./, (c) => c.toUpperCase()),
+      tools: [
+        ...(typed ? [{ label: 'Edit', icon: 'edit' as const, onSelect: () => { o.openTextEdit(key); } }] : []),
+        { label: 'Colour', icon: 'shape', onSelect: () => { editPart(key, 'phone'); } },
+        { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target }); } },
+        { label: 'Motion', icon: 'motion', onSelect: () => { if (addMotionToSelection(clock) === 'exists') o.openPhonePanel('effects', name); } },
+        { label: 'Delete', icon: 'trash', danger: true, onSelect: () => { deleteSlot(key); } },
+        done,
+      ],
+    };
   }
 
   if (s.selectedSlot !== null) {

@@ -266,6 +266,24 @@ export type SceneInputs = {
   readonly motion?: MotionTuning;
   /** …and for one element, overriding the scene's. */
   readonly slotMotion?: Readonly<Record<SlotKey, MotionTuning>>;
+  /**
+   * The person's changes to a design's own parts (D-159) — a pill, a brand
+   * mark, the shape behind a photograph — keyed `shape:<name>`. Applied after
+   * the build, so recolouring never rebuilds. Absent means untouched; optional
+   * like the effect fields, so older projects open and save exactly as before.
+   */
+  readonly shapeOverrides?: Readonly<Record<SlotKey, ShapeOverride>>;
+};
+
+/**
+ * One part's changes (D-159): deleted (it can be put back), another colour
+ * for what is the part's own colour, another colour for its outline. A colour
+ * is a palette role or the person's own, as for the elements they add.
+ */
+export type ShapeOverride = {
+  readonly hidden?: true;
+  readonly color?: NonNullable<ElementColor>;
+  readonly outline?: NonNullable<ElementColor>;
 };
 
 export type Scene = {

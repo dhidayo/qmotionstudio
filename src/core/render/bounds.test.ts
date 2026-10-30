@@ -319,7 +319,7 @@ describe('boxes follow the layer\u2019s anchor', () => {
       props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 400, h: 300, fit: 'cover' },
     };
 
-    const [box] = slotBoxes(drawnWith([layer]), 0, {}, '9:16', measure);
+    const [box] = slotBoxes(drawnWith([layer]), 0, { slotTransforms: {} }, '9:16', measure);
     expect(box?.box.cx).toBeCloseTo(300, 6);
     expect(box?.box.cy).toBeCloseTo(350, 6);
     expect(box?.box.w).toBeCloseTo(400, 6);
@@ -338,7 +338,7 @@ describe('boxes follow the layer\u2019s anchor', () => {
       props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 400, h: 300, fit: 'cover' },
     };
 
-    const [box] = slotBoxes(drawnWith([layer]), 0, {}, '9:16', measure);
+    const [box] = slotBoxes(drawnWith([layer]), 0, { slotTransforms: {} }, '9:16', measure);
     expect(box?.box.cx).toBeCloseTo(100, 6);
     expect(box?.box.cy).toBeCloseTo(200, 6);
   });
@@ -374,7 +374,7 @@ describe('boxes follow the layer\u2019s anchor', () => {
 
     // The stub measures 10px a character, so "hello" is 50 wide and one line
     // of 60px text at 1.2 line height is 72 tall.
-    const [box] = slotBoxes(drawnWith([layer]), 0, {}, '9:16', measure);
+    const [box] = slotBoxes(drawnWith([layer]), 0, { slotTransforms: {} }, '9:16', measure);
     expect(box?.box.cx).toBeCloseTo(60 + 25, 6);
     expect(box?.box.cy).toBeCloseTo(90 + 36, 6);
     expect(box?.box.w).toBeCloseTo(50, 6);
@@ -395,7 +395,7 @@ describe('boxes follow the layer\u2019s anchor', () => {
     const [box] = slotBoxes(
       drawnWith([layer]),
       0,
-      { 'photo:0': { offsetX: 0.25, offsetY: -0.1, scale: 2, rotation: 30, z: 0 } },
+      { slotTransforms: { 'photo:0': { offsetX: 0.25, offsetY: -0.1, scale: 2, rotation: 30, z: 0 } } },
       '9:16',
       measure,
     );
@@ -443,7 +443,7 @@ describe('a drawable the template nested', () => {
       children: [photo()],
     };
 
-    const [box] = slotBoxes(drawnWith([mask]), 0, {}, '1:1', measure);
+    const [box] = slotBoxes(drawnWith([mask]), 0, { slotTransforms: {} }, '1:1', measure);
     expect(box?.box.cx).toBeCloseTo(200, 6);
     expect(box?.box.cy).toBeCloseTo(500, 6);
   });
@@ -464,7 +464,7 @@ describe('a drawable the template nested', () => {
       children: [photo()],
     };
 
-    const [box] = slotBoxes(drawnWith([mask]), 0, {}, '1:1', measure);
+    const [box] = slotBoxes(drawnWith([mask]), 0, { slotTransforms: {} }, '1:1', measure);
     expect(box?.box.w).toBeCloseTo(600, 6);
     expect(box?.box.h).toBeCloseTo(450, 6);
   });
@@ -488,7 +488,7 @@ describe('a drawable the template nested', () => {
       children: [{ ...child, tracks: { x: [{ t: 0, v: 100, ease: 'linear' }], y: [{ t: 0, v: 0, ease: 'linear' }] } }],
     };
 
-    const [box] = slotBoxes(drawnWith([group]), 0, {}, '1:1', measure);
+    const [box] = slotBoxes(drawnWith([group]), 0, { slotTransforms: {} }, '1:1', measure);
     expect(box?.box.cx).toBeCloseTo(500, 6);
     expect(box?.box.cy).toBeCloseTo(300, 6);
   });
@@ -509,7 +509,7 @@ describe('a drawable the template nested', () => {
       children: [photo()],
     };
 
-    const [box] = slotBoxes(drawnWith([group]), 1_500, {}, '1:1', measure);
+    const [box] = slotBoxes(drawnWith([group]), 1_500, { slotTransforms: {} }, '1:1', measure);
     expect(box?.box.cx).toBeCloseTo(200, 6);
   });
 });
@@ -548,7 +548,7 @@ describe('a nudge on an element that starts partway through', () => {
       },
     };
 
-    const [box] = slotBoxes(drawn, 2_500, transforms, '1:1', measure);
+    const [box] = slotBoxes(drawn, 2_500, { slotTransforms: transforms }, '1:1', measure);
     expect(box?.box.cx).toBeCloseTo(100 + 0.125 * frame.w, 6);
   });
 });
@@ -579,7 +579,7 @@ describe('a group that stands for an element (D-090)', () => {
     };
     const drawn: DrawnScene = { sceneId: 's1', layers: [group], design: projectDesign('1:1') };
 
-    const [box] = slotBoxes(drawn, 0, {}, '1:1', measure);
+    const [box] = slotBoxes(drawn, 0, { slotTransforms: {} }, '1:1', measure);
     expect(box?.box.cx).toBeCloseTo(400, 6);
     expect(box?.box.cy).toBeCloseTo(600, 6);
     expect(box?.box.w).toBeCloseTo(300, 6);
@@ -608,7 +608,7 @@ describe('a group that stands for an element (D-090)', () => {
     };
     const drawn: DrawnScene = { sceneId: 's1', layers: [group], design: projectDesign('1:1') };
 
-    const [box] = slotBoxes(drawn, 0, {}, '1:1', measure);
+    const [box] = slotBoxes(drawn, 0, { slotTransforms: {} }, '1:1', measure);
     // Hinged at its left edge, 150 left of the group's origin: centred on it.
     expect(box?.box.cx).toBeCloseTo(400, 6);
   });
@@ -631,12 +631,12 @@ describe('only what is on screen gets handles (D-091)', () => {
   const drawn = (layers: readonly Layer[]): DrawnScene => ({ sceneId: 's1', layers, design: projectDesign('1:1') });
 
   it('gives no box to a layer outside its own time window', () => {
-    const boxes = slotBoxes(drawn([at('a', 0, 0, 1_000, 300), at('b', 1, 1_000, 2_000, 300)]), 1_500, {}, '1:1', measure);
+    const boxes = slotBoxes(drawn([at('a', 0, 0, 1_000, 300), at('b', 1, 1_000, 2_000, 300)]), 1_500, { slotTransforms: {} }, '1:1', measure);
     expect(boxes.map((b) => b.key)).toEqual(['photo:1']);
   });
 
   it('still finds the visible layer when an invisible one of the same slot came first', () => {
-    const boxes = slotBoxes(drawn([at('early', 0, 0, 1_000, 100), at('late', 0, 1_000, 2_000, 700)]), 1_500, {}, '1:1', measure);
+    const boxes = slotBoxes(drawn([at('early', 0, 0, 1_000, 100), at('late', 0, 1_000, 2_000, 700)]), 1_500, { slotTransforms: {} }, '1:1', measure);
     expect(boxes).toHaveLength(1);
     expect(boxes[0]?.box.cx).toBeCloseTo(700, 6);
   });
@@ -646,7 +646,7 @@ describe('only what is on screen gets handles (D-091)', () => {
       id: 'g', type: 'group', startMs: 0, endMs: 1_000, tracks: {}, props: {},
       children: [at('inner', 2, 0, 5_000, 400)],
     };
-    expect(slotBoxes(drawn([group]), 1_500, {}, '1:1', measure)).toHaveLength(0);
+    expect(slotBoxes(drawn([group]), 1_500, { slotTransforms: {} }, '1:1', measure)).toHaveLength(0);
   });
 });
 

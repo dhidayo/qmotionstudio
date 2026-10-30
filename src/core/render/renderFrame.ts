@@ -13,6 +13,7 @@ import { drawPlaceholderFrame } from './placeholder';
 import { overlayKey, overlayLayer } from './overlays';
 import { applySlotTransforms, hasSlotTransforms, slotTransformKey } from './slots';
 import { applySceneExtras, hasSceneExtras, sceneExtrasKey, timeElementEffects } from './tuning';
+import { applyShapeStyles, hasShapeStyles, shapeStylesKey } from './parts';
 import { lockupSpec, logoGeometry, logoLayer } from './logo';
 import { safeBox } from './bounds';
 import { transitionFn } from './transitions';
@@ -358,15 +359,19 @@ function placed(
   const { slotTransforms } = scene.inputs;
   const nudged = hasSlotTransforms(slotTransforms);
   const extras = hasSceneExtras(scene.inputs);
-  if (!nudged && !extras) return layers;
+  // The person's colours and deletions on the design's own parts (D-159).
+  const styled = hasShapeStyles(scene.inputs);
+  if (!nudged && !extras && !styled) return layers;
 
-  const key = `${baseKey}|${slotTransformKey(slotTransforms)}|${sceneExtrasKey(scene.inputs)}`;
+  const key = `${baseKey}|${slotTransformKey(slotTransforms)}|${sceneExtrasKey(scene.inputs)}|${shapeStylesKey(scene.inputs)}`;
   const hit = rig.placedCache.get(scene.id);
   if (hit && hit.key === key) return hit.layers;
 
   // Nudges first, so an element's effects travel with it wherever it was put.
   const moved = nudged ? applySlotTransforms(layers, slotTransforms, design) : layers;
-  const next = extras ? applySceneExtras(moved, scene.inputs) : moved;
+  const extra = extras ? applySceneExtras(moved, scene.inputs) : moved;
+  // Last, so a deleted part takes its effects with it and a recolour reaches them.
+  const next = styled ? applyShapeStyles(extra, scene.inputs) : extra;
   rig.placedCache.set(scene.id, { key, layers: next });
   return next;
 }

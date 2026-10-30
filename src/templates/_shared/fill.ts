@@ -36,8 +36,10 @@ export function applyPhotoFill(layers: Layer[], photos: readonly PhotoInput[], d
     if (photo.sizeMode !== 'fillFrame') return;
     const taken = take(result, index);
     if (!taken) return;
-    const at = firstContentIndex(taken.layers);
-    result = [...taken.layers.slice(0, at), fillLayer(taken.from, photo, index, design), ...taken.layers.slice(at)];
+    // What followed the photograph — its frame's shadow, a print's border (D-159) — goes with it.
+    const rest = taken.layers.filter((layer) => layer.follows !== `photo:${index}`);
+    const at = firstContentIndex(rest);
+    result = [...rest.slice(0, at), fillLayer(taken.from, photo, index, design), ...rest.slice(at)];
   });
   return result;
 }
@@ -74,7 +76,9 @@ function firstContentIndex(layers: readonly Layer[]): number {
 }
 
 function holdsContent(layer: Layer): boolean {
-  if (slotOf(layer)) return true;
+  // A photo or words — not one of the design's parts (D-159), which sit behind them.
+  const kind = slotOf(layer)?.kind;
+  if (kind === 'photo' || kind === 'text') return true;
   return (layer.type === 'group' || layer.type === 'mask') && layer.children.some(holdsContent);
 }
 

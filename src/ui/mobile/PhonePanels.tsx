@@ -111,6 +111,8 @@ function ElementPanel({ onClose, section }: { onClose: () => void; section: stri
     : audio !== null ? <AudioPanel />
     : effect !== null ? <TimelineEffectPanel />
     : slot?.startsWith('photo:') === true ? <PhotosTab template={template} />
+    // A design's part has its settings in Style (D-159).
+    : slot?.startsWith('shape:') === true ? <LookTab template={template} />
     : <TextTab template={template} />;
   return <BottomSheet title="Settings" onClose={onClose} tall><SectionTabs initial={section}>{body}</SectionTabs></BottomSheet>;
 }

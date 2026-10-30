@@ -24,7 +24,8 @@ import {
 import { InlineTextEditor, SelectionToolbar, screenBounds, type ToolbarAction } from './CanvasEditing';
 import { DESIGN_SHORT_EDGE } from '@/core/render/bounds';
 import { TEXT_BASE } from '@/core/render/overlays';
-import { slotKey as keyOfSlot } from '@/core/render/slots';
+import { parseSlotKey, slotKey as keyOfSlot } from '@/core/render/slots';
+import { editPart, entryEditing, type Entry } from '@/ui/editing/parts';
 import { fontString } from '@/fonts/registry';
 import { totalDurationMs } from '@/document/select/timeline';
 import type { Layer, TextProps } from '@/core/types';
@@ -123,6 +124,8 @@ type Target =
       readonly poseAtMs: number | null;
       readonly box: OrientedBox;
       readonly label: string;
+      /** What typing into it changes: a text, a list entry, a part's letter or number (D-159). */
+      readonly edits?: Entry;
     };
 
 type Drag =
@@ -294,7 +297,7 @@ export function CanvasSelection({
       const span = sceneSpans(project.scenes).find((s) => s.scene.id === drawn.sceneId);
       const sceneTimeMs = span ? (playheadMs - span.startMs) * drawnScene.inputs.look.speed : 0;
       const transforms = drawnScene.inputs.slotTransforms;
-      for (const slot of slotBoxes(drawn, sceneTimeMs, transforms, aspect, measure)) {
+      for (const slot of slotBoxes(drawn, sceneTimeMs, drawnScene.inputs, aspect, measure)) {
         const transform = transforms[slot.key] ?? NO_SLOT_TRANSFORM;
         list.push({
           kind: 'slot',
@@ -304,6 +307,7 @@ export function CanvasSelection({
           poseAtMs: hasNudgePoses(transform) ? sceneTimeMs : null,
           box: slot.box,
           label: slot.label,
+          ...(slot.edits ? { edits: slot.edits } : {}),
         });
       }
     }
@@ -368,19 +372,20 @@ export function CanvasSelection({
         write: (text) => { dispatch(actions.setOverlayText(id, text)); },
       };
     }
-    if (target.kind === 'slot' && target.key.startsWith('text:')) {
-      const slotId = target.key.slice('text:'.length);
+    if (target.kind === 'slot' && target.edits) {
+      // A text, one entry of a list, or the letter or number a part draws (D-159).
       const scene = project.scenes[target.sceneIndex];
-      const def = template?.textSlots.find((slot) => slot.id === slotId);
-      const props = drawn ? findSlotText(drawn.layers, target.key) : null;
+      const editing = scene ? entryEditing(target.edits, scene.inputs, template, drawn?.layers ?? null) : null;
+      if (!editing) return null;
+      const props = drawn ? findSlotText(drawn.layers, target.key, target.edits.slot) : null;
       const toProject = drawn ? DESIGN_SHORT_EDGE / Math.max(1, Math.min(drawn.design.w, drawn.design.h)) : 1;
       const sizePx = (props?.fontSizePx ?? 48) * toProject * scale;
       return {
-        text: scene?.inputs.texts[slotId] ?? def?.placeholder ?? '',
+        text: editing.text,
         font: fontString(props?.fontId ?? 'headline', Math.max(10, sizePx), props?.weight ?? 700),
         align: props?.align ?? 'center',
-        maxLength: def?.maxChars,
-        write: (text) => { dispatch(actions.setText(slotId, text)); },
+        maxLength: editing.maxLength,
+        write: (text) => { dispatch(editing.write(text)); },
       };
     }
     return null;
@@ -483,12 +488,10 @@ export function CanvasSelection({
     if (target.kind === 'slot') {
       // The scene first, so the edit is scoped to the beat that was clicked.
       if (target.sceneIndex !== selectedScene) selectScene(target.sceneIndex);
-      const photo = /^photo:(\d+)$/.exec(target.key);
-      selectSlot(
-        target.key,
-        photo ? 'photos' : 'text',
-        photo?.[1] === undefined ? undefined : Number(photo[1]),
-      );
+      // A photo opens Photos, words open Text, a part of the design opens Style (D-159).
+      const parsed = parseSlotKey(target.key);
+      if (parsed?.kind === 'photo') selectSlot(target.key, 'photos', parsed.index);
+      else selectSlot(target.key, parsed?.kind === 'shape' ? 'look' : 'text');
       return;
     }
     selectOverlay(target.key);
@@ -550,7 +553,7 @@ export function CanvasSelection({
       return;
     }
     if (target.kind === 'slot') {
-      openMenu({ x, y, title: target.label, items: slotMenu(target.key, target.label.toLowerCase()) });
+      openMenu({ x, y, title: target.label, items: slotMenu(target.key, target.label.toLowerCase(), { typed: target.edits !== undefined }) });
       return;
     }
     openMenu({ x, y, title: target.label, items: overlayMenu(target.overlay, null, 0) });
@@ -824,8 +827,10 @@ export function CanvasSelection({
       openTextEdit(target.key);
       return;
     }
-    const photo = target.kind === 'slot' ? /^photo:(\d+)$/.exec(target.key) : null;
-    if (photo?.[1] !== undefined) openPhotoPicker({ kind: 'slot', index: Number(photo[1]) });
+    const parsed = target.kind === 'slot' ? parseSlotKey(target.key) : null;
+    if (parsed?.kind === 'photo') openPhotoPicker({ kind: 'slot', index: parsed.index });
+    // A part with no words opens its settings: its colour first (D-159).
+    else if (parsed?.kind === 'shape') editPart(target.key, layout);
     else if (target.kind === 'overlay' && target.overlay.content.kind === 'photo') openPhotoPicker({ kind: 'overlay', id: target.key });
     // A shape, sticker or number opens its own settings (D-158).
     else if (target.kind === 'overlay') editElement(target.overlay, layout);
@@ -844,7 +849,7 @@ export function CanvasSelection({
   /** The selected thing's own toolbar (D-107). */
   const toolbarActions = (target: Target): ToolbarAction[] => {
     const more: ToolbarAction = { label: 'More', icon: '⋯', onSelect: ({ x, y }) => { openTargetMenu(target, x, y); } };
-    const remove: ToolbarAction = { label: target.kind === 'slot' && target.key.startsWith('text:') ? 'Remove' : 'Delete', icon: '✕', danger: true, onSelect: () => { deleteSelection(); } };
+    const remove: ToolbarAction = { label: target.kind === 'slot' && parseSlotKey(target.key)?.kind === 'text' ? 'Remove' : 'Delete', icon: '✕', danger: true, onSelect: () => { deleteSelection(); } };
     if (target.kind === 'logo') {
       return [
         { label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'logo' }); } },
@@ -877,11 +882,13 @@ export function CanvasSelection({
       ];
     }
     const label = target.label.toLowerCase();
-    const isText = target.key.startsWith('text:');
-    const photo = /^photo:(\d+)$/.exec(target.key);
+    const parsed = parseSlotKey(target.key);
+    const shape = parsed?.kind === 'shape';
     return [
-      ...(isText ? [{ label: 'Edit text', icon: '✎', onSelect: () => { openTextEdit(target.key); } }] : []),
-      ...(photo?.[1] !== undefined ? [{ label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'slot', index: Number(photo[1]) }); } }] : []),
+      // A part's letter or number is typed into like any words (D-159); its own first tool is its colour.
+      ...(target.edits ? [{ label: shape ? 'Edit' : 'Edit text', icon: '✎', onSelect: () => { openTextEdit(target.key); } }] : []),
+      ...(shape ? [{ label: 'Colour', icon: '◧', onSelect: () => { editPart(target.key, layout); } }] : []),
+      ...(parsed?.kind === 'photo' ? [{ label: 'Replace', icon: '⇄', onSelect: () => { openPhotoPicker({ kind: 'slot', index: parsed.index }); } }] : []),
       { label: 'Effects', icon: '✦', onSelect: () => { openPicker({ target: { kind: 'element', target: { kind: 'slot', key: target.key }, label } }); } },
       { label: 'Animate', icon: '◐', onSelect: () => { selectSlotTab(target.key, 'motion'); } },
       remove,
@@ -1079,15 +1086,24 @@ const ENDS: readonly Side[] = ['e', 'w'];
 
 /** Whether a target is words someone can type into. */
 function isTextTarget(target: Target): boolean {
-  return target.kind === 'slot' ? target.key.startsWith('text:') : target.kind === 'overlay' && target.overlay.content.kind === 'text';
+  return target.kind === 'slot' ? target.edits !== undefined : target.kind === 'overlay' && target.overlay.content.kind === 'text';
 }
 
-/** A template's text layer for a slot, wherever it is nested. */
-function findSlotText(layers: readonly Layer[], key: string): TextProps | null {
+/**
+ * The words a target draws, wherever they are nested: a text with that key,
+ * or the letter or number inside the part with that key, set in `styleOf`
+ * (D-159).
+ */
+function findSlotText(layers: readonly Layer[], key: string, styleOf?: string): TextProps | null {
   for (const layer of layers) {
     if (layer.type === 'text' && layer.props.slot && keyOfSlot(layer.props.slot) === key) return layer.props;
     if (layer.type === 'group' || layer.type === 'mask') {
-      const hit = findSlotText(layer.children, key);
+      const own = layer.props.slot && keyOfSlot(layer.props.slot) === key;
+      if (own && styleOf !== undefined) {
+        const inner = layer.children.find((child) => child.type === 'text' && child.props.styleOf === styleOf);
+        if (inner?.type === 'text') return inner.props;
+      }
+      const hit = findSlotText(layer.children, key, styleOf);
       if (hit) return hit;
     }
   }

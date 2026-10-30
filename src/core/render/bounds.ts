@@ -5,12 +5,12 @@ import { fontString } from '@/fonts/registry';
 import type { Aspect, Layer, Rect, Size } from '@/core/types';
 import type { Overlay, SceneInputs } from '@/document/types';
 import { createProps, resolveProps } from '@/core/anim/interpolate';
-import { NO_SLOT_TRANSFORM, type SlotKey, type SlotTransform } from '@/document/types';
+import { NO_SLOT_TRANSFORM, type SlotKey } from '@/document/types';
 import { poseAt } from '@/document/select/overlay';
 import type { DrawnScene } from './rig';
 import { overlayLayer } from './overlays';
 import { lockupSpec, logoGeometry } from './logo';
-import { nudgeAt, slotKey, slotOf } from './slots';
+import { carry, leaderOf, nudgeAt, slotKey, slotOf } from './slots';
 import { depthOrdered, turnOf } from './depth';
 
 /**
@@ -334,6 +334,9 @@ function layerExtent(layer: Layer, measure: TextMeasureContext): Extent | null {
     }
 
     case 'group': {
+      // A part (D-159) says its own extent: the whole brand mark, not its first piece.
+      const hint = layer.props.box;
+      if (hint) return { size: { w: hint.w, h: hint.h }, offset: { x: hint.x + hint.w / 2, y: hint.y + hint.h / 2 } };
       /*
        * A group has no box of its own — its children are positioned in its
        * space, about its origin. When a group stands for an element (D-090),
@@ -371,6 +374,12 @@ export type SlotBox = {
   readonly key: SlotKey;
   readonly box: OrientedBox;
   readonly label: string;
+  /**
+   * The text slot, and entry, that typing into this element changes (D-159):
+   * a text's own, or the letter or number a part draws. Absent for a photo or
+   * a part with no words.
+   */
+  readonly edits?: { readonly slot: string; readonly item?: number };
 };
 
 /**
@@ -391,20 +400,30 @@ export function slotBoxes(
   drawn: DrawnScene,
   /** Scene-local time, after §8.4's speed remap. */
   sceneTimeMs: number,
-  transforms: Readonly<Record<SlotKey, SlotTransform>>,
+  /** The scene's nudges, and its part changes: a deleted part has no box (D-159). */
+  inputs: Pick<SceneInputs, 'slotTransforms' | 'shapeOverrides'>,
   aspect: Aspect,
   measure: TextMeasureContext,
 ): readonly SlotBox[] {
+  const transforms = inputs.slotTransforms;
+  const overrides = inputs.shapeOverrides ?? {};
   const frame = projectDesign(aspect);
   const toFrameUnits = frame.w / drawn.design.w;
   const seen = new Set<SlotKey>();
   const boxes: SlotBox[] = [];
 
-  for (const { layer, parent } of flatten(drawn.layers, sceneRoot(sceneTimeMs))) {
+  for (const { layer, parent, siblings } of flatten(drawn.layers, sceneRoot(sceneTimeMs))) {
     const slot = slotOf(layer);
     if (!slot) continue;
 
     const key = slotKey(slot);
+    /*
+     * A deleted part, or one that follows a deleted part, is not there to be
+     * picked; nor is scattered decoration that would swallow clicks meant for
+     * the background (D-159, D-120).
+     */
+    if (slot.kind === 'shape' && (slot.pick === false || overrides[key]?.hidden === true)) continue;
+    if (layer.follows !== undefined && overrides[layer.follows]?.hidden === true) continue;
     // A template may build several drawables from one slot — a photo and its
     // reflection, say. They all move together, but only the first gets the
     // handles, and it is the one the template drew first.
@@ -430,6 +449,24 @@ export function slotBoxes(
     // differ, and so did the box and the photograph it was supposed to be on.
     const localMs = Math.max(0, parent.timeMs - layer.startMs);
     const props = resolveProps(layer.tracks, localMs, createProps());
+
+    /*
+     * Carried by its leader's nudge first (D-159), as the renderer does it: a
+     * rigid move about the leader's anchor, in the parent's space.
+     */
+    const leader = leaderOf(layer, siblings);
+    const leaderTransform = layer.follows === undefined ? undefined : transforms[layer.follows];
+    if (leader && leaderTransform) {
+      const leaderMs = Math.max(0, parent.timeMs - leader.startMs);
+      const lead = nudgeAt(leaderTransform, leaderMs);
+      const anchor = resolveProps(leader.tracks, leaderMs, createProps());
+      const moved = carry({ x: props.x, y: props.y }, { x: anchor.x, y: anchor.y }, lead, drawn.design);
+      props.x = moved.x;
+      props.y = moved.y;
+      props.scaleX *= lead.scale;
+      props.scaleY *= lead.scale;
+      props.rotation += lead.rotation;
+    }
 
     /*
      * Sampled at this moment, not read as a constant: a keyframed nudge moves,
@@ -472,7 +509,9 @@ export function slotBoxes(
     seen.add(key);
     boxes.push({
       key,
-      label: slot.kind === 'photo' ? `Photo ${slot.index + 1}` : labelFor(slot.key),
+      label: slot.kind === 'photo' ? `Photo ${slot.index + 1}` : slot.kind === 'shape' ? slot.label : slot.label ?? labelFor(slot.key),
+      ...(slot.kind === 'text' ? { edits: slot.item === undefined ? { slot: slot.key } : { slot: slot.key, item: slot.item } } : {}),
+      ...(slot.kind === 'shape' && slot.text ? { edits: slot.text } : {}),
       box: {
         cx: centre.x * toFrameUnits + nudge.offsetX * frame.w,
         cy: centre.y * toFrameUnits + nudge.offsetY * frame.h,
@@ -517,9 +556,10 @@ function sceneRoot(timeMs: number): Ancestry {
 function* flatten(
   layers: readonly Layer[],
   parent: Ancestry,
-): Generator<{ layer: Layer; parent: Ancestry }> {
+): Generator<{ layer: Layer; parent: Ancestry; siblings: readonly Layer[] }> {
   for (const layer of layers) {
-    yield { layer, parent };
+    // With its siblings, so a follower can find what it follows (D-159).
+    yield { layer, parent, siblings: layers };
     if (layer.type !== 'group' && layer.type !== 'mask') continue;
     // A container that is not drawn now draws none of its children either.
     if (parent.timeMs < layer.startMs || parent.timeMs >= layer.endMs) continue;
