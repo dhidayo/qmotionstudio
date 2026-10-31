@@ -3324,3 +3324,496 @@ one in the first sample spot; the chosen spot's settings with Replace; then
 Extra photos — photos on top, anywhere. A design with no spots shows Extra
 photos first, and photos added to it go on top. A paste now lands in one
 place (it used to be added more than once), and toasts are centred again.
+
+## D-153 — the timeline shows only what is used, folds away, and one bar adds everything
+
+"The timeline on desktop view has taken almost all screen … show only used
+timeline and hide others that are not in use … can I have the + Motion where you
+already have the +Photo, +Text … have collapsible timeline in case where it is not
+actively used."
+
+- **Rows in use.** The ruler and Scenes are always there. Motion appears once
+  anything in the project moves (two poses or more). It is the whole project
+  rather than the selection, so the picture does not jump at every click. Effects,
+  Layers and Music appear once something is on them, and go with the last thing on
+  them. Empty rows with hints in them are gone. A new video's timeline went from
+  243px to 131px.
+- **It fits, and gives the room back.** The panel is as tall as its rows, up to
+  45% of the window. A row that goes gives its height back to the picture, which
+  reverses D-106's grow-only rule. The panel still holds still while anything in
+  it is pressed. Dragging the top edge sets the most it may take
+  (`ms.timelineHeight` is now a cap, so stored heights stay harmless).
+  Double-click clears the cap; dragged right down, the panel folds.
+- **It folds.** Collapse/Expand in the header folds the timeline to its header,
+  ruler and scenes (97px), with a + beside Scenes for a new scene. The choice is
+  remembered on this device (`ms.timeline`). With nothing stored, it starts folded
+  when the window is under 760px tall. When something new appears (a first motion,
+  effect, layer or music), the timeline opens for the visit without changing what
+  is stored. The timeline draws the scene picker, so "Add a scene after…" works
+  while folded.
+- **One add bar.** + Text, + Photo, + Video (Pro; it was + Media), + Shape, +
+  Sticker, + Number, + Motion, + Effect, + Sound, + Music.
+  - It sits in the timeline's header for a video.
+  - It sits beside the scrubber for a design, with Text, Photo, Shape, Sticker,
+    Number, Motion and Effect only.
+  - It is the phone's Add sheet: Scene first in a video, and a design has Add on
+    the phone too.
+  - It is one row that scrolls sideways when it does not fit, by mouse wheel or by
+    its edge arrow, with a fade where there is more.
+  - The tool strip lost its Add and is one row that scrolls the same way.
+- **+ Motion** gives the selected layer, template photo or template text a motion
+  in one undo step.
+  - A layer's motion finishes where its exit begins, so the moment it finishes can
+    be seen.
+  - The timeline opens, the preview stops at the motion's end, and a toast says
+    "Motion added — drag it to where it should finish."
+  - On something already moving, it goes to the motion's start and says the bar's
+    ends set the timing.
+  - With nothing that can move selected, it says "Select a photo, some text or an
+    element first."
+  - The lane's own "+ Motion" is gone. On a phone a selected layer has Motion, and
+    a template element's Animate became Motion.
+- **The canvas at 1366×768**, for a new 16:9 video, went from 443×249 to 722×406
+  (742×417 folded).
+
+Later: D-162 made the bar the one row of actions and dropped the Motion row; D-163
+made Shape, Sticker and Number one + Element and took + Music into + Sound.
+
+## D-154 — smooth motion on a computer
+
+"I am viewing on landscape on system, and I see that the motion drags; please fix
+this and ensure smooth motion."
+
+A phone's preview had been capped since D-112; a computer's had not. On a retina
+laptop a 16:9 picture drew 1632×918 every frame — one and a half megapixels
+through every blur, shadow and grain pass — and played at under twenty frames a
+second with nearly every frame late.
+
+- **Playing and paused.** On a computer or tablet the playing picture draws at
+  most 0.8 megapixels (1184×666 for 16:9); paused, it goes back to the screen's
+  own pixels, up to 1080 on the short edge. The canvas changes size inside the
+  frame that draws at the new size, so it never flashes. Export is unaffected.
+- **Exactly the frame shape.** Preview sizes are whole steps of the ratio (18px
+  for 16:9), so templates lay out in exactly the export's design units — 1920
+  wide, where the preview had been 1923 — and a change of resolution never
+  rebuilds a design or moves a selection box. On a computer the picture gives up
+  less than one step of its box so that, paused, every canvas pixel is one of the
+  screen's.
+- **Stepping down, everywhere.** D-112's step to 0.75 and then 0.5 now applies to
+  computers and tablets too, to the playing size only. It counts late frames
+  instead of averaging gaps, which hid stutter: a window (sixty frames or two
+  seconds) is slow when more than one frame in eight is more than one and a half
+  screen intervals late, or the average gap is over 25ms; two slow windows in a
+  row step down. Never back up in a session; a reload or a new frame shape starts
+  again. A phone's step is now a step of its capped size, so each one really draws
+  less.
+- **A paused picture is not redrawn when nothing changed** — only for a new time,
+  size, photo, font, design, watermark, video frame or edit, and at least twice a
+  second regardless.
+- **Blur.** Bilinear steps that stop one doubling short of full size: a
+  blurred-photo background costs a quarter to a third as much, 1.7 levels in 255
+  apart on average. Each step clears past its edge, which removes a thin dark line
+  round every blurred card in the depth designs. Shared with the export.
+- **Beside the picture.** The quick start measures its button four times a second
+  and on scroll or resize; its ring's glow fades instead of repainting a shadow.
+  Keyframe panels hold the playhead still while the picture plays and read it when
+  a button is pressed. The performance readout appears in development or with
+  `?perf=1`, without a backdrop blur, and shows mean frame time, late frames and
+  canvas size.
+
+Measured at 1440×900, 2×: Polaroid Pass 16:9 went from about 19 to 33 frames a
+second (39ms to 19ms a frame), Wide Ring from 19 to 35 (27ms to 13ms); paused, two
+redraws a second instead of over twenty.
+
+## D-155 — Image and Video
+
+"There are two modes … I need the name to speak to exactly what they are."
+
+The modes are **Image** (was Design) and **Video**; the stored ids stay 'showcase'
+and 'motionAd'. Every word that changes with the mode is in one table (MODE_COPY):
+in Image the library holds *designs*; in Video it holds *video templates* — whole
+videos of several scenes — and a *scene* is one place in the video.
+
+"Play once and stop is enough." Image plays its design once and rests on its
+picture moment — the template's posterAtMs (D-033) at the scene's speed and inside
+its length, otherwise the last frame — with Replay, and the moment marked on the
+slider. Where it rests before the end, a 250ms cross-fade softens the cut. A new
+design, a reopened project or a switch to Image plays again from the start once
+its template has loaded; ?frozen stays put and ?thumb= keeps looping. Video still
+loops.
+
+"Allow the Design to be exportable as high definition images … user can be allowed
+to export as videos as well … On Video, only video can be exported." Export in
+Image opens on Image: a PNG or JPG of the frame on screen — the frame paused on,
+otherwise the picture moment — shown small with the moment named, in sizes named
+for what they are for in the image's shape: 16:9 YouTube thumbnail 1280×720 (a JPG
+kept under 2 MB), Full HD 1920×1080, 4K 3840×2160; 4:5 Instagram post 1080×1350;
+1:1 1080×1080; 9:16 1080×1920; 4:3 1440×1080; and twice each on the short side.
+Free saves up to 1080 on the short side with the watermark, Pro up to 2160
+(Limits.maxImageShortEdge, which replaces the unused maxExportHeight). Image can
+still save a video. Video saves video only: D-135's carousel and LinkedIn PDF are
+retired. The real-time fallback says when the file will be without sound.
+
+"After choose a design, you should have Add a scene, and add your photos." Video's
+start row is Choose a video template · Add a scene · Add your photos (three
+columns on a phone, the icon above the words), and its library tool is Templates.
+Add a scene offers New scene or Your images; a saved image comes in with the
+layers on top of it, moved and cut to the new scene, in one undo step, so "the
+animated version is what is used for that space". In a video the background menu
+changes that scene's design rather than opening the video templates. Under an
+image, + Scene is now Make a video (+ Video on a phone). Switching a video to
+Image keeps the selected scene and the layers over it, sets the other scenes and
+the music aside, and says so with the way back. The menu reads New image and New
+video. Supersedes D-140's names and D-129's "+ Scene" label.
+
+## D-156 — + Sound: a library of sounds, and clips that loop
+
+"On the + segment, please let us add + Sound … generic sounds with effects that
+helps the product to ship out videos with sounds instead of only custom music …
+You will loop sounds to match the length of the sound on timeline as applicable.
+Maybe you can help with sample sounds for now."
+
++ Sound opens the sound library: a window on a computer, a sheet on a phone. It
+holds four background loops — Upbeat Pulse, Lo-fi Haze, Bright Corporate,
+Cinematic Dawn — and eight effects: Whoosh, Swoosh, Pop, Click, Riser, Impact,
+Chime, Applause. Every one can be heard first (Listen plays a background round its
+loop, exactly as under the video) and added with one press. A background goes
+under the whole video from its start, looping, and keeps running to the end as
+scenes are added or taken away. There is one at a time: choosing another replaces
+it, keeping its start, length, level and fades. The person's own music is never
+replaced. An effect goes at the playhead on a Sounds row below Music, where
+overlapping effects stack. Your own track is one press away ("Use a music file
+from your device…"). Sounds are for videos only.
+
+The sounds are original. Each is synthesised from code (`npm run sounds`): written
+chord progressions, drums, bass and hooks for the loops, designed layers for the
+effects. Each is checked for loudness (backgrounds −16 LUFS, effects −14 at their
+height), clipping (peaks under −1dBFS), DC and a seamless join, and each is the
+same bytes on every run. They are mono WAV: MP3 and AAC put a gap at every repeat.
+The library is under 4MB, fetched only when a sound is heard or used, cached for
+offline use after that, and never saved into a project or a project file, like the
+samples (D-111).
+
+Any music clip can now loop: a switch in its panel, a length on the timeline, and
+"Fit to video" loops a track shorter than the video instead of leaving silence.
+Trims, splits and slips keep a loop sounding exactly where it was. The preview and
+the export share one loop (D-052). An export fetches the sounds it needs first,
+and stops with the sound's name if one is missing rather than leaving it out of
+the file.
+
+## D-157 — one photo in focus at every moment
+
+"At every moment, there must be a focused element that is being emphasized … the
+pictures coming into focus to become bigger to fill the focus and becomes smaller
+as it leaves focus."
+
+Where several photos share the frame, one is the subject. Each arrangement has a
+focus point: the front of a ring, the foot of a Ferris wheel, the crown of a
+crescent, the middle of a coverflow or lane, the centre of a marquee's middle row.
+The photo reaching it grows (about 1.45×, less where the stage is small), turns to
+face you, straightens and comes forward, while the others step back to 0.86× and
+darken by `shade`. The motion slows to about a third of its speed there and then
+moves on; it never stops, and nothing snaps. Arrangements that hold still take
+turns instead: a snake through a lattice's rows, the sweep of the radar arm, the
+cards of a dealt deck one after another, the photos round a collage's words. Where
+a layout comes and goes, the first photo to arrive takes the focus and the last to
+leave keeps it, so no moment is without one. A photo at the edge steps inward as
+it grows, so it never leaves the stage, crosses the headline or passes the content
+floor; round a collage's centred words it moves to the nearest clear spot and
+holds its place while the halo turns. A few designs add a character of their own:
+the domino that stays standing, the winning slot reel, the deck card that takes
+the empty middle, the polaroid print that rises and straightens. Piles keep their
+top card as the subject and darken the cards beneath by depth. Every design's
+still, which is also the frame an image rests on, is taken on a focus peak. A test
+holds every design in these families to a clear focus at least 80% of the time in
+four frame shapes.
+
+Part 2. The Depth Stage, Hero Stage, Timeline, Product and Business families and
+the hand-written Angle, Depth and Split designs keep one photo in focus after
+their entrance. A moving arrangement lingers on the card at its focus point. A
+still one gives each card a turn once all have arrived, never shorter than about
+0.7s, so a short scene in a film shows fewer turns rather than a flicker. The
+photo in focus grows (never past the stage or under the words), comes forward and
+faces you; the others step back and darken, and words dim instead. Things that
+stand on something grow upward from it: products on a shelf, portraits above their
+names, milestones away from their line. Hand-keyframed entrances play as written
+and the focus eases in afterwards. Stacks, before-and-after pairs and full-frame
+designs are exempt by design. Library stills sit on a focus peak.
+
+## D-158 — shapes, stickers and numbers (elements)
+
+"Shapes can be added, selected and customized too … animations such as Youtube
+like, YouTube subscribe, FaceBook like, lots of library for this … scroll of
+applicable elements on smaller screen" and "you may have number elements that can
+be added and modified."
+
+Three new kinds of layer sit on the design like text and photos: **shapes**,
+**animated stickers** and **numbers**. Each moves, keyframes, takes entrances and
+effects, sits on the timeline in a video, spans the whole image in an image,
+survives a switch between the two, and exports through the same renderer.
+
+- **Shapes**: box, rounded box, circle, pill, triangle, diamond, hexagon, star,
+  seal, heart, speech bubble, arrow and line, plus outline and dashed variants.
+  Fill and outline take a look colour (which restyles with the look), a colour of
+  the person's own, or none. Corners, points, arrowheads, the bubble's tail, size,
+  dashes and shadow can all be changed. The side handles stretch the shape's own
+  box, not its scale, so outlines keep their width and corners stay round. A line
+  has only its two ends. The templates' own rectangles and ellipses are drawn
+  exactly as before.
+- **Stickers** are small looping animations drawn by code, not played from files.
+  They can loop or hold still, change speed, colours and words, flip where that
+  makes sense, and be swapped for another in place with Change sticker…. Stickers
+  and numbers only grow from their corners.
+- **Numbers** count from one figure to another over a set time, after a set delay,
+  with a choice of feel. They support text before and after, decimals, thousands
+  separators and a short form (1.2K). Digits sit in cells of one width so the
+  figure never shuffles, and the box stays the same for the whole count. The same
+  number at both ends is a still number: a step in a circle, a rank, a price. They
+  use the text style controls.
+- **The library**: + Shape, + Sticker and + Number in the add bar, and "Add an
+  element…" on the picture's menu, all open one window (a sheet on a phone) with
+  chips that scroll sideways, search, live previews, and what is on the design
+  already first, where a tap selects one and × deletes it. Double-click, Enter,
+  the selection toolbar and the phone's first tool open each element's own
+  settings.
+- **Characters**: presets use only Latin-1 characters, because the extended font
+  subsets are not loaded.
+- **The renamed text style**: the text gallery's "Sticker" style is now
+  "Outlined".
+
+Later: D-163 made + Shape, + Sticker and + Number one + Element.
+
+**Stickers.** "Should we have animations that we can add too? … YouTube like,
+YouTube subscribe, Facebook like, lots of library for this." Thirty stickers in
+four kinds: **Social** (Subscribe, Like, Love, Notify bell, Follow, Share,
+Comment, Save), **Reactions** (Laughing, Wow, Heart eyes, Sad, Angry, Cool),
+**Badges** (NEW, SALE, Star burst, Check tick, LIVE, Hot, Limited tag, Five stars)
+and **Pointers** (Arrow pointer, Tap here, Click, Swipe up, Drawn arrow, Scribbled
+circle, Sparkles, Confetti). Each is drawn by code, not played from a file. Each
+is a pure function of time and seed, so the preview, a scrub and the export draw
+the same frame, and each loop ends exactly where it began. Every sticker has a
+pop-in entrance and a gentle loop. It never disappears inside its loop, so an
+Image that comes to rest on any moment shows it whole. Words (SUBSCRIBE, SALE,
+LIVE, Swipe up…) are labels the person can change. Colours come from the look's
+roles where that suits the sticker, and both colours can be changed. Nothing
+copies a platform: the Subscribe button is a generic red with a bell, Like is a
+thumbs-up in the accent, and there is no play-button logo, "f", camera or platform
+name. Shapes are drawn with paths, never emoji, because emoji fonts differ between
+devices.
+
+## D-159 — a design's own parts are editable
+
+"The T and the background box cannot be modified, changed, or customized. Same
+with Episode 24 rounded background … the numbers cannot be modified."
+
+A template's decoration can now be a **part**: a layer tagged `shape:<name>`, with
+a name the template chooses and a label people read ("Brand mark", "Pill behind
+the small line"). A part can be picked on the picture, recoloured (the design's
+colour, a palette colour or one's own, as for added shapes in D-158), given
+another outline colour, moved, resized, turned, stacked, given effects, deleted
+and put back. Each change is one undo step. Several pieces that make one thing — a
+tile and its letter, a button and its sheen, twenty dots — are one part. A pill,
+button, highlight box or chip *follows* the words it sits behind, so dragging the
+words carries it exactly, while it can still be picked on its own. Scattered
+decoration (confetti, pulse rings) is listed in Style but never picked on the
+picture, so empty space still opens the Background menu (D-120). Nothing that
+fills the frame is a part.
+
+Changes are stored on the scene (`shapeOverrides`) and applied after the build, as
+nudges are, so recolouring never rebuilds. Words drawn on a recoloured part read
+on it; words on a deleted part fall back to the Text colour. Style lists **Shapes
+in this design** with Put back.
+
+Letters and numbers are text the person can type into, on the picture or in Text.
+The brand mark's letter follows the company name until one is typed. Numbers
+follow the pattern typed: `1`, `01`, `Step 1`, `A`, `i`, or each one written out;
+an empty one hides just that number. Each entry of a list (a pillar, a step) is
+typed into on its own.
+
+The photograph's frame now carries the photo, so dragging moves the framed photo,
+and front and back mean something.
+
+Doing this found a real bug: a text's colour was left out of the build key, so the
+preview kept an old colour that the export had already changed. The colour is now
+put on after the build.
+
+The Covers & Thumbnails family came first; the others followed one at a time.
+
+The Business family follows the covers. Phone frames, browser windows and their
+buttons, logo tiles, post cards and portrait rings move with their photographs. A
+plan's words, a quote's photo and words, and a column's title move with their
+card. Plans, prices, features, quotes, names, steps, columns and roles are each
+typed into on their own. Step numbers and like counts are numbers people change.
+The featured badge, LIVE and the date are the person's text again. A part drawn in
+fixed colours, such as the LIVE badge's red or a window's buttons, takes a new
+colour too. Every still is unchanged.
+
+Product and Timeline follow. Shelves, plinths, boxes, swatches, callout lines,
+spec bullets, the line through an old price, the before/after divider and the
+detail lens are parts. A callout's line and a bullet move with their words; a
+swatch and the NEW badge (which you type into) move with their product; the strike
+line moves with the old price. A timeline's line is one part, each stop moves with
+its milestone, and each milestone is typed into on its own. Every still is
+unchanged.
+
+Every remaining family and design follows. Elements' buttons, pills, seals, cards,
+chips, ticks, bars, ribbons and orbits; Text Motion's panels, rules, brackets,
+underlines and quotation marks; Flow Track's film strip; and the rules, rings,
+bullets, seams and progress dots of the designs built a layer at a time are all
+parts. The countdown's numbers are typed in like any list. Deleting a part keeps
+the words and photos that move with it. Only light (glows and scrims) and shapes
+that fill much of the frame stay unpicked. A library-wide test now holds every
+design to this: no decoration fixed, and no part that can be picked bigger than
+half the frame. Every still is unchanged.
+
+## D-160 — the library by purpose on every device, and designs shown in your frame shape
+
+"On mobile, only the Start Here segment changes as I switch purpose … The By
+purpose on the left pane is not needed." That phone had the library grouped by
+style — one tap on a button whose explanation only showed on hover — and grouping
+by style ignored the purpose, so only Start here changed. D-143's switch is gone:
+the library is always by purpose, the saved choice is deleted once, and folds
+saved while it grouped by style keep their purposes and lose their category names.
+A search still finds a design by its style. On a phone or tablet, Start here is
+one row that scrolls sideways, so the groups that change with the purpose are on
+the first screen.
+
+"When I click choose a design, it should take the aspect ratio." The large preview
+now draws the design live with the real renderer, in the project's frame shape,
+with the person's photos, words, look and logo — exactly what "Use this design"
+gives, since both work the change out the same way (`prepareTemplateChange`). The
+design's still in that shape shows at once; the recorded loop stands in only if
+the design cannot be drawn. Playback in the editor holds still while the preview
+is open. Cards move only in their own shape: the recorded loop where it was made
+in that shape, the still in that shape otherwise — never a picture of another
+shape boxed inside the card. With a mouse, resting on a card plays it live in that
+shape, one card at a time; the "Add a scene" picker does the same, as the scene
+would be added or changed.
+
+In Video, a video template is a whole video. The library says so ("Using one
+replaces your scenes. To add one scene, use Add a scene."), the large preview's
+button reads "Use this video template" with "Replaces your N scenes" under it, and
+once it has replaced more than one scene a note says how to get them back.
+
+## D-161 — help that fits the device
+
+"The Help ? shows Macbook help, shortcuts … This shouldn't be the case on other
+devices." Keys are written the way the device writes them: ⌘ ⌥ ⇧ on a Mac, iPhone
+or iPad, Ctrl, Alt and Shift elsewhere — in the shortcuts list, the right-click
+menus, the Export button's tooltip, the undo note and the music panel. A device
+counts as having a keyboard when it has a mouse or trackpad, or once a real key is
+pressed outside a text field; it is remembered on that device. Without one, the
+"?" button is not shown, menus show no key hints, and Help becomes "Touch
+gestures": tap, double-tap, press and hold, pinch, double-tap to fit, the undo and
+redo arrows, and on a phone swiping a panel down. The menu offers "Keyboard
+shortcuts" or "Touch gestures" on every screen, the phone included.
+
+## D-162 — one row of actions under the picture; the timeline keeps only what is in it
+
+"On smaller screens, the timeline section covers largest part of the screen when
+indeed it should have been the work area … the timeline should only include
+elements (rows) for items that has elements configured or added … I would also no
+specialized rows for items that can stack somewhere else if not major elements.
+Then, the Choose Design, maybe it should also pack on same row with + Photo, +
+Text, + Effect, etc. … Please ensure same buttons are not shown or both items are
+not shown two different times with different representations."
+
+**One row under the picture, each action once.** The start buttons (D-109, D-116),
+the tool strip (D-116) and the timeline's scene bar are gone. Under the picture
+there is one row: Play · the time · a row of actions that scrolls sideways when it
+does not fit (D-153). It reads **Choose a design** (Image) or **Templates**
+(Video), **+ Photos**, + Text, + Shape, + Sticker, + Number, + Motion, + Effect;
+in a video also + Sound, + Music, + Scene and + Video (Pro); an image ends with
+**Make a video**. In a video the row is the timeline's header, followed by
+Collapse/Expand. In an image it sits over the slider, which now runs the full
+width. On a tablet, where the inspector is a sheet, the row ends with
+**Settings**, which opens it.
+
+**+ Photos is the one way to add photos on a computer.** It does what Add your
+photos did (D-152): each photo takes the place of a sample, one for one; the rest
+wait in Your photos; a design with no photo spots takes them on top. The "+ Photo"
+layer chip and the Add your photos button went. In the Photos panel the spots'
+button reads **+ Add photos** and does the same; Extra photos' button reads **+
+Add extra photos**.
+
+**No tool strip.** The inspector's tabs — Photos, Text, Effects, Style — lead to
+each panel. Background is a section of Style, and still on the canvas's
+right-click menu.
+
+**The scene bar's controls are on the scene.** + Scene is in the row of actions,
+so the collapsed timeline's "+" went too. Change design, Length and transition,
+Duplicate, Move earlier/later and Delete are in the scene's menu: right-click or
+hold its clip, or the **⋯** on the selected one. Length and transition opens the
+phone's Timing panel (D-133) as a small window. ⌘D, ⌥← ⌥→ and Delete do the same
+from the keyboard.
+
+**Timeline rows: scenes always, then two groups, each only while something is in
+it.**
+- *Layers:* L1, L2 … with the spare layer to drop onto (D-103), and the effects in
+  the gaps between layer clips.
+  - An effect is drawn over the whole frame and has no layer in the document, so
+    its lane is worked out afresh each time: the first lane from the top where it
+    overlaps neither a layer clip nor another effect.
+  - A lane beyond the layers appears only when no gap is long enough; it is
+    labelled Effects.
+  - A layer dragged over an effect moves the effect to the next gap; nothing in
+    the document changes.
+  - Effect clips keep their look (✦; solid on the timeline, dashed in a scene),
+    their drag, trim and menu.
+- *Audio:* music and library sounds together, with overlapping clips stacked.
+- *Motion has no row.*
+  - A moving layer shows a line along the foot of its clip; selected, its motion
+    bar (drag, diamond grips) is drawn in the lower half of its own clip.
+  - A selected moving template element's bar is drawn on its scene's clip, and the
+    scene row grows by the bar's height.
+  - A scene with moving elements shows a small motion mark.
+
+Placing effects in the layer lanes is safe: effects are never written to a lane,
+layer settling (D-103) ignores them, and they still drag only sideways.
+
+**Phone.** The row of big buttons above the toolbar went, and its height went to
+the picture. The toolbar is Templates/Designs · Add · Photos · Text · Effects ·
+Style. The Add sheet starts with + Scene in a video and has no + Photos. Photos
+are added from Photos, whose panel holds + Add photos, Take photo, the photo spots
+and Your photos — the only way to that panel on a phone. Backdrop went: Style
+holds Background, and a long press on the empty picture offers Change background.
+While something is selected the toolbar shows that thing's tools; Done brings the
+main tools back.
+
+**The quick start** points "design" at the row's first button (the first tool on a
+phone), "photos" at + Photos (Photos on a phone), and "export" where it was.
+
+## D-163 — a clearer row, one way to add audio, video layers with sound, a chosen picture
+
+"The + Text, + Shape, etc. needs to be very clear to the eyes; just like how you
+represented Templates." Every button in the row under the picture is drawn one
+way: icon, "+ Label" in ink at medium weight, a visible border, one height and one
+hover (the accent's soft tint and border). + Photos keeps an accent outline but no
+solid fill — its hover was overridden by the shared one and turned white on white.
+"I should have only one button to represent the Shape, Sticker, and Number": one
+**+ Element** opens the elements library on all three. "I do not need to have a
+separate + Music": + Sound is the one way to add audio, and its library opens on
+**Upload your own sound or music** (MP3, M4A, WAV, OGG), which lands as a music
+clip from the start of the video, as + Music's did.
+
+"Uploaded video should have volume control … reduce, increase or mute": a video
+layer's own sound now plays, in preview and export alike. It is decoded with the
+picture and never stored as a clip; it is derived from the layer (`playedAudio`):
+it starts with the layer, loops the whole video exactly as the picture does, lasts
+as long as the layer, at `volumeDb` (−40…+6, default 0 = as recorded). `muted`
+schedules nothing; a video with no sound track has none. **Videos in existing
+projects, silent until now, play their sound at 0 dB, unmuted** — the recording as
+made is the least surprising default, and Mute is one press. The inspector's Sound
+section has Mute and Volume (one undo step per drag), or says "This video has no
+sound."
+
+"Let the animation stop on a specific image so that it can be the basis for export
+to JPG": in Image mode, paused on a frame, **Use this frame** (or dragging the
+picture mark) sets `Project.pictureAtMs`. The design plays once and rests there,
+and Export → Image saves it ("Your chosen frame · 2.40s"). A frame paused on
+elsewhere still exports as it is on screen. **Reset frame** returns to the
+design's own picture moment; choosing another design forgets the chosen frame.
+Undoable and saved with the project, with no schema change.
+
+The phone's timing note ("Detailed timing work is easier on a larger screen")
+closes itself after ten seconds, with a quiet × to close it sooner.

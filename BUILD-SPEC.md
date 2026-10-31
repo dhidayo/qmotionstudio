@@ -1,7 +1,9 @@
 # BUILD SPEC — Motion Studio
 
-A browser-based photo-to-motion video editor with two modes: **Showcase** (single
-looping scene) and **Motion Ads** (multi-scene sequences with a timeline and music).
+A browser-based photo-to-motion video editor with two modes: **Image** (one design
+that plays once and saves as a picture or a short clip) and **Video** (multi-scene
+sequences with a timeline and sound). The stored mode ids stay `showcase` and
+`motionAd` (D-155).
 
 This document is the contract for the build. Read it in full before writing code.
 If anything here is ambiguous or turns out to be wrong in practice, stop and say so
@@ -11,36 +13,55 @@ rather than improvising around it.
 
 ## 1. Product overview
 
-### 1.1 Showcase mode
-The user picks a template from a categorised library, drops in 1–N photos, edits
-text, logo and look, and gets a short looping motion clip (default ~10s, max 60s)
-which they export as MP4 or WebM.
+### 1.1 Image mode (id `showcase`)
+The user picks a template from a library grouped by purpose, drops in 1–N photos,
+edits text, logo and look, and gets a short motion design (default ~10s, max 60s)
+that plays once and rests on its picture moment, exported as a PNG or JPG picture
+(up to 1080 on the short side free, 4K on Pro) or as an MP4 or WebM clip (D-155).
 
-- Template library grouped by category, with search, a free/pro filter and favourites.
+- Template library grouped by what each design is for (D-143, D-160), with search
+  (which also matches a design's style), a free/pro filter and favourites. Previews
+  show the design in the project's frame shape, live, with the person's own photos
+  and words (D-160).
 - "Set up for" (D-149): a first visit asks "What will you make most?" — social
   posts, business ads, news and events, or a bit of everything. The answer sets
   which groups come first, a short "Start here" pick, which groups start open,
   and the design a fresh project opens on. Nothing is hidden; it can be changed
-  any time from the top of the library or the menu.
-- Single scene. Loops. Scrubbable via a simple slider, not a track timeline.
+  any time from the Purpose row above the picture (D-150) or the menu.
+- Single scene. Plays once and rests on its picture moment, with Replay; the person
+  may choose that moment with Use this frame (D-155, D-163). Scrubbable via a simple
+  slider, not a track timeline, under one row of actions (Choose a design, + Photos,
+  + Text, + Element, + Motion, + Effect, Make a video) (D-153, D-162, D-163).
 - Variable photo count per template, within the template's declared min/max.
 - Per-photo controls: frame ratio, size mode, crop mode.
 
-### 1.2 Motion Ads mode
+### 1.2 Video mode (id `motionAd`)
 The user picks a multi-scene template (typically 7–10 scenes, 15–35s), fills the
 scenes with their own content, optionally adds overlay layers and a music track,
 and exports a longer ad.
 
 - Scenes play sequentially with transitions between them.
-- A track timeline showing overlay layers (L1, L2, …) plus a dedicated music track.
-- Overlay layers can be photo, text or custom media, each with its own time range.
+- A track timeline: the scenes, then a Layers group (overlay layers L1, L2 … with
+  effects in the gaps) and an Audio group (music and library sounds), each shown only
+  while something is in it, folding to its scenes. A moving element's motion is drawn
+  on its clip. The row of actions is the timeline's header (D-153, D-162).
+- Exports video only (D-155).
+- Overlay layers can be photo, text, custom media (with its own sound, volume and
+  mute, D-163), shape, sticker or number (D-158), each with its own time range.
 - Free tier capped at 15 seconds of output; Pro removes the cap.
 
 ### 1.3 Shared
 - Aspect presets: 16:9, 4:3, 1:1, 4:5, 9:16. Switching re-lays-out, it does not crop.
 - Right-hand inspector with four tabs: **Photos**, **Text**, **Logo**, **Look**.
 - Light/dark theme toggle.
-- Export to MP4 (H.264 + AAC) and WebM (VP9 + Opus).
+- Export to MP4 (H.264 + AAC) and WebM (VP9 + Opus); Image also exports PNG or JPG
+  pictures (D-155).
+- One row of actions under the picture, each action once; the inspector's tabs are
+  the way to its panels (D-162).
+- A template's own decorations and numbers are parts the person can pick, recolour,
+  move, type into, delete and put back (D-159).
+- Help fits the device (D-161): keys per platform, and touch gestures on a device
+  with no keyboard.
 - Undo/redo across all document edits.
 - Autosave. Reloading the tab must not lose work.
 
@@ -51,7 +72,7 @@ and exports a longer ad.
 | Term | Meaning |
 |---|---|
 | **Project** | The whole document the user is editing. |
-| **Scene** | One template instance with a duration. Showcase = 1 scene. Motion Ad = many. |
+| **Scene** | One template instance with a duration. Image = 1 scene. Video = many. |
 | **Overlay** | A user-added element (photo/text/custom media) placed freely on the global timeline, independent of scenes. |
 | **Layer** | A drawable primitive produced by a template's `build()` or by an overlay. |
 | **Slot** | A named hole in a template that user content fills (photo slot, text slot, logo slot). |
@@ -185,6 +206,10 @@ type AudioClip = {
   gainDb: number;
   fadeInMs: number;
   fadeOutMs: number;
+  loop?: boolean;       // the window [trimStartMs, trimEndMs) repeats (D-156)
+  lengthMs?: number;    // length on the timeline while looping
+  loopPhaseMs?: number; // where in the window the clip starts
+  fitsVideo?: boolean;  // a loop that runs to the end of the video
 };
 
 type Brand = {
@@ -204,7 +229,9 @@ This keeps the document small, serialisable and cheap to undo.
 ## 6. Render core
 
 ### 6.1 Layer types
-`image`, `text`, `shape`, `gradient`, `group`, `mask`, `video` (custom media only).
+`image`, `text`, `shape`, `gradient`, `group`, `mask`, `video` (custom media only),
+`sticker` (art from `src/core/stickers`, drawn at the layer's local time; an unknown
+id draws nothing, D-158).
 
 Every layer carries:
 ```ts
@@ -248,7 +275,8 @@ reflection with gradient fade, optional border/frame with configurable inset and
 Font family, size, weight, tracking, line height, colour, alignment, max wrap width.
 Style flags matching the inspector: **Wrap**, **Shadow**, **Outline**, **Pill**.
 Reveal modes: `none`, `fade`, `maskWipe(dir)`, `perWord(staggerMs)`, `perChar(staggerMs)`,
-`swap` (crossfade between the primary text and the alt phrase).
+`swap` (crossfade between the primary text and the alt phrase), and `counter`
+(D-158: fixed-width digit cells, measured on its widest figure).
 
 Text measurement must be cached — `ctx.measureText` per character per frame will
 destroy preview performance on kinetic templates.
@@ -298,7 +326,17 @@ type Template = {
 };
 ```
 
-Motion Ad templates additionally declare a `scenes: SceneTemplateRef[]` array giving
+**Focus (D-157).** Photo designs keep one photo in focus at every moment, using the
+shared helpers in `kit.ts` and `emphasis.ts`; every multi-photo variant declares a
+`posterAtMs` on a focus peak, and `focus.test.ts` measures every design.
+
+**Parts (D-159).** A decoration the person may change is a part: a shape slot
+(`shapeSlot(name, label, {tint, text, pick})`) on a shape, mask or `part()` group,
+never on anything that fills the frame. A backing names what it sits behind with
+`follows`. Colours, outlines and deletions of parts, and text colours, are applied
+after the build, in `placed()`. A library-wide test holds every design to this.
+
+Video templates additionally declare a `scenes: SceneTemplateRef[]` array giving
 the ordered sub-templates, their durations and the transitions between them.
 
 **File layout:** `src/templates/<category-slug>/<template-id>.ts`, auto-registered by
@@ -317,7 +355,9 @@ Never hand-author thumbnails. Never commit them from a manual screenshot.
 ## 8. Inspector panels
 
 ### 8.1 Photos
-Upload button (drag/drop, paste and file picker all work). Thumbnail grid with the
++ Add photos, the same as + Photos under the picture: each photo takes the place
+of a sample, one for one; + Add extra photos puts photos on top (D-152, D-162).
+Drag/drop, paste and file picker all work. Thumbnail grid with the
 first photo badged **FIRST**, drag to reorder, click to select, remove per photo.
 Photo count stepper bounded by the template's min/max — increasing beyond the
 supplied photos reuses earlier ones. "Try sample photos" and "Remove all".
@@ -361,11 +401,14 @@ inspector control may mutate the document directly.
 
 ## 10. Audio
 
-- Import MP3/M4A/WAV/OGG, plus a bundled royalty-free track library.
-  **Licensing is my responsibility, not yours — leave the library as an empty manifest
-  with a documented shape and three placeholder tracks.**
+- Import MP3/M4A/WAV/OGG through + Sound's "Upload your own sound or music" (D-163),
+  plus a bundled library of original background loops and effects, synthesised by
+  `npm run sounds`, fetched on demand and never persisted (D-156).
 - Decode with `OfflineAudioContext.decodeAudioData`.
-- Per-clip: trim start/end, gain in dB, fade in/out, and a waveform preview on the track.
+- Per-clip: trim start/end, gain in dB, fade in/out, loop (a section repeating for a
+  length of its own, or to the end of the video), and a waveform preview on the track.
+- A video layer's own sound plays at its volume unless muted, derived from the layer
+  and never stored as a clip (D-163).
 - Preview playback uses `AudioBufferSourceNode` scheduled against the same clock as
   the visual preview. Drift over a 60s preview must stay under one frame.
 - Export: render the mixed audio offline into a single `AudioBuffer`, slice into
@@ -411,7 +454,7 @@ export type Limits = {
   maxDurationMs: number;       // free: 15_000 for motionAd, 60_000 for showcase
   proTemplates: boolean;
   customMedia: boolean;
-  maxExportHeight: number;
+  maxImageShortEdge: number;   // pictures: free 1080, pro 2160 (D-155)
   watermark: boolean;
 };
 export function useEntitlements(): { tier: Tier; limits: Limits };
@@ -437,9 +480,14 @@ free exports carry a small watermark.
 - "Set up for" choice (`ms.workspace`) and the library's folds, one set per choice,
   in `localStorage` — a device preference, never part of a project or project file.
 - Keyboard: space = play/pause, ⌘Z/⌘⇧Z = undo/redo, arrows = step one frame,
-  ⌘E = export, ⌘S is a no-op with a "saves automatically" toast.
+  ⌘E = export, ⌘S is a no-op with a "saves automatically" toast. ⌥←/⌥→ move the
+  selected scene; Delete and ⌘D act on it too (D-162). Keys are written per platform
+  (D-161).
 - `prefers-reduced-motion` suppresses editor chrome animation only, never the artboard.
 - Responsive down to tablet. On phones, inspector and library become bottom sheets.
+  On tablets the inspector is a sheet opened by Settings at the end of the row of
+  actions. On phones the toolbar is Designs/Templates, Add, Photos, Text, Effects,
+  Style (D-162).
 
 ---
 
@@ -452,8 +500,11 @@ free exports carry a small watermark.
 | Template `build()` | ≤ 16ms |
 | Cold load to interactive editor | ≤ 2.5s on a fast 3G throttle |
 | Peak heap, 8 photos + 60s audio | ≤ 900MB |
+| Preview backing store while playing on a computer or tablet | ≤ 0.8 MP per frame; screen sharpness (≤ 1080 short edge) when paused (D-154) |
 
-Add a dev-only performance overlay showing frame time, build time and heap.
+A performance overlay, in development and with `?perf=1` in a build, shows frame rate,
+mean frame time, the share of late frames while playing, the canvas size, build time
+and heap (D-154).
 
 ---
 
