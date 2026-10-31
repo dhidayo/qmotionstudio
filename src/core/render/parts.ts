@@ -78,6 +78,21 @@ function* paintsIn(layer: Layer): Generator<Paint> {
   }
 }
 
+/** The role of a part's edge of another colour, when it is a palette role. */
+function outlineRoleOf(layer: Layer, tint: PaletteRole): { outlineRole?: PaletteRole } {
+  if (layer.type === 'shape') {
+    const paint = layer.props.stroke?.paint;
+    return paint?.kind === 'role' && paint.role !== tint && paint.role !== 'onAccent' ? { outlineRole: paint.role } : {};
+  }
+  if (layer.type === 'group' || layer.type === 'mask') {
+    for (const child of layer.children) {
+      const found = outlineRoleOf(child, tint);
+      if (found.outlineRole) return found;
+    }
+  }
+  return {};
+}
+
 /** Whether a part has an edge of another colour than its own — a chip's hairline — that can be recoloured on its own. */
 function hasOutline(layer: Layer, tint: PaletteRole): boolean {
   if (layer.type === 'shape') {
@@ -156,8 +171,10 @@ function restyle(layers: readonly Layer[], overrides: Overrides, colours: Readon
  * transparency; lettering drawn on the accent reads on the new colour; the
  * outline, when there is one of another colour, takes `outline`.
  */
-function recolour(layer: Layer, tint: PaletteRole, color: Paint | null, outline: Paint | null): Layer {
+function recolour(layer: Layer, tint: PaletteRole, color: Paint | null, outline: Paint | null, fixed = !usesRole(layer, tint)): Layer {
   const paint = (p: Paint): Paint => {
+    // A part drawn in fixed colours — a LIVE badge's red — takes the new one on its shapes (D-159).
+    if (color !== null && fixed && p.kind === 'color' && layer.type !== 'text') return color;
     if (color === null || p.kind !== 'role') return p;
     if (p.role === tint) return withOpacity(color, p.alpha);
     if (p.role === 'onAccent' && tint === 'accent') return p.alpha === undefined ? { kind: 'on', of: color } : { kind: 'on', of: color, alpha: p.alpha };
@@ -179,12 +196,18 @@ function recolour(layer: Layer, tint: PaletteRole, color: Paint | null, outline:
     case 'text':
       return { ...layer, props: { ...layer.props, fill: paint(layer.props.fill) } };
     case 'group':
-      return { ...layer, children: layer.children.map((child) => recolour(child, tint, color, outline)) };
+      return { ...layer, children: layer.children.map((child) => recolour(child, tint, color, outline, fixed)) };
     case 'mask':
-      return { ...layer, children: layer.children.map((child) => recolour(child, tint, color, outline)) };
+      return { ...layer, children: layer.children.map((child) => recolour(child, tint, color, outline, fixed)) };
     default:
       return layer;
   }
+}
+
+/** Whether any paint of a part is its colour's palette role. */
+function usesRole(layer: Layer, tint: PaletteRole): boolean {
+  for (const paint of paintsIn(layer)) if (paint.kind === 'role' && paint.role === tint) return true;
+  return false;
 }
 
 function withOpacity(color: Paint, alpha: number | undefined): Paint {
@@ -200,6 +223,8 @@ export type PartInfo = {
   readonly label: string;
   readonly tint: PaletteRole;
   readonly hasOutline: boolean;
+  /** The palette role its outline is drawn in, for "As designed". */
+  readonly outlineRole?: PaletteRole;
   readonly text?: Extract<SlotRef, { kind: 'shape' }>['text'];
   readonly pick: boolean;
 };
@@ -221,6 +246,7 @@ export function partsIn(layers: readonly Layer[]): readonly PartInfo[] {
             label: slot.label,
             tint,
             hasOutline: hasOutline(layer, tint),
+            ...outlineRoleOf(layer, tint),
             ...(slot.text ? { text: slot.text } : {}),
             pick: slot.pick !== false,
           });

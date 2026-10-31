@@ -87,10 +87,13 @@ export function numbers(typed: string, count: number): string[] {
   });
 }
 
-/** A list text's entries, as a design draws them: trimmed, empty ones left out. */
-export function listEntries(text: string): string[] {
-  return text.split(',').map((entry) => entry.trim()).filter((entry) => entry.length > 0);
+/** A list text's entries, as a design draws them: trimmed, empty ones left out. Most lists are split at commas; quotes, which hold commas, at `|`. */
+export function listEntries(text: string, separator = ','): string[] {
+  return text.split(separator).map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 }
+
+/** How a list's entries are written back: "a, b" or "a | b". */
+const joiner = (separator: string): string => (separator === ',' ? ', ' : ` ${separator} `);
 
 /**
  * A list text with one entry changed, or taken out (`words` null).
@@ -104,9 +107,10 @@ export function withListItem(
   current: string,
   item: number,
   words: string | null,
-  options: { readonly numbered: boolean; readonly count: number },
+  options: { readonly numbered: boolean; readonly count: number; readonly separator?: string },
 ): string {
-  const clean = words === null ? null : words.replace(/,/g, ' ').trim();
+  const separator = options.separator ?? ',';
+  const clean = words === null ? null : words.split(separator).join(' ').trim();
   if (options.numbered) {
     const list = numbers(current, Math.max(options.count, item + 1));
     // Unchanged stays as typed: "1" is not rewritten "1, 2, 3" by a look.
@@ -114,9 +118,9 @@ export function withListItem(
     list[item] = clean ?? '';
     return list.join(', ');
   }
-  const list = listEntries(current);
+  const list = listEntries(current, separator);
   if (item < 0 || item >= list.length) return current;
   if (clean === null || clean.length === 0) list.splice(item, 1);
   else list[item] = clean;
-  return list.join(', ');
+  return list.join(joiner(separator));
 }

@@ -34,6 +34,8 @@ export type TextSlotDef = {
    * design counts on from (numbering.ts). Each entry is typed into on its own.
    */
   readonly list?: 'words' | 'numbers';
+  /** What separates a list's entries: a comma unless said (quotes, which hold commas, use `|`). */
+  readonly listSeparator?: string;
 };
 
 export type NamedPalette = { readonly id: string; readonly label: string; readonly palette: Palette };

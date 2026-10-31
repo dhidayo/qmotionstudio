@@ -132,6 +132,47 @@ test('the Episode 24 pill moves with its words', async ({ page }) => {
   expect(Math.abs((moved?.y ?? 0) - pill.y + 10)).toBeLessThan(3);
 });
 
+test('the pricing badge is picked, recoloured and typed into', async ({ page }) => {
+  await open(page, 'biz-pricing');
+  const before = await frame(page);
+  await pick(page, 'shape:badge', { x0: 0.3, y0: 0.1, x1: 0.7, y1: 0.55 });
+  await expect(page.locator('[data-part-settings="shape:badge"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Colour: Text' }).click();
+  await page.waitForTimeout(300);
+  expect(await frame(page)).not.toBe(before);
+  await page.locator(SELECTION).focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('BEST VALUE');
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Featured badge', { exact: true })).toHaveValue('BEST VALUE');
+});
+
+test("a post's like count in Social Feed is typed into on the picture", async ({ page }) => {
+  await open(page, 'biz-social-feed');
+  // Whichever post is in view: its likes line is one entry of the numbers list.
+  const canvas = await canvasBox(page);
+  let key: string | null = null;
+  for (let fy = 0.6; fy < 0.9 && key === null; fy += 0.02) {
+    for (let fx = 0.02; fx < 0.95 && key === null; fx += 0.02) {
+      await page.mouse.click(canvas.x + canvas.width * fx, canvas.y + canvas.height * fy);
+      const picked = (await page.locator(SELECTION).count()) > 0 ? await page.locator(SELECTION).getAttribute('data-selection-box') : null;
+      if (picked?.startsWith('text:likes#') === true) key = picked;
+    }
+  }
+  expect(key).not.toBeNull();
+  await page.locator(SELECTION).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('textarea').first()).toBeVisible();
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('999');
+  await page.keyboard.press('Enter');
+  await page.getByRole('tab', { name: 'Text' }).click();
+  const field = page.getByLabel('Likes on each post', { exact: true });
+  if (!(await field.isVisible())) await page.locator('[data-text-tile="text:likes"] button').first().click();
+  await expect(field).toHaveValue(/999/);
+});
+
 test("a pillar's number is typed into on the picture", async ({ page }) => {
   await open(page, 'bp-marketing-strategy');
   await pick(page, 'text:pillarNumbers#2', { x0: 0, y0: 0.4, x1: 0.55, y1: 1 });

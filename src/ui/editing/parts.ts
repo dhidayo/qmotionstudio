@@ -66,11 +66,12 @@ export function entryEditing(
   const item = entry.item;
   const numbered = def.list === 'numbers';
   const count = Math.max(item + 1, layers === null ? 0 : entriesDrawn(layers, def.id));
-  const text = (numbered ? numbers(current, count) : listEntries(current))[item] ?? '';
+  const separator = def.listSeparator ?? ',';
+  const text = (numbered ? numbers(current, count) : listEntries(current, separator))[item] ?? '';
   return {
     text,
     maxLength: undefined,
-    write: (words) => actions.setListItem(def.id, item, words, { current, count, numbered }),
+    write: (words) => actions.setListItem(def.id, item, words, { current, count, numbered, separator }),
   };
 }
 

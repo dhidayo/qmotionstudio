@@ -1005,7 +1005,7 @@ export function setListItem(
   slotId: string,
   item: number,
   words: string | null,
-  options: { readonly current: string; readonly count: number; readonly numbered: boolean },
+  options: { readonly current: string; readonly count: number; readonly numbered: boolean; readonly separator?: string },
 ): Action {
   return {
     label: words === null ? 'Remove from the list' : 'Edit text',

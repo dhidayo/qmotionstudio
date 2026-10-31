@@ -5,7 +5,9 @@ import { pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate, TextSlotDef } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
 import { fillSlots, photoProps, untagged, type FilledSlot } from '../_shared/photo';
-import { cardCount, clamp01, defineScene, depthGroup, easeInOut, easeOutBack, emphasise, focusCurve, glow, headlineAndStage, headlineSlot, kf, labelSlot, lerp, linger, placeText, rect, roomFor, sampled, serpentine, wrapSteps, type Pose } from './kit';
+import { cardCount, clamp01, defineScene, depthGroup, easeInOut, easeOutBack, emphasise, focusCurve, glow, headlineAndStage, headlineSlot, kf, labelSlot, lerp, linger, part, placeText, rect, roomFor, sampled, serpentine, shapeSlot, wrapSteps, type Pose } from './kit';
+import { listEntries, numbers } from '../_shared/numbering';
+import { slotWords } from '../_shared/text';
 import { focusIn, heldTurns, roomyPoint, settleInto, smoother, turnsAlong } from './emphasis';
 
 /**
@@ -22,6 +24,13 @@ import { focusIn, heldTurns, roomyPoint, settleInto, smoother, turnsAlong } from
  * front, the quote in the middle, the portrait, logo, step or person whose
  * turn it is, the ticket that has just moved. It grows a little and comes
  * forward while the rest step back and darken; words dim rather than darken.
+ *
+ * Every frame, card, badge and line is a part (D-159): picked, recoloured,
+ * moved and deleted like the cover family's. A phone's frame, a window, a
+ * tile, a ring or a post's card moves with its photograph; a plan's words
+ * move with their card; each plan, price, quote, name, step and column is
+ * typed into on its own, and the step numbers and like counts are numbers
+ * people can change.
  */
 
 /**
@@ -51,17 +60,22 @@ export function create(variant: SceneVariant): SceneTemplate {
   const kind = pick<Kind>(p, 'kind', KINDS, 'apps');
   const headline = headlineSlot(text(p, 'headline', 'Work smarter'), {}, 60);
   const label = (id: string, name: string, fallback: string, max = 120): TextSlotDef => labelSlot(id, name, text(p, id, fallback), {}, max);
+  /** A list typed into an entry at a time (D-159). */
+  const list = (id: string, name: string, fallback: string, max = 120, listSeparator = ','): TextSlotDef =>
+    ({ ...label(id, name, fallback, max), list: 'words', ...(listSeparator === ',' ? {} : { listSeparator }) });
+  /** Numbers the design used to make up, now the person's (D-159). */
+  const numbered = (id: string, name: string, fallback: string): TextSlotDef => ({ ...label(id, name, fallback, 60), list: 'numbers' });
   const extra: Record<Kind, TextSlotDef[]> = {
     apps: [], browser: [], dashboard: [],
-    pricing: [label('plans', 'Plan names, separated by commas', 'Starter, Pro, Business'), label('prices', 'Prices, separated by commas', '$9, $29, $79'), label('features', 'What each includes, separated by |', '1 user · 5 projects | 5 users · Unlimited projects | Unlimited users · Priority support', 160), label('badge', 'Featured badge', 'MOST POPULAR', 24)],
+    pricing: [list('plans', 'Plan names, separated by commas', 'Starter, Pro, Business'), list('prices', 'Prices, separated by commas', '$9, $29, $79'), list('features', 'What each includes, separated by |', '1 user · 5 projects | 5 users · Unlimited projects | Unlimited users · Priority support', 160, '|'), label('badge', 'Featured badge', 'MOST POPULAR', 24)],
     logos: [],
-    testimonials: [label('quotes', 'Quotes, separated by |', 'Fast, friendly and professional. | They doubled our sales in a quarter. | The best partner we have worked with.', 200), label('names', 'Names, separated by |', 'Amaka O., Retail | James P., SaaS | Laura K., Agency', 120)],
-    team: [label('names', 'Names, separated by commas', 'Ada, Tunde, Grace, Musa, Zainab, Emeka')],
-    workflow: [label('steps', 'Steps, separated by commas', 'Brief, Design, Build, Test, Launch')],
-    kanban: [label('columns', 'Columns, separated by commas', 'To do, In progress, Done')],
+    testimonials: [list('quotes', 'Quotes, separated by |', 'Fast, friendly and professional. | They doubled our sales in a quarter. | The best partner we have worked with.', 200, '|'), list('names', 'Names, separated by |', 'Amaka O., Retail | James P., SaaS | Laura K., Agency', 120, '|')],
+    team: [list('names', 'Names, separated by commas', 'Ada, Tunde, Grace, Musa, Zainab, Emeka')],
+    workflow: [list('steps', 'Steps, separated by commas', 'Brief, Design, Build, Test, Launch'), numbered('stepNumbers', 'Step numbers', '1')],
+    kanban: [list('columns', 'Columns, separated by commas', 'To do, In progress, Done')],
     webinar: [label('when', 'Date and time', 'Thursday · 2pm GMT', 40), label('live', 'Badge', 'LIVE', 12)],
-    social: [label('handle', 'Handle', '@yourbrand', 30)],
-    org: [label('names', 'Roles, top first, separated by commas', 'CEO, Product, Sales, Design, Engineering, Support')],
+    social: [label('handle', 'Handle', '@yourbrand', 30), numbered('likes', 'Likes on each post', '120, 157, 194, 231, 268, 305')],
+    org: [list('names', 'Roles, top first, separated by commas', 'CEO, Product, Sales, Design, Engineering, Support')],
   };
   const slots: TextSlotDef[] = [headline, ...extra[kind]];
 
@@ -72,7 +86,13 @@ export function create(variant: SceneVariant): SceneTemplate {
     const u = Math.min(design.w, design.h);
     const { headline: head, stage } = headlineAndStage(ctx, inputs, headline);
     const tall = stage.h > stage.w * 1.3;
-    const words = (id: string, sep = ','): string[] => (inputs.texts[id] ?? slots.find((s) => s.id === id)?.placeholder ?? '').split(sep).map((w) => w.trim());
+    const slotOf = (id: string): TextSlotDef => slots.find((s) => s.id === id) ?? headline;
+    /** A slot's words, or a list's entries, read the way an entry typed on the picture is written back (D-159). */
+    const words = (id: string, sep = ','): string[] => {
+      const slot = slotOf(id);
+      const said = slotWords(slot, inputs);
+      return slot.list === 'words' ? listEntries(said, slot.listSeparator ?? ',') : said.split(sep).map((w) => w.trim());
+    };
     const layers: Layer[] = [backgroundLayer(inputs, ctx), glow(ctx, { x: stage.cx, y: stage.cy }, Math.min(stage.w, stage.h) * 1.4, 0.18)];
     const photo = (k: number): FilledSlot | undefined => photos[((k % n) + n) % n];
     /** A photograph sized to an exact box, cropped to fill it. */
@@ -81,16 +101,27 @@ export function create(variant: SceneVariant): SceneTemplate {
       const props: ImageProps = { ...base, w, h, cornerRadius: radius, fit: 'cover' };
       return tag ? props : untagged(props);
     };
-    const labelLayer = (slotId: string, words2: string, opts: Parameters<typeof placeText>[3]): Layer => {
-      const slot = slots.find((s) => s.id === slotId) ?? headline;
+    /**
+     * Words in a slot's style. With `item`, entry `item` of a list, typed into
+     * on its own (D-159); without, the slot's own words. `inside` draws them
+     * untagged, for words that are part of a part (a badge's, a step's number).
+     */
+    const labelLayer = (slotId: string, words2: string, opts: Parameters<typeof placeText>[3], how: { readonly item?: number; readonly label?: string; readonly inside?: boolean } = {}): Layer => {
+      const slot = slotOf(slotId);
       // Measured as the words it shows, not as the whole list it comes from.
-      const placed = placeText(ctx, slot, { ...inputs, texts: { ...inputs.texts, [slot.id]: words2 } }, opts);
+      const placed = placeText(ctx, slot, { ...inputs, texts: { ...inputs.texts, [slot.id]: words2 } }, {
+        ...opts,
+        ...(how.item === undefined ? {} : { item: how.item }),
+        ...(how.label === undefined ? {} : { label: how.label }),
+      });
       if (placed.layer.type !== 'text') return placed.layer;
-      const { slot: _slot, ...props } = placed.layer.props;
+      const { slot: tag, ...props } = placed.layer.props;
       // A label pinned by its left or right edge reads from that edge.
       const align = opts.anchorX === 0 ? 'left' : opts.anchorX === 1 ? 'right' : props.align;
-      return { ...placed.layer, props: { ...props, text: words2, align } };
+      return { ...placed.layer, props: { ...props, text: words2, align, ...(how.inside === true || tag === undefined ? {} : { slot: tag }) } };
     };
+    /** The photo slot a decoration moves with, when that photograph is tagged (D-159). */
+    const withPhoto = (k: number, tagged: boolean): { follows?: string } => (tagged ? { follows: `photo:${k}` } : {});
 
     switch (kind) {
       case 'apps': {
@@ -111,7 +142,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             return focusIn(base, focusCurve(off), stage, { w: phoneW, h: phoneH }, 1.2);
           };
           const tracks = sampled(0, durationMs, 70, pose, stage.w * 0.5);
-          items.push({ id: ctx.id('bezel'), type: 'shape', startMs: 0, endMs: durationMs, tracks: { ...tracks, z: (tracks.z ?? []).map((key) => ({ ...key, v: key.v - 0.001 })) }, props: { shape: 'rect', w: phoneW, h: phoneH, cornerRadius: phoneW * 0.16, fill: roleFill('ink'), shadow: { blur: u * 0.04, offsetX: 0, offsetY: u * 0.015, paint: colorFill('rgba(0,0,0,0.45)') } } });
+          items.push({ id: ctx.id('bezel'), type: 'shape', startMs: 0, endMs: durationMs, ...withPhoto(k, k < n), tracks: { ...tracks, z: (tracks.z ?? []).map((key) => ({ ...key, v: key.v - 0.001 })) }, props: { shape: 'rect', w: phoneW, h: phoneH, cornerRadius: phoneW * 0.16, fill: roleFill('ink'), shadow: { blur: u * 0.04, offsetX: 0, offsetY: u * 0.015, paint: colorFill('rgba(0,0,0,0.45)') }, slot: shapeSlot(`phone${k + 1}`, `Phone ${k + 1}`, { tint: 'ink' }) } });
           items.push({ id: ctx.id('screen'), type: 'image', startMs: 0, endMs: durationMs, tracks, props: fitted(ph, phoneW * 0.9, phoneH * 0.94, phoneW * 0.12, k < n) });
         }
         layers.push(depthGroup(ctx, 'phones', items));
@@ -151,11 +182,12 @@ export function create(variant: SceneVariant): SceneTemplate {
           const tracks = sampled(0, durationMs, 70, pose, stage.w * 0.5);
           const shadowed: Tracks = { ...tracks, z: (tracks.z ?? [kf(0, 0)]).map((key) => ({ ...key, v: key.v - 0.002 })) };
           const shotTracks = partOf(pose, durationMs, 0, bar / 2, (_, p) => ({ z: (p.z ?? 0) - 0.001 }), stage.w * 0.5);
-          items.push({ id: ctx.id('window'), type: 'shape', startMs: 0, endMs: durationMs, tracks: shadowed, props: { shape: 'rect', w: winW, h: winH, cornerRadius: u * 0.014, fill: roleFill('surface'), stroke: { paint: roleFill('ink', 0.14), width: Math.max(1, u * 0.002) }, shadow: { blur: u * 0.05, offsetX: 0, offsetY: u * 0.02, paint: colorFill('rgba(0,0,0,0.4)') } } });
+          items.push({ id: ctx.id('window'), type: 'shape', startMs: 0, endMs: durationMs, ...withPhoto(k, k < n), tracks: shadowed, props: { shape: 'rect', w: winW, h: winH, cornerRadius: u * 0.014, fill: roleFill('surface'), stroke: { paint: roleFill('ink', 0.14), width: Math.max(1, u * 0.002) }, shadow: { blur: u * 0.05, offsetX: 0, offsetY: u * 0.02, paint: colorFill('rgba(0,0,0,0.4)') }, slot: shapeSlot(`window${k + 1}`, `Window ${k + 1}`, { tint: 'surface' }) } });
           items.push({ id: ctx.id('shot'), type: 'image', startMs: 0, endMs: durationMs, anchorY: 0.5, tracks: shotTracks, props: fitted(ph, winW * 0.97, winH - bar * 1.3, u * 0.008, k < n) });
           for (let d = 0; d < 3; d++) {
             const dotOffsetX = -winW / 2 + bar * (0.7 + d * 0.65);
-            items.push({ id: ctx.id('dot'), type: 'shape', startMs: 0, endMs: durationMs, tracks: partOf(pose, durationMs, dotOffsetX, -winH / 2 + bar * 0.55, undefined, stage.w * 0.5), props: { shape: 'ellipse', w: bar * 0.38, h: bar * 0.38, fill: d === 0 ? colorFill('#ff5f57') : d === 1 ? colorFill('#febc2e') : colorFill('#28c840') } });
+            // The three buttons are one part (one key on each), moving with the window's photograph.
+            items.push({ id: ctx.id('dot'), type: 'shape', startMs: 0, endMs: durationMs, ...withPhoto(k, k < n), tracks: partOf(pose, durationMs, dotOffsetX, -winH / 2 + bar * 0.55, undefined, stage.w * 0.5), props: { shape: 'ellipse', w: bar * 0.38, h: bar * 0.38, fill: d === 0 ? colorFill('#ff5f57') : d === 1 ? colorFill('#febc2e') : colorFill('#28c840'), slot: shapeSlot(`buttons${k + 1}`, `Window ${k + 1}'s buttons`) } });
           }
         }
         layers.push(depthGroup(ctx, 'windows', items));
@@ -177,16 +209,23 @@ export function create(variant: SceneVariant): SceneTemplate {
           const at = 300 + k * 220;
           const lift = featured ? (tall ? 0 : -u * 0.03) : 0;
           const rise: Tracks = { y: [kf(at, y + u * 0.08), kf(at + 600, y + lift, 'outExpo')], opacity: [kf(at, 0), kf(at + 350, 1)], ...(featured ? { scaleX: [kf(at + 600, 1), kf(at + 1100, 1.04, 'outBack')], scaleY: [kf(at + 600, 1), kf(at + 1100, 1.04, 'outBack')] } : {}) };
-          layers.push(rect(ctx, 'plan', { w: cardW, h: cardH, x, y, radius: u * 0.025, fill: featured ? roleFill('accent', 0.16) : roleFill('surface', 0.9), stroke: { paint: featured ? roleFill('accent') : roleFill('ink', 0.12), width: Math.max(2, u * (featured ? 0.004 : 0.002)) }, tracks: rise }));
+          // The card leads: its words, and the badge, move with it (D-159).
+          const card = `shape:plan${k + 1}`;
+          layers.push(rect(ctx, 'plan', { w: cardW, h: cardH, x, y, radius: u * 0.025, fill: featured ? roleFill('accent', 0.16) : roleFill('surface', 0.9), stroke: { paint: featured ? roleFill('accent') : roleFill('ink', 0.12), width: Math.max(2, u * (featured ? 0.004 : 0.002)) }, tracks: rise, slot: shapeSlot(`plan${k + 1}`, `Plan ${k + 1}'s card`, { tint: featured ? 'accent' : 'surface' }) }));
           const top = y + lift - cardH / 2;
           const nameY = tall ? top + cardH * 0.12 : top + cardH * 0.1;
-          layers.push(labelLayer('plans', plans[k] ?? '', { sizePx: u * 0.04, maxWidthPx: cardW * 0.9, x: tall ? x - cardW * 0.4 : x, y: nameY, anchorX: tall ? 0 : 0.5, reveal: LINE(at + 300) }));
-          layers.push(labelLayer('prices', prices[k] ?? '', { sizePx: u * (tall ? 0.07 : 0.075), maxWidthPx: cardW * 0.9, x: tall ? x + cardW * 0.4 : x, y: tall ? top + cardH * 0.18 : top + cardH * 0.24, anchorX: tall ? 1 : 0.5, fill: roleFill('accent'), reveal: { kind: 'count', startMs: at + 400, durationMs: 1100 } }));
-          layers.push(labelLayer('features', features[k] ?? '', { sizePx: u * 0.028, maxWidthPx: cardW * 0.82, x: tall ? x - cardW * 0.4 : x, y: tall ? top + cardH * 0.52 : top + cardH * 0.52, anchorX: tall ? 0 : 0.5, fill: roleFill('inkMuted'), lineHeight: 1.4, reveal: LINE(at + 600) }));
+          layers.push(labelLayer('plans', plans[k] ?? '', { sizePx: u * 0.04, maxWidthPx: cardW * 0.9, x: tall ? x - cardW * 0.4 : x, y: nameY, anchorX: tall ? 0 : 0.5, reveal: LINE(at + 300), follows: card }, { item: k, label: `Plan ${k + 1}` }));
+          layers.push(labelLayer('prices', prices[k] ?? '', { sizePx: u * (tall ? 0.07 : 0.075), maxWidthPx: cardW * 0.9, x: tall ? x + cardW * 0.4 : x, y: tall ? top + cardH * 0.18 : top + cardH * 0.24, anchorX: tall ? 1 : 0.5, fill: roleFill('accent'), reveal: { kind: 'count', startMs: at + 400, durationMs: 1100 }, follows: card }, { item: k, label: `Price ${k + 1}` }));
+          layers.push(labelLayer('features', features[k] ?? '', { sizePx: u * 0.028, maxWidthPx: cardW * 0.82, x: tall ? x - cardW * 0.4 : x, y: tall ? top + cardH * 0.52 : top + cardH * 0.52, anchorX: tall ? 0 : 0.5, fill: roleFill('inkMuted'), lineHeight: 1.4, reveal: LINE(at + 600), follows: card }, { item: k, label: `What plan ${k + 1} includes` }));
           if (featured) {
             const pillW = Math.min(cardW * 0.7, u * 0.3);
-            layers.push(rect(ctx, 'badge', { w: pillW, h: u * 0.05, x: tall ? x + cardW * 0.25 : x, y: top - (tall ? -u * 0.03 : 0), radius: u * 0.025, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 900, 0), kf(at + 1250, 1, 'outBack')], scaleY: [kf(at + 900, 0), kf(at + 1250, 1, 'outBack')] } }));
-            layers.push(labelLayer('badge', words('badge')[0] ?? '', { sizePx: u * 0.022, maxWidthPx: pillW, x: tall ? x + cardW * 0.25 : x, y: top - (tall ? -u * 0.03 : 0) - u * 0.015, fill: roleFill('onAccent'), reveal: LINE(at + 1150) }));
+            const bx = tall ? x + cardW * 0.25 : x;
+            const by = top - (tall ? -u * 0.03 : 0);
+            // The badge and its words, one part that is typed into (D-159).
+            layers.push(part(ctx, 'badge', shapeSlot('badge', 'Featured badge', { text: { slot: 'badge' } }), { x: bx, y: by }, [
+              rect(ctx, 'badgeShape', { w: pillW, h: u * 0.05, x: bx, y: by, radius: u * 0.025, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 900, 0), kf(at + 1250, 1, 'outBack')], scaleY: [kf(at + 900, 0), kf(at + 1250, 1, 'outBack')] } }),
+              labelLayer('badge', words('badge')[0] ?? '', { sizePx: u * 0.022, maxWidthPx: pillW, x: bx, y: by - u * 0.015, fill: roleFill('onAccent'), reveal: LINE(at + 1150) }, { inside: true }),
+            ], { follows: card }));
           }
         }
         break;
@@ -215,7 +254,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             const pop = Math.max(0.001, easeOutBack((ms - at) / 500));
             return { ...shown, scaleX: (shown.scaleX ?? 1) * pop, scaleY: (shown.scaleY ?? 1) * pop, opacity: clamp01((ms - at) / 300) };
           });
-          layers.push({ id: ctx.id('tile'), type: 'shape', startMs: 0, endMs: durationMs, tracks, props: { shape: 'rect', w: tileW, h: tileH, cornerRadius: u * 0.016, fill: colorFill('#ffffff'), stroke: { paint: roleFill('accent'), width: Math.max(2, u * 0.003) } } });
+          layers.push({ id: ctx.id('tile'), type: 'shape', startMs: 0, endMs: durationMs, ...withPhoto(k, k < n), tracks, props: { shape: 'rect', w: tileW, h: tileH, cornerRadius: u * 0.016, fill: colorFill('#ffffff'), stroke: { paint: roleFill('accent'), width: Math.max(2, u * 0.003) }, slot: shapeSlot(`tile${k + 1}`, `Logo ${k + 1}'s tile`) } });
           layers.push({ id: ctx.id('logo'), type: 'image', startMs: 0, endMs: durationMs, tracks, props: { ...fitted(ph, tileW * 0.7, tileH * 0.6, 0, k < n), fit: 'contain' } });
         }
         break;
@@ -243,13 +282,15 @@ export function create(variant: SceneVariant): SceneTemplate {
           const tracks = sampled(0, durationMs, 70, pose, stage.w * 0.5);
           // Words are not darkened by shade, so they dim instead.
           const wordTracks = (dx: number, dy: number): Tracks => partOf(pose, durationMs, dx, dy, (ms, p) => ({ opacity: (p.opacity ?? 1) * lerp(0.5, 1, focusOf(ms).f), shade: 0 }), stage.w * 0.5);
-          const items: Layer[] = [{ id: ctx.id('quoteCard'), type: 'shape', startMs: 0, endMs: durationMs, tracks, props: { shape: 'rect', w: cardW, h: cardH, cornerRadius: u * 0.025, fill: roleFill('surface'), stroke: { paint: roleFill('ink', 0.1), width: Math.max(1, u * 0.002) } } }];
+          // The card leads; its photo and words move with it (D-159).
+          const card = `shape:quoteCard${k + 1}`;
+          const items: Layer[] = [{ id: ctx.id('quoteCard'), type: 'shape', startMs: 0, endMs: durationMs, tracks, props: { shape: 'rect', w: cardW, h: cardH, cornerRadius: u * 0.025, fill: roleFill('surface'), stroke: { paint: roleFill('ink', 0.1), width: Math.max(1, u * 0.002) }, slot: shapeSlot(`quoteCard${k + 1}`, `Quote ${k + 1}'s card`, { tint: 'surface' }) } }];
           if (ph) {
             const av = cardH * 0.2;
-            items.push({ id: ctx.id('avatar'), type: 'image', startMs: 0, endMs: durationMs, tracks: partOf(pose, durationMs, -cardW * 0.36, cardH * 0.3, undefined, stage.w * 0.5), props: fitted(ph, av, av, av / 2, k < n) });
+            items.push({ id: ctx.id('avatar'), type: 'image', startMs: 0, endMs: durationMs, follows: card, tracks: partOf(pose, durationMs, -cardW * 0.36, cardH * 0.3, undefined, stage.w * 0.5), props: fitted(ph, av, av, av / 2, k < n) });
           }
-          const quote = labelLayer('quotes', `“${quotes[k] ?? ''}”`, { sizePx: u * (tall ? 0.046 : 0.038), maxWidthPx: cardW * 0.84, x: 0, y: 0, lineHeight: 1.3, reveal: { kind: 'none' } });
-          const name = labelLayer('names', names[k] ?? '', { sizePx: u * 0.026, maxWidthPx: cardW * 0.6, x: 0, y: 0, anchorX: 0, fill: roleFill('inkMuted'), reveal: { kind: 'none' } });
+          const quote = labelLayer('quotes', `“${quotes[k] ?? ''}”`, { sizePx: u * (tall ? 0.046 : 0.038), maxWidthPx: cardW * 0.84, x: 0, y: 0, lineHeight: 1.3, reveal: { kind: 'none' }, follows: card }, { item: k, label: `Quote ${k + 1}` });
+          const name = labelLayer('names', names[k] ?? '', { sizePx: u * 0.026, maxWidthPx: cardW * 0.6, x: 0, y: 0, anchorX: 0, fill: roleFill('inkMuted'), reveal: { kind: 'none' }, follows: card }, { item: k, label: `Name ${k + 1}` });
           items.push({ ...quote, tracks: wordTracks(0, -cardH * 0.3) });
           items.push({ ...name, tracks: wordTracks(-cardW * 0.24, cardH * 0.26) });
           layers.push(depthGroup(ctx, 'testimonial', items));
@@ -294,7 +335,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           const popped = (from: number, ms: number): number => Math.max(0.001, easeOutBack((ms - from) / 450));
           /** 1 in focus, 0 at rest: the words and the ring dim rather than darken (a darkened line would fill). */
           const lit = (p: Pose): number => lerp(0.5, 1, clamp01(1 - (p.shade ?? 0) / 0.4));
-          layers.push(rect(ctx, 'ring', { w: av * 1.1, h: av * 1.1, x, y, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('accent'), width: Math.max(2, u * 0.004) }, tracks: sampled(0, durationMs, 80, (ms) => {
+          layers.push(rect(ctx, 'ring', { w: av * 1.1, h: av * 1.1, x, y, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('accent'), width: Math.max(2, u * 0.004) }, slot: shapeSlot(`ring${k + 1}`, `Ring round portrait ${k + 1}`), ...withPhoto(k, k < n), tracks: sampled(0, durationMs, 80, (ms) => {
             const p = pose(ms);
             return { x: p.x, y: p.y, scale: (p.scaleX ?? 1) * popped(at + 200, ms), opacity: lit(p) };
           }) }));
@@ -302,7 +343,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             const p = pose(ms);
             return { ...p, scaleX: (p.scaleX ?? 1) * popped(at, ms), scaleY: (p.scaleY ?? 1) * popped(at, ms) };
           }), props: fitted(ph, av, av, av / 2, k < n) });
-          const name = labelLayer('names', names[k] ?? '', { sizePx: u * 0.032, maxWidthPx: cell * 0.9, x, y: y + av * 0.62, reveal: LINE(at + 400) });
+          const name = labelLayer('names', names[k] ?? '', { sizePx: u * 0.032, maxWidthPx: cell * 0.9, x, y: y + av * 0.62, reveal: LINE(at + 400), ...withPhoto(k, k < n) }, { item: k, label: `Name ${k + 1}` });
           layers.push({ ...name, tracks: { ...name.tracks, ...sampled(0, durationMs, 80, (ms) => {
             const p = pose(ms);
             // Just under the ring, however large it is (never above where it began).
@@ -315,6 +356,8 @@ export function create(variant: SceneVariant): SceneTemplate {
       case 'workflow': {
         const steps = words('steps');
         const count = Math.max(3, Math.min(6, steps.length));
+        const marks = numbers(slotWords(slotOf('stepNumbers'), inputs), count);
+        const links: Layer[] = [];
         const vertical = tall;
         const pitch = (vertical ? stage.h : stage.w) / count;
         const box = Math.min(pitch * (vertical ? 0.62 : 0.74), (vertical ? stage.w : stage.h) * 0.42);
@@ -323,7 +366,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           const x = vertical ? stage.cx - stage.w * 0.2 : stage.cx + (k - (count - 1) / 2) * pitch;
           const y = vertical ? stage.cy + (k - (count - 1) / 2) * pitch : stage.cy - box * 0.2;
           if (k < count - 1) {
-            layers.push(rect(ctx, 'link', { w: vertical ? Math.max(3, u * 0.005) : pitch - box * 0.6, h: vertical ? pitch - box * 0.6 : Math.max(3, u * 0.005), x: vertical ? x : x + pitch / 2, y: vertical ? y + pitch / 2 : y, fill: roleFill('accent', 0.5), tracks: { [vertical ? 'scaleY' : 'scaleX']: [kf(turn * k + turn * 0.5, 0), kf(turn * (k + 1), 1, 'inOutCubic')] } }));
+            links.push(rect(ctx, 'link', { w: vertical ? Math.max(3, u * 0.005) : pitch - box * 0.6, h: vertical ? pitch - box * 0.6 : Math.max(3, u * 0.005), x: vertical ? x : x + pitch / 2, y: vertical ? y + pitch / 2 : y, fill: roleFill('accent', 0.5), tracks: { [vertical ? 'scaleY' : 'scaleX']: [kf(turn * k + turn * 0.5, 0), kf(turn * (k + 1), 1, 'inOutCubic')] } }));
           }
           // The step the line has reached is in focus; steps still to come are
           // fainter than the ones already done.
@@ -332,19 +375,28 @@ export function create(variant: SceneVariant): SceneTemplate {
             const shown = focusIn({ x, y }, heldTurns(ms, k, count, 0, durationMs), stage, { w: box, h: box }, 1.14);
             return { ...shown, opacity: clamp01((ms - k * 200) / 300) * lerp(0.55, 1, reached) };
           });
-          layers.push({ id: ctx.id('step'), type: 'shape', startMs: 0, endMs: durationMs, tracks: focus, props: { shape: 'rect', w: box, h: box, cornerRadius: box * 0.24, fill: roleFill('surface'), stroke: { paint: roleFill('accent'), width: Math.max(2, u * 0.004) } } });
+          const stepBox: Layer = { id: ctx.id('step'), type: 'shape', startMs: 0, endMs: durationMs, tracks: focus, props: { shape: 'rect', w: box, h: box, cornerRadius: box * 0.24, fill: roleFill('surface'), stroke: { paint: roleFill('accent'), width: Math.max(2, u * 0.004) } } };
           // A photo per step when there are some; the step's number when not.
           const ph = photo(k);
-          if (ph && inputs.photos.length > 0) layers.push({ id: ctx.id('stepPhoto'), type: 'image', startMs: 0, endMs: durationMs, tracks: focus, props: fitted(ph, box * 0.8, box * 0.8, box * 0.18, k < n) });
-          else {
-            const number = labelLayer('steps', String(k + 1), { sizePx: box * 0.42, maxWidthPx: box, x: 0, y: 0, fill: roleFill('accent'), reveal: { kind: 'none' } });
+          const label = `text:steps#${k}`;
+          if (ph && inputs.photos.length > 0) {
+            // The box behind the photo is a part that moves with it (D-159).
+            layers.push({ ...stepBox, ...withPhoto(k, k < n), props: { ...stepBox.props, slot: shapeSlot(`step${k + 1}`, `Step ${k + 1}'s box`, { tint: 'surface' }) } });
+            layers.push({ id: ctx.id('stepPhoto'), type: 'image', startMs: 0, endMs: durationMs, tracks: focus, props: fitted(ph, box * 0.8, box * 0.8, box * 0.18, k < n) });
+          } else {
+            const number = labelLayer('stepNumbers', marks[k] ?? '', { sizePx: box * 0.42, maxWidthPx: box, x: 0, y: 0, fill: roleFill('accent'), reveal: { kind: 'none' } }, { inside: true });
             const sy = focus.scaleY ?? [kf(0, 1)];
             // The number keeps its place in the box as the box grows; words do not darken, so no shade.
             const { shade: _shade, ...plain } = focus;
-            layers.push({ ...number, tracks: { ...plain, y: (focus.y ?? []).map((key, j) => ({ ...key, v: key.v - box * 0.24 * (sy[j]?.v ?? 1) })) } });
+            const pieces: Layer[] = [stepBox];
+            if ((marks[k] ?? '').length > 0) pieces.push({ ...number, tracks: { ...plain, y: (focus.y ?? []).map((key, j) => ({ ...key, v: key.v - box * 0.24 * (sy[j]?.v ?? 1) })) } });
+            // The box and its number, one part typed into, moving with its step's name (D-159).
+            layers.push(part(ctx, 'stepPart', shapeSlot(`step${k + 1}`, `Step ${k + 1}'s number`, { tint: 'surface', text: { slot: 'stepNumbers', item: k } }), { x, y }, pieces, { follows: label }));
           }
-          layers.push(labelLayer('steps', steps[k] ?? '', { sizePx: u * 0.034, maxWidthPx: vertical ? stage.w * 0.5 : pitch * 0.92, x: vertical ? x + box * 0.75 : x, y: vertical ? y - u * 0.02 : y + box * 0.62, anchorX: vertical ? 0 : 0.5, reveal: LINE(turn * k + 200) }));
+          layers.push(labelLayer('steps', steps[k] ?? '', { sizePx: u * 0.034, maxWidthPx: vertical ? stage.w * 0.5 : pitch * 0.92, x: vertical ? x + box * 0.75 : x, y: vertical ? y - u * 0.02 : y + box * 0.62, anchorX: vertical ? 0 : 0.5, reveal: LINE(turn * k + 200) }, { item: k, label: `Step ${k + 1}` }));
         }
+        // The lines between the steps, one part, under them.
+        if (links.length > 0) layers.splice(2, 0, part(ctx, 'links', shapeSlot('links', 'Lines between the steps'), { x: stage.cx, y: stage.cy }, links));
         break;
       }
 
@@ -358,8 +410,9 @@ export function create(variant: SceneVariant): SceneTemplate {
         const cardW = colW * 0.86;
         for (let c = 0; c < cols; c++) {
           const x = stage.cx + (c - 1) * (stage.w / cols);
-          layers.push(rect(ctx, 'column', { w: colW, h: colH, x, y: stage.cy, radius: u * 0.02, fill: roleFill('surface', 0.6), tracks: { opacity: [kf(c * 150, 0), kf(c * 150 + 400, 1)] } }));
-          layers.push(labelLayer('columns', columns[c] ?? '', { sizePx: u * 0.03, maxWidthPx: colW * 0.9, x, y: stage.cy - colH / 2 + u * 0.02, fill: roleFill('inkMuted'), reveal: LINE(200 + c * 150) }));
+          // The column leads; its title moves with it (D-159).
+          layers.push(rect(ctx, 'column', { w: colW, h: colH, x, y: stage.cy, radius: u * 0.02, fill: roleFill('surface', 0.6), tracks: { opacity: [kf(c * 150, 0), kf(c * 150 + 400, 1)] }, slot: shapeSlot(`column${c + 1}`, `Column ${c + 1}`, { tint: 'surface' }) }));
+          layers.push(labelLayer('columns', columns[c] ?? '', { sizePx: u * 0.03, maxWidthPx: colW * 0.9, x, y: stage.cy - colH / 2 + u * 0.02, fill: roleFill('inkMuted'), reveal: LINE(200 + c * 150), follows: `shape:column${c + 1}` }, { item: c, label: `Column ${c + 1}'s title` }));
         }
         // Cards move from column to column, one at a time.
         const count = Math.min(6, Math.max(4, n));
@@ -408,14 +461,18 @@ export function create(variant: SceneVariant): SceneTemplate {
         const speaker = tall ? { x: stage.cx, y: stage.cy - stage.h * 0.22 } : { x: stage.cx - stage.w * 0.3, y: stage.cy };
         const slide = tall ? { x: stage.cx, y: stage.cy + stage.h * 0.2 } : { x: stage.cx + stage.w * 0.18, y: stage.cy };
         if (ph0) layers.push({ id: ctx.id('speaker'), type: 'image', startMs: 0, endMs: durationMs, tracks: { x: [kf(0, speaker.x)], y: [kf(0, speaker.y)], scaleX: [kf(200, 0.6), kf(800, 1, 'outBack')], scaleY: [kf(200, 0.6), kf(800, 1, 'outBack')], opacity: [kf(200, 0), kf(500, 1)] }, props: fitted(ph0, av, av, av / 2, true) });
-        layers.push(rect(ctx, 'speakerRing', { w: av * 1.08, h: av * 1.08, x: speaker.x, y: speaker.y, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('accent'), width: Math.max(3, u * 0.005) }, tracks: { scaleX: [kf(0, 1), kf(durationMs, 1, 'linear')], opacity: [kf(600, 0), kf(900, 1)] } }));
+        layers.push(rect(ctx, 'speakerRing', { w: av * 1.08, h: av * 1.08, x: speaker.x, y: speaker.y, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('accent'), width: Math.max(3, u * 0.005) }, tracks: { scaleX: [kf(0, 1), kf(durationMs, 1, 'linear')], opacity: [kf(600, 0), kf(900, 1)] }, slot: shapeSlot('speakerRing', 'Ring round the speaker'), ...(ph0 ? { follows: 'photo:0' } : {}) }));
         if (ph1) layers.push({ id: ctx.id('slide'), type: 'image', startMs: 0, endMs: durationMs, tracks: { x: [kf(500, slide.x + u * 0.1), kf(1200, slide.x, 'outExpo')], y: [kf(0, slide.y)], opacity: [kf(500, 0), kf(900, 1)] }, props: fitted(ph1, slideW, slideH, u * 0.016, n > 1) });
         // The LIVE badge, pulsing.
         const badge = { x: speaker.x + av * 0.38, y: speaker.y - av * 0.42 };
         const pulseKeys = [];
         for (let t = 1000; t < durationMs; t += 1200) pulseKeys.push(kf(t, 1, 'linear'), kf(t + 600, 1.12, 'inOutSine'), kf(t + 1200, 1, 'inOutSine'));
-        layers.push(rect(ctx, 'live', { w: u * 0.12, h: u * 0.05, x: badge.x, y: badge.y, radius: u * 0.012, fill: colorFill('#e5322d'), tracks: { scaleX: pulseKeys.length > 0 ? pulseKeys : [kf(0, 1)], scaleY: pulseKeys.length > 0 ? pulseKeys : [kf(0, 1)], opacity: [kf(900, 0), kf(1100, 1)] } }));
-        layers.push(labelLayer('live', words('live')[0] ?? 'LIVE', { sizePx: u * 0.026, maxWidthPx: u * 0.12, x: badge.x, y: badge.y - u * 0.016, fill: colorFill('#ffffff'), reveal: LINE(1000) }));
+        // The badge and its word, one part typed into, that moves with the speaker (D-159).
+        layers.push(part(ctx, 'live', shapeSlot('live', 'LIVE badge', { text: { slot: 'live' } }), badge, [
+          rect(ctx, 'liveShape', { w: u * 0.12, h: u * 0.05, x: badge.x, y: badge.y, radius: u * 0.012, fill: colorFill('#e5322d'), tracks: { scaleX: pulseKeys.length > 0 ? pulseKeys : [kf(0, 1)], scaleY: pulseKeys.length > 0 ? pulseKeys : [kf(0, 1)], opacity: [kf(900, 0), kf(1100, 1)] } }),
+          labelLayer('live', words('live')[0] ?? 'LIVE', { sizePx: u * 0.026, maxWidthPx: u * 0.12, x: badge.x, y: badge.y - u * 0.016, fill: colorFill('#ffffff'), reveal: LINE(1000) }, { inside: true }),
+        ], ph0 ? { follows: 'photo:0' } : {}));
+        // The date is the person's text again (D-159).
         layers.push(labelLayer('when', words('when', '|')[0] ?? '', { sizePx: u * 0.032, maxWidthPx: safe.w * 0.8, x: stage.cx, y: contentFloor(design, safe) - u * 0.05, fill: roleFill('accent'), reveal: LINE(1400) }));
         break;
       }
@@ -426,6 +483,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         const across = !tall && stage.w > stage.h * 1.2;
         const post = across ? Math.min(stage.h * 0.66, stage.w * 0.3) : Math.min(stage.w * 0.72, stage.h * 0.5);
         const count = Math.max(3, Math.min(6, n));
+        const likes = numbers(slotWords(slotOf('likes'), inputs), count);
         const items: Layer[] = [];
         for (let k = 0; k < count; k++) {
           const ph = photo(k);
@@ -441,9 +499,10 @@ export function create(variant: SceneVariant): SceneTemplate {
             return emphasise({ x: stage.cx, y: stage.cy + off * post * 1.3, opacity: off < 0 ? clamp01(1.5 + off * 1.6) : clamp01(1.6 - off), z: -Math.abs(off) }, f, 1.06);
           };
           const tracks = sampled(0, durationMs, 70, pose, across ? stage.w * 0.5 : stage.h * 0.5);
-          items.push({ id: ctx.id('postCard'), type: 'shape', startMs: 0, endMs: durationMs, tracks: partOf(pose, durationMs, 0, post * 0.08, (_, p) => ({ z: (p.z ?? 0) - 0.001 }), across ? stage.w * 0.5 : stage.h * 0.5), props: { shape: 'rect', w: post * 1.06, h: post * 1.22, cornerRadius: u * 0.02, fill: roleFill('surface') } });
+          items.push({ id: ctx.id('postCard'), type: 'shape', startMs: 0, endMs: durationMs, ...withPhoto(k, k < n), tracks: partOf(pose, durationMs, 0, post * 0.08, (_, p) => ({ z: (p.z ?? 0) - 0.001 }), across ? stage.w * 0.5 : stage.h * 0.5), props: { shape: 'rect', w: post * 1.06, h: post * 1.22, cornerRadius: u * 0.02, fill: roleFill('surface'), slot: shapeSlot(`postCard${k + 1}`, `Post ${k + 1}'s card`, { tint: 'surface' }) } });
           items.push({ id: ctx.id('post'), type: 'image', startMs: 0, endMs: durationMs, tracks, props: fitted(ph, post, post, u * 0.01, k < n) });
-          items.push(labelLayer('handle', `♥ ${120 + k * 37}   ${words('handle')[0] ?? ''}`, { sizePx: u * 0.03, maxWidthPx: post, x: 0, y: 0, anchorX: 0, reveal: { kind: 'none' } }));
+          // The like count is a number the person types (D-159); the handle is theirs in Text.
+          items.push(labelLayer('likes', `♥ ${likes[k] ?? ''}   ${words('handle')[0] ?? ''}`, { sizePx: u * 0.03, maxWidthPx: post, x: 0, y: 0, anchorX: 0, reveal: { kind: 'none' }, ...withPhoto(k, k < n) }, { item: k, label: `Likes on post ${k + 1}` }));
           const last = items[items.length - 1];
           if (last) items[items.length - 1] = { ...last, tracks: partOf(pose, durationMs, -post * 0.5, post * 0.53, (_, p) => ({ shade: 0, z: (p.z ?? 0) + 0.001 }), across ? stage.w * 0.5 : stage.h * 0.5) };
         }
@@ -463,13 +522,15 @@ export function create(variant: SceneVariant): SceneTemplate {
           const idx = row.indexOf(k);
           return { x: stage.cx + (idx - (row.length - 1) / 2) * (stage.w / (row.length + 0.6)), y: levelY(l) };
         };
-        // Connectors first, under the nodes.
+        // Connectors first, under the nodes: one part (D-159).
+        const edges: Layer[] = [];
         for (const [from, to] of [[0, 1], [0, 2], [1, 3], [1, 4], [2, 5]] as const) {
           const a = posOf(from);
           const b = posOf(to);
           const len = Math.hypot(b.x - a.x, b.y - a.y);
-          layers.push(rect(ctx, 'edge', { w: len, h: Math.max(3, u * 0.005), x: a.x, y: a.y, anchorX: 0, fill: roleFill('accent', 0.55), tracks: { rotation: [kf(0, (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI)], scaleX: [kf(400 + to * 120, 0), kf(800 + to * 120, 1, 'outCubic')] } }));
+          edges.push(rect(ctx, 'edge', { w: len, h: Math.max(3, u * 0.005), x: a.x, y: a.y, anchorX: 0, fill: roleFill('accent', 0.55), tracks: { rotation: [kf(0, (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI)], scaleX: [kf(400 + to * 120, 0), kf(800 + to * 120, 1, 'outCubic')] } }));
         }
+        layers.push(part(ctx, 'edges', shapeSlot('edges', 'Lines between people'), { x: stage.cx, y: stage.cy }, edges));
         for (let k = 0; k < 6; k++) {
           const ph = photo(k);
           if (!ph) continue;
@@ -484,7 +545,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           });
           layers.push({ id: ctx.id('member'), type: 'image', startMs: 0, endMs: durationMs, tracks, props: fitted(ph, av * 0.7, av * 0.7, av * 0.35, k < n) });
           // The names dim with their people, after the tree is drawn.
-          const name = labelLayer('names', names[k] ?? '', { sizePx: u * 0.028, maxWidthPx: av * 1.3, x: at.x, y: at.y + av * 0.46, reveal: LINE(500 + k * 120) });
+          const name = labelLayer('names', names[k] ?? '', { sizePx: u * 0.028, maxWidthPx: av * 1.3, x: at.x, y: at.y + av * 0.46, reveal: LINE(500 + k * 120), ...withPhoto(k, k < n) }, { item: k, label: `Role ${k + 1}` });
           const quiet = sampled(settled - 400, durationMs, 100, (ms) => ({ x: at.x, y: at.y, opacity: lerp(1, lerp(0.55, 1, turnOf(ms)), clamp01((ms - settled + 400) / 400)) })).opacity;
           layers.push(quiet ? { ...name, tracks: { ...name.tracks, opacity: quiet.map((key) => ({ ...key, t: key.t + settled - 400 })) } } : name);
         }

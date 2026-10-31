@@ -252,12 +252,20 @@ function boxAround(layers: readonly Layer[]): { box?: Rect } {
     const sy = Math.abs(last(layer.tracks.scaleY, 1));
     const w = layer.props.w * sx;
     const h = layer.props.h * sy;
-    const left = last(layer.tracks.x, 0) - w * (layer.anchorX ?? 0.5);
-    const top = last(layer.tracks.y, 0) - h * (layer.anchorY ?? 0.5);
-    x0 = Math.min(x0, left);
-    y0 = Math.min(y0, top);
-    x1 = Math.max(x1, left + w);
-    y1 = Math.max(y1, top + h);
+    // Its corners, turned about its anchor as it rests: a line drawn at an angle is boxed where it lies.
+    const ax = last(layer.tracks.x, 0);
+    const ay = last(layer.tracks.y, 0);
+    const radians = (last(layer.tracks.rotation, 0) * Math.PI) / 180;
+    const left = -w * (layer.anchorX ?? 0.5);
+    const top = -h * (layer.anchorY ?? 0.5);
+    for (const [cx, cy] of [[left, top], [left + w, top], [left, top + h], [left + w, top + h]] as const) {
+      const px = ax + cx * Math.cos(radians) - cy * Math.sin(radians);
+      const py = ay + cx * Math.sin(radians) + cy * Math.cos(radians);
+      x0 = Math.min(x0, px);
+      y0 = Math.min(y0, py);
+      x1 = Math.max(x1, px);
+      y1 = Math.max(y1, py);
+    }
   }
   return Number.isFinite(x0) ? { box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } } : {};
 }

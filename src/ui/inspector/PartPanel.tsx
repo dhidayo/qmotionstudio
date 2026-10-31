@@ -65,6 +65,8 @@ export function SelectedPart(): React.JSX.Element | null {
   const palette = inputs.look.palette;
   const as = { name: 'As designed', swatch: swatchOf(palette, part.tint) };
   const editing = part.text ? entryEditing(part.text, inputs, template, drawn?.layers ?? null) : null;
+  // What its words are called: the slot's own name ("Brand mark letter", "Featured badge"), or Number for one of a list.
+  const wordsLabel = part.text?.item === undefined ? template?.textSlots.find((slot) => slot.id === part.text?.slot)?.label ?? 'Words' : 'Number';
 
   return (
     <Section title={PART_SECTION}>
@@ -80,14 +82,14 @@ export function SelectedPart(): React.JSX.Element | null {
           <ElementColorField
             label="Outline"
             value={override?.outline}
-            own={{ name: 'As designed', swatch: swatchOf(palette, 'inkMuted') }}
+            own={{ name: 'As designed', swatch: swatchOf(palette, part.outlineRole ?? 'inkMuted') }}
             onChange={(color) => { dispatch(actions.setShapeOutline(key, color ?? null)); }}
           />
         )}
         {editing && (
-          <Row label={part.text?.item === undefined ? 'Letter' : 'Number'}>
+          <Row label={wordsLabel}>
             <TextInput
-              label={part.text?.item === undefined ? 'Letter' : 'Number'}
+              label={wordsLabel}
               value={editing.text}
               {...(editing.maxLength === undefined ? {} : { maxLength: editing.maxLength })}
               onChange={(words) => { dispatch(editing.write(words)); }}
