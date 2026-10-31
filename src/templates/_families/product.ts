@@ -1,11 +1,11 @@
-import { colorFill, roleFill, type Keyframe, type Layer, type Reveal, type Tracks } from '@/core/types';
+import { colorFill, roleFill, type Keyframe, type Layer, type PaletteRole, type Reveal, type Tracks } from '@/core/types';
 import type { SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
 import { pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate, TextSlotDef } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
 import { fillSlots, photoProps, untagged } from '../_shared/photo';
-import { cardProps, defineScene, FOCUS, glow, headlineSlot, kf, labelSlot, lerp, measureSlot, placeText, rect, sampled, sublineSlot, type Pose, type Stage } from './kit';
+import { cardProps, defineScene, FOCUS, glow, headlineSlot, kf, labelSlot, lerp, measureSlot, part, placeText, rect, sampled, shapeSlot, sublineSlot, type Pose, type Stage } from './kit';
 import { focusIn, roomyPoint, settleInto, turnsAlong, type Box } from './emphasis';
 
 /**
@@ -18,6 +18,11 @@ import { focusIn, roomyPoint, settleInto, turnsAlong, type Box } from './emphasi
  * range — once they have all arrived the light moves from one to the next
  * (D-157): the one in turn grows up from where it stands, so it never leaves
  * its shelf or covers its name, and the others step back and darken.
+ *
+ * Every shelf, badge, swatch, callout, bullet, plinth, lens and box is a part
+ * (D-159): picked, recoloured, moved and deleted. A callout's line and a
+ * spec's bullet move with their words, a swatch and the NEW badge with their
+ * product, the line through the old price with that price.
  */
 
 /** Emphasis for a product standing on something: it grows upward, its foot where it was. */
@@ -104,15 +109,17 @@ export function create(variant: SceneVariant): SceneTemplate {
           const boxW = size * 1.05;
           const boxTop = stageCy + size * 0.18;
           layers.push(hero(size, { x: cx, y: stageCy }, { y: [kf(600, boxTop + size * 0.6), kf(1700, stageCy, 'outBack')], opacity: [kf(600, 0), kf(900, 1)] }));
-          layers.push(rect(ctx, 'box', { w: boxW, h: size * 0.5, x: cx, y: boxTop, anchorY: 0, radius: u * 0.012, fill: roleFill('surface'), stroke: { paint: roleFill('ink', 0.14), width: Math.max(1, u * 0.002) } }));
+          const pieces: Layer[] = [rect(ctx, 'box', { w: boxW, h: size * 0.5, x: cx, y: boxTop, anchorY: 0, radius: u * 0.012, fill: roleFill('surface'), stroke: { paint: roleFill('ink', 0.14), width: Math.max(1, u * 0.002) } })];
           // Two lid flaps, hinged at the box's outer edges, swing open outwards.
           for (const side of [-1, 1]) {
-            layers.push(rect(ctx, 'flap', {
+            pieces.push(rect(ctx, 'flap', {
               w: boxW / 2, h: size * 0.05, x: cx + (side * boxW) / 2, y: boxTop, anchorX: side < 0 ? 0 : 1, anchorY: 1,
               fill: roleFill('accent'), radius: u * 0.006,
               tracks: { rotation: [kf(250, 0), kf(800, side * -120, 'outBack')] },
             }));
           }
+          // The box and its flaps, one part (D-159).
+          layers.push(part(ctx, 'boxPart', shapeSlot('box', 'Box', { tint: 'surface' }), { x: cx, y: boxTop + size * 0.25 }, pieces));
         } else {
           layers.push(hero(size, { x: cx, y: stageCy }, {
             scaleX: [kf(0, 0.86), kf(900, 1, 'outCubic'), kf(durationMs, 1.05, 'linear')],
@@ -124,8 +131,11 @@ export function create(variant: SceneVariant): SceneTemplate {
           const r = u * 0.11;
           const bx = cx + size * 0.42;
           const by = stageCy - size * 0.48;
-          layers.push(rect(ctx, 'badge', { w: r * 2, h: r * 2, x: bx, y: by, ellipse: true, fill: roleFill('accent'), tracks: { scaleX: [kf(1100, 2), kf(1450, 1, 'outBack')], scaleY: [kf(1100, 2), kf(1450, 1, 'outBack')], opacity: [kf(1100, 0), kf(1250, 1)], rotation: [kf(1100, -25), kf(1450, -12, 'outBack')] } }));
-          layers.push(placeText(ctx, slot('badge'), inputs, { sizePx: u * 0.05, maxWidthPx: r * 1.8, x: bx, y: by - u * 0.033, fill: roleFill('onAccent'), reveal: { kind: 'fade', startMs: 1300, durationMs: 200 }, tracks: { rotation: [kf(0, -12)] } }).layer);
+          // The badge and its word, one part typed into, that moves with the product (D-159).
+          layers.push(part(ctx, 'badge', shapeSlot('badge', 'NEW badge', { text: { slot: 'badge' } }), { x: bx, y: by }, [
+            rect(ctx, 'badgeShape', { w: r * 2, h: r * 2, x: bx, y: by, ellipse: true, fill: roleFill('accent'), tracks: { scaleX: [kf(1100, 2), kf(1450, 1, 'outBack')], scaleY: [kf(1100, 2), kf(1450, 1, 'outBack')], opacity: [kf(1100, 0), kf(1250, 1)], rotation: [kf(1100, -25), kf(1450, -12, 'outBack')] } }),
+            inside(placeText(ctx, slot('badge'), inputs, { sizePx: u * 0.05, maxWidthPx: r * 1.8, x: bx, y: by - u * 0.033, fill: roleFill('onAccent'), reveal: { kind: 'fade', startMs: 1300, durationMs: 200 }, tracks: { rotation: [kf(0, -12)] } }).layer),
+          ], { follows: 'photo:0' }));
         }
         bottomSubline(1200);
         break;
@@ -152,8 +162,11 @@ export function create(variant: SceneVariant): SceneTemplate {
           const textW = Math.max(u * 0.16, Math.abs(edgeX - dotX) - size * 0.08);
           const reach = Math.max(u * 0.03, Math.abs(edgeX - dotX) - Math.min(textW, u * 0.3) - u * 0.02);
           const endX = dotX + spot.side * reach;
-          layers.push(rect(ctx, 'dot', { w: u * 0.025, h: u * 0.025, x: dotX, y: dotY, ellipse: true, fill: roleFill('accent'), stroke: { paint: roleFill('bg'), width: Math.max(2, u * 0.004) }, tracks: { scaleX: [kf(at, 0), kf(at + 250, 1, 'outBack')], scaleY: [kf(at, 0), kf(at + 250, 1, 'outBack')] } }));
-          layers.push(rect(ctx, 'leader', { w: reach, h: Math.max(2, u * 0.003), x: dotX, y: dotY, anchorX: spot.side < 0 ? 1 : 0, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 150, 0), kf(at + 500, 1, 'outCubic')] } }));
+          // The dot and its line, one part that moves with its words (D-159).
+          layers.push(part(ctx, 'callout', shapeSlot(`callout${i + 1}`, `Callout ${i + 1}'s line`), { x: dotX, y: dotY }, [
+            rect(ctx, 'dot', { w: u * 0.025, h: u * 0.025, x: dotX, y: dotY, ellipse: true, fill: roleFill('accent'), stroke: { paint: roleFill('bg'), width: Math.max(2, u * 0.004) }, tracks: { scaleX: [kf(at, 0), kf(at + 250, 1, 'outBack')], scaleY: [kf(at, 0), kf(at + 250, 1, 'outBack')] } }),
+            rect(ctx, 'leader', { w: reach, h: Math.max(2, u * 0.003), x: dotX, y: dotY, anchorX: spot.side < 0 ? 1 : 0, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 150, 0), kf(at + 500, 1, 'outCubic')] } }),
+          ], { follows: `text:point${i + 1}` }));
           layers.push(placeText(ctx, slot(`point${i + 1}`), inputs, {
             sizePx: u * 0.036, maxWidthPx: Math.min(textW, u * 0.3), x: endX + spot.side * u * 0.012, y: dotY - u * 0.024, anchorX: spot.side < 0 ? 1 : 0,
             reveal: { kind: 'kinetic', unit: 'line', motion: spot.side < 0 ? 'slideRight' : 'slideLeft', startMs: at + 400, durationMs: 450, staggerMs: 0 },
@@ -196,7 +209,10 @@ export function create(variant: SceneVariant): SceneTemplate {
                 return settleInto(shown, ms, settled);
               }),
             }, i));
-            layers.push(rect(ctx, 'swatch', { w: u * 0.035, h: u * 0.035, x, y: y + size * 0.62, ellipse: true, fill: swatches[i % swatches.length] ?? roleFill('accent'), stroke: { paint: roleFill('ink', 0.4), width: Math.max(2, u * 0.003) }, tracks: { scaleX: [kf(at + 300, 0), kf(at + 600, 1, 'outBack')], scaleY: [kf(at + 300, 0), kf(at + 600, 1, 'outBack')] } }));
+            const fill = swatches[i % swatches.length] ?? roleFill('accent');
+            // Its colour is the finish's: a palette role, or (the gold) its own, which a recolour replaces (D-159).
+            const tint: PaletteRole = fill.kind === 'role' && fill.role !== 'onAccent' ? fill.role : 'accent';
+            layers.push(rect(ctx, 'swatch', { w: u * 0.035, h: u * 0.035, x, y: y + size * 0.62, ellipse: true, fill, stroke: { paint: roleFill('ink', 0.4), width: Math.max(2, u * 0.003) }, tracks: { scaleX: [kf(at + 300, 0), kf(at + 600, 1, 'outBack')], scaleY: [kf(at + 300, 0), kf(at + 600, 1, 'outBack')] }, slot: shapeSlot(`swatch${i + 1}`, `Finish ${i + 1}'s swatch`, { tint }), follows: `photo:${i}` }));
           } else {
             const rise = (ms: number): number => 1 - (1 - Math.min(1, Math.max(0, (ms - at) / 700))) ** 4;
             layers.push(hero(size, { x, y }, sampled(0, durationMs, 80, (ms) => {
@@ -222,7 +238,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         const shelfGap = stageH / shelves;
         const size = Math.min((safe.w / perShelf) * 0.9, shelfGap * 0.62);
         for (let sh = 0; sh < shelves; sh++) {
-          layers.push(rect(ctx, 'shelf', { w: safe.w, h: Math.max(4, u * 0.008), x: cx, y: stageTop + shelfGap * (sh + 0.8), fill: roleFill('ink', 0.25), tracks: { scaleX: [kf(100 + sh * 200, 0), kf(700 + sh * 200, 1, 'outExpo')] } }));
+          layers.push(rect(ctx, 'shelf', { w: safe.w, h: Math.max(4, u * 0.008), x: cx, y: stageTop + shelfGap * (sh + 0.8), fill: roleFill('ink', 0.25), tracks: { scaleX: [kf(100 + sh * 200, 0), kf(700 + sh * 200, 1, 'outExpo')] }, slot: shapeSlot(`shelf${sh + 1}`, shelves > 1 ? `Shelf ${sh + 1}` : 'Shelf', { tint: 'ink' }) }));
         }
         // The light starts on the last to slide in and moves back along the row.
         const settled = 500 + (count - 1) * 220 + 400;
@@ -265,8 +281,9 @@ export function create(variant: SceneVariant): SceneTemplate {
           props: { shape: 'rect', w: design.w, h: design.h, clipFrom: 'left' },
           children: [{ id: ctx.id('after'), type: 'image', startMs: 0, endMs: durationMs, tracks: { x: [kf(0, cx)], y: [kf(0, design.h / 2)] }, props: untagged(photoProps(after, size)) }],
         });
-        layers.push(rect(ctx, 'divider', { w: Math.max(4, u * 0.006), h: design.h, x: 0, y: design.h / 2, fill: roleFill('ink'), tracks: { x: progressKeys.map((key) => ({ ...key, v: key.v * design.w })) } }));
-        layers.push(rect(ctx, 'knob', { w: u * 0.07, h: u * 0.07, x: 0, y: design.h / 2, ellipse: true, fill: roleFill('ink'), tracks: { x: progressKeys.map((key) => ({ ...key, v: key.v * design.w })) } }));
+        // The handle leads; the divider line moves with it (D-159).
+        layers.push(rect(ctx, 'divider', { w: Math.max(4, u * 0.006), h: design.h, x: 0, y: design.h / 2, fill: roleFill('ink'), tracks: { x: progressKeys.map((key) => ({ ...key, v: key.v * design.w })) }, slot: shapeSlot('divider', 'Divider line', { tint: 'ink' }), follows: 'shape:knob' }));
+        layers.push(rect(ctx, 'knob', { w: u * 0.07, h: u * 0.07, x: 0, y: design.h / 2, ellipse: true, fill: roleFill('ink'), tracks: { x: progressKeys.map((key) => ({ ...key, v: key.v * design.w })) }, slot: shapeSlot('knob', 'Divider handle', { tint: 'ink' }) }));
         layers.push(placeText(ctx, slot('after'), inputs, { sizePx: u * 0.045, maxWidthPx: u * 0.4, x: safe.x, y: safe.y, anchorX: 0, reveal: LINE(300), pill: { x: u * 0.025, y: u * 0.012, radius: u * 0.02 }, fill: roleFill('onAccent') }).layer);
         layers.push(placeText(ctx, slot('before'), inputs, { sizePx: u * 0.045, maxWidthPx: u * 0.4, x: safe.x + safe.w, y: safe.y, anchorX: 1, reveal: LINE(400), pill: { x: u * 0.025, y: u * 0.012, radius: u * 0.02 }, fill: roleFill('onAccent') }).layer);
         break;
@@ -276,7 +293,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         topHeadline();
         const size = Math.min(stageH * 0.75, u * 0.58);
         const y = stageCy - size * 0.05;
-        layers.push(rect(ctx, 'plinth', { w: size * 1.1, h: size * 0.2, x: cx, y: y + size * 0.62, ellipse: true, fill: roleFill('ink', 0.12) }));
+        layers.push(rect(ctx, 'plinth', { w: size * 1.1, h: size * 0.2, x: cx, y: y + size * 0.62, ellipse: true, fill: roleFill('ink', 0.12), slot: shapeSlot('plinth', 'Plinth', { tint: 'ink' }) }));
         layers.push(glow(ctx, { x: cx, y }, size * 2, 0.25));
         layers.push(hero(size, { x: cx, y }, sampled(0, durationMs, 60, (ms) => ({
           x: cx,
@@ -304,7 +321,7 @@ export function create(variant: SceneVariant): SceneTemplate {
         if (kind === 'spec') {
           for (let i = 0; i < 3; i++) {
             const at = 1000 + i * 350;
-            layers.push(rect(ctx, 'bullet', { w: u * 0.018, h: u * 0.018, x: (side ? colX : cx - u * 0.25) + u * 0.009, y: y + u * 0.022, ellipse: true, fill: roleFill('accent'), tracks: { scaleX: [kf(at, 0), kf(at + 250, 1, 'outBack')], scaleY: [kf(at, 0), kf(at + 250, 1, 'outBack')] } }));
+            layers.push(rect(ctx, 'bullet', { w: u * 0.018, h: u * 0.018, x: (side ? colX : cx - u * 0.25) + u * 0.009, y: y + u * 0.022, ellipse: true, fill: roleFill('accent'), tracks: { scaleX: [kf(at, 0), kf(at + 250, 1, 'outBack')], scaleY: [kf(at, 0), kf(at + 250, 1, 'outBack')] }, slot: shapeSlot(`bullet${i + 1}`, `Bullet ${i + 1}`), follows: `text:spec${i + 1}` }));
             layers.push(placeText(ctx, slot(`spec${i + 1}`), inputs, { sizePx: u * 0.038, maxWidthPx: side ? safe.w * 0.36 : u * 0.5, x: (side ? colX : cx - u * 0.25) + u * 0.04, y, anchorX: 0, reveal: { kind: 'kinetic', unit: 'line', motion: 'slideRight', startMs: at, durationMs: 450, staggerMs: 0 } }).layer);
             y += u * 0.075;
           }
@@ -314,7 +331,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           layers.push(price.layer);
           const was = placeText(ctx, slot('was'), inputs, { sizePx: u * 0.05, maxWidthPx: u * 0.4, x: priceX, y: y + price.height + u * 0.01, anchorX: side ? 0 : 0.5, fill: roleFill('inkMuted'), reveal: LINE(1500) });
           layers.push(was.layer);
-          layers.push(rect(ctx, 'strike', { w: was.width + u * 0.02, h: Math.max(3, u * 0.006), x: side ? priceX - u * 0.01 : priceX, y: y + price.height + u * 0.01 + was.height * 0.5, anchorX: side ? 0 : 0.5, fill: roleFill('inkMuted'), tracks: { scaleX: [kf(1800, 0), kf(2100, 1)] } }));
+          layers.push(rect(ctx, 'strike', { w: was.width + u * 0.02, h: Math.max(3, u * 0.006), x: side ? priceX - u * 0.01 : priceX, y: y + price.height + u * 0.01 + was.height * 0.5, anchorX: side ? 0 : 0.5, fill: roleFill('inkMuted'), tracks: { scaleX: [kf(1800, 0), kf(2100, 1)] }, slot: shapeSlot('strike', 'Line through the old price', { tint: 'inkMuted' }), follows: 'text:was' }));
         }
         break;
       }
@@ -334,8 +351,9 @@ export function create(variant: SceneVariant): SceneTemplate {
         };
         const lensTracks = sampled(0, durationMs, 80, (ms) => ({ ...path(ms), opacity: Math.min(1, Math.max(0, (ms - 900) / 400)) }));
         const big = photoProps(photo, size * zoom);
+        // The window moves with the lens's ring, which is the part (D-159).
         layers.push({
-          id: ctx.id('lens'), type: 'mask', startMs: 0, endMs: durationMs,
+          id: ctx.id('lens'), type: 'mask', startMs: 0, endMs: durationMs, follows: 'shape:lens',
           tracks: lensTracks,
           props: { shape: 'ellipse', w: lens, h: lens },
           children: [{
@@ -349,7 +367,7 @@ export function create(variant: SceneVariant): SceneTemplate {
             props: untagged(big),
           }],
         });
-        layers.push(rect(ctx, 'lensRing', { w: lens, h: lens, x: cx, y: stageCy, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('ink', 0.9), width: Math.max(3, u * 0.006) }, tracks: lensTracks }));
+        layers.push(rect(ctx, 'lensRing', { w: lens, h: lens, x: cx, y: stageCy, ellipse: true, fill: roleFill('accent', 0), stroke: { paint: roleFill('ink', 0.9), width: Math.max(3, u * 0.006) }, tracks: lensTracks, slot: shapeSlot('lens', 'Lens', { tint: 'ink' }) }));
         bottomSubline(1300);
         break;
       }
@@ -359,4 +377,11 @@ export function create(variant: SceneVariant): SceneTemplate {
   };
 
   return defineScene(variant, { textSlots: slots, build });
+}
+
+/** Words drawn inside a part: untagged, the part is what is picked and typed into (D-159). */
+function inside(layer: Layer): Layer {
+  if (layer.type !== 'text') return layer;
+  const { slot: _slot, ...props } = layer.props;
+  return { ...layer, props };
 }

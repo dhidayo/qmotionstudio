@@ -5,7 +5,9 @@ import { pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate, TextSlotDef } from '../schema';
 import { backgroundLayer } from '../_shared/chrome';
 import { fillSlots } from '../_shared/photo';
-import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOutBack, FOCUS, headlineAndStage, headlineSlot, isTall, kf, labelSlot, lerp, placeText, rect, sampled, type Pose } from './kit';
+import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOutBack, FOCUS, headlineAndStage, headlineSlot, isTall, kf, labelSlot, lerp, part, placeText, rect, sampled, shapeSlot, type Pose } from './kit';
+import { listEntries } from '../_shared/numbering';
+import { slotWords } from '../_shared/text';
 import { focusIn, roomyPoint, scaled } from './emphasis';
 
 /**
@@ -17,6 +19,9 @@ import { focusIn, roomyPoint, scaled } from './emphasis';
  * The milestone the playhead is at is the one in focus (D-157): it grows away
  * from the line — the edge nearest the line stays put, so it never covers the
  * line or a label — while the others step back and darken.
+ *
+ * The line is a part, and so is each stop, which moves with its milestone's
+ * words (D-159); each milestone — a year, a phase — is typed into on its own.
  */
 
 type Shape = 'track' | 'arc' | 'zigzag' | 'spine' | 'metro' | 'hang' | 'focus';
@@ -27,7 +32,7 @@ export function create(variant: SceneVariant): SceneTemplate {
   const p = variant.params;
   const shape = pick<Shape>(p, 'shape', SHAPES, 'track');
   const headline = headlineSlot(text(p, 'headline', 'Our journey'), {}, 50);
-  const labels: TextSlotDef = labelSlot('milestones', 'Milestones, separated by commas', text(p, 'milestones', '2019, 2020, 2021, 2022, 2023, 2024, 2025'), {}, 140);
+  const labels: TextSlotDef = { ...labelSlot('milestones', 'Milestones, separated by commas', text(p, 'milestones', '2019, 2020, 2021, 2022, 2023, 2024, 2025'), {}, 140), list: 'words' };
 
   const build = (inputs: SceneInputs, ctx: BuildContext): Layer[] => {
     const { durationMs, design } = ctx;
@@ -36,7 +41,8 @@ export function create(variant: SceneVariant): SceneTemplate {
     const { headline: head, stage } = headlineAndStage(ctx, inputs, headline);
     const u = Math.min(design.w, design.h);
     const vertical = shape === 'spine' || (isTall(stage) && shape !== 'arc' && shape !== 'hang');
-    const words = (inputs.texts['milestones'] ?? labels.placeholder).split(',').map((w) => w.trim());
+    // Read the way an entry typed on the picture is written back (D-159).
+    const words = listEntries(slotWords(labels, inputs));
 
     // Where each milestone sits along the path, 0 → 1.
     const along = (i: number): number => (n === 1 ? 0.5 : i / (n - 1));
@@ -61,18 +67,20 @@ export function create(variant: SceneVariant): SceneTemplate {
 
     const layers: Layer[] = [backgroundLayer(inputs, ctx)];
 
-    // The line itself, drawn as short segments so it can bend.
+    // The line itself, drawn as short segments so it can bend: one part (D-159).
     const segments = 40;
+    const line: Layer[] = [];
     for (let k = 0; k < segments; k++) {
       const a = point(k / segments);
       const b = point((k + 1) / segments);
       const len = Math.hypot(b.x - a.x, b.y - a.y);
-      layers.push(rect(ctx, 'line', {
+      line.push(rect(ctx, 'line', {
         w: len + 1, h: Math.max(3, u * 0.006), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2,
         fill: shape === 'metro' ? roleFill('accent') : roleFill('ink', 0.3),
         tracks: { rotation: [kf(0, (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI)], opacity: [kf(k * 18, 0), kf(k * 18 + 200, 1)] },
       }));
     }
+    layers.push(part(ctx, 'line', shapeSlot('line', 'The line', { tint: shape === 'metro' ? 'accent' : 'ink' }), { x: stage.cx, y: stage.cy }, line));
 
     // On a vertical line, as big as the gap between stops and half the width allow.
     const size = vertical
@@ -108,23 +116,26 @@ export function create(variant: SceneVariant): SceneTemplate {
       };
       cards.push({ id: ctx.id('milestone'), type: 'image', startMs: 0, endMs: durationMs, tracks: sampled(0, durationMs, 70, pose), props });
 
-      // The station, and its label.
+      // The station, and its label: the stop moves with its milestone's words (D-159).
+      const entry = `text:${labels.id}#${i}`;
       layers.push(rect(ctx, 'stop', {
+        slot: shapeSlot(`stop${i + 1}`, `Stop ${i + 1}`), ...(i < words.length ? { follows: entry } : {}),
         w: u * (shape === 'metro' ? 0.04 : 0.026), h: u * (shape === 'metro' ? 0.04 : 0.026), x: at.x, y: at.y, ellipse: true,
         fill: shape === 'metro' ? roleFill('bg') : roleFill('accent'), stroke: { paint: roleFill('accent'), width: Math.max(3, u * 0.006) },
         tracks: sampled(0, durationMs, 80, (ms) => { const near = 1 - Math.min(1, Math.abs(playhead(ms) - s) * Math.max(1, n - 1)); return { x: at.x, y: at.y, scale: 1 + near * 0.5 }; }),
       }));
-      const label = placeText(ctx, labels, inputs, {
+      const label = entryText(ctx, labels, inputs, {
         sizePx: u * 0.034, maxWidthPx: size * 1.4,
         x: vertical ? at.x - side * u * 0.04 : at.x,
         y: vertical ? at.y - u * 0.02 : at.y + (offset < 0 || shape === 'arc' ? u * 0.03 : -u * 0.075),
         anchorX: vertical ? (side < 0 ? 0 : 1) : 0.5,
         fill: roleFill('accent'),
         reveal: { kind: 'kinetic', unit: 'line', motion: 'rise', startMs: Math.max(0, (durationMs / n) * i - 200), durationMs: 450, staggerMs: 0 },
-      });
-      // Each label shows its own milestone from the list; the list itself is
-      // edited in the Text panel, so none of them is the editable original.
-      layers.push(unslotted(label.layer, words[i] ?? ''));
+        item: i,
+        label: `Milestone ${i + 1}`,
+      }, words[i] ?? '');
+      // Each label is its own milestone from the list, typed into on its own (D-159).
+      if (i < words.length) layers.push(label.layer);
     });
 
     layers.push(depthGroup(ctx, 'milestones', cards), head);
@@ -134,8 +145,7 @@ export function create(variant: SceneVariant): SceneTemplate {
   return defineScene(variant, { textSlots: [headline, labels], build });
 }
 
-function unslotted(layer: Layer, words: string): Layer {
-  if (layer.type !== 'text') return layer;
-  const { slot: _slot, ...props } = layer.props;
-  return { ...layer, props: { ...props, text: words } };
+/** One entry of a list, measured and drawn as its own words. */
+function entryText(ctx: BuildContext, slot: TextSlotDef, inputs: SceneInputs, options: Parameters<typeof placeText>[3], words: string): ReturnType<typeof placeText> {
+  return placeText(ctx, slot, { ...inputs, texts: { ...inputs.texts, [slot.id]: words } }, options);
 }

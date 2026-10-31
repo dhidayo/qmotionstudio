@@ -35,6 +35,8 @@ async function pick(page: Page, key: string, area = { x0: 0, y0: 0, x1: 1, y1: 1
   for (let fy = area.y0 + 0.02; fy < area.y1; fy += 0.035) {
     for (let fx = area.x0 + 0.01; fx < area.x1; fx += 0.02) {
       const at = { x: canvas.x + canvas.width * fx, y: canvas.y + canvas.height * fy };
+      // Put any selection down first, so a press near it is not taken by one of its handles.
+      await page.keyboard.press('Escape');
       await page.mouse.click(at.x, at.y);
       if (await page.locator(`[data-selection-box="${key}"]`).count() > 0) return at;
     }
@@ -146,6 +148,54 @@ test('the pricing badge is picked, recoloured and typed into', async ({ page }) 
   await page.keyboard.type('BEST VALUE');
   await page.keyboard.press('Enter');
   await expect(page.getByLabel('Featured badge', { exact: true })).toHaveValue('BEST VALUE');
+});
+
+test('the NEW badge on a product is picked, recoloured and typed into', async ({ page }) => {
+  await open(page, 'pd-new-arrival');
+  const before = await frame(page);
+  await pick(page, 'shape:badge', { x0: 0.5, y0: 0.1, x1: 0.8, y1: 0.5 });
+  await expect(page.locator('[data-part-settings="shape:badge"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Colour: Text' }).click();
+  await page.waitForTimeout(300);
+  expect(await frame(page)).not.toBe(before);
+  await page.locator(SELECTION).focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('SALE');
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Badge', { exact: true })).toHaveValue('SALE');
+});
+
+test('a milestone on the timeline is typed into, and its stop moves with it', async ({ page }) => {
+  await open(page, 'tl-metro');
+  const stopAt = await pick(page, 'shape:stop2', { x0: 0.1, y0: 0.3, x1: 0.5, y1: 0.8 });
+  const stop = await page.locator(SELECTION).boundingBox();
+  if (!stop) throw new Error('no stop');
+  await page.keyboard.press('Escape');
+  await pick(page, 'text:milestones#1', { x0: 0.1, y0: 0.3, x1: 0.5, y1: 0.9 });
+  const words = await page.locator(SELECTION).boundingBox();
+  if (!words) throw new Error('no words');
+  await page.locator(SELECTION).focus();
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Control+a');
+  await page.keyboard.type('Prepare well');
+  await page.keyboard.press('Enter');
+  // Dragged, the words carry their stop.
+  const from = { x: words.x + words.width / 2, y: words.y + words.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(from.x + 30, from.y - 15, { steps: 4 });
+  await page.keyboard.up('Shift');
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+  await page.mouse.click(stopAt.x + 30, stopAt.y - 15);
+  const moved = await page.locator('[data-selection-box="shape:stop2"]').boundingBox();
+  expect(Math.abs((moved?.x ?? 0) - stop.x - 30)).toBeLessThan(3);
+  await page.getByRole('tab', { name: 'Text' }).click();
+  const field = page.getByLabel('Milestones, separated by commas', { exact: true });
+  if (!(await field.isVisible())) await page.locator('[data-text-tile="text:milestones"] button').first().click();
+  await expect(field).toHaveValue(/Prepare well/);
 });
 
 test("a post's like count in Social Feed is typed into on the picture", async ({ page }) => {
