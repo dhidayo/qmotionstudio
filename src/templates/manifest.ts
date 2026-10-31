@@ -657,7 +657,7 @@ export function sceneTemplates(): readonly TemplateSummary[] {
  * keep the loops, so an unchanged address goes on showing yesterday's picture
  * — a dark card for a design that now opens in cream (D-121).
  */
-export const THUMBS_REVISION = 2;
+export const THUMBS_REVISION = 3;
 
 export function posterUrl(id: string): string {
   return `/thumbs/${id}.webp?v=${THUMBS_REVISION}`;
