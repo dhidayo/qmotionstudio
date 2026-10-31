@@ -26,6 +26,12 @@ export class PreviewClock {
   #restAtMs: number | null = null;
   /** True from the moment a one-shot play finishes until the next play or seek. */
   #ended = false;
+  /**
+   * This play stops on the picture moment rather than at the end (D-164).
+   * Only the play the editor starts by itself does; Play and Replay are the
+   * person asking to see the whole design, so they still run to the end.
+   */
+  #toRest = false;
 
   /**
    * Returns the project time the audio engine is currently sounding, or null
@@ -123,7 +129,12 @@ export class PreviewClock {
     return this.#audioMaster !== null && this.#audioMaster() !== null;
   }
 
-  play(): void {
+  /**
+   * `untilRest`: a one-shot play that stops on the picture moment instead of
+   * playing on to the end and coming back to it (D-164). A looping clock
+   * ignores it.
+   */
+  play(options?: { untilRest?: boolean }): void {
     if (this.#playing) return;
     /*
      * Play after a one-shot play has finished means "again" (D-155): from the
@@ -132,11 +143,13 @@ export class PreviewClock {
      */
     if (this.#ended || (!this.#loop && this.#timeMs >= this.#durationMs)) this.#timeMs = 0;
     this.#ended = false;
+    this.#toRest = options?.untilRest === true;
     this.#playing = true;
     this.#transportChanged();
   }
 
   pause(): void {
+    this.#toRest = false;
     if (!this.#playing) return;
     this.#playing = false;
     this.#transportChanged();
@@ -146,6 +159,8 @@ export class PreviewClock {
     const clamped = Math.max(0, Math.min(timeMs, this.#durationMs));
     const next = Number.isFinite(clamped) ? clamped : 0;
     // Moving the playhead by hand is no longer resting where playback ended.
+    // Taken in hand: playing on from here is no longer the editor's own play.
+    this.#toRest = false;
     if (next === this.#timeMs && !this.#ended) return;
     this.#ended = false;
     this.#timeMs = next;
@@ -165,6 +180,9 @@ export class PreviewClock {
   tick(deltaMs: number): number {
     if (!this.#playing || this.#durationMs <= 0) return this.#timeMs;
 
+    // Where a one-shot play stops: the end, or the picture moment for the editor's own play.
+    const stopAt = this.#toRest ? Math.min(this.#restAtMs ?? this.#durationMs, this.#durationMs) : this.#durationMs;
+
     const mastered = this.#audioMaster?.() ?? null;
     if (mastered !== null) {
       /*
@@ -174,7 +192,7 @@ export class PreviewClock {
        * than half the length is that wrap, never a correction.
        */
       const wrapped = this.#timeMs - mastered > this.#durationMs / 2;
-      if (!this.#loop && (mastered >= this.#durationMs || wrapped)) return this.#finish();
+      if (!this.#loop && (mastered >= stopAt || wrapped)) return this.#finish();
       // The engine reports where it has actually got to, wrapping included.
       this.#timeMs = Math.max(0, Math.min(mastered, this.#durationMs));
       return this.#timeMs;
@@ -183,6 +201,7 @@ export class PreviewClock {
     const dt = Math.max(0, Math.min(deltaMs, 100));
     let next = this.#timeMs + dt;
 
+    if (!this.#loop && next >= stopAt) return this.#finish();
     if (next >= this.#durationMs) {
       if (!this.#loop) return this.#finish();
       next %= this.#durationMs;
@@ -201,6 +220,7 @@ export class PreviewClock {
     this.#timeMs = Math.min(this.#restAtMs ?? this.#durationMs, this.#durationMs);
     this.#playing = false;
     this.#ended = true;
+    this.#toRest = false;
     this.#transportChanged();
     return this.#timeMs;
   }

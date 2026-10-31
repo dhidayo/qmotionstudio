@@ -15,6 +15,11 @@ import { peekTemplate } from '@/templates/registry';
  * (`restMomentMs`), which is the frame Export → Image saves. Video keeps
  * looping: it is watched, not looked at.
  *
+ * "When a template is selected on Image mode, let the auto-play stop on the
+ * cue and not play all the way to the end. The user can always click play to
+ * intentionally see how it runs to the end." So the play started here stops
+ * on the picture moment itself (D-164); Play and Replay still run to the end.
+ *
  * A new design, a reopened project or a switch to Image plays again from the
  * start — but only once its template has arrived. Templates load lazily
  * (D-029), and playing on a blank canvas would spend the one play on nothing.
@@ -45,7 +50,8 @@ export function usePlayOnce(clock: PreviewClock, project: Project): void {
       }
       clock.pause();
       clock.seek(0);
-      clock.play();
+      // Up to the picture moment and no further (D-164); Play shows the whole design.
+      clock.play({ untilRest: true });
     };
     playWhenReady();
     return () => { cancelAnimationFrame(handle); };

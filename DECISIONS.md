@@ -3817,3 +3817,17 @@ Undoable and saved with the project, with no schema change.
 
 The phone's timing note ("Detailed timing work is easier on a larger screen")
 closes itself after ten seconds, with a quiet × to close it sooner.
+
+## D-164 — a new design stops on its picture, not at the end
+
+"When a template is selected on Image mode, let the auto-play stop on the cue
+and not play all the way to the end. The user can always click play to
+intentionally see how it runs to the end." The play the editor starts by
+itself in Image — a new design, a reopened project, a switch to Image — now
+stops on the picture moment (the chosen frame, or the design's own) instead of
+playing to the end and coming back to it, so nothing plays past the picture
+and there is no cut back to it. Play and Replay are the person asking to see
+the whole design: they still run to the end and then rest on the picture
+moment (D-155). Moving the playhead by hand during that first play lets it
+play on to the end. A design with no picture moment stops at the end, as
+before.

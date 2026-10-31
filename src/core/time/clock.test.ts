@@ -81,6 +81,64 @@ describe('PreviewClock', () => {
       expect(clock.timeMs).toBe(1000);
     });
 
+    it("stops on the picture moment itself on the editor's own play, without playing on (D-164)", () => {
+      const clock = once();
+      clock.setRest(400);
+      clock.play({ untilRest: true });
+      const seen: number[] = [];
+      for (let i = 0; i < 12; i++) seen.push(clock.tick(60));
+      expect(Math.max(...seen)).toBe(400);
+      expect(clock.timeMs).toBe(400);
+      expect(clock.playing).toBe(false);
+      expect(clock.ended).toBe(true);
+    });
+
+    it('runs to the end on Play and Replay, then rests on the picture moment (D-164)', () => {
+      const clock = once();
+      clock.setRest(400);
+      clock.play({ untilRest: true });
+      for (let i = 0; i < 12; i++) clock.tick(60);
+      clock.play();
+      const seen: number[] = [];
+      for (let i = 0; i < 20; i++) seen.push(clock.tick(60));
+      expect(Math.max(...seen)).toBeGreaterThan(900);
+      expect(clock.timeMs).toBe(400);
+      expect(clock.ended).toBe(true);
+    });
+
+    it('plays on to the end once the playhead is taken in hand (D-164)', () => {
+      const clock = once();
+      clock.setRest(400);
+      clock.play({ untilRest: true });
+      clock.seek(200);
+      for (let i = 0; i < 4; i++) clock.tick(60);
+      expect(clock.playing).toBe(true);
+      expect(clock.timeMs).toBeCloseTo(440, 6);
+    });
+
+    it('stops on the picture moment while the audio clock keeps time, too (D-164)', () => {
+      const clock = once();
+      clock.setRest(400);
+      let audio = 0;
+      clock.setAudioMaster(() => audio);
+      clock.play({ untilRest: true });
+      audio = 380;
+      clock.tick(16);
+      expect(clock.playing).toBe(true);
+      audio = 410;
+      clock.tick(16);
+      expect(clock.timeMs).toBe(400);
+      expect(clock.ended).toBe(true);
+    });
+
+    it('stops at the end when the design has no picture moment (D-164)', () => {
+      const clock = once();
+      clock.play({ untilRest: true });
+      for (let i = 0; i < 20; i++) clock.tick(60);
+      expect(clock.timeMs).toBe(1000);
+      expect(clock.ended).toBe(true);
+    });
+
     it('plays again from the start after it has ended', () => {
       const clock = once();
       clock.setRest(400);
