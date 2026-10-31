@@ -5,7 +5,7 @@ import { flag, num, pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate, TextSlotDef } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
 import { fillSlots, photoProps } from '../_shared/photo';
-import { defineScene, headlineSlot, kf, measureSlot, placeText, rect, sublineSlot } from './kit';
+import { defineScene, headlineSlot, kf, measureSlot, part, placeText, rect, shapeSlot, sublineSlot } from './kit';
 
 /**
  * Text Motion (D-119): a story told in words.
@@ -104,30 +104,36 @@ export function create(variant: SceneVariant): SceneTemplate {
       ? { letterSpacing: [kf(start, size * 0.6), kf(start + 1600, 0, 'outExpo')], opacity: [kf(start, 0), kf(start + 600, 1)] }
       : {};
 
-    // The accent, under the words.
+    // The accent, under the words: a part that moves with them (D-159), unless they sit in a clip of their own.
     const accentColour = roleFill('accent');
+    const withWords = flag(p, 'clip') ? {} : { follows: `text:${headline.id}` };
     const blockW = left ? Math.min(maxW, Math.max(head.width, sub.width)) : Math.max(head.width, sub.width);
     const blockLeft = left ? x : x - blockW / 2;
     if (accent === 'bar' || layout === 'third') {
       const barH = blockH + u * 0.06;
-      layers.push(rect(ctx, 'bar', {
-        w: blockW + u * 0.1, h: barH, x: blockLeft - u * 0.05, y: top - u * 0.03, anchorX: 0, anchorY: 0,
-        fill: roleFill('surface', 0.92), radius: u * 0.012,
-        tracks: { scaleX: [kf(start - 200, 0), kf(start + 350, 1, 'outExpo')] },
-      }));
-      layers.push(rect(ctx, 'barEdge', {
-        w: u * 0.012, h: barH, x: blockLeft - u * 0.05, y: top - u * 0.03, anchorX: 0, anchorY: 0, fill: roleFill('accent'),
-        tracks: { scaleY: [kf(start - 200, 0), kf(start + 200, 1, 'outExpo')] },
-      }));
+      layers.push(part(ctx, 'barPart', shapeSlot('bar', 'Panel behind the words', { tint: 'surface' }), { x: blockLeft - u * 0.05, y: top - u * 0.03 + barH / 2 }, [
+        rect(ctx, 'bar', {
+          w: blockW + u * 0.1, h: barH, x: blockLeft - u * 0.05, y: top - u * 0.03, anchorX: 0, anchorY: 0,
+          fill: roleFill('surface', 0.92), radius: u * 0.012,
+          tracks: { scaleX: [kf(start - 200, 0), kf(start + 350, 1, 'outExpo')] },
+        }),
+        rect(ctx, 'barEdge', {
+          w: u * 0.012, h: barH, x: blockLeft - u * 0.05, y: top - u * 0.03, anchorX: 0, anchorY: 0, fill: roleFill('accent'),
+          tracks: { scaleY: [kf(start - 200, 0), kf(start + 200, 1, 'outExpo')] },
+        }),
+      ], withWords));
     }
     if (accent === 'rule') {
       layers.push(rect(ctx, 'rule', {
         w: u * 0.11, h: Math.max(3, u * 0.008), x: left ? blockLeft : design.w / 2, y: top - u * 0.05, anchorX: left ? 0 : 0.5, fill: accentColour,
         tracks: { scaleX: [kf(start, 0), kf(start + 600, 1, 'outExpo')] },
+        slot: shapeSlot('rule', 'Line above the words'), ...withWords,
       }));
     }
     if (accent === 'quote') {
-      layers.push({
+      const markX = left ? blockLeft : design.w / 2;
+      // The quotation mark is decoration, not words anyone types: a part (D-159).
+      layers.push(part(ctx, 'quotePart', shapeSlot('quoteMark', 'Quotation mark'), { x: markX, y: top - size * 1.55 }, [{
         id: ctx.id('quoteMark'),
         type: 'text',
         startMs: 0,
@@ -141,7 +147,7 @@ export function create(variant: SceneVariant): SceneTemplate {
           text: '“', fontId: 'headline', fontSizePx: size * 2.4, weight: 800, letterSpacingPct: 0, lineHeight: 1, align: 'left',
           fill: accentColour, maxWidthPx: null, reveal: { kind: 'none' },
         },
-      });
+      }], withWords));
     }
     if (accent === 'brackets') {
       const pad = u * 0.05;
@@ -152,12 +158,15 @@ export function create(variant: SceneVariant): SceneTemplate {
       const boxT = top - pad;
       const boxB = top + blockH + pad;
       const corners: [number, number, number, number][] = [[boxL, boxT, 1, 1], [boxR, boxT, -1, 1], [boxL, boxB, 1, -1], [boxR, boxB, -1, -1]];
+      const arms: Layer[] = [];
       corners.forEach(([cx, cy, dx, dy], i) => {
         const inFrom = start - 100 + i * 60;
         const slide = { x: [kf(inFrom, cx - dx * u * 0.05), kf(inFrom + 500, cx, 'outExpo')], y: [kf(inFrom, cy - dy * u * 0.05), kf(inFrom + 500, cy, 'outExpo')], opacity: [kf(inFrom, 0), kf(inFrom + 300, 1)] };
-        layers.push(rect(ctx, 'armH', { w: arm, h: thick, x: cx, y: cy, anchorX: dx > 0 ? 0 : 1, anchorY: dy > 0 ? 0 : 1, fill: accentColour, tracks: slide }));
-        layers.push(rect(ctx, 'armV', { w: thick, h: arm, x: cx, y: cy, anchorX: dx > 0 ? 0 : 1, anchorY: dy > 0 ? 0 : 1, fill: accentColour, tracks: slide }));
+        arms.push(rect(ctx, 'armH', { w: arm, h: thick, x: cx, y: cy, anchorX: dx > 0 ? 0 : 1, anchorY: dy > 0 ? 0 : 1, fill: accentColour, tracks: slide }));
+        arms.push(rect(ctx, 'armV', { w: thick, h: arm, x: cx, y: cy, anchorX: dx > 0 ? 0 : 1, anchorY: dy > 0 ? 0 : 1, fill: accentColour, tracks: slide }));
       });
+      // The four corners, one part (D-159).
+      layers.push(part(ctx, 'brackets', shapeSlot('brackets', 'Corner brackets'), { x: (boxL + boxR) / 2, y: (boxT + boxB) / 2 }, arms, withWords));
     }
 
     // The words.
@@ -205,6 +214,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       layers.push(rect(ctx, 'underline', {
         w: lineW, h: Math.max(4, u * 0.01), x: left ? x : design.w / 2 - lineW / 2, y: top + head.height + u * 0.012, anchorX: 0, anchorY: 0, fill: accentColour,
         tracks: { scaleX: [kf(start + dur, 0), kf(start + dur + 700, 1, 'outExpo')] },
+        slot: shapeSlot('underline', 'Underline'), ...withWords,
       }));
     }
 

@@ -418,12 +418,11 @@ export function slotBoxes(
 
     const key = slotKey(slot);
     /*
-     * A deleted part, or one that follows a deleted part, is not there to be
-     * picked; nor is scattered decoration that would swallow clicks meant for
+     * A deleted part is not there to be picked (what follows it with a slot
+     * of its own — words, a photo — stays, and keeps its box); nor is scattered decoration that would swallow clicks meant for
      * the background (D-159, D-120).
      */
     if (slot.kind === 'shape' && (slot.pick === false || overrides[key]?.hidden === true)) continue;
-    if (layer.follows !== undefined && overrides[layer.follows]?.hidden === true) continue;
     // A template may build several drawables from one slot — a photo and its
     // reflection, say. They all move together, but only the first gets the
     // handles, and it is the one the template drew first.

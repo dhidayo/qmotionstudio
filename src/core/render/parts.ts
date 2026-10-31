@@ -117,15 +117,19 @@ function restyle(layers: readonly Layer[], overrides: Overrides, colours: Readon
   const hidden = new Set<string>();
   /** A text a backing follows, by key: the backing's new colour, or 'bare' when it is gone. */
   const under = new Map<string, Paint | 'bare'>();
+  /** The same, by the part's own key, for words that follow the part they sit on (a seal's, a card's). */
+  const parts = new Map<string, Paint | 'bare'>();
   for (const layer of layers) {
     const slot = slotOf(layer);
     if (slot?.kind !== 'shape') continue;
     const key = slotKey(slot);
     const override = overrides[key];
-    if (override?.hidden === true) hidden.add(key);
-    if (layer.follows === undefined || !override) continue;
-    if (override.hidden === true) under.set(layer.follows, 'bare');
-    else if (override.color) under.set(layer.follows, elementPaint(override.color) ?? roleFill('accent'));
+    if (!override) continue;
+    const now = override.hidden === true ? 'bare' : override.color ? elementPaint(override.color) ?? roleFill('accent') : undefined;
+    if (override.hidden === true) hidden.add(key);
+    if (now === undefined) continue;
+    parts.set(key, now);
+    if (layer.follows !== undefined) under.set(layer.follows, now);
   }
 
   let changed = false;
@@ -133,7 +137,12 @@ function restyle(layers: readonly Layer[], overrides: Overrides, colours: Readon
   for (const layer of layers) {
     const slot = slotOf(layer);
     const key = slot ? slotKey(slot) : null;
-    if ((key !== null && hidden.has(key)) || (layer.follows !== undefined && hidden.has(layer.follows))) {
+    /*
+     * A deleted part goes, and so does the decoration that only moved with it
+     * (a shadow, a sheen). Anything with a slot of its own — words, a photo,
+     * another part — stays where it is: deleting a card never deletes its words.
+     */
+    if ((key !== null && hidden.has(key)) || (key === null && layer.follows !== undefined && hidden.has(layer.follows))) {
       changed = true;
       continue;
     }
@@ -149,7 +158,7 @@ function restyle(layers: readonly Layer[], overrides: Overrides, colours: Readon
     if (next.type === 'text') {
       let fill = next.props.fill;
       // Words on a backing read on whatever colour the backing now is.
-      const backing = key === null ? undefined : under.get(key);
+      const backing = (key === null ? undefined : under.get(key)) ?? (layer.follows === undefined ? undefined : parts.get(layer.follows));
       // Only words drawn *on* the backing (in what reads on the accent); a footer beside its rule keeps its colour.
       if (backing !== undefined && fill.kind === 'role' && fill.role === 'onAccent') {
         fill = backing === 'bare' ? roleFill('ink') : { kind: 'on', of: backing };

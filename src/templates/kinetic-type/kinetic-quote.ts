@@ -7,6 +7,8 @@ import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
 import { backgroundLayer } from '../_shared/chrome';
+import { tagParts } from '../_shared/parts';
+import { shapeSlot } from '../_families/kit';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -194,7 +196,11 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     props: attribution,
   });
 
-  return layers;
+  // The design's decorations as parts (D-159), tagged by name so the drawing above is untouched.
+  return tagParts(layers, {
+    ring: { slot: shapeSlot('ring', 'Ring round the photo') },
+    mark: { slot: shapeSlot('quoteMark', 'Quotation mark'), follows: 'text:quote' },
+  });
 }
 
 const template: SceneTemplate = {

@@ -6,8 +6,9 @@ import type { SceneTemplate } from '../schema';
 import { FULL_BLEED_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
-import { FOCUS, lerp } from '../_families/kit';
+import { FOCUS, lerp, shapeSlot } from '../_families/kit';
 import { emphasisedAfter, turnsAlong } from '../_families/emphasis';
+import { tagParts } from '../_shared/parts';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -226,7 +227,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     props: caption,
   });
 
-  return layers;
+  // The design's decorations as parts (D-159), tagged by name so the drawing above is untouched.
+  return tagParts(layers, { seam: ({ index }) => ({ slot: shapeSlot(`seam${index + 1}`, `Line between the photos ${index + 1}`) }) });
 }
 
 const template: SceneTemplate = {

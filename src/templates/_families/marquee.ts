@@ -5,7 +5,7 @@ import { flag, num, pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate } from '../schema';
 import { backgroundLayer } from '../_shared/chrome';
 import { fillSlots, untagged } from '../_shared/photo';
-import { cardCount, cardProps, defineScene, depthGroup, FOCUS, focusCurve, headlineAndStage, headlineSlot, kf, linger, rect, sampled } from './kit';
+import { cardCount, cardProps, defineScene, depthGroup, FOCUS, focusCurve, headlineAndStage, headlineSlot, kf, linger, part, rect, sampled, shapeSlot } from './kit';
 import { focusIn, lingerAt } from './emphasis';
 
 /**
@@ -66,17 +66,20 @@ export function create(variant: SceneVariant): SceneTemplate {
     if (shape === 'filmstrip') {
       // The strip itself, with sprocket holes along both edges.
       const stripH = card * 1.32;
-      layers.push(rect(ctx, 'strip', { w: design.w * 1.2, h: stripH, x: stage.cx, y: stage.cy, fill: roleFill('surface') }));
+      const film: Layer[] = [rect(ctx, 'strip', { w: design.w * 1.2, h: stripH, x: stage.cx, y: stage.cy, fill: roleFill('surface') })];
       const holes = Math.ceil(design.w / (u * 0.05)) + 2;
       for (const edge of [-1, 1]) {
         for (let h = 0; h < holes; h++) {
           const baseX = h * u * 0.05;
-          layers.push(rect(ctx, 'hole', {
+          film.push(rect(ctx, 'hole', {
             w: u * 0.024, h: u * 0.018, x: 0, y: stage.cy + edge * stripH * 0.42, radius: u * 0.004, fill: roleFill('bg'),
             tracks: sampled(0, durationMs, 100, (ms) => ({ x: ((baseX - (ms / cycleMs) * span) % (holes * u * 0.05) + holes * u * 0.05) % (holes * u * 0.05) - u * 0.05, y: stage.cy + edge * stripH * 0.42 }), u * 0.5),
           }));
         }
       }
+      // The strip and its holes, one part (D-159). It runs the width of the picture behind the photos, so it is
+      // recoloured or deleted from Style rather than picked, and a click beside a photo still reaches the background.
+      layers.push(part(ctx, 'film', shapeSlot('filmStrip', 'Film strip', { tint: 'surface', pick: false }), { x: stage.cx, y: stage.cy }, film));
     }
 
     // The lanes that carry the focus: the middle one, or the middle two
@@ -134,7 +137,8 @@ export function create(variant: SceneVariant): SceneTemplate {
     // Rows that run edge to edge pass under the headline: a band of the
     // background behind it keeps the words legible.
     const bandBottom = stage.cy - stage.h / 2;
-    layers.push(rect(ctx, 'headBand', { w: design.w, h: bandBottom, x: 0, y: 0, anchorX: 0, anchorY: 0, fill: roleFill('bg', 0.82) }));
+    // Light for legibility rather than a shape anyone picks; it goes where the headline goes (D-159).
+    layers.push(rect(ctx, 'headBand', { w: design.w, h: bandBottom, x: 0, y: 0, anchorX: 0, anchorY: 0, fill: roleFill('bg', 0.82), follows: `text:${headline.id}` }));
     layers.push(head);
     return layers;
   };

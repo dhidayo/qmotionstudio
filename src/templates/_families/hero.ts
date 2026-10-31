@@ -5,7 +5,7 @@ import { num, pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
 import { fillSlots, photoProps } from '../_shared/photo';
-import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOut, easeOutBack, FOCUS, glow, headlineAndStage, headlineSlot, isTall, lerp, measureSlot, placeText, rect, sampled, type Pose } from './kit';
+import { cardCount, cardProps, clamp01, defineScene, depthGroup, easeInOut, easeOut, easeOutBack, FOCUS, glow, headlineAndStage, headlineSlot, isTall, lerp, measureSlot, placeText, rect, sampled, type Pose, shapeSlot } from './kit';
 import { focusIn, type Box } from './emphasis';
 
 /**
@@ -56,7 +56,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       const size = u * 0.075;
       const measured = measureSlot(ctx, headline, inputs, size, safe.w * 0.9);
       const top = contentFloor(design, safe) - measured.height;
-      layers.push(rect(ctx, 'rule', { w: u * 0.1, h: Math.max(3, u * 0.007), x: safe.x, y: top - u * 0.035, anchorX: 0, fill: roleFill('accent'), tracks: { scaleX: [{ t: 300, v: 0, ease: 'linear' }, { t: 900, v: 1, ease: 'outExpo' }] } }));
+      layers.push(rect(ctx, 'rule', { w: u * 0.1, h: Math.max(3, u * 0.007), x: safe.x, y: top - u * 0.035, anchorX: 0, fill: roleFill('accent'), tracks: { scaleX: [{ t: 300, v: 0, ease: 'linear' }, { t: 900, v: 1, ease: 'outExpo' }] }, slot: shapeSlot('rule', 'Line above the headline'), follows: `text:${headline.id}` }));
       layers.push(placeText(ctx, headline, inputs, { sizePx: size, maxWidthPx: safe.w * 0.9, x: safe.x, y: top, anchorX: 0, reveal: { kind: 'kinetic', unit: 'word', motion: 'rise', startMs: 400, durationMs: 650, staggerMs: 80 } }).layer);
       return layers;
     }

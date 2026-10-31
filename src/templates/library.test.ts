@@ -9,6 +9,7 @@ import { createBuildContext } from './buildContext';
 import { loadAllTemplates } from './registry';
 import { TEMPLATE_MANIFEST } from './manifest';
 import { isSceneTemplate, type SceneTemplate } from './schema';
+import { unpicked } from './_test/partChecks';
 
 /**
  * Invariants every template in the library has to hold.
@@ -163,6 +164,37 @@ describe.each(scenes.map((t) => [t.id, t] as const))('%s', (_id, template) => {
       for (const offence of doubleTags(buildAt(template, aspect))) {
         expect.soft(offence, `${template.id} at ${aspect}`).toBe('');
       }
+    }
+  });
+
+  /*
+   * D-159: every decoration in every design is the person's to change — a
+   * part, a piece inside one, or something that moves with one. Only light
+   * (glows, scrims) and what fills much of the frame stays unpicked, and no
+   * part that can be picked is so big that it takes the clicks meant for the
+   * background (D-120).
+   */
+  it('leaves no decoration fixed, and no pickable part bigger than half the frame (D-159)', () => {
+    for (const aspect of aspects) {
+      const design = projectDesign(aspect);
+      const [, ...rest] = buildAt(template, aspect);
+      const fixed: string[] = [];
+      const huge: string[] = [];
+      const walk = (layers: readonly Layer[]): void => {
+        for (const layer of layers) {
+          const slot = slotOf(layer);
+          if (slot?.kind === 'shape' && slot.pick !== false) {
+            const box = layer.type === 'group' ? layer.props.box : 'w' in layer.props ? { w: layer.props.w, h: layer.props.h } : undefined;
+            if (box && box.w * box.h > design.w * design.h * 0.5) huge.push(layer.id);
+          }
+          if (slot === null && layer.follows === undefined && !unpicked(layer, design) && (layer.type === 'shape' || layer.type === 'gradient')) fixed.push(layer.id);
+          // Pieces of a tagged element (a photo's sparkles, a part's pieces) move with it.
+          if (slot === null && (layer.type === 'group' || layer.type === 'mask')) walk(layer.children);
+        }
+      };
+      walk(rest);
+      expect.soft(fixed, `${template.id} at ${aspect}: fixed decorations`).toEqual([]);
+      expect.soft(huge, `${template.id} at ${aspect}: parts that take the background's clicks`).toEqual([]);
     }
   });
 

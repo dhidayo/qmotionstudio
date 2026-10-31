@@ -152,6 +152,14 @@ describe('part styles', () => {
     expect(out[0]).toBe(words);
   });
 
+  it('keeps words that follow a deleted card, and reads them on the ground', () => {
+    const card = shape('c', { kind: 'shape', key: 'card', label: 'Card' });
+    const words = text('w', 'name', { follows: 'shape:card' });
+    const out = applyShapeStyles([card, words], inputs({ shapeOverrides: { 'shape:card': { hidden: true } } }));
+    expect(out.map((l) => l.id)).toEqual(['w']);
+    expect(out[0]?.type === 'text' && out[0].props.fill).toEqual(roleFill('ink'));
+  });
+
   it('keeps a see-through piece see-through', () => {
     const sheen = shape('s', pill, {}, roleFill('accent', 0.3));
     const out = applyShapeStyles([sheen], inputs({ shapeOverrides: { 'shape:pill': { color: { role: 'ink' } } } }));

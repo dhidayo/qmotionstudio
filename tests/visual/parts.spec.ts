@@ -150,6 +150,45 @@ test('the pricing badge is picked, recoloured and typed into', async ({ page }) 
   await expect(page.getByLabel('Featured badge', { exact: true })).toHaveValue('BEST VALUE');
 });
 
+test('a call-to-action button is recoloured, deleted and put back, its words staying', async ({ page }) => {
+  await open(page, 'el-cta-button');
+  const before = await frame(page);
+  await pick(page, 'shape:button', { x0: 0.3, y0: 0.55, x1: 0.7, y1: 0.85 });
+  await page.getByRole('button', { name: 'Colour: Text' }).click();
+  await page.waitForTimeout(300);
+  expect(await frame(page)).not.toBe(before);
+  await page.locator(SELECTION).focus();
+  await page.keyboard.press('Delete');
+  await page.getByRole('tab', { name: 'Style' }).click();
+  const list = page.locator('[data-design-shapes]');
+  if (!(await list.isVisible())) await page.getByRole('button', { name: /Shapes in this design/ }).click();
+  await page.locator('[data-part-row="shape:button"]').getByRole('button', { name: 'Put back' }).click();
+  await pick(page, 'shape:button', { x0: 0.3, y0: 0.55, x1: 0.7, y1: 0.85 });
+  await expect(page.locator('[data-part-settings="shape:button"]')).toBeVisible();
+});
+
+test('a lower third’s panel moves with its words', async ({ page }) => {
+  await open(page, 'type-lower-third');
+  const panelAt = await pick(page, 'shape:bar', { x0: 0, y0: 0.5, x1: 0.6, y1: 0.95 });
+  const panel = await page.locator(SELECTION).boundingBox();
+  if (!panel) throw new Error('no panel');
+  await page.keyboard.press('Escape');
+  await pick(page, 'text:headline', { x0: 0, y0: 0.5, x1: 0.6, y1: 0.95 });
+  const words = await page.locator(SELECTION).boundingBox();
+  if (!words) throw new Error('no words');
+  const from = { x: words.x + words.width / 2, y: words.y + words.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.keyboard.down('Shift');
+  await page.mouse.move(from.x + 40, from.y - 60, { steps: 4 });
+  await page.keyboard.up('Shift');
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+  await page.mouse.click(panelAt.x + 40, panelAt.y - 60);
+  const moved = await page.locator('[data-selection-box="shape:bar"]').boundingBox();
+  expect(Math.abs((moved?.x ?? 0) - panel.x - 40)).toBeLessThan(3);
+});
+
 test('the NEW badge on a product is picked, recoloured and typed into', async ({ page }) => {
   await open(page, 'pd-new-arrival');
   const before = await frame(page);

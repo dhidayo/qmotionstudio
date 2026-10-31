@@ -8,6 +8,8 @@ import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
 import type { TextSlotDef } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
+import { keyOf, tagParts } from '../_shared/parts';
+import { shapeSlot } from '../_families/kit';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -222,7 +224,14 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     },
   });
 
-  return layers;
+  // The design's decorations as parts (D-159), tagged by name so the drawing above is untouched.
+  return tagParts(layers, {
+    mark: ({ index, next }) => {
+      const follows = keyOf(next);
+      return { slot: shapeSlot(`mark${index + 1}`, `Bullet ${index + 1}`), ...(follows === undefined ? {} : { follows }) };
+    },
+    underline: { slot: shapeSlot('underline', 'Line under the title'), follows: 'text:title' },
+  });
 }
 
 const template: SceneTemplate = {

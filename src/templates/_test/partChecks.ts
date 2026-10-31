@@ -43,16 +43,33 @@ export function buildVariant(template: SceneTemplate, variant: SceneVariant, asp
   return template.build(sampleInputs(template, texts), ctx);
 }
 
+/**
+ * What stays unpicked on purpose (D-159): light — glows, scrims, pools, all
+ * gradients — and shapes that fill much of the frame, such as the doors a
+ * split reveal opens or a flash between cuts. A part that size would take
+ * every click meant for the background (D-120).
+ */
+export function unpicked(layer: Layer, design: { readonly w: number; readonly h: number }): boolean {
+  if (layer.type === 'gradient') return true;
+  return layer.type === 'shape' && layer.props.w * layer.props.h >= design.w * design.h * 0.4;
+}
+
 /** The three part checks, for each of a family's designs. */
 export function describePartChecks(variants: readonly SceneVariant[], create: (variant: SceneVariant) => SceneTemplate): void {
-  describe.each(variants.map((v) => [v.id, v] as const))('%s, part by part', (_id, variant) => {
-    const template = create(variant);
+  describeTemplateChecks(variants.map((variant) => ({ template: create(variant), variant })));
+}
+
+/** The same, for templates already made — the designs built a layer at a time, or the whole library. */
+export function describeTemplateChecks(list: readonly { readonly template: SceneTemplate; readonly variant?: SceneVariant }[]): void {
+  const entries = list.map(({ template, variant }) => [template.id, template, variant ?? ({ id: template.id, durationMs: template.defaultDurationMs } as SceneVariant)] as const);
+  describe.each(entries)('%s, part by part', (_id, template, variant) => {
 
     it('leaves no decoration fixed', () => {
       for (const aspect of ASPECTS) {
+        const design = projectDesign(aspect);
         const fixed = (layers: readonly Layer[]): string[] => layers.flatMap((layer) => {
-          if (slotOf(layer) !== null || layer.follows !== undefined) return [];
-          if (layer.type === 'shape' || layer.type === 'gradient') return layer.id.startsWith('glow-') ? [] : [layer.id];
+          if (slotOf(layer) !== null || layer.follows !== undefined || unpicked(layer, design)) return [];
+          if (layer.type === 'shape' || layer.type === 'gradient') return [layer.id];
           return layer.type === 'mask' || layer.type === 'group' ? fixed(layer.children) : [];
         });
         const [, ...rest] = buildVariant(template, variant, aspect);
@@ -79,7 +96,9 @@ export function describePartChecks(variants: readonly SceneVariant[], create: (v
     });
 
     it('keeps every text the person can type into tagged', () => {
-      const untagged = [...flatten(buildVariant(template, variant))].filter((l) => l.type === 'text' && slotOf(l) === null && !l.props.styleOf);
+      // Words inside a part (a badge's, a quotation mark) are the part's: it is what is picked.
+      const loose = (layers: readonly Layer[]): Layer[] => layers.flatMap((l) => (slotOf(l)?.kind === 'shape' ? [] : l.type === 'group' || l.type === 'mask' ? loose(l.children) : [l]));
+      const untagged = loose(buildVariant(template, variant)).filter((l) => l.type === 'text' && slotOf(l) === null && !l.props.styleOf);
       expect(untagged.map((l) => l.id)).toEqual([]);
     });
   });

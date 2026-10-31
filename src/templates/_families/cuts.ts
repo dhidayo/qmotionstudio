@@ -5,7 +5,7 @@ import { num, pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
 import { fillSlots, photoProps, untagged } from '../_shared/photo';
-import { cardCount, defineScene, headlineSlot, kf, measureSlot, placeText, rect, sampled } from './kit';
+import { cardCount, defineScene, headlineSlot, kf, measureSlot, placeText, rect, sampled, shapeSlot } from './kit';
 import { hash } from '@/core/render/layers/kinetic';
 
 /**
@@ -182,7 +182,8 @@ function arrival(
         });
       }
       for (let k = 0; k < 4; k++) {
-        pieces.push(rect(ctx, 'scan', { w: design.w, h: u * 0.01 * (1 + (k % 2)), x: 0, y: hash(k, i + 3) * design.h, anchorX: 0, fill: k % 2 === 0 ? roleFill('accent', 0.8) : colorFill('rgba(255,255,255,0.6)'), ...span, tracks: { opacity: sampled(0, T, 45, (ms) => ({ x: 0, y: 0, opacity: hash(k * 5 + Math.floor(ms / 45), 4) > 0.5 ? 1 : 0 })).opacity ?? [kf(0, 0)] } }));
+        // Scan lines flicker across the cut: listed in Style, never picked (D-159).
+        pieces.push(rect(ctx, 'scan', { slot: shapeSlot('scanLines', 'Glitch lines', { pick: false }), w: design.w, h: u * 0.01 * (1 + (k % 2)), x: 0, y: hash(k, i + 3) * design.h, anchorX: 0, fill: k % 2 === 0 ? roleFill('accent', 0.8) : colorFill('rgba(255,255,255,0.6)'), ...span, tracks: { opacity: sampled(0, T, 45, (ms) => ({ x: 0, y: 0, opacity: hash(k * 5 + Math.floor(ms / 45), 4) > 0.5 ? 1 : 0 })).opacity ?? [kf(0, 0)] } }));
       }
       return pieces;
     }

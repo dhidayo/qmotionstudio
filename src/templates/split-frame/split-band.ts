@@ -7,6 +7,8 @@ import { FULL_LOOK, BODY_STYLE, HEADLINE_STYLE } from '../_shared/look';
 import { fillSlots, photoProps } from '../_shared/photo';
 import { specFor, textFor } from '../_shared/text';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
+import { tagParts } from '../_shared/parts';
+import { shapeSlot } from '../_families/kit';
 
 const kf = (t: number, v: number, ease: Keyframe['ease'] = 'outCubic'): Keyframe => ({ t, v, ease });
 
@@ -219,7 +221,8 @@ function build(inputs: SceneInputs, ctx: BuildContext): Layer[] {
     props: cta,
   });
 
-  return layers;
+  // The design's decorations as parts (D-159), tagged by name so the drawing above is untouched.
+  return tagParts(layers, { band: { slot: shapeSlot('band', 'Panel behind the words', { tint: 'surface' }) } });
 }
 
 const template: SceneTemplate = {
