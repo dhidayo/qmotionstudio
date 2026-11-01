@@ -246,13 +246,13 @@ test.describe('a video still loops', () => {
 });
 
 test.describe('the row of actions says what each mode makes (D-162)', () => {
-  test('an image: Choose a design · + Photos … Make a video', async ({ page }) => {
+  test('an image: Choose a design · + Photos … + Video mode', async ({ page }) => {
     await open(page, IMAGE);
     const bar = page.locator('[data-add-bar]');
     await expect(bar.locator('[data-choose-design]')).toHaveAttribute('data-choose-design', 'showcase');
     const labels = await bar.getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
     expect(labels.slice(0, 2)).toEqual(['Choose a design', '+ Photos']);
-    expect(labels[labels.length - 1]).toBe('Make a video');
+    expect(labels[labels.length - 1]).toBe('+ Video mode');
     // An image is one scene: no + Scene.
     await expect(bar.locator('[data-add="scene"]')).toHaveCount(0);
   });
@@ -264,7 +264,7 @@ test.describe('the row of actions says what each mode makes (D-162)', () => {
     const labels = await bar.getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
     expect(labels.slice(0, 2)).toEqual(['Templates', '+ Photos']);
     expect(labels).toContain('+ Scene');
-    expect(labels).not.toContain('Make a video');
+    expect(labels).not.toContain('+ Video mode');
 
     // + Scene opens the scene picker, with a new scene or one of your images.
     await bar.locator('[data-add="scene"]').click();
@@ -328,10 +328,10 @@ test.describe('on a phone', () => {
     expect(ids).not.toContain('photos');
   });
 
-  test('an image offers + Video beside the transport, and Replay once it has played', async ({ page }) => {
+  test('an image offers + Video mode beside the transport, and Replay once it has played', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, IMAGE);
-    await expect(page.locator('[data-continue-video]')).toHaveText('+ Video');
+    await expect(page.locator('[data-continue-video]')).toHaveText('+ Video mode');
     await seek(page, 9_000);
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Replay', exact: true })).toBeVisible({ timeout: 10_000 });

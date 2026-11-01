@@ -27,7 +27,7 @@ export type AddItem = {
   readonly ready: boolean;
   /** The main thing anyone opens the editor to do: drawn in the accent colour (D-162). */
   readonly primary: boolean;
-  /** Opens the device's file chooser, whose input lives with the bar — so a sheet holding it stays open. */
+  /** Opens the device's file chooser — so a sheet holding it stays open, showing "Reading…", until the file lands. */
   readonly picksFile: boolean;
   readonly run: () => void;
 };
@@ -40,9 +40,9 @@ type ItemSpec = Omit<AddItem, 'id' | 'busy' | 'pro' | 'ready' | 'primary' | 'pic
  * The add bar's items for the project's mode, with what each one does — the
  * one list behind the bar on a computer and the sheet on a phone (D-153).
  *
- * `inputs` are the hidden file inputs for photos and video, to be
- * rendered once by whoever draws the items: two copies on one page would give
- * two controls of the same name. `note` is the Pro explanation or an upload
+ * `inputs` is the hidden file input for video, to be rendered once by
+ * whoever draws the items: two copies on one page would give two controls of
+ * the same name. Photos' inputs are mounted once by the editor (D-165). `note` is the Pro explanation or an upload
  * error, when there is one. `order` is the bar's, or the phone sheet's, which
  * puts + Photos and + Scene first (D-162). `onPhotosAdded` runs once photos
  * have landed — the phone's sheet closes then, so the picture can be seen.
@@ -62,7 +62,7 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
   const selected = useEditor((s) => s.selectedOverlay !== null || s.selectedSlot !== null);
   const clock = usePreviewClock();
   const layers = useAddLayers();
-  const photos = useAddYourPhotos('Add your photos', onPhotosAdded);
+  const photos = useAddYourPhotos(onPhotosAdded);
   const sceneNumber = useEditor((s) => s.selectedScene + 1);
   const { tier } = useEntitlements(mode);
   const [proNote, setProNote] = useState(false);
@@ -79,10 +79,10 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
       label: 'Photos',
       icon: 'photo',
       title: video
-        ? `Your photos replace the sample photos in scene ${sceneNumber}, one for one, and stay in Your photos. Nothing is uploaded.`
-        : 'Your photos replace the sample photos, one for one, and stay in Your photos. Nothing is uploaded.',
+        ? `Your photos replace the sample photos in scene ${sceneNumber}, one for one, and stay in this project. Nothing is uploaded.`
+        : 'Your photos replace the sample photos, one for one, and stay in this project. Nothing is uploaded.',
       hint: 'Yours in place of the samples',
-      busy: photos.busy ? 'Reading…' : null,
+      busy: photos.busy ? photos.reading : null,
       primary: true,
       picksFile: true,
       run: photos.pick,
@@ -94,8 +94,13 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
       hint: video ? 'A caption at the playhead' : 'A caption on the design',
       run: layers.addText,
     },
+    /*
+     * "Video clip", not "Video" (D-165): in Video mode a + Video beside the
+     * scenes read as the mode, and in Image + Video mode is the switch; two
+     * different buttons never both say Video.
+     */
     video: {
-      label: 'Video',
+      label: 'Video clip',
       icon: 'video',
       /*
        * §12 keeps custom media behind Pro, and it stays behind Pro — but a
@@ -104,9 +109,9 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
        * already specifies. The real upsell is M7's.
        */
       title: layers.canVideo
-        ? 'Add a video overlay'
-        : 'Custom media is a Pro feature — click to find out how to enable it',
-      hint: 'A clip from your device',
+        ? 'Add a video clip from your device, as a layer over the scene'
+        : 'Video clips are a Pro feature — click to find out how to enable it',
+      hint: 'A clip from your device, as a layer',
       busy: layers.videoBusy ? 'Reading…' : null,
       pro: !layers.canVideo,
       picksFile: true,
@@ -171,7 +176,7 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
 
   const pro = proNote && !layers.canVideo ? (
     <span className="flex shrink-0 items-center gap-1.5 text-[10px] text-ink-muted" data-add-note>
-      Video overlays are Pro.
+      Video clips are Pro.
       {TIER_SWITCHABLE ? (
         <button
           type="button"
@@ -186,7 +191,8 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
       )}
     </span>
   ) : null;
-  const problem = photos.error ?? layers.error;
+  // + Photos' own failures are said in a toast and in the Photos panel (D-165); a video's here.
+  const problem = layers.error;
   const error = problem === null ? null : (
     <span className="max-w-64 shrink-0 truncate text-[10px]" style={{ color: 'var(--c-danger)' }} data-add-note role="alert">
       {problem}
@@ -195,7 +201,7 @@ export function useAddItems({ order = 'bar', onPhotosAdded }: {
 
   return {
     items,
-    inputs: <>{photos.input}{layers.inputs}</>,
+    inputs: layers.inputs,
     note: pro === null && error === null ? null : <>{pro}{error}</>,
   };
 }

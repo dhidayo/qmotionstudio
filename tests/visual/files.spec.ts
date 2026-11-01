@@ -32,7 +32,7 @@ async function uploadOwnPhoto(page: Page): Promise<void> {
     return canvas.toDataURL('image/png').split(',')[1] ?? '';
   });
   await page.getByRole('tab', { name: 'Photos' }).click();
-  await page.getByLabel('Add photos to this scene').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: Buffer.from(base64, 'base64') });
+  await page.getByLabel('Add your photos').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: Buffer.from(base64, 'base64') });
   await expect(page.locator('[data-media-id]:not([data-media-id^="sample:"])').first()).toBeVisible({ timeout: 10_000 });
 }
 

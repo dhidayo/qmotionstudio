@@ -7,7 +7,7 @@ import type { PhotoPlacement } from '@/document/actions';
  * to understand", and the rule they describe is one-for-one — "remove a
  * sample photo for each uploaded photos" — so the message counts exactly that:
  * how many samples gave way, how many new spots were made, and how many photos
- * are waiting in Your photos because the design is full.
+ * are waiting under Photo spots because the design is full.
  *
  * `scene` is the scene's number in a video, or null for a single design.
  */
@@ -22,7 +22,7 @@ export function addedPhotosMessage(plan: Pick<PhotoPlacement, 'replaced' | 'adde
   if (placed === 0) {
     if (waiting === 0) return scene === null ? 'That photo is already in this design.' : `That photo is already in scene ${scene}.`;
     const yours = waiting === 1 ? 'your photo is' : `your ${waiting} photos are`;
-    return `${design} is full — ${yours} waiting in Your photos. To use ${waiting === 1 ? 'it' : 'them'}, take one of yours out with × in Photos.`;
+    return `${design} is full — ${yours} waiting under Photo spots. To use ${waiting === 1 ? 'it' : 'them'}, take one of yours out with × in Photos.`;
   }
 
   const yours = placed === 1 ? 'Your photo' : `Your ${placed} photos`;
@@ -34,7 +34,7 @@ export function addedPhotosMessage(plan: Pick<PhotoPlacement, 'replaced' | 'adde
   const said = scene === null ? `${yours} ${what}.` : `Scene ${scene}: ${yours.charAt(0).toLowerCase()}${yours.slice(1)} ${what}.`;
   if (waiting === 0) return said;
   const rest = waiting === 1 ? '1 more is' : `${waiting} more are`;
-  return `${said} ${design} is now full, so ${rest} waiting in Your photos.`;
+  return `${said} ${design} is now full, so ${rest} waiting under Photo spots.`;
 }
 
 /** Photos added to a design with no photo spots go on top of it, as extra photos. */

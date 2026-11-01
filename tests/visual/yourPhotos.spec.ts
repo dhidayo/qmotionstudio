@@ -50,16 +50,19 @@ const distinctOwn = async (page: Page): Promise<number> => new Set((await shown(
 /** The design's own spots in Photos (D-150): `upload:` for yours, `sample:` for the samples. */
 const spots = (page: Page, kind: 'upload' | 'sample') => page.locator(`[data-design-photos] [data-media-id^="${kind}:"]`);
 
-/** The phone's Photos tool: where photos are added, spots set and Your photos kept (D-162). */
+/** The phone's Photos tool: where photos are added, spots set and the project's photos kept (D-162, D-165). */
 async function openPhotos(page: Page): Promise<void> {
   await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Photos', exact: true }).click();
   await expect(page.locator('[data-design-photos]')).toBeVisible();
 }
 
-/** "Your photos" folds like every section in a phone's sheet, which opens one at a time. */
-async function openYourPhotos(page: Page): Promise<void> {
-  await page.locator('[data-section="Your photos"] h3 button').click();
-  await expect(page.locator('[data-your-photos]')).toBeVisible();
+/**
+ * Photos not in the design wait under Photo spots, always in view, with no
+ * section of their own to open (D-165).
+ */
+async function seeWaitingPhotos(page: Page): Promise<void> {
+  await expect(page.locator('[data-design-photos] [data-your-photos]')).toBeVisible();
+  await expect(page.locator('[data-section="Your photos"]')).toHaveCount(0);
 }
 
 test('photos taken one at a time build up instead of replacing each other', async ({ page }) => {
@@ -78,15 +81,15 @@ test('photos taken one at a time build up instead of replacing each other', asyn
 
   await expect(spots(page, 'upload')).toHaveCount(2);
   await expect(spots(page, 'sample')).toHaveCount(2);
-  // Both are in the design, so Your photos has nothing to offer and stays out of the way.
-  await expect(page.locator('[data-section="Your photos"]')).toHaveCount(0);
+  // Both are in the design, so nothing is waiting and nothing is shown for it.
+  await expect(page.locator('[data-your-photos]')).toHaveCount(0);
 });
 
 test('four spots and three photos: three of yours and one sample; + adds a sample spot (D-150)', async ({ page }) => {
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
   await open(page, LIFESTYLE);
   await openPhotos(page);
-  await page.getByLabel('Add photos to this scene').setInputFiles([
+  await page.getByLabel('Add your photos').setInputFiles([
     await picture(page, '#ff2d55'), await picture(page, '#2dd4ff'), await picture(page, '#22c55e'),
   ]);
   await expect.poll(() => distinctOwn(page)).toBe(3);
@@ -103,14 +106,14 @@ test('a photo can be taken out of the design, put back, and deleted from the pro
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
   await open(page, LIFESTYLE);
   await openPhotos(page);
-  await page.getByLabel('Add photos to this scene').setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
+  await page.getByLabel('Add your photos').setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
   await expect.poll(() => distinctOwn(page)).toBe(2);
 
-  // Out of the design: a sample goes back in its spot, and the photo waits in Your photos.
+  // Out of the design: a sample goes back in its spot, and the photo waits under Photo spots.
   await page.getByRole('button', { name: 'Take your photo out of spot 1' }).click();
   await expect.poll(() => distinctOwn(page)).toBe(1);
   expect((await shown(page))[0]).toMatch(/^sample:/);
-  await openYourPhotos(page);
+  await seeWaitingPhotos(page);
   const tiles = page.locator('[data-library-photo]');
   await expect(tiles).toHaveCount(1);
 
@@ -118,13 +121,13 @@ test('a photo can be taken out of the design, put back, and deleted from the pro
   await tiles.first().getByRole('button', { name: 'Use this photo in the design' }).click();
   await expect.poll(() => distinctOwn(page)).toBe(2);
   expect((await shown(page))[0]).toMatch(/^upload:/);
-  await expect(page.locator('[data-section="Your photos"]')).toHaveCount(0);
+  await expect(page.locator('[data-your-photos]')).toHaveCount(0);
 
   // Deleted: out of the design first, then from the project, where undo could bring it back.
   await page.getByRole('button', { name: 'Take your photo out of spot 2' }).click();
-  await openYourPhotos(page);
+  await seeWaitingPhotos(page);
   await tiles.first().getByRole('button', { name: 'Delete this photo from the project' }).click();
-  await expect(page.locator('[data-section="Your photos"]')).toHaveCount(0);
+  await expect(page.locator('[data-your-photos]')).toHaveCount(0);
   await expect.poll(() => library(page)).toBe(1);
   await expect.poll(() => distinctOwn(page)).toBe(1);
 });
@@ -133,7 +136,7 @@ test('photos kept only in Your photos are still there after a reload', async ({ 
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
   await open(page, LIFESTYLE);
   await openPhotos(page);
-  await page.getByLabel('Add photos to this scene').setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
+  await page.getByLabel('Add your photos').setInputFiles([await picture(page, '#ff2d55'), await picture(page, '#2dd4ff')]);
   await expect.poll(() => distinctOwn(page)).toBe(2);
   await page.getByRole('button', { name: 'Take your photo out of spot 2' }).click();
   await expect.poll(() => distinctOwn(page)).toBe(1);
@@ -144,7 +147,7 @@ test('photos kept only in Your photos are still there after a reload', async ({ 
   await page.waitForTimeout(1_500);
   await openPhotos(page);
   await expect(spots(page, 'upload')).toHaveCount(1);
-  await openYourPhotos(page);
+  await seeWaitingPhotos(page);
   await expect(page.locator('[data-library-photo]')).toHaveCount(1);
   await expect(page.locator('[data-library-photo] img')).toHaveCount(1);
 });

@@ -429,7 +429,7 @@ test.describe('second round (D-111 to D-115)', () => {
     await page.waitForTimeout(1_500);
     // From Photos, where a phone adds them (D-162).
     await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Photos', exact: true }).tap();
-    await page.getByLabel('Add photos to this scene').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: await stripes(page) });
+    await page.getByLabel('Add your photos').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: await stripes(page) });
     await expect.poll(() => photoIds(page)).toMatch(/^upload:/);
     // Well inside the autosave debounce: the photo is saved as it arrives.
     await page.waitForTimeout(400);

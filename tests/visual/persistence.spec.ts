@@ -104,7 +104,7 @@ test.describe('autosave', () => {
       cx.fillRect(0, 0, 200, 200);
       return canvas.toDataURL('image/png').split(',')[1] ?? '';
     });
-    await page.getByLabel('Add photos to this scene').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    await page.getByLabel('Add your photos').setInputFiles({ name: 'mine.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
     const mine = page.locator('[data-design-photos] [data-media-id]:not([data-media-id^="sample:"])');
     await expect(mine).toHaveCount(1, { timeout: 10_000 });
     await settled(page);

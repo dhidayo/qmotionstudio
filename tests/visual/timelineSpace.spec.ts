@@ -247,10 +247,10 @@ test.describe('in a design', () => {
     await expect(timeline(page)).toHaveCount(0);
     const ids = await bar(page).locator('[data-add]').evaluateAll((all) => all.map((chip) => chip.getAttribute('data-add')));
     expect(ids).toEqual(DESIGN_ORDER);
-    // Choose a design first and Make a video last, in the same row as Play (D-162).
+    // Choose a design first and + Video mode last, in the same row as Play (D-162, D-165).
     const labels = await bar(page).getByRole('button').evaluateAll((all) => all.map((b) => b.textContent.trim()));
     expect(labels[0]).toBe('Choose a design');
-    expect(labels[labels.length - 1]).toBe('Make a video');
+    expect(labels[labels.length - 1]).toBe('+ Video mode');
     const play = await page.locator('[data-control-row]').getByRole('button', { name: 'Play' }).boundingBox();
     const chips = await bar(page).boundingBox();
     expect(Math.abs((play?.y ?? 0) + (play?.height ?? 0) / 2 - ((chips?.y ?? 99) + (chips?.height ?? 0) / 2))).toBeLessThan(4);

@@ -33,17 +33,17 @@ test.describe('custom media (§9)', () => {
      * nothing when clicked gives the user no way to find out why, which is how
      * this shipped looking broken.
      */
-    // "+ Video" in the add bar (D-153), once "+ Media".
-    const add = page.getByRole('button', { name: /\+ Video/ });
+    // "+ Video clip" in the add bar (D-153, D-165), once "+ Media", then "+ Video".
+    const add = page.getByRole('button', { name: /\+ Video clip/ });
     await expect(add).toBeEnabled();
     await expect(add.getByText('Pro')).toBeVisible();
 
     await add.click();
-    await expect(page.getByText('Video overlays are Pro.')).toBeVisible();
+    await expect(page.getByText('Video clips are Pro.')).toBeVisible();
 
     // And the way through is the dev switch §12 already specifies.
     await page.getByRole('button', { name: /^Switch to Pro/ }).click();
-    await expect(page.getByText('Video overlays are Pro.')).toBeHidden();
+    await expect(page.getByText('Video clips are Pro.')).toBeHidden();
     await expect(add.getByText('Pro')).toBeHidden();
 
     // It now opens the picker rather than the note.
@@ -94,7 +94,9 @@ test.describe('custom media (§9)', () => {
     });
 
     // §16: it says so rather than leaving an overlay that never appears.
-    await expect(page.getByText(/Could not read "broken\.webm"/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('[data-add-note]').getByText(/Could not read "broken\.webm"/)).toBeVisible({ timeout: 15_000 });
+    // And in a toast, which is seen wherever the person is (D-165).
+    await expect(page.locator('[data-toast]')).toContainText('Could not read "broken.webm"');
     await expect(page.getByLabel('Overlay inspector')).toBeHidden();
   });
 

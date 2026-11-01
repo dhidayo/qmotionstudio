@@ -101,7 +101,7 @@ export function ScrubBar({
       {/*
         * The one row of actions under the picture (D-162): play, the time,
         * then everything that can be done to the design — Choose a design,
-        * + Photos, the rest of the add bar, Make a video — scrolled sideways
+        * + Photos, the rest of the add bar, + Video mode — scrolled sideways
         * when it does not fit. A phone has its own transport and toolbar.
         */}
       {!phone && (

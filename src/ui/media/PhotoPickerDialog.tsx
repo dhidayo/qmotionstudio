@@ -5,7 +5,8 @@ import { projectPhotos } from '@/document/select/media';
 import { useEditor } from '@/state/store';
 import { useOverlays, type PhotoTarget } from '@/ui/shell/overlays';
 import { useMediaRevision, useMediaStore } from './MediaProvider';
-import { ACCEPT_ATTRIBUTE, useUpload } from './useUpload';
+import { readingLabel } from './uploadMessages';
+import { PHOTO_ACCEPT_ATTRIBUTE, useUpload } from './useUpload';
 import { useLayout } from '@/ui/shell/useLayout';
 import { BottomSheet } from '@/ui/mobile/BottomSheet';
 
@@ -80,12 +81,12 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
         style={{ borderColor: 'var(--c-accent)', color: 'var(--c-accent)', background: 'var(--c-accent-soft)' }}
       >
         <span aria-hidden className="text-[20px] leading-none">＋</span>
-        {uploadState.busy ? 'Reading…' : phone ? 'Choose from your phone' : 'Upload a photo'}
+        {uploadState.busy ? readingLabel(uploadState.progress) : phone ? 'Choose from your phone' : 'Upload a photo'}
       </button>
       <input
         ref={fileInput}
         type="file"
-        accept={ACCEPT_ATTRIBUTE}
+        accept={PHOTO_ACCEPT_ATTRIBUTE}
         hidden
         aria-label="Upload a photo"
         onChange={(e) => {
@@ -102,7 +103,7 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
 
   const yours = ids.length > 0 && (
     <>
-      <h3 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Or use one of Your photos</h3>
+      <h3 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Or use one of your photos</h3>
       <div className={`grid gap-2 ${phone ? 'grid-cols-3' : 'grid-cols-4'}`}>
         {ids.map((id) => {
           const url = store.previewUrl(id);

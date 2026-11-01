@@ -17,6 +17,7 @@ import { PhonePanels } from './PhonePanels';
 import { PhoneToolbar } from './PhoneToolbar';
 import { PhoneTopBar } from './PhoneTopBar';
 import { continueAsVideo } from '@/ui/editing/commands';
+import { useSceneTipOpen } from '@/ui/onboarding/SceneTip';
 import { useSceneReorder } from '@/ui/timeline/useSceneReorder';
 import { anyMotion } from '@/ui/timeline/timelineRows';
 import * as actions from '@/document/actions';
@@ -154,10 +155,21 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
         <Icon name={playing ? 'pause' : ended ? 'replay' : 'play'} size={20} />
       </button>
       <span className="flex items-center justify-end gap-1">
-        {/* A video from this image (D-129, D-155), where the play controls are. */}
+        {/*
+          * A video from this image (D-129, D-155), where the play controls are.
+          * "+ Video mode", not "+ Video": it switches the mode, and "+ Video
+          * is not self-explanatory" (D-165).
+          */}
         {!corporate && (
-          <button type="button" data-continue-video onClick={continueAsVideo} title="Make a video: this image becomes scene 1" className="mr-1 whitespace-nowrap rounded-full bg-accent px-2.5 py-1.5 text-[12px] font-semibold text-accent-ink">
-            + Video
+          <button
+            type="button"
+            data-continue-video
+            onClick={continueAsVideo}
+            title="Switch to Video mode: this image becomes scene 1"
+            aria-label="Switch to Video mode: this image becomes scene 1"
+            className="mr-0.5 whitespace-nowrap rounded-full bg-accent px-2 py-1.5 text-[11px] font-semibold text-accent-ink"
+          >
+            + Video mode
           </button>
         )}
         <button type="button" onClick={undo} disabled={!canUndo()} aria-label="Undo" className="grid size-9 place-items-center rounded-full disabled:opacity-35">
@@ -199,14 +211,16 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
   const durationMs = Math.max(1, timelineSpanMs(project));
   const spans = useMemo(() => sceneSpans(project.scenes), [project.scenes]);
   const [tip, setTip] = useState(() => !readTipSeen());
+  // After the tip about adding scenes, not under it (D-165).
+  const sceneTip = useSceneTipOpen();
   const closeTip = useCallback(() => { setTip(false); rememberTipSeen(); }, []);
   // "Space management is important": the note gives the timeline its room
   // back after a few seconds, closed or not, and is not shown again (D-163).
   useEffect(() => {
-    if (!tip) return undefined;
+    if (!tip || sceneTip) return undefined;
     const id = setTimeout(closeTip, TIP_SHOWN_MS);
     return () => { clearTimeout(id); };
-  }, [tip, closeTip]);
+  }, [tip, sceneTip, closeTip]);
   const lane = useRef<HTMLDivElement>(null);
   const playhead = useRef<HTMLSpanElement>(null);
 
@@ -319,7 +333,7 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
           <Icon name="up" size={14} /> Timeline
         </button>
       </div>
-      {tip && (
+      {tip && !sceneTip && (
         <div className="mt-1.5 flex items-center gap-1 rounded-lg py-1 pl-2 pr-1 text-[11px]" style={{ background: 'var(--c-accent-soft)' }} role="note">
           <span className="min-w-0 flex-1">
             Detailed timing work is easier on a larger screen. Everything still works here — tap Timeline to open it.

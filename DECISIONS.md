@@ -3831,3 +3831,50 @@ the whole design: they still run to the end and then rest on the picture
 moment (D-155). Moving the playhead by hand during that first play lets it
 play on to the end. A design with no picture moment stops at the end, as
 before.
+
+## D-165 — photos on a phone: the library, moving photos, the waiting photos, and Video mode
+
+"On mobile, when I click on Photos to upload photos to replace the sample
+pictures, upload from library doesn't upload nor replace the sample photos … Take
+photos works." Every photo picker now asks for `image/*` instead of a list naming
+image/heic. With the list, an iPhone hands over the original HEIC, which then has
+to be decoded on the phone — slowly, or not at all, for several large photos. With
+`image/*` the phone converts each photo to JPEG as it hands it over, as it always
+did for the camera. A HEIC that still arrives — dropped, pasted, or from a
+computer — is decoded as before (D-011). + Photos, + Add photos, Take photo and +
+Add extra photos keep their file inputs in one place, mounted once by the editor,
+so a phone sheet that closes while the library is open can no longer take the
+input with it. Only that one upload takes pasted pictures, so a paste is added
+once. While several photos are read, the button counts them ("Reading 2 of 5…"). A
+photo that cannot be read is named, with the reason, in a toast as well as beside
+the button, saying what was added too ("3 photos added; 1 could not be read.
+IMG_123.HEIC: …").
+
+"The pictures cannot be moved around or rearranged." The spots used HTML drag and
+drop, which touch screens never fire. Now a finger rests on a photo for 350ms,
+then drags it; moving sooner is a scroll of the panel. A mouse drags after a few
+pixels. The photo lifts and follows the pointer, its own spot fades, and the spot
+it would go to is outlined. Releasing there moves it — one change, one undo step —
+and selects it. A tap still selects. Move earlier and Move later move the chosen
+photo one spot, as the dependable way for anyone and for the keyboard; both say
+"Photo moved to spot N."
+
+"I will rather like the pictures to be listed right under the Photo spots section
+where I have x of n … since those two actions speak to the same thing and
+section." The project's photos that are not in the design are now listed under the
+Photo spots stepper, always in view, headed "Not in this design — tap one to use
+it". There is no "Your photos" section to open any more. On a design with no photo
+spots they wait under + Add extra photos, which places them on top. Messages say a
+photo is "still in this project, under Photo spots".
+
+"The + Video is not self-explanatory … + Video Mode." The switch reads **+ Video
+mode** on a phone and a computer, and Video mode's clip item reads **+ Video
+clip**, so two different buttons never both say Video. "It would be good to see
+the video mode without that popup since the design will already be scene 1; then,
+you can have a quick tip on the + Add." Switching no longer opens Add a scene. A
+small tip points at where scenes are added: on a phone the toolbar's Add ("Your
+design is scene 1. Tap Add, then + Scene, to add more scenes."), elsewhere + Scene
+in the bar. It closes after ten seconds or when tapped, is shown once per device,
+and the phone's timing note (D-163) waits until it has gone.
+
+

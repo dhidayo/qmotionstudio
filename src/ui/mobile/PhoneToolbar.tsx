@@ -213,8 +213,8 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
    * tools, so it went, and its height went to the picture: the designs are
    * the first tool, + Scene heads the Add sheet, and photos are added from
    * Photos, whose panel starts with + Add photos and Take photo and holds the
-   * design's photo spots and Your photos — so the Add sheet has no + Photos
-   * of its own. Backdrop was Style opened at its Background section; Style
+   * design's photo spots and the photos waiting under them — so the Add
+   * sheet has no + Photos of its own. Backdrop was Style opened at its Background section; Style
    * is here, and so is a long press on the empty picture → Change background.
    */
   const designs: Tool = { label: MODE_COPY[project.mode].tool, icon: 'designs', tour: 'design', onSelect: () => { o.openPhonePanel('designs'); } };
@@ -244,6 +244,7 @@ export function PhoneToolbar(): React.JSX.Element {
             key={tool.label}
             type="button"
             data-tour={tool.tour}
+            data-phone-tool={tool.label.toLowerCase()}
             onClick={tool.onSelect}
             className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-1 py-1 text-[11px] active:bg-panel-alt"
             style={{ color: tool.danger === true ? 'var(--c-danger)' : 'var(--c-ink)' }}

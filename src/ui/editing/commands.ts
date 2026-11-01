@@ -15,6 +15,7 @@ import { currentLayout, type Layout } from '@/ui/shell/useLayout';
 import { parseSlotKey } from '@/core/render/slots';
 import { labelIn } from '@/core/render/parts';
 import { editPart, entryEditing, selectedSceneLayers } from './parts';
+import { offerSceneTip } from '@/ui/onboarding/SceneTip';
 
 /**
  * What can be done to a thing on the timeline or the canvas (D-104), in one
@@ -517,13 +518,18 @@ export function backgroundMenu(layout: Layout): readonly MenuItem[] {
  * A video from the image on screen (D-129, D-155): "add a button somewhere
  * to create multi-scene videos … continue with design as scene 1". Video
  * keeps the image as its first scene, animated as it plays in Image (setMode
- * always has), then the scene picker opens for the second. One undo goes back.
+ * always has). One undo goes back.
+ *
+ * It opens nothing more (D-165): "it would be good to see the video mode
+ * without that popup since the design will already be scene 1; then, you can
+ * have a quick tip on the + Add to tell user to click to add more scenes".
+ * The scene picker used to open for the second scene; now a tip points at
+ * where scenes are added, once per device.
  */
 export function continueAsVideo(): void {
   const s = useEditor.getState();
   if (s.project.mode !== 'motionAd') s.setMode('motionAd');
-  useOverlays.getState().openScenePicker('add');
-  s.showToast('Your image is scene 1 — it plays animated in the video. Pick what comes next.');
+  offerSceneTip();
 }
 
 /** Where a scene sits on the project clock, for "Move playhead here". */

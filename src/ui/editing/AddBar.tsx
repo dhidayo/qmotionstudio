@@ -18,8 +18,8 @@ import { useAddItems, type AddItem } from './useAddItems';
  * Now there is one row, each action in it once: **Choose a design** (Image) or
  * **Templates** (Video) first, then **+ Photos** — the one way to add photos —
  * then everything else that can be added, a video's **+ Scene** among them,
- * and an image's **Make a video** last. The inspector's tabs are the way to
- * Photos, Text, Effects and Style, so the row has no tools of its own; where
+ * and an image's **+ Video mode** last (D-165). The inspector's tabs are the
+ * way to Photos, Text, Effects and Style, so the row has no tools of its own; where
  * the inspector is a sheet rather than a column (a tablet) the row ends with
  * the button that opens it.
  *
@@ -44,7 +44,7 @@ export function AddBar({
   variant?: 'bar' | 'grid';
   /** Sizing within the row it sits in. */
   className?: string;
-  /** The bar's own first and last buttons — designs, Make a video — and a tablet's settings. */
+  /** The bar's own first and last buttons — designs, + Video mode — and a tablet's settings. */
   lead?: boolean;
   /** The sheet closing once something is added. */
   onDone?: (() => void) | undefined;
@@ -101,10 +101,12 @@ export function AddBar({
             type="button"
             data-continue-video
             onClick={continueAsVideo}
-            title="This image becomes scene 1 of a video, animated, and you pick what comes next"
+            title="Switch to Video mode: this image becomes scene 1, animated, and + Scene adds more"
+            aria-label="Switch to Video mode: this image becomes scene 1"
             className={`${CHIP} ${ACCENT}`}
           >
-            <Icon name="video" size={14} /> Make a video
+            {/* Named as on a phone, for what it does: it switches the mode (D-165). */}
+            <Icon name="video" size={14} /> + Video mode
           </button>
         )}
       </SideScroll>
@@ -120,7 +122,7 @@ export function AddBar({
  * needs to be very clear to the eyes; just like how you represented
  * Templates", and "fix the hover on Photo. Make the UI consistent with other
  * buttons there." So each — Templates or Choose a design, every add item,
- * Make a video — is the same height and shape: its icon, the words at a
+ * + Video mode — is the same height and shape: its icon, the words at a
  * medium weight, a border that can be seen, the panel behind. Only the
  * colour of the words and border differs, and they all hover alike, to the
  * accent's soft tint with an accent border. + Photos used to be a solid
@@ -129,7 +131,7 @@ export function AddBar({
 const CHIP = 'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border bg-panel px-2.5 text-[12px] font-medium transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-40';
 /** Templates, and every add item that is not lit: ink, with a clear border. */
 const PLAIN = 'border-edge-strong text-ink';
-/** + Photos, the main action, and Make a video: the accent's words and border, nothing filled. */
+/** + Photos, the main action, and + Video mode: the accent's words and border, nothing filled. */
 const ACCENT = 'border-accent font-semibold text-accent';
 /** + Motion with something selected: the accent, tinted, so it says it is ready. */
 const READY = 'border-accent bg-accent-soft text-accent';

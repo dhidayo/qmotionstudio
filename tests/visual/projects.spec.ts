@@ -36,7 +36,7 @@ async function uploadOwnPhoto(page: Page): Promise<void> {
     return canvas.toDataURL('image/png').split(',')[1] ?? '';
   });
   await page.getByRole('tab', { name: 'Photos' }).click().catch(() => undefined);
-  await page.getByLabel('Add photos to this scene').setInputFiles({
+  await page.getByLabel('Add your photos').setInputFiles({
     name: 'my-own-photo.png',
     mimeType: 'image/png',
     buffer: Buffer.from(base64, 'base64'),

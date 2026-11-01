@@ -15,12 +15,12 @@ describe('what adding photos says', () => {
   it('says when new spots were made, and what is left waiting', () => {
     expect(addedPhotosMessage({ replaced: 0, added: 1, waiting: [] }, null)).toBe('Your photo is in a new photo spot.');
     expect(addedPhotosMessage({ replaced: 2, added: 2, waiting: ['e'] }, null))
-      .toBe('Your 4 photos replaced 2 samples and filled 2 new photo spots. This design is now full, so 1 more is waiting in Your photos.');
+      .toBe('Your 4 photos replaced 2 samples and filled 2 new photo spots. This design is now full, so 1 more is waiting under Photo spots.');
   });
 
   it('says a full design is full, and how to make room', () => {
     expect(addedPhotosMessage({ replaced: 0, added: 0, waiting: ['a'] }, null))
-      .toBe('This design is full — your photo is waiting in Your photos. To use it, take one of yours out with × in Photos.');
+      .toBe('This design is full — your photo is waiting under Photo spots. To use it, take one of yours out with × in Photos.');
   });
 
   it('puts photos on top of a design with no spots', () => {

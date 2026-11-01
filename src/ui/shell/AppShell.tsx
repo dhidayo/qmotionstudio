@@ -37,6 +37,8 @@ import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { SoundPicker } from '@/ui/audio/SoundPicker';
 import { ElementPicker } from '@/ui/elements/ElementPicker';
 import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
+import { PhotoInputs } from '@/ui/editing/useAddYourPhotos';
+import { SceneTip } from '@/ui/onboarding/SceneTip';
 import { ShortcutsDialog } from './ShortcutsDialog';
 import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
 import { PhonePanels } from '@/ui/mobile/PhonePanels';
@@ -442,6 +444,10 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </Suspense>
       <QuickStart />
+      {/* + Photos' file inputs, once, where no closing sheet can take them away (D-165). */}
+      <PhotoInputs />
+      {/* Where to add scenes, once, after switching an image to Video (D-165). */}
+      <SceneTip />
       <Toast />
       <ContextMenu />
       <EffectPicker />

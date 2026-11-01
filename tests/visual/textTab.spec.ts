@@ -124,15 +124,17 @@ test.describe('photos on top of the design', () => {
 });
 
 test.describe('a longer video from one design (D-129)', () => {
-  test('Make a video keeps the image as scene 1 and asks for the next (D-155)', async ({ page }) => {
+  test('+ Video mode keeps the image as scene 1 and points at + Scene (D-155, D-165)', async ({ page }) => {
     await page.goto('/?template=type-typewriter&aspect=9:16');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_200);
-    await expect(page.locator('[data-continue-video]').first()).toHaveText('Make a video');
+    await expect(page.locator('[data-continue-video]').first()).toHaveText('+ Video mode');
     await page.locator('[data-continue-video]').first().click();
     await expect(page.getByRole('button', { name: 'Video', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('dialog', { name: 'Add a scene' })).toBeVisible();
-    // One scene so far — the design — on the timeline behind the picker.
+    // No scene picker any more: a tip says where scenes are added (D-165).
+    await expect(page.getByRole('dialog', { name: 'Add a scene' })).toHaveCount(0);
+    await expect(page.locator('[data-scene-tip]')).toContainText('Use + Scene to add more scenes.');
+    // One scene so far — the design — on the timeline.
     await expect(page.getByRole('button', { name: /^1\. Typewriter/ })).toHaveCount(1);
     await expect(page.getByRole('button', { name: /^2\. / })).toHaveCount(0);
   });

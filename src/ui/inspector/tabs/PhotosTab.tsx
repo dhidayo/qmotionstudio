@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import * as actions from '@/document/actions';
 import { isSampleSpot } from '@/document/actions';
@@ -6,16 +6,17 @@ import { projectPhotos } from '@/document/select/media';
 import type { PhotoCropMode, PhotoFrame, PhotoInput, PhotoSizeMode } from '@/document/types';
 import { useEditor } from '@/state/store';
 import type { PhotoSlots, SceneTemplate } from '@/templates/schema';
-import { useAddYourPhotos } from '@/ui/editing/useAddYourPhotos';
-import { addLayer, addPhotoLayers } from '@/ui/editing/addLayer';
+import { useAddPhotoLayers, useAddYourPhotos } from '@/ui/editing/useAddYourPhotos';
+import { addLayer } from '@/ui/editing/addLayer';
 import { undoHint } from '@/ui/editing/commands';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
-import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { Icon } from '@/ui/mobile/Icon';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useLayout } from '@/ui/shell/useLayout';
 import { Button, Section, Segmented, Slider, Stepper } from '../controls';
 import { SlotPlacement } from '../SlotPlacement';
+import { stepTarget } from '../spotDrag';
+import { LiftedSpot, useSpotDrag } from '../useSpotDrag';
 
 /**
  * §8.1, rebuilt for D-152. Every control here goes through dispatch; none
@@ -29,12 +30,19 @@ import { SlotPlacement } from '../SlotPlacement';
  * bottom:
  *
  *   Photos in this design  the design's own spots, each a photo of theirs or
- *                          a sample, with + Add photos to replace the samples (D-162)
- *   Your photos            only while some of theirs are not in the design
+ *                          a sample, with + Add photos to replace the samples
+ *                          (D-162), and under Photo spots, theirs that are
+ *                          not in it, waiting to be used (D-165)
  *   Photo N                the chosen spot's frame, size and crop
  *   Extra photos           photos on top, anywhere
  *
- * A design with no photo spots shows Extra photos first, then Your photos.
+ * A design with no photo spots shows only Extra photos, with theirs waiting
+ * under its button, to be placed on top.
+ *
+ * The waiting photos were a section of their own, "Your photos", folded away
+ * on a phone. D-165 moved them under Photo spots: "I will rather like the
+ * pictures to be listed right under the Photo spots section where I have x of
+ * n … since those two actions speak to the same thing and section."
  */
 const NO_PHOTOS: readonly PhotoInput[] = [];
 const ANY_SLOTS: PhotoSlots = { min: 1, max: 8, default: 3 };
@@ -45,7 +53,6 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
     return (
       <div>
         <PhotoLayers blank />
-        <YourPhotos maxPhotos={0} />
       </div>
     );
   }
@@ -54,7 +61,6 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
   return (
     <div>
       <DesignPhotos slots={slots} />
-      <YourPhotos maxPhotos={slots.max} />
       <SpotSettings />
       <PhotoLayers blank={false} />
     </div>
@@ -83,10 +89,25 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
   const sceneCount = useEditor((s) => s.project.scenes.length);
   const photos = useScenePhotos();
   const word = useDesignWord();
-  const add = useAddYourPhotos('Add photos to this scene');
+  const add = useAddYourPhotos();
   const phone = useLayout() === 'phone';
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dropping, setDropping] = useState(false);
+  const store = useMediaStore();
+
+  /*
+   * Moving a photo to another spot (D-165): by pressing and dragging it, or
+   * with Move earlier and Move later on the chosen one. Either is one change,
+   * one undo step, and the moved photo stays chosen, at its new spot.
+   */
+  const move = (from: number, to: number): void => {
+    dispatch(actions.reorderPhoto(from, to));
+    selectPhoto(to);
+    showToast(`Photo moved to spot ${to + 1}.`);
+  };
+  const drag = useSpotDrag(move);
+  const chosen = selected !== null && selected < photos.length ? selected : null;
+  const earlier = chosen === null ? null : stepTarget(chosen, -1, photos.length);
+  const later = chosen === null ? null : stepTarget(chosen, 1, photos.length);
 
   const own = [...new Set(photos.map((p) => p.mediaId).filter((id) => !isSampleSpot(id)))];
   const samples = photos.filter((p) => isSampleSpot(p.mediaId)).length;
@@ -100,7 +121,7 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
 
   const toSample = (index: number): void => {
     dispatch(actions.sampleAt(index));
-    showToast(`Photo ${index + 1} shows a sample again. Your photo is still in Your photos.`);
+    showToast(`Photo ${index + 1} shows a sample again. Your photo is still in this project, under Photo spots.`);
   };
 
   const addButton = 'flex min-w-[7.5rem] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60';
@@ -122,7 +143,7 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
       >
         <div className="flex flex-wrap gap-1.5">
           <button type="button" onClick={add.pick} disabled={add.busy} data-add-photo className={`${addButton} bg-accent text-accent-ink hover:bg-accent-hover`}>
-            {add.busy ? 'Reading…' : '+ Add photos'}
+            {add.busy ? add.reading : '+ Add photos'}
           </button>
           {phone && (
             <button type="button" onClick={add.takePhoto} disabled={add.busy} className={`${addButton} border border-edge bg-panel hover:bg-panel-alt`}>
@@ -130,7 +151,6 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
             </button>
           )}
         </div>
-        {add.input}
         <p className="mt-1.5 text-[11px] leading-snug text-ink-muted">{hint}</p>
         {add.error !== null && <p className="mt-1 text-[11px]" style={{ color: 'var(--c-danger)' }}>{add.error}</p>}
 
@@ -142,18 +162,45 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
                 index={index}
                 mediaId={photo.mediaId}
                 active={index === selected}
+                lifted={drag.lift?.from === index}
+                target={drag.lift !== null && drag.lift.over === index && drag.lift.from !== index}
+                press={drag.bind(index)}
                 onSelect={() => { selectPhoto(index); }}
                 onToSample={() => { toSample(index); }}
-                onDragStart={() => { setDragFrom(index); }}
-                onDropOn={() => {
-                  if (dragFrom !== null && dragFrom !== index) {
-                    dispatch(actions.reorderPhoto(dragFrom, index));
-                    selectPhoto(index);
-                  }
-                  setDragFrom(null);
-                }}
               />
             ))}
+          </div>
+        )}
+        {drag.lift !== null && (
+          <LiftedSpot lift={drag.lift} url={store.previewUrl(photos[drag.lift.from]?.mediaId ?? '')} />
+        )}
+        {photos.length > 1 && (
+          <div className="mt-1.5" data-spot-move>
+            <p className="text-[11px] leading-snug text-ink-muted">
+              Hold a photo and drag it to another spot to move it.
+            </p>
+            {chosen !== null && (
+              <div className="mt-1 grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  disabled={earlier === null}
+                  onClick={() => { if (earlier !== null) move(chosen, earlier); }}
+                  title={`Move photo ${chosen + 1} one spot earlier`}
+                  className="rounded-md border border-edge px-2 py-1.5 text-[11px] font-medium hover:bg-panel-alt disabled:opacity-40"
+                >
+                  ← Move earlier
+                </button>
+                <button
+                  type="button"
+                  disabled={later === null}
+                  onClick={() => { if (later !== null) move(chosen, later); }}
+                  title={`Move photo ${chosen + 1} one spot later`}
+                  className="rounded-md border border-edge px-2 py-1.5 text-[11px] font-medium hover:bg-panel-alt disabled:opacity-40"
+                >
+                  Move later →
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -166,13 +213,14 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
             onChange={(count) => { dispatch(actions.setPhotoCount(count, slots)); }}
           />
         </div>
+        <WaitingPhotos maxPhotos={slots.max} />
 
         {own.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             <Button
               onClick={() => {
                 dispatch(actions.restoreSamples());
-                showToast(`Samples are back in every spot. Your photos are still in Your photos. ${undoHint()}`);
+                showToast(`Samples are back in every spot. Your photos are still in this project, under Photo spots. ${undoHint()}`);
               }}
             >
               Use samples again
@@ -198,24 +246,28 @@ function DesignPhotos({ slots }: { slots: PhotoSlots }): React.JSX.Element {
 /**
  * One photo spot: its picture, its number, "Sample" on a sample, and — on a
  * photo of the person's own only — an × that puts a sample back there. A tap
- * chooses it, for its settings below; a drag moves it.
+ * chooses it, for its settings below; pressing and dragging moves it (D-165).
+ * While a photo is being moved, its own spot is faded and the spot it would
+ * go to is outlined.
  */
 function SpotTile({
   index,
   mediaId,
   active,
+  lifted,
+  target,
+  press,
   onSelect,
   onToSample,
-  onDragStart,
-  onDropOn,
 }: {
   index: number;
   mediaId: string;
   active: boolean;
+  lifted: boolean;
+  target: boolean;
+  press: ReturnType<ReturnType<typeof useSpotDrag>['bind']>;
   onSelect: () => void;
   onToSample: () => void;
-  onDragStart: () => void;
-  onDropOn: () => void;
 }): React.JSX.Element {
   const store = useMediaStore();
   // Redraws when the decode lands; without it the tile stays empty.
@@ -226,12 +278,11 @@ function SpotTile({
 
   return (
     <div
-      draggable
-      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart(); }}
-      onDragOver={(e) => { if (!carriesFiles(e)) e.preventDefault(); }}
-      onDrop={(e) => { if (carriesFiles(e)) return; e.preventDefault(); e.stopPropagation(); onDropOn(); }}
-      className="relative"
+      {...press}
+      className="relative select-none [-webkit-touch-callout:none]"
+      style={{ opacity: lifted ? 0.35 : 1, transition: 'opacity var(--t-fast)' }}
       data-spot={index}
+      data-spot-target={target ? '' : undefined}
     >
       <button
         type="button"
@@ -240,7 +291,11 @@ function SpotTile({
         aria-label={`Photo ${number}: ${sample ? 'a sample' : 'your photo'}`}
         data-media-id={mediaId}
         className="block aspect-square w-full overflow-hidden rounded-md border-2"
-        style={{ borderColor: active ? 'var(--c-accent)' : 'var(--c-edge)', background: 'var(--c-panel-alt)' }}
+        style={{
+          borderColor: active || target ? 'var(--c-accent)' : 'var(--c-edge)',
+          borderStyle: target ? 'dashed' : 'solid',
+          background: target ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
+        }}
       >
         {url !== null && <img src={url} alt="" draggable={false} className="size-full object-cover" />}
       </button>
@@ -265,8 +320,9 @@ function SpotTile({
         <button
           type="button"
           onClick={onToSample}
+          data-spot-out
           aria-label={`Take your photo out of spot ${number}`}
-          title="Take your photo out of this spot. A sample goes back; your photo stays in Your photos."
+          title="Take your photo out of this spot. A sample goes back; your photo stays in this project, under Photo spots."
           className="absolute right-0.5 top-0.5 grid size-6 place-items-center rounded-full text-[13px] leading-none sm:size-5 sm:text-[12px]"
           style={{ background: 'var(--c-panel)', color: 'var(--c-ink)', border: '1px solid var(--c-edge-strong)' }}
         >
@@ -379,7 +435,7 @@ function PhotoLayers({ blank }: { blank: boolean }): React.JSX.Element {
   const showToast = useEditor((s) => s.showToast);
   const layers = useEditor(useShallow((s) => s.project.overlays.filter((o) => o.content.kind === 'photo')));
   const openPhotoPicker = useOverlays((o) => o.openPhotoPicker);
-  const add = useAddPhotoLayers(blank);
+  const add = useAddPhotoLayers();
   const small = 'rounded-md border border-edge px-2 py-0.5 text-[11px] hover:bg-panel-alt';
 
   return (
@@ -389,8 +445,20 @@ function PhotoLayers({ blank }: { blank: boolean }): React.JSX.Element {
           ? 'This design has no photo spots. Add photos on top and place them anywhere.'
           : 'Photos on top of the design, placed anywhere. They are not part of it.'}
       </p>
-      <div className="mb-2 flex">{add.button}</div>
-      {add.error}
+      <div className="mb-2 flex">
+        {/* "+ Add extra photos": named for what it adds, never a second "+ Add photos" (D-162). */}
+        <button
+          type="button"
+          data-add-photo-layer
+          onClick={add.pick}
+          disabled={add.busy}
+          className={`min-w-[7.5rem] whitespace-nowrap rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60 ${blank ? 'flex-1 bg-accent text-accent-ink hover:bg-accent-hover' : 'border border-edge hover:bg-panel-alt'}`}
+        >
+          {add.busy ? add.reading : '+ Add extra photos'}
+        </button>
+      </div>
+      {add.error !== null && <p className="mb-2 text-[11px]" style={{ color: 'var(--c-danger)' }}>{add.error}</p>}
+      {blank && <WaitingPhotos maxPhotos={0} />}
       <div className="flex flex-col gap-1.5">
         {layers.map((layer, i) => {
           const mediaId = layer.content.kind === 'photo' ? layer.content.mediaId : '';
@@ -425,61 +493,18 @@ function PhotoLayers({ blank }: { blank: boolean }): React.JSX.Element {
 }
 
 /**
- * "+ Add extra photos": picks photos and puts each on the canvas as a layer of
- * its own (D-124). Named for what it adds, so it never reads as a second copy
- * of the panel's "+ Add photos", which fills the design's spots (D-162).
- */
-function useAddPhotoLayers(primary: boolean): { button: React.JSX.Element; error: React.JSX.Element | null } {
-  const store = useMediaStore();
-  const showToast = useEditor((s) => s.showToast);
-  const input = useRef<HTMLInputElement>(null);
-  const onAdded = useCallback((ids: string[]) => {
-    // Kept in Your photos too, for any scene to use later (D-147).
-    addPhotoLayers(ids);
-    showToast(ids.length === 1 ? 'Photo added on top. Drag it where you want it.' : `${ids.length} photos added on top. Drag them where you want them.`);
-  }, [showToast]);
-  const { state: upload, addFiles } = useUpload(store, onAdded, { artboardLongestEdge: 1920 });
-  return {
-    button: (
-      <>
-        <button
-          type="button"
-          data-add-photo-layer
-          onClick={() => { input.current?.click(); }}
-          disabled={upload.busy}
-          className={`min-w-[7.5rem] whitespace-nowrap rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60 ${primary ? 'flex-1 bg-accent text-accent-ink hover:bg-accent-hover' : 'border border-edge hover:bg-panel-alt'}`}
-        >
-          {upload.busy ? 'Reading…' : '+ Add extra photos'}
-        </button>
-        <input
-          ref={input}
-          type="file"
-          accept={ACCEPT_ATTRIBUTE}
-          multiple
-          hidden
-          aria-label="Add a photo on top of the design"
-          onChange={(e) => {
-            void addFiles([...(e.target.files ?? [])]);
-            e.target.value = '';
-          }}
-        />
-      </>
-    ),
-    error: upload.error === null ? null : <p className="mb-2 text-[11px]" style={{ color: 'var(--c-danger)' }}>{upload.error}</p>,
-  };
-}
-
-/**
- * "Your photos" (D-147): every photograph added to the project, kept until
- * the person deletes it — shown here only while some are not in this design,
- * small, so it never competes with the design's own photos above (D-152).
+ * The project's photos that are not in this design (D-147): every photograph
+ * added to the project is kept until the person deletes it. Shown only while
+ * some are waiting, small, so they never compete with the design's own photos
+ * (D-152) — under Photo spots, always in view, not in a section of their own
+ * to open (D-165).
  *
  * A tap puts one in the design in place of the first sample, or in a new spot
  * while the design has room; on a design with no photo spots it goes on top
  * instead. × deletes it from the project — from every scene that shows it,
  * which shows a sample there instead — and undo brings it back.
  */
-function YourPhotos({ maxPhotos }: { maxPhotos: number }): React.JSX.Element | null {
+function WaitingPhotos({ maxPhotos }: { maxPhotos: number }): React.JSX.Element | null {
   const store = useMediaStore();
   useMediaRevision();
   const dispatch = useEditor((s) => s.dispatch);
@@ -515,45 +540,41 @@ function YourPhotos({ maxPhotos }: { maxPhotos: number }): React.JSX.Element | n
     showToast(`Photo deleted from this project. ${undoHint()}`);
   };
 
-  // No count in the name: a phone's sheet keeps a section open by its name,
-  // and the count would change with every photo used from here.
   return (
-    <Section title="Your photos">
-      <div data-your-photos>
-        <p className="mb-2 text-[11px] leading-snug text-ink-muted">
-          {spots
-            ? `Not in this ${word}. Tap one to use it here. × deletes it from the project.`
-            : 'Tap one to place it on top of the design. × deletes it from the project.'}
-        </p>
-        <div className="grid grid-cols-5 gap-1.5">
-          {waiting.map((id) => {
-            const url = store.previewUrl(id);
-            return (
-              <div key={id} className="relative" data-library-photo={id}>
-                <button
-                  type="button"
-                  onClick={() => { putInDesign(id); }}
-                  aria-label={spots ? `Use this photo in the ${word}` : 'Place this photo on top of the design'}
-                  className="block aspect-square w-full overflow-hidden rounded-md border border-edge hover:border-accent"
-                  style={{ background: 'var(--c-panel-alt)' }}
-                >
-                  {url !== null && <img src={url} alt="" className="size-full object-cover" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { remove(id); }}
-                  aria-label="Delete this photo from the project"
-                  title="Delete from the project"
-                  className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full text-[12px] leading-none"
-                  style={{ background: 'var(--c-panel)', color: 'var(--c-danger)', border: '1px solid var(--c-edge-strong)' }}
-                >
-                  ×
-                </button>
-              </div>
-            );
-          })}
-        </div>
+    <div data-your-photos className={spots ? 'mb-2.5 border-t border-edge pt-2.5' : 'mb-2 mt-1'}>
+      <p className="mb-2 text-[11px] leading-snug text-ink-muted">
+        {spots
+          ? <><span className="font-semibold text-ink">Not in this {word}</span> — tap one to use it. × deletes it from the project.</>
+          : <><span className="font-semibold text-ink">Your photos</span> — tap one to place it on top of the design. × deletes it from the project.</>}
+      </p>
+      <div className="grid grid-cols-5 gap-1.5">
+        {waiting.map((id) => {
+          const url = store.previewUrl(id);
+          return (
+            <div key={id} className="relative" data-library-photo={id}>
+              <button
+                type="button"
+                onClick={() => { putInDesign(id); }}
+                aria-label={spots ? `Use this photo in the ${word}` : 'Place this photo on top of the design'}
+                className="block aspect-square w-full overflow-hidden rounded-md border border-edge hover:border-accent"
+                style={{ background: 'var(--c-panel-alt)' }}
+              >
+                {url !== null && <img src={url} alt="" className="size-full object-cover" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => { remove(id); }}
+                aria-label="Delete this photo from the project"
+                title="Delete from the project"
+                className="absolute -right-1 -top-1 grid size-5 place-items-center rounded-full text-[12px] leading-none"
+                style={{ background: 'var(--c-panel)', color: 'var(--c-danger)', border: '1px solid var(--c-edge-strong)' }}
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
       </div>
-    </Section>
+    </div>
   );
 }

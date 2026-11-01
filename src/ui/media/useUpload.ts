@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { decodeImage, UnsupportedImageError, ACCEPTED_TYPES } from '@/media/image/decode';
+import { decodeImage, UnsupportedImageError } from '@/media/image/decode';
 import { decodeVideo, isVideoFile, UnsupportedVideoError, ACCEPTED_VIDEO_TYPES } from '@/media/video/decode';
 import { decodeAudio, isAudioFile, UnsupportedAudioError, ACCEPTED_AUDIO_TYPES } from '@/media/audio/decode';
 import type { MediaStore } from '@/media/store';
+import { useEditor } from '@/state/store';
+import { failureMessage, type UploadFailure, type UploadProgress } from './uploadMessages';
 
 /**
  * Photo upload (§8.1: drag/drop, paste and file picker all work; §9 for decode).
@@ -11,9 +13,18 @@ import type { MediaStore } from '@/media/store';
  * Failures surface rather than disappearing (§16); a HEIC gets its own message
  * because it is the single most likely failure, iPhone photos being HEIC by
  * default.
+ *
+ * Photo pickers ask for `image/*`, not a list of types (D-165). When the list
+ * names image/heic, an iPhone hands over the original HEIC, which then has to
+ * be decoded here — slowly, or not at all, for several large photos on a
+ * phone: "upload from library doesn't upload nor replace the sample photos …
+ * Take photos works." With `image/*` the phone converts each photo to JPEG as
+ * it hands it over, as it always did for the camera. A HEIC that still arrives
+ * — dropped, pasted, or from a computer — is decoded as before (§9, D-011).
  */
 
-export const ACCEPT_ATTRIBUTE = [...ACCEPTED_TYPES, 'image/heic', 'image/heif'].join(',');
+/** Every photo picker's `accept` (D-165): see above. */
+export const PHOTO_ACCEPT_ATTRIBUTE = 'image/*';
 
 /** Custom media is Pro (§12); the picker that uses this is gated, not this list. */
 export const VIDEO_ACCEPT_ATTRIBUTE = ACCEPTED_VIDEO_TYPES.join(',');
@@ -23,8 +34,12 @@ export const AUDIO_ACCEPT_ATTRIBUTE = [...ACCEPTED_AUDIO_TYPES, '.mp3', '.m4a', 
 
 export type UploadState = {
   readonly busy: boolean;
+  /** How far through the files it is, while busy: "Reading 2 of 5…" (D-165). */
+  readonly progress: UploadProgress | null;
   readonly error: string | null;
 };
+
+export const IDLE_UPLOAD: UploadState = { busy: false, progress: null, error: null };
 
 let counter = 0;
 function nextMediaId(): string {
@@ -39,7 +54,8 @@ function nextMediaId(): string {
  * Photos panel — and put on top as a layer, and in a video added to the
  * timeline as a clip too. Now only an upload that asks for paste listens, and
  * of those only the one opened last answers: the Replace photo dialog while it
- * is open, otherwise + Photos (D-162).
+ * is open, otherwise + Photos (D-162), whose upload is mounted once for the
+ * whole editor (D-165).
  */
 type PasteTarget = { current: (files: readonly File[]) => Promise<void> };
 const pasteTargets: PasteTarget[] = [];
@@ -81,7 +97,7 @@ export function useUpload(
   addFiles: (files: readonly File[]) => Promise<void>;
   clearError: () => void;
 } {
-  const [state, setState] = useState<UploadState>({ busy: false, error: null });
+  const [state, setState] = useState<UploadState>(IDLE_UPLOAD);
 
   const addFiles = useCallback(
     async (files: readonly File[]) => {
@@ -105,6 +121,7 @@ export function useUpload(
       if (usable.length === 0) {
         setState({
           busy: false,
+          progress: null,
           error: wantsAudio
             ? 'No audio in that drop.'
             : wantsVideo ? 'No images or video in that drop.' : 'No images in that drop.',
@@ -112,11 +129,12 @@ export function useUpload(
         return;
       }
 
-      setState({ busy: true, error: null });
+      const total = usable.length;
       const added: string[] = [];
-      const failures: string[] = [];
+      const failures: UploadFailure[] = [];
 
-      for (const file of usable) {
+      for (const [done, file] of usable.entries()) {
+        setState({ busy: true, progress: { done, total }, error: null });
         const id = nextMediaId();
         try {
           const entry = wantsAudio
@@ -131,18 +149,32 @@ export function useUpload(
           store.set(entry);
           added.push(id);
         } catch (error) {
-          failures.push(
-            error instanceof UnsupportedImageError ||
-            error instanceof UnsupportedVideoError ||
-            error instanceof UnsupportedAudioError
-              ? error.message
-              : `Could not read "${file.name}".`,
-          );
+          failures.push({
+            name: file.name,
+            reason:
+              error instanceof UnsupportedImageError ||
+              error instanceof UnsupportedVideoError ||
+              error instanceof UnsupportedAudioError
+                ? error.message
+                : `Could not read "${file.name}".`,
+          });
         }
       }
 
       if (added.length > 0) onAdded(added);
-      setState({ busy: false, error: failures[0] ?? null });
+      /*
+       * A failure is said in a toast as well as beside the button (D-165): on a
+       * phone the panel that started the upload may have closed by now, and a
+       * photo that silently never arrives reads as the app not working. It
+       * comes after `onAdded`'s own toast, so it says what was added too.
+       */
+      const problem = failureMessage(
+        added.length,
+        failures,
+        wantsAudio || wantsVideo ? { one: 'file', many: 'files' } : undefined,
+      );
+      if (problem !== null) useEditor.getState().showToast(problem);
+      setState({ busy: false, progress: null, error: problem });
     },
     [store, onAdded, options.artboardLongestEdge, options.video, options.audio],
   );

@@ -5,7 +5,7 @@ import { LOCKUP_SIZE_DEFAULT } from '@/core/render/logo';
 import { useEditor } from '@/state/store';
 import type { SceneTemplate } from '@/templates/schema';
 import { useMediaRevision, useMediaStore } from '@/ui/media/MediaProvider';
-import { ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
+import { PHOTO_ACCEPT_ATTRIBUTE, useUpload } from '@/ui/media/useUpload';
 import { ElementEffectsEditor } from '@/ui/effects/EffectEditors';
 import { Button, ColorField, EmptyNote, Section, Segmented, Slider, TextInput, Toggle } from './controls';
 
@@ -86,7 +86,7 @@ export function LogoSection({ template }: { template: SceneTemplate | null }): R
         <input
           ref={fileInput}
           type="file"
-          accept={ACCEPT_ATTRIBUTE}
+          accept={PHOTO_ACCEPT_ATTRIBUTE}
           hidden
           aria-label="Add a logo"
           onChange={(e) => {

@@ -53,8 +53,8 @@ export function addItemIds(mode: ProjectMode): readonly AddItemId[] {
  *
  * A phone adds photos from its Photos tool, whose panel holds everything a
  * phone needs for them in one place — + Add photos, Take photo, the design's
- * photo spots and Your photos — and the toolbar is the only way to that
- * panel there. A + Photos in this sheet as well would be the same action
+ * photo spots and the photos waiting under them (D-165) — and the toolbar is
+ * the only way to that panel there. A + Photos in this sheet as well would be the same action
  * twice, in two places that look different, which is what D-162 removes.
  */
 export function gridItemIds(mode: ProjectMode): readonly AddItemId[] {
