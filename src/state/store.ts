@@ -20,7 +20,7 @@ import {
   sealCoalescing, undo, undoLabel, type HistoryState,
 } from './undo';
 
-export type InspectorTab = 'photos' | 'text' | 'motion' | 'look';
+export type InspectorTab = 'elements' | 'photos' | 'text' | 'motion' | 'look';
 export type Theme = 'light' | 'dark';
 
 /**

@@ -108,7 +108,8 @@ function PickerDialog({ state }: { state: ElementPickerState }): React.JSX.Eleme
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Elements"
+      // Named as it reads, so it is never taken for the Elements list (D-167).
+      aria-label={title}
       /* A sheet from the bottom on a phone (D-109), a window on a computer. */
       className="fixed inset-0 z-50 flex flex-col justify-end sm:items-center sm:justify-center sm:p-4"
       style={{ background: 'rgb(0 0 0 / 0.45)' }}

@@ -5,7 +5,7 @@ import { entriesDrawn, partsIn, type PartInfo } from '@/core/render/parts';
 import { parseSlotKey } from '@/core/render/slots';
 import type { SceneTemplate } from '@/templates/schema';
 import { slotWords } from '@/templates/_shared/text';
-import { listEntries, numbers } from '@/templates/_shared/numbering';
+import { entryWords } from './names';
 import { useEditor } from '@/state/store';
 import { useOverlays } from '@/ui/shell/overlays';
 import { currentLayout, type Layout } from '@/ui/shell/useLayout';
@@ -67,7 +67,7 @@ export function entryEditing(
   const numbered = def.list === 'numbers';
   const count = Math.max(item + 1, layers === null ? 0 : entriesDrawn(layers, def.id));
   const separator = def.listSeparator ?? ',';
-  const text = (numbered ? numbers(current, count) : listEntries(current, separator))[item] ?? '';
+  const text = entryWords(def, inputs, item, count);
   return {
     text,
     maxLength: undefined,

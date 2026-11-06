@@ -1,9 +1,6 @@
 import * as actions from '@/document/actions';
 import { effectName } from '@/core/effects/catalog';
-import { stickerDef } from '@/core/stickers/catalog';
-import { formatCounter } from '@/core/text/counter';
-import { SHAPE_NAMES } from '@/document/elements';
-import type { CounterContent, EffectClip, Overlay, Project, ShapeContent, StickerContent } from '@/document/types';
+import type { EffectClip, Overlay, Project } from '@/document/types';
 import { resolvedAudio, sceneLengthMs, sceneSpans, totalDurationMs } from '@/document/select/timeline';
 import { clipEndMs } from '@/core/audio/envelope';
 import { soundFor } from '@/audio/library';
@@ -15,7 +12,11 @@ import { currentLayout, type Layout } from '@/ui/shell/useLayout';
 import { parseSlotKey } from '@/core/render/slots';
 import { labelIn } from '@/core/render/parts';
 import { editPart, entryEditing, selectedSceneLayers } from './parts';
+import { elementName, slotTitle } from './names';
 import { offerSceneTip } from '@/ui/onboarding/SceneTip';
+
+// Named in one place (D-167); still offered from here, where the menus always found it.
+export { elementName } from './names';
 
 /**
  * What can be done to a thing on the timeline or the canvas (D-104), in one
@@ -44,15 +45,6 @@ export function overlayLabel(overlay: Overlay): string {
     case 'shape': return `the ${elementName(content).toLowerCase()}`;
     case 'sticker': return `the “${elementName(content)}” sticker`;
     case 'counter': return `the number ${elementName(content)}`;
-  }
-}
-
-/** What an element is, in a word or two: "Star", "Check tick", "1,000" (D-158). */
-export function elementName(content: ShapeContent | StickerContent | CounterContent): string {
-  switch (content.kind) {
-    case 'shape': return SHAPE_NAMES[content.shape];
-    case 'sticker': return stickerDef(content.sticker)?.name ?? 'Sticker';
-    case 'counter': return formatCounter(content.to, content.format);
   }
 }
 
@@ -214,12 +206,13 @@ export function arrangeSelection(to: 'front' | 'back'): boolean {
 export function deleteSlot(key: string): boolean {
   const s = useEditor.getState();
   const parsed = parseSlotKey(key);
-  // A part of the design (D-159): it goes, and Style lists it to put back.
+  // A part of the design (D-159): it goes, and Elements and Style list it to put back.
   if (parsed?.kind === 'shape') {
     s.dispatch(actions.hideShape(key));
     s.endInteraction();
     s.selectSlot(null);
-    s.showToast(`Shape deleted. ${undoHint()} Or Style → Shapes in this design → Put back.`);
+    // Elements lists it, dimmed, to put back (D-167).
+    s.showToast(`Shape deleted. ${undoHint()} Or put it back from Elements.`);
     return true;
   }
   // One entry of a list: that entry leaves the list (a number leaves its place empty).
@@ -453,13 +446,14 @@ export function slotMenu(key: string, label: string, options: { readonly typed?:
 export function slotName(key: string): string {
   const s = useEditor.getState();
   const layers = selectedSceneLayers();
-  const named = layers === null ? null : labelIn(layers, key);
   const parsed = parseSlotKey(key);
   if (parsed?.kind === 'photo') return `photo ${parsed.index + 1}`;
+  // The design's own name for it (D-159), as the Elements list titles it (D-167).
+  const named = layers === null ? null : labelIn(layers, key);
   if (named !== null) return parsed?.kind === 'shape' ? `the ${named.charAt(0).toLowerCase()}${named.slice(1)}` : named.toLowerCase();
   if (parsed?.kind === 'text') {
-    const def = s.template?.textSlots.find((slot) => slot.id === parsed.id);
-    return def ? `the ${def.label.toLowerCase()}` : 'this text';
+    const title = slotTitle(`text:${parsed.id}`, null, s.template);
+    return title === null ? 'this text' : `the ${title.toLowerCase()}`;
   }
   return parsed?.kind === 'shape' ? 'this shape' : 'this element';
 }

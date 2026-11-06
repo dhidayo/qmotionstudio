@@ -19,7 +19,7 @@ type Handle = {
   editor: { getState(): { project: { overlays: { kind: string; content: Record<string, unknown> }[] } } };
 };
 
-const picker = (page: Page): Locator => page.getByRole('dialog', { name: 'Elements' });
+const picker = (page: Page): Locator => page.getByRole('dialog', { name: /^(Add an element|Change sticker)$/ });
 
 async function open(page: Page, theme: 'light' | 'dark' = 'light'): Promise<void> {
   await page.addInitScript((t) => { localStorage.setItem('ms.theme', t); }, theme);

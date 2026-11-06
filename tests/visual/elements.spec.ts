@@ -26,7 +26,7 @@ async function open(page: Page, url = '/?template=el-cta-button&aspect=1:1&froze
   await page.waitForTimeout(1_500);
 }
 
-const picker = (page: Page): Locator => page.getByRole('dialog', { name: 'Elements' });
+const picker = (page: Page): Locator => page.getByRole('dialog', { name: /^(Add an element|Change sticker)$/ });
 
 /** "+ Element" in the add bar — shapes, stickers and numbers alike (D-163) — then a tile. */
 async function add(page: Page, tile: string): Promise<void> {

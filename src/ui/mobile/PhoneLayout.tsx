@@ -143,8 +143,28 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
 
   return (
     <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-edge bg-panel px-3 py-1">
-      <span className="tabular text-[12px] text-ink-muted" data-phone-time>
-        <span ref={now} className="text-ink">{clockTime(0)}</span> / {clockTime(durationMs)}
+      <span className="flex min-w-0 items-center gap-1.5">
+        {/* An image's line also holds Elements, so its time stands over its length rather than beside it (D-167). */}
+        <span className={`tabular text-[12px] text-ink-muted ${corporate ? '' : 'flex flex-col leading-tight'}`} data-phone-time>
+          <span ref={now} className="text-ink">{clockTime(0)}</span>
+          {corporate ? ` / ${clockTime(durationMs)}` : <span className="text-[11px]">of {clockTime(durationMs)}</span>}
+        </span>
+        {/*
+          * Everything in the design, to pick (D-167), where an image has room
+          * for it: the toolbar keeps its six tools, Add is for adding, and
+          * Style is for the look. A video's way in is its scene's own row.
+          */}
+        {!corporate && (
+          <button
+            type="button"
+            data-phone-elements
+            onClick={() => { useOverlays.getState().openPhonePanel('elements'); }}
+            className="flex h-9 shrink-0 items-center gap-1 rounded-full border border-edge px-2.5 text-[12px] font-medium"
+          >
+            <Icon name="layers" size={16} />
+            Elements
+          </button>
+        )}
       </span>
       <button
         type="button"

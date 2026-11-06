@@ -3,6 +3,7 @@ import { PhotosTab } from './tabs/PhotosTab';
 import { TextTab } from './tabs/TextTab';
 import { MotionTab } from './tabs/MotionTab';
 import { LookTab } from './tabs/LookTab';
+import { ElementsList } from './ElementsList';
 import { OverlayPanel } from './OverlayPanel';
 import { AudioPanel } from './AudioPanel';
 import { TimelineEffectPanel } from '@/ui/effects/EffectEditors';
@@ -11,8 +12,15 @@ import { soundFor } from '@/audio/library';
 /*
  * Logo became part of Look, and its place went to Motion — the template's
  * motion properties and the effects library (D-105).
+ *
+ * Elements comes first (D-167): the list of everything in the design, the way
+ * to whatever the other four tabs change — "I would prefer a way to see all
+ * design elements and select them to update as I like." A fifth tab rather
+ * than a section of Style: words and photos are not a style, and a list at
+ * the top of Style would push its own settings out of sight.
  */
 const TABS: readonly { id: InspectorTab; label: string }[] = [
+  { id: 'elements', label: 'Elements' },
   { id: 'photos', label: 'Photos' },
   { id: 'text', label: 'Text' },
   { id: 'motion', label: 'Effects' },
@@ -73,6 +81,9 @@ export function Inspector(): React.JSX.Element {
         className="flex shrink-0 flex-col overflow-y-auto border-l border-edge bg-panel p-3"
         style={{ width: 'var(--w-inspector)' }}
         aria-label="Overlay inspector"
+        // Where focus goes when a layer is chosen from Elements (D-167).
+        data-inspector-focus
+        tabIndex={-1}
       >
         <OverlayPanel />
       </aside>
@@ -93,7 +104,7 @@ export function Inspector(): React.JSX.Element {
             role="tab"
             aria-selected={tab === id}
             onClick={() => { setTab(id); }}
-            className="flex-1 border-b-2 px-2 py-2.5 text-[12px] transition-colors"
+            className="flex-1 whitespace-nowrap border-b-2 px-1 py-2.5 text-[12px] transition-colors"
             style={{
               borderColor: tab === id ? 'var(--c-accent)' : 'transparent',
               color: tab === id ? 'var(--c-ink)' : 'var(--c-ink-faint)',
@@ -107,6 +118,7 @@ export function Inspector(): React.JSX.Element {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3" role="tabpanel">
+        {tab === 'elements' && <ElementsList />}
         {tab === 'photos' && <PhotosTab template={template} />}
         {tab === 'text' && <TextTab template={template} />}
         {tab === 'motion' && <MotionTab template={template} />}

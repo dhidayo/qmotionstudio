@@ -11,6 +11,7 @@ import { PhotosTab } from '@/ui/inspector/tabs/PhotosTab';
 import { TextTab } from '@/ui/inspector/tabs/TextTab';
 import { MotionTab } from '@/ui/inspector/tabs/MotionTab';
 import { LookTab } from '@/ui/inspector/tabs/LookTab';
+import { ElementsList } from '@/ui/inspector/ElementsList';
 import { OverlayPanel } from '@/ui/inspector/OverlayPanel';
 import { AudioPanel } from '@/ui/inspector/AudioPanel';
 import { TimelineEffectPanel } from '@/ui/effects/EffectEditors';
@@ -89,6 +90,9 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
       return <BottomSheet title={of('Style')} onClose={done} tall>{tabs(<LookTab template={template} />)}</BottomSheet>;
     case 'element':
       return <ElementPanel onClose={done} section={section} />;
+    // Everything in the design or the scene, to pick (D-167); a pick closes it, so the element's tools are in view.
+    case 'elements':
+      return <BottomSheet title={of('Elements')} onClose={done}><ElementsList onPicked={done} /></BottomSheet>;
     case 'add':
       return <AddPanel onClose={done} />;
     case 'aspect':

@@ -42,6 +42,9 @@ const PATHS = {
   right: 'M9 6l6 6-6 6',
   // + Sound's "Upload your own sound or music" (D-163).
   upload: 'M12 15V4M7.5 8.5L12 4l4.5 4.5M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4',
+  // Elements (D-167): the design's pieces, stacked; and the logo among them.
+  layers: 'M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4',
+  logo: 'M5 5h14v14H5zM9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0',
 } as const;
 
 export type IconName = keyof typeof PATHS;

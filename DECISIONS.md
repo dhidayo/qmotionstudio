@@ -3914,3 +3914,38 @@ photos wait under Photo spots, one tap each (D-165), and Use on every scene is
 still there. Duplicate still copies everything. This replaces the part of D-137
 and D-098 that carried photos into a new scene.
 
+## D-167 — Elements: everything in the design, to pick and change
+
+"On Video mode, when I add a new scene and I select the scene, I should have one
+of the menus saying customize design … the most important thing for every scene
+is to be able to modify the elements of those scenes … I would prefer a way to
+see all design elements and select them to update as I like." **Elements** lists
+everything in the design (Image) or the selected scene (Video), in reading order
+under headings: **Photos** (each spot, "Sample" on a sample), **Words** (each
+text by its name and words, each entry of a list on its own), **Shapes and
+parts** (every part, scattered ones too — this is how they are reached), **Logo**
+and **Added on top**. In a video the layers are on the timeline, not in a scene,
+so a scene lists those seen during it, by when they arrive, with their time.
+
+Choosing a row does exactly what a tap on the picture does, so the element's own
+tools and settings open. If it is not on screen at the playhead (a word that
+arrives later), the playhead goes there, paused: to the picture moment when the
+element is seen then, otherwise just after it arrives. A deleted part or text
+stays in the list, dimmed, with **Put back**; choosing it puts it back and picks
+it. The list is worked out from what the preview last drew; it costs nothing
+per frame.
+
+On a computer it is the inspector's first tab, before Photos, Text, Effects and
+Style: words and photos are not a style. On a phone in a video it is the first
+action in a scene's row; in an image it sits beside Play, so the toolbar keeps its
+six tools and Add stays for adding. A pick on a phone closes the sheet so the
+element's tools are in view.
+
+It works without a mouse: one Tab stop, then the arrow keys, Home and End, and
+Enter or Space; rows are named with what they are and their state ("Photo 2,
+sample", "Brand mark, shape, deleted — put back") under real headings; the
+selected row is marked and follows the picture; rows are 44px on touch, and
+scrolling respects reduced motion. The Add-an-element picker is now named as it
+reads, so a screen reader never hears two things called "Elements".
+
+

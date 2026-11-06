@@ -279,6 +279,13 @@ function SceneRow(): React.JSX.Element | null {
   const o = useOverlays.getState();
   const name = `Scene ${index + 1}`;
   const sceneTools: readonly Tool[] = [
+    /*
+     * First, right after the scene's name (D-167): "when I add a new scene and
+     * I select the scene, I should have one of the menus saying customize
+     * design and I should be able to select what to customize such as images,
+     * texts, etc." Everything in this scene, as a list to pick from.
+     */
+    { label: 'Elements', icon: 'layers', onSelect: () => { o.openPhonePanel('elements'); } },
     { label: 'Change design', icon: 'designs', onSelect: () => { o.openScenePicker('replace'); } },
     // Its length and how it arrives (D-133) — on a computer, the scene menu's Length and transition (D-162).
     { label: 'Timing', icon: 'scene', onSelect: () => { o.openPhonePanel('scene'); } },

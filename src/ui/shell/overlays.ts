@@ -63,7 +63,7 @@ export type PhotoTarget =
  */
 export type PhonePanel =
   | 'designs' | 'photos' | 'text' | 'motion' | 'effects' | 'style' | 'add'
-  | 'project' | 'aspect' | 'element' | 'timeline' | 'scene';
+  | 'project' | 'aspect' | 'element' | 'timeline' | 'scene' | 'elements';
 
 /**
  * The elements picker (D-158): shapes, stickers and numbers. Opens on a
