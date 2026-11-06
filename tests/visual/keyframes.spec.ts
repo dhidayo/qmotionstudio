@@ -256,12 +256,12 @@ test.describe('clicking the timeline moves the playhead', () => {
   const now = async (page: Page): Promise<number> =>
     Number(await page.getByLabel('Scrub').getAttribute('aria-valuenow'));
 
-  test('a second click on an already-selected clip seeks to it', async ({ page }) => {
+  test('a click on a scene chooses it and goes to the moment clicked (D-166)', async ({ page }) => {
     await page.goto('/?template=quick-pitch&aspect=9:16&frozen=8000');
     await page.waitForSelector('canvas');
 
-    // Scene 2, because scene 1 is selected the moment the project opens — and
-    // a click on something already selected is the *second* kind of click.
+    // "When I click a scene it selects the entire scene and I cannot select a
+    // specific time during the scene": one click now does both, for a scene.
     const clip = page.getByRole('button', { name: /2\. Fan Out/ });
     await expect(clip).toHaveAttribute('aria-pressed', 'false');
 
@@ -271,11 +271,7 @@ test.describe('clicking the timeline moves the playhead', () => {
 
     const before = await now(page);
     await page.mouse.click(at.x, at.y);
-    // The first click chose the scene and left the playhead where it was.
     await expect(clip).toHaveAttribute('aria-pressed', 'true');
-    expect(await now(page)).toBe(before);
-
-    await page.mouse.click(at.x, at.y);
     // The seek lands on the next render, not inside the click.
     await expect.poll(() => now(page)).toBeLessThan(before);
   });

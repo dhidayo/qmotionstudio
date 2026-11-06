@@ -139,7 +139,7 @@ test.describe('on a phone', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_500);
     await page.locator('[data-phone-scene="1"]').tap();
-    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Timing' }).tap();
+    await page.getByRole('toolbar', { name: 'Scene 2 actions' }).getByRole('button', { name: 'Timing' }).tap();
     const sheet = page.getByRole('dialog', { name: 'Scene 2' });
     await expect(sheet).toBeVisible();
     await sheet.getByRole('button', { name: 'Wipe' }).tap();

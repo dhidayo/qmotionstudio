@@ -6,7 +6,7 @@ import { migrate } from '@/document/migrate';
 import { listProjects } from '@/persist/db';
 import { restoreMedia } from '@/persist/media';
 import { useMediaStore } from '@/ui/media/MediaProvider';
-import { referencedMedia, userPhotoIds } from '@/document/select/media';
+import { projectPhotos, referencedMedia } from '@/document/select/media';
 import { noHover } from '@/ui/library/PlayingPreview';
 import { CardPicture, useHoverIntent } from '@/ui/library/CardPicture';
 import { sceneAddTrial, sceneReplaceTrial } from '@/ui/library/useTrialProject';
@@ -30,8 +30,11 @@ import { useEditor } from '@/state/store';
  * Every scene template is here, grouped as the library groups them, with Blank
  * first for building from nothing. The same picker does both jobs:
  *
- *   add      a new scene after the selected one, carrying the person's photos,
- *            logo and look forward (D-098) so it matches what is already there.
+ *   add      a new scene after the selected one, carrying the person's logo
+ *            and look forward (D-098) so it matches what is already there. Its
+ *            photo spots start on the design's samples (D-166): "A new scene
+ *            added should not inherit the pictures of previous scene". The
+ *            person's photos wait under Photo spots, one tap each (D-165).
  *   replace  the selected scene takes the new design and keeps its photos, its
  *            text where the slots line up, and its length where the new
  *            design allows it — changing the look of a beat should not cost
@@ -109,11 +112,12 @@ export function ScenePicker({
           durationMs: template.defaultDurationMs,
           photoCount: template.photoSlots.default,
           from: current,
-          photoIds: userPhotoIds(project),
         });
         dispatch(actions.addScene(scene, index + 1));
         selectScene(index + 1);
-        showToast(`Added “${template.name}” as scene ${index + 2}.`);
+        showToast(projectPhotos(project).length > 0 && template.photoSlots.max > 0
+          ? `Added “${template.name}” as scene ${index + 2}, with sample photos. Yours are in Photos, one tap each.`
+          : `Added “${template.name}” as scene ${index + 2}.`);
       } else if (current.templateId === template.id) {
         // Already this design: nothing to change, and nothing to announce.
       } else {
@@ -139,7 +143,7 @@ export function ScenePicker({
     ? 'The scene keeps its photos, its text where the new design has room for it, and its length.'
     : source === 'mine'
       ? 'Your image comes in animated, as it plays in Image, with its words and photos, after the selected scene.'
-      : 'It goes after the selected scene, with your photos, logo and colours already in it.';
+      : 'It goes after the selected scene, with your logo and colours. It starts with sample photos; yours are one tap away in Photos.';
 
   return (
     <div

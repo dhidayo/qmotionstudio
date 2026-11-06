@@ -69,7 +69,7 @@ describe('sceneTrialProject (D-160)', () => {
     expect(trial.scenes[0]).toEqual(expected);
   });
 
-  it('add: a new scene from the design, with the selected scene’s look and logo carried forward', async () => {
+  it('add: a new scene from the design, with the selected scene’s look and logo carried forward and sample photos (D-166)', async () => {
     if (!SCENE_DESIGN) throw new Error('fixture');
     const template = await loadSceneTemplate(SCENE_DESIGN.id);
     const project = busyProject();
@@ -82,9 +82,10 @@ describe('sceneTrialProject (D-160)', () => {
       durationMs: template.defaultDurationMs,
       photoCount: template.photoSlots.default,
       from: project.scenes[0],
-      photoIds: ['mine-2'],
     });
     expect({ ...scene, id: '' }).toEqual({ ...made, id: '' });
+    // "A new scene added should not inherit the pictures of previous scene."
+    expect(scene?.inputs.photos.every((p) => p.mediaId.startsWith('sample:'))).toBe(true);
   });
 });
 

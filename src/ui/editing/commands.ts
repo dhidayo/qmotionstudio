@@ -180,9 +180,10 @@ export function duplicateSelection(): boolean {
   }
   if (s.sceneClipSelected || s.project.mode === 'motionAd') {
     if (s.selectedSlot !== null || s.selectedLogo) return false;
+    // A copy of everything in it — photos, words, look — straight after it (D-166).
     s.dispatch(actions.duplicateScene(s.selectedScene));
     s.selectSceneClip(s.selectedScene + 1);
-    s.showToast(`Duplicated scene ${s.selectedScene + 1}.`);
+    s.showToast(`Duplicated scene ${s.selectedScene + 1}. The copy is scene ${s.selectedScene + 2}.`);
     return true;
   }
   return false;

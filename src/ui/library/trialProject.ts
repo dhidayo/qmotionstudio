@@ -1,6 +1,5 @@
 import { FIRST_SCENE, setTemplate } from '@/document/actions';
 import { createSceneFrom } from '@/document/defaults';
-import { userPhotoIds } from '@/document/select/media';
 import type { Project } from '@/document/types';
 import type { TemplateChange } from '@/state/templateChange';
 import type { SceneTemplate } from '@/templates/schema';
@@ -34,7 +33,7 @@ export function trialProject(project: Project, change: TemplateChange, sceneInde
  * (D-160), made the way the picker makes it:
  *
  *   add      a new scene from the design, carrying the selected scene's logo
- *            and look and the person's photos forward (D-098).
+ *            and look forward (D-098), on the design's sample photos (D-166).
  *   replace  the selected scene switched to the design — its photos, words,
  *            look and logo kept, its length kept where the design allows.
  *
@@ -50,7 +49,6 @@ export function sceneTrialProject(project: Project, sceneIndex: number, template
       durationMs: template.defaultDurationMs,
       photoCount: template.photoSlots.default,
       from: scene,
-      photoIds: userPhotoIds(project),
     });
     return { ...bare, scenes: [added] };
   }

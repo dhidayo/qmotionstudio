@@ -64,6 +64,12 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
   const done = (): void => { close(null); };
   // Long panels show one section at a time on a phone (D-114).
   const tabs = (body: React.ReactNode): React.JSX.Element => <SectionTabs initial={section}>{body}</SectionTabs>;
+  /*
+   * In a video of several scenes, which one the panel is changing (D-166):
+   * the main tools act on the selected scene, so their panels say which.
+   */
+  const scene = useEditor((s) => (s.project.mode === 'motionAd' && s.project.scenes.length > 1 ? s.selectedScene + 1 : null));
+  const of = (name: string): string => (scene === null ? name : `${name} · Scene ${scene}`);
 
   switch (panel) {
     case 'designs':
@@ -73,14 +79,14 @@ function Panel({ panel, clock }: { panel: PhonePanel; clock: PreviewClock }): Re
         </BottomSheet>
       );
     case 'photos':
-      return <BottomSheet title="Photos" onClose={done} tall>{tabs(<PhotosTab template={template} />)}</BottomSheet>;
+      return <BottomSheet title={of('Photos')} onClose={done} tall>{tabs(<PhotosTab template={template} />)}</BottomSheet>;
     case 'text':
-      return <BottomSheet title="Text" onClose={done} tall>{tabs(<TextTab template={template} />)}</BottomSheet>;
+      return <BottomSheet title={of('Text')} onClose={done} tall>{tabs(<TextTab template={template} />)}</BottomSheet>;
     case 'effects':
     case 'motion':
-      return <BottomSheet title="Effects" onClose={done} tall>{tabs(<MotionTab template={template} />)}</BottomSheet>;
+      return <BottomSheet title={of('Effects')} onClose={done} tall>{tabs(<MotionTab template={template} />)}</BottomSheet>;
     case 'style':
-      return <BottomSheet title="Style" onClose={done} tall>{tabs(<LookTab template={template} />)}</BottomSheet>;
+      return <BottomSheet title={of('Style')} onClose={done} tall>{tabs(<LookTab template={template} />)}</BottomSheet>;
     case 'element':
       return <ElementPanel onClose={done} section={section} />;
     case 'add':

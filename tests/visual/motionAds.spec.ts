@@ -364,8 +364,10 @@ test.describe('the sequence is editable', () => {
     await openAd(page, 'quick-pitch', 300);
     const firstBeat = await fingerprint(page);
 
-    // Change the look of beat *three* and confirm beat one is untouched.
-    await page.getByRole('button', { name: /^3\./ }).click();
+    // Change the look of beat *three* and confirm beat one is untouched. Chosen
+    // from the keyboard: a click would also move the playhead into it (D-166).
+    await page.getByRole('button', { name: /^3\./ }).focus();
+    await page.keyboard.press('Enter');
     await page.getByRole('tab', { name: 'Style' }).click();
     // Grain lives under Style → More, folded until asked for (D-146).
     await page.getByRole('button', { name: 'More', exact: true }).click();

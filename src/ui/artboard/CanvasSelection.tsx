@@ -689,6 +689,12 @@ export function CanvasSelection({
       select(null);
       return;
     }
+    // …and a selected scene's clip, which on a phone puts its row of actions away (D-166).
+    if (useEditor.getState().sceneClipSelected) {
+      lastTap.current = null;
+      selectScene(selectedScene);
+      return;
+    }
     // A double-tap on the empty picture fits it back to the screen.
     if (again('')) {
       lastTap.current = null;

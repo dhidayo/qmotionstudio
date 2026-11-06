@@ -3877,4 +3877,40 @@ design is scene 1. Tap Add, then + Scene, to add more scenes."), elsewhere + Sce
 in the bar. It closes after ten seconds or when tapped, is shown once per device,
 and the phone's timing note (D-163) waits until it has gone.
 
+## D-166 — a scene keeps the main tools, a tap goes to that moment, and the strip shows your scenes
+
+"When I tap on the scene 2, I see these options: Design, Timing, Effects, Copy,
+Delete, Done … when I click on a scene, the menu for image design is what should
+be displayed (Designs, Add +, Photos, Text, Effects, Style) … Can you toggle the
+menu when the timeline is clicked so that I do not have to click on done." On a
+phone a selected scene no longer swaps the toolbar. The main tools stay, acting
+on that scene, and a slim row of the scene's own actions sits above them:
+"Scene 2", Change design, Timing, Effects, Duplicate (was Copy), Delete apart and
+last, and a quiet × that puts the row away. Tapping the scene again or the empty
+picture does the same; the scene stays the one the tools act on. There is no
+Done for a scene. The row scrolls sideways when it does not fit, with the scene
+and the × always in view, and is a labelled toolbar ("Scene 2 actions"). Panels
+opened from the main tools in a video of several scenes say which scene they
+change: "Photos · Scene 2". An element's own tools still replace the main ones,
+so the two rows are never shown together.
+
+"When I click a scene it selects the entire scene and I cannot select a specific
+time during the scene." A tap on a scene in the strip, or a click on its clip on
+a computer, pauses (D-110) and moves the playhead to the moment tapped inside it.
+A key press chooses the scene without moving the playhead; dragging still
+rearranges scenes (D-130).
+
+"While the pictures of the design changed, the timeline still shows the sample
+pictures." The strip and the clips show each scene as it was made — its photos,
+words, look, logo and parts — drawn by the real renderer, small, at its picture
+moment (D-155). A scene is drawn again only when something that changes its
+picture changes, one at a time in the browser's idle time, and the design's
+poster shows until its first picture is ready.
+
+"A new scene added should not inherit the pictures of previous scene, however …
+the uploaded pictures should be available for selection." A new scene keeps the
+logo and colours (D-098) but starts on the design's sample photos; the project's
+photos wait under Photo spots, one tap each (D-165), and Use on every scene is
+still there. Duplicate still copies everything. This replaces the part of D-137
+and D-098 that carried photos into a new scene.
 

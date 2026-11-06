@@ -3,7 +3,7 @@ import type { PreviewClock } from '@/core/time/clock';
 import type { Overlay } from '@/document/types';
 import { resolvedAudio, sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
 import * as actions from '@/document/actions';
-import { summaryFor } from '@/templates/manifest';
+import { posterUrl, summaryFor } from '@/templates/manifest';
 import { MAX_TRACKS } from '@/document/select/tracks';
 import { useOverlays } from '@/ui/shell/overlays';
 import { LongPress } from '@/ui/shell/ContextMenu';
@@ -20,6 +20,8 @@ import { OverlayMotionBar, SlotMotionBar } from './MotionLane';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { MusicTrack, audioRowsHeight } from './MusicTrack';
 import { useSceneReorder } from './useSceneReorder';
+import { useSceneStills } from './useSceneStills';
+import { ASPECT_RATIO } from '@/core/types';
 import { newRowKinds, packEffectLanes, sceneMoves, timelineRows } from './timelineRows';
 import { useTimelineFold } from './timelineFold';
 import {
@@ -93,6 +95,9 @@ export function Timeline({
   const durationMs = timelineSpanMs(project);
   const overhang = durationMs > videoMs + 1;
   const spans = sceneSpans(project.scenes);
+  // Each scene as the person made it, drawn small, on its clip (D-166).
+  const stills = useSceneStills(project);
+  const [ratioW, ratioH] = ASPECT_RATIO[project.aspect];
 
   const [playing, setPlaying] = useState(clock.playing);
   const shownPlaying = useRef(clock.playing);
@@ -605,12 +610,14 @@ export function Timeline({
                   data-scene-clip={span.index}
                   onClick={(e) => {
                     if (sceneLongPress.current.fired || reorder.wasDrag()) return;
-                    // Already selected? Then this click is about the moment,
-                    // not the choice (D-087). Either way the scene is now the
-                    // thing Delete would remove (D-104).
-                    if (active) seekTo(laneMs(e.clientX));
-                    selectSceneClip(span.index);
+                    // The scene, at the moment clicked (D-166): picking it
+                    // stops the preview (D-110), then the playhead goes to
+                    // the point clicked inside it, so that exact moment can
+                    // be seen and edited. The scene is now the thing Delete
+                    // would remove (D-104).
                     holdStill();
+                    seekTo(laneMs(e.clientX));
+                    selectSceneClip(span.index);
                   }}
                   onContextMenu={(e) => { e.preventDefault(); openSceneMenu(span.index, e.clientX, e.clientY); }}
                   onKeyDown={(e) => {
@@ -650,6 +657,17 @@ export function Timeline({
                   }}
                 >
                   <span className={`flex items-center gap-1 truncate leading-[26px] ${active ? 'pr-6' : ''}`}>
+                    {/* The scene's own picture (D-166); the design's poster until it is drawn. */}
+                    <span
+                      aria-hidden
+                      data-scene-still={stills.has(span.scene.id) ? 'own' : 'poster'}
+                      className="h-5 shrink-0 rounded-sm bg-cover bg-center"
+                      style={{
+                        aspectRatio: `${ratioW} / ${ratioH}`,
+                        backgroundColor: 'var(--c-edge)',
+                        backgroundImage: `url("${stills.get(span.scene.id) ?? posterUrl(span.scene.templateId)}")`,
+                      }}
+                    />
                     <span className="truncate">{span.index + 1}. {name}</span>
                     {/* Something in this scene moves: select it to see when (D-162). */}
                     {moves && <span aria-hidden data-scene-moves className="shrink-0 opacity-70"><Icon name="motion" size={11} /></span>}

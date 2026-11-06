@@ -381,12 +381,41 @@ test.describe('Corporate Ads on a phone', () => {
     await expect(page.locator('[data-phone-timeline]').getByRole('note')).toHaveCount(0);
   });
 
-  test('tapping a scene selects it and stops there', async ({ page }) => {
+  test('tapping a scene shows its row above the main tools, at the moment tapped (D-166)', async ({ page }) => {
     await open(page, AD);
-    await page.locator('[data-phone-scene="2"]').tap();
-    const tools = page.locator('[data-phone-toolbar="selection"]');
-    await expect(tools).toContainText('Scene 3');
-    await expect(tools.getByRole('button', { name: 'Design' })).toBeVisible();
+    const tile = page.locator('[data-phone-scene="2"]');
+    const box = await tile.boundingBox();
+    if (!box) throw new Error('no scene tile');
+    // Three quarters of the way along scene 3: the playhead goes there, not to its start.
+    await tile.tap({ position: { x: box.width * 0.75, y: box.height / 2 } });
+    const row = page.getByRole('toolbar', { name: 'Scene 3 actions' });
+    await expect(row).toBeVisible();
+    for (const name of ['Change design', 'Timing', 'Effects', 'Duplicate', 'Delete']) {
+      await expect(row.getByRole('button', { name, exact: true })).toBeAttached();
+    }
+    // The main tools stay, acting on the scene; there is no Done for a scene.
+    const main = page.locator('[data-phone-toolbar="main"]');
+    await expect(main.getByRole('button', { name: 'Photos', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Done' })).toHaveCount(0);
+    const head = await page.locator('[data-phone-playhead]').boundingBox();
+    expect(head).not.toBeNull();
+    const x = (head?.x ?? 0) + (head?.width ?? 0) / 2;
+    expect(x).toBeGreaterThan(box.x + box.width * 0.6);
+    expect(x).toBeLessThan(box.x + box.width * 0.9);
+
+    // Photos' panel says which scene it changes.
+    await main.getByRole('button', { name: 'Photos', exact: true }).tap();
+    await expect(page.getByRole('dialog', { name: 'Photos · Scene 3' })).toBeVisible();
+    await page.getByRole('dialog', { name: 'Photos · Scene 3' }).getByRole('button', { name: /close/i }).first().tap();
+
+    // Tapped again, the row goes; tapped once more, it is back; × puts it away.
+    await tile.tap();
+    await expect(row).toHaveCount(0);
+    await tile.tap();
+    await expect(row).toBeVisible();
+    await row.getByRole('button', { name: 'Hide Scene 3 actions' }).tap();
+    await expect(row).toHaveCount(0);
+    await expect(main).toBeVisible();
   });
 });
 

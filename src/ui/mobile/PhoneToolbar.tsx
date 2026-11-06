@@ -22,6 +22,9 @@ import { Icon, type IconName } from './Icon';
  * effects, style — and, for an ad, adding scenes and layers. Select something
  * and it becomes that thing's own tools, the way CapCut's does, ending in
  * "Done" to put it down again. One row, never scrolled.
+ *
+ * A scene is the exception (D-166): selecting one keeps these main tools, which
+ * act on it, and adds a slim row of the scene's own actions above them.
  */
 
 type Tool = {
@@ -57,7 +60,6 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
   } };
   const o = useOverlays.getState();
   const clock = usePreviewClock();
-  const corporate = project.mode === 'motionAd';
   const done: Tool = {
     label: 'Done',
     icon: 'check',
@@ -192,20 +194,13 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
     };
   }
 
-  if (s.sceneClipSelected && corporate) {
-    return {
-      context: `Scene ${s.selectedScene + 1}`,
-      tools: [
-        { label: 'Design', icon: 'designs', onSelect: () => { o.openScenePicker('replace'); } },
-        // Its length and how it arrives (D-133) — on a computer, the scene menu's Length and transition (D-162).
-        { label: 'Timing', icon: 'scene', onSelect: () => { o.openPhonePanel('scene'); } },
-        { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target: { kind: 'scene' } }); } },
-        { label: 'Copy', icon: 'copy', onSelect: () => { duplicateSelection(); } },
-        del(),
-        done,
-      ],
-    };
-  }
+  /*
+   * A selected scene keeps the main tools (D-166): "when I click on a scene,
+   * the menu for image design is what should be displayed … users do not need
+   * to be learning how to work in different modes." Each of them already acts
+   * on the selected scene; the scene's own actions are in the row above
+   * (SceneRow), so there is no second toolbar to leave with Done.
+   */
 
   /*
    * Each action once (D-162). The row of big buttons above this toolbar —
@@ -229,6 +224,8 @@ function useTools(): { tools: readonly Tool[]; context: string | null } {
 export function PhoneToolbar(): React.JSX.Element {
   const { tools, context } = useTools();
   return (
+    <>
+    {context === null && <SceneRow />}
     <nav
       aria-label={context === null ? 'Tools' : `${context} tools`}
       data-phone-toolbar={context === null ? 'main' : 'selection'}
@@ -255,5 +252,83 @@ export function PhoneToolbar(): React.JSX.Element {
         ))}
       </div>
     </nav>
+    </>
+  );
+}
+
+/**
+ * The selected scene's own actions, in a slim row above the main tools (D-166).
+ *
+ * "I should be able to select what to customize such as images, texts, etc."
+ * and "toggle the menu when the timeline is clicked so that I do not have to
+ * click on done to get the other menu; that way, I can have both context menu
+ * and regular menu with a single tap." So a tapped scene shows this row and
+ * leaves the main toolbar — Photos, Text, Effects, Style — where it was, acting
+ * on that scene. The × at the end, tapping the scene again or tapping the empty
+ * picture puts the row away; the scene stays the one being worked on.
+ *
+ * Only while no element is selected: an element's tools replace the main ones,
+ * and the two are never on screen together. Scrolls sideways when it does not
+ * fit, with the scene's name and the × always in view.
+ */
+function SceneRow(): React.JSX.Element | null {
+  const shown = useEditor((st) => st.sceneClipSelected && st.project.mode === 'motionAd');
+  const index = useEditor((st) => st.selectedScene);
+  const count = useEditor((st) => st.project.scenes.length);
+  if (!shown) return null;
+  const o = useOverlays.getState();
+  const name = `Scene ${index + 1}`;
+  const sceneTools: readonly Tool[] = [
+    { label: 'Change design', icon: 'designs', onSelect: () => { o.openScenePicker('replace'); } },
+    // Its length and how it arrives (D-133) — on a computer, the scene menu's Length and transition (D-162).
+    { label: 'Timing', icon: 'scene', onSelect: () => { o.openPhonePanel('scene'); } },
+    { label: 'Effects', icon: 'effects', onSelect: () => { o.openPicker({ target: { kind: 'scene' } }); } },
+    { label: 'Duplicate', icon: 'copy', onSelect: () => { duplicateSelection(); } },
+  ];
+  const chip = 'flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium active:bg-panel-alt';
+  return (
+    <div
+      role="toolbar"
+      aria-label={`${name} actions`}
+      data-phone-scene-row={index}
+      className="flex shrink-0 items-center border-t border-edge bg-panel pl-3"
+    >
+      <span className="shrink-0 pr-1.5 text-[12px] font-semibold text-accent">{name}</span>
+      {/* Fades at its right edge, so a row wider than the phone reads as one to scroll; a spacer at its end lets Delete clear the fade. */}
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-20px),transparent)] [scrollbar-width:none]">
+        {sceneTools.map((tool) => (
+          <button key={tool.label} type="button" data-scene-action={tool.label.toLowerCase()} onClick={tool.onSelect} className={chip} style={{ color: 'var(--c-ink)' }}>
+            <Icon name={tool.icon} size={18} />
+            <span className="whitespace-nowrap">{tool.label}</span>
+          </button>
+        ))}
+        {/* Apart from the others, and last: the one that takes something away. */}
+        <span aria-hidden className="mx-1 h-6 w-px shrink-0 bg-edge" />
+        <button
+          type="button"
+          data-scene-action="delete"
+          onClick={() => { deleteSelection(); }}
+          disabled={count <= 1}
+          title={count <= 1 ? 'A video needs at least one scene' : undefined}
+          className={`${chip} disabled:opacity-40`}
+          style={{ color: 'var(--c-danger)' }}
+        >
+          <Icon name="trash" size={18} />
+          <span className="whitespace-nowrap">Delete</span>
+        </button>
+        <span aria-hidden className="w-5 shrink-0" />
+      </div>
+      {/* A quiet ×: the row goes, the scene stays the one the tools act on. */}
+      <button
+        type="button"
+        onClick={() => { useEditor.getState().selectScene(index); }}
+        aria-label={`Hide ${name} actions`}
+        className="grid size-11 shrink-0 place-items-center text-ink-muted"
+      >
+        <svg aria-hidden width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+        </svg>
+      </button>
+    </div>
   );
 }

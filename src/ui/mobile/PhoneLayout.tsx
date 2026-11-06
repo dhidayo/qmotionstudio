@@ -19,6 +19,7 @@ import { PhoneTopBar } from './PhoneTopBar';
 import { continueAsVideo } from '@/ui/editing/commands';
 import { useSceneTipOpen } from '@/ui/onboarding/SceneTip';
 import { useSceneReorder } from '@/ui/timeline/useSceneReorder';
+import { useSceneStills } from '@/ui/timeline/useSceneStills';
 import { anyMotion } from '@/ui/timeline/timelineRows';
 import * as actions from '@/document/actions';
 
@@ -210,6 +211,8 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
   const open = useOverlays((o) => o.openPhonePanel);
   const durationMs = Math.max(1, timelineSpanMs(project));
   const spans = useMemo(() => sceneSpans(project.scenes), [project.scenes]);
+  // Each scene as the person made it, drawn small (D-166).
+  const stills = useSceneStills(project);
   const [tip, setTip] = useState(() => !readTipSeen());
   // After the tip about adding scenes, not under it (D-165).
   const sceneTip = useSceneTipOpen();
@@ -267,6 +270,7 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
       >
         {spans.map((span) => {
           const on = span.index === selectedScene;
+          const still = stills.get(span.scene.id);
           return (
             <button
               key={span.scene.id}
@@ -274,16 +278,28 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
               aria-label={`Scene ${span.index + 1}`}
               aria-pressed={on && sceneClip}
               data-phone-scene={span.index}
+              data-still={still === undefined ? 'poster' : 'own'}
               onPointerDown={(event) => { event.stopPropagation(); reorder.handlers(span.index).onPointerDown(event); }}
               onPointerMove={(event) => { event.stopPropagation(); reorder.handlers(span.index).onPointerMove(event); }}
               onPointerUp={(event) => { reorder.handlers(span.index).onPointerUp(event); }}
               onPointerCancel={() => { reorder.handlers(span.index).onPointerCancel(); }}
-              onClick={() => {
+              onClick={(event) => {
                 if (reorder.wasDrag()) return;
+                /*
+                 * To the moment tapped, inside this scene, and paused there
+                 * (D-166): "When I click a scene it selects the entire scene
+                 * and I cannot select a specific time during the scene." A
+                 * key press (no pointer position) goes to the scene's start.
+                 */
+                const box = event.currentTarget.getBoundingClientRect();
+                const along = event.detail === 0 || box.width <= 0 ? 0 : (event.clientX - box.left) / box.width;
+                const at = Math.round(span.startMs + Math.max(0, Math.min(1, along)) * Math.max(0, span.endMs - span.startMs - 1));
                 clock.pause();
-                clock.seek(span.startMs);
-                setPlayhead(span.startMs);
-                selectSceneClip(span.index);
+                clock.seek(at);
+                setPlayhead(at);
+                // Tapped again, the scene's row of actions goes away; the scene stays chosen (D-166).
+                if (on && sceneClip) useEditor.getState().selectScene(span.index);
+                else selectSceneClip(span.index);
               }}
               className="absolute inset-y-0 overflow-hidden rounded-md border-2 text-left text-[11px] font-semibold"
               style={{
@@ -291,9 +307,13 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
                 width: `calc(${((span.endMs - span.startMs) / durationMs) * 100}% - 2px)`,
                 borderColor: on && sceneClip ? 'var(--c-accent)' : on ? 'var(--c-edge-strong)' : 'transparent',
                 ...(reorder.drag?.from === span.index ? { transform: `translateX(${reorder.drag.dx}px)`, zIndex: 10, opacity: 0.9, boxShadow: 'var(--shadow-lg)' } : {}),
-                // Each scene's own design, so the strip reads as the ad at a glance.
+                /*
+                 * Each scene as it is, so the strip reads as the video at a
+                 * glance (D-166): the design's catalogue poster only until the
+                 * scene's own picture has been drawn.
+                 */
                 backgroundColor: 'var(--c-edge)',
-                backgroundImage: `url("${posterUrl(span.scene.templateId)}")`,
+                backgroundImage: `url("${still ?? posterUrl(span.scene.templateId)}")`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
