@@ -103,8 +103,8 @@ test.describe('+ Scene asks what kind of scene (D-097)', () => {
   });
 });
 
-test.describe('your work carries on (D-098)', () => {
-  test('a new scene starts with your own photos, not the samples', async ({ page }) => {
+test.describe('your work carries on (D-098, D-166)', () => {
+  test('a new scene starts on samples, with your photos one tap away', async ({ page }) => {
     await openAd(page);
     await uploadOwnPhoto(page);
 
@@ -112,16 +112,22 @@ test.describe('your work carries on (D-098)', () => {
     await page.getByRole('dialog', { name: 'Add a scene' }).getByRole('button', { name: /^Scatter/ }).click();
 
     /*
-     * The new scene is selected, and its first spot is the uploaded photo —
-     * once, with samples in the spots after it rather than repeats (D-152).
-     * This used to expect no samples at all, the rule before D-152, and only
-     * passed when it looked before the new scene's spots were drawn.
+     * "A new scene added should not inherit the pictures of previous scene,
+     * however … the uploaded pictures should be available for selection"
+     * (D-166). The new scene is selected and shows only samples; the photo
+     * uploaded earlier waits under Photo spots, and one tap puts it in the
+     * first spot. Before D-166 the new scene started with it already in.
      */
     const spots = page.locator('[data-design-photos] [data-media-id]');
+    await expect.poll(() => spots.count()).toBeGreaterThan(1);
+    await expect(page.locator('[data-design-photos] [data-media-id^="upload:"]')).toHaveCount(0);
+    await expect(page.locator('[data-design-photos] [data-media-id^="sample:"]')).toHaveCount(await spots.count());
+
+    const waiting = page.locator('[data-your-photos] [data-library-photo^="upload:"]');
+    await expect(waiting).toHaveCount(1);
+    await waiting.getByRole('button').first().click();
     await expect(spots.first()).toHaveAttribute('data-media-id', /^upload:/);
     await expect(page.locator('[data-design-photos] [data-media-id^="upload:"]')).toHaveCount(1);
-    await expect.poll(() => spots.count()).toBeGreaterThan(1);
-    await expect(page.locator('[data-design-photos] [data-media-id^="sample:"]')).toHaveCount(await spots.count() - 1);
   });
 });
 

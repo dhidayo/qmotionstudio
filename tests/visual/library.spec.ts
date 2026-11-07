@@ -113,6 +113,8 @@ test('the scene picker\'s cards play live in the video\'s frame shape, and only 
   const scenes = (): Promise<number> => page.evaluate(() =>
     (globalThis as unknown as { __motionStudio: { editor: { getState: () => { project: { scenes: unknown[] } } } } })
       .__motionStudio.editor.getState().project.scenes.length);
+  // A video template expands into its scenes after the page loads: count once it has.
+  await expect.poll(scenes).toBeGreaterThan(1);
   const before = await scenes();
 
   await page.locator('[data-add-bar] [data-add="scene"]').click();

@@ -216,6 +216,15 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   // the cache by then costs a blank beat rather than a blank frame.
   const templateIds = project.scenes.map((scene) => scene.templateId).join(',');
   const activeTemplateId = project.scenes[selectedScene]?.templateId;
+  /*
+   * Opening a project or changing the mode empties `template` so the right
+   * one is loaded again — but when the project uses the same designs, the ids
+   * above do not change and nothing would load it. A reload that reopened
+   * the last project before its starter's template had landed left the
+   * editor with no template at all: no Looks in Style, generic panels. So
+   * being emptied is a reason to load too.
+   */
+  const templateLoaded = useEditor((s) => s.template !== null);
 
   useEffect(() => {
     const ids = [...new Set(templateIds.split(',').filter((id) => id.length > 0))]
@@ -241,7 +250,7 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
         console.error('Failed to load a scene template.', error);
       });
     return () => { cancelled = true; };
-  }, [templateIds, activeTemplateId, rig, setLoadedTemplate]);
+  }, [templateIds, activeTemplateId, templateLoaded, rig, setLoadedTemplate]);
 
   /**
    * `?template=<ad-id>` opens straight into an expanded ad, which is what the

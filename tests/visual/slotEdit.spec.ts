@@ -415,8 +415,12 @@ test.describe('arrow keys on a selected element', () => {
      */
     await page.goto('/?template=split-pair&aspect=16:9');
     await page.waitForSelector('canvas');
-    await page.waitForTimeout(2_500);
-    await page.getByRole('button', { name: 'Pause' }).click();
+    /*
+     * An image plays once and stops on its picture moment by itself (D-155,
+     * D-164), so there may be no Pause to press: wait for it to stop. It is
+     * still a real, unfrozen transport, which is the point of this test.
+     */
+    await expect(page.getByRole('button', { name: 'Replay' })).toBeVisible({ timeout: 20_000 });
     const canvas = await boxOf(page, 'canvas');
     await page.mouse.click(canvas.x + canvas.width * 0.25, canvas.y + canvas.height * 0.3);
     await expect(page.locator(SELECTION)).toBeVisible();
