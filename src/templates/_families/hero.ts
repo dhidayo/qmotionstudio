@@ -29,7 +29,8 @@ export function create(variant: SceneVariant): SceneTemplate {
   const p = variant.params;
   const shape = pick<Shape>(p, 'shape', SHAPES, 'crossfade');
   const full = FULL_FRAME.includes(shape);
-  const headline = headlineSlot(text(p, 'headline', 'The story so far'), full ? { align: 'left' } : {}, 60);
+  // Over a full-frame photo the words are light, with a soft shadow, whatever the look (D-168, as in cuts.ts).
+  const headline = headlineSlot(text(p, 'headline', 'The story so far'), full ? { align: 'left', shadow: true } : {}, 60);
 
   const build = (inputs: SceneInputs, ctx: BuildContext): Layer[] => {
     const { durationMs, design, safe } = ctx;
@@ -57,7 +58,7 @@ export function create(variant: SceneVariant): SceneTemplate {
       const measured = measureSlot(ctx, headline, inputs, size, safe.w * 0.9);
       const top = contentFloor(design, safe) - measured.height;
       layers.push(rect(ctx, 'rule', { w: u * 0.1, h: Math.max(3, u * 0.007), x: safe.x, y: top - u * 0.035, anchorX: 0, fill: roleFill('accent'), tracks: { scaleX: [{ t: 300, v: 0, ease: 'linear' }, { t: 900, v: 1, ease: 'outExpo' }] }, slot: shapeSlot('rule', 'Line above the headline'), follows: `text:${headline.id}` }));
-      layers.push(placeText(ctx, headline, inputs, { sizePx: size, maxWidthPx: safe.w * 0.9, x: safe.x, y: top, anchorX: 0, reveal: { kind: 'kinetic', unit: 'word', motion: 'rise', startMs: 400, durationMs: 650, staggerMs: 80 } }).layer);
+      layers.push(placeText(ctx, headline, inputs, { sizePx: size, maxWidthPx: safe.w * 0.9, x: safe.x, y: top, anchorX: 0, fill: colorFill('#ffffff'), reveal: { kind: 'kinetic', unit: 'word', motion: 'rise', startMs: 400, durationMs: 650, staggerMs: 80 } }).layer);
       return layers;
     }
 

@@ -6,6 +6,8 @@ import { readLastOpened, readProject } from '@/persist/db';
 import { restoreMedia } from '@/persist/media';
 import { renderParams } from '@/dev/renderParams';
 import { useEditor } from '@/state/store';
+import { hasWork } from '@/state/starter';
+import { offerWelcomeBack } from './welcomeBack';
 
 /**
  * Reopening the last project on load (§13).
@@ -82,6 +84,8 @@ export function useRestore(media: MediaStore): RestoreState {
 
         openProject(result.project);
         setState({ phase: 'ready', missing });
+        // Coming back to work asks whether to carry on or start anew (D-168).
+        offerWelcomeBack(stored.savedAt, hasWork(result.project));
         /*
          * §16: never silently. A photo that could not be reopened leaves an
          * empty frame, and an empty frame with no explanation reads as the app

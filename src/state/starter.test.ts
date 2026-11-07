@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ASPECTS } from '@/core/types';
-import { createProject, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
+import { createProject, createScene, DEFAULT_TEMPLATE_ID } from '@/document/defaults';
 import { migrate } from '@/document/migrate';
 import * as actions from '@/document/actions';
 import { designLook } from '@/templates/looks';
 import { WORKSPACE_IDS, WORKSPACES } from '@/templates/workspaces';
 import { loadSceneTemplate } from '@/templates/registry';
-import { sameContent, starterProject, untouchedStarterOf } from './starter';
+import { emptyVideo, hasWork, sameContent, starterProject, untouchedStarterOf } from './starter';
 
 /** D-149: only a project nobody has touched is ever swapped for a workspace's opener. */
 
@@ -71,6 +71,31 @@ describe('starter projects (D-149)', () => {
     ];
     for (const edit of edits) {
       expect(untouchedStarterOf(edit.apply(start, here)), edit.label).toBeNull();
+    }
+  });
+});
+
+describe('work worth coming back to (D-168)', () => {
+  it('a starter or an empty new video is not, in any frame, even after a save and reopen', () => {
+    for (const aspect of ASPECTS) {
+      for (const project of [...WORKSPACE_IDS.map((id) => starterProject(id, { aspect })), emptyVideo(aspect)]) {
+        expect(hasWork(project), `${project.name} ${aspect}`).toBe(false);
+        const reopened = migrate(JSON.parse(JSON.stringify(project)));
+        expect(reopened.ok).toBe(true);
+        if (reopened.ok) expect(hasWork(reopened.project), `${project.name} ${aspect} reopened`).toBe(false);
+      }
+    }
+  });
+
+  it('a word, a photo, a scene, a sound or a name is', () => {
+    const image = starterProject('both');
+    for (const edit of [actions.setText('headline', 'Our summer'), actions.replacePhoto(0, 'upload:2'), actions.renameProject('My trip')]) {
+      expect(hasWork(edit.apply(image, here)), edit.label).toBe(true);
+    }
+    const video = emptyVideo('16:9');
+    const sound = { id: 'a1', mediaId: 'upload:song', startMs: 0, trimStartMs: 0, trimEndMs: 4_000, gainDb: 0, fadeInMs: 0, fadeOutMs: 0 };
+    for (const edit of [actions.addScene(createScene(DEFAULT_TEMPLATE_ID)), actions.addAudio(sound)]) {
+      expect(hasWork(edit.apply(video, here)), edit.label).toBe(true);
     }
   });
 });

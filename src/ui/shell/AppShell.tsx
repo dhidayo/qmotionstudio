@@ -27,6 +27,8 @@ import { useKeyboard } from '@/ui/hooks/useKeyboard';
 import { useAudioPlayback } from '@/ui/audio/useAudioPlayback';
 import { useAutosave } from '@/ui/persist/useAutosave';
 import { useRestore } from '@/ui/persist/useRestore';
+import { WelcomeBackDialog } from '@/ui/persist/WelcomeBack';
+import { ImageModeConfirm } from './ImageModeConfirm';
 import { Toast } from './Toast';
 import { QuickStart } from '@/ui/onboarding/QuickStart';
 import { markRestoreReady } from '@/ui/onboarding/purposeState';
@@ -444,6 +446,10 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
         {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
       </Suspense>
       <QuickStart />
+      {/* On opening afresh onto saved work: carry on, or start anew (D-168). */}
+      <WelcomeBackDialog />
+      {/* A video of several scenes, or with sound, asks before it becomes an image (D-168). */}
+      <ImageModeConfirm />
       {/* + Photos' file inputs, once, where no closing sheet can take them away (D-165). */}
       <PhotoInputs />
       {/* Where to add scenes, once, after switching an image to Video (D-165). */}

@@ -283,21 +283,52 @@ test.describe('the row of actions says what each mode makes (D-162)', () => {
 test.describe('switching modes', () => {
   test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
 
-  test('to Image keeps the selected scene and the layers over it, says so, and undoes in one step', async ({ page }) => {
+  test('to Image asks first, keeps scene 1 and the layers over it, says so, and undoes in one step (D-168)', async ({ page }) => {
     await open(page, `${VIDEO}&frozen=1000`);
     await page.getByTitle('Add a text overlay').click();
+    type Scenes = { getState: () => { project: { scenes: { id: string }[]; overlays: unknown[] }; selectScene: (i: number) => void } };
+    const firstScene = await page.evaluate(() => (globalThis as unknown as { __motionStudio: { editor: Scenes } }).__motionStudio.editor.getState().project.scenes[0]?.id);
+    // Scene 3 selected: scene 1 is still the one kept, as the owner asked.
+    await page.evaluate(() => { (globalThis as unknown as { __motionStudio: { editor: Scenes } }).__motionStudio.editor.getState().selectScene(2); });
     const modes = page.getByRole('group', { name: 'Mode' });
-    await modes.getByRole('button', { name: 'Image', exact: true }).click();
-    await expect(page.locator('[data-toast]')).toContainText('Image keeps scene 1 and the layers over it');
     const counts = () => page.evaluate(() => {
       const { project } = (globalThis as unknown as { __motionStudio: Handle }).__motionStudio.editor.getState();
       return [project.scenes.length, project.overlays.length];
     });
+
+    // Asked first; Stay in Video (and Escape) change nothing.
+    await modes.getByRole('button', { name: 'Image', exact: true }).click();
+    const question = page.getByRole('dialog', { name: 'Switch to Image mode?' });
+    await expect(question).toContainText('An image is one scene. Scene 1 stays, with the layers over it; scenes 2–5 are set aside. You can undo this.');
+    await expect(question.getByRole('button', { name: 'Switch to Image' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(question).toHaveCount(0);
+    await modes.getByRole('button', { name: 'Image', exact: true }).click();
+    await question.getByRole('button', { name: 'Stay in Video' }).click();
+    await expect(question).toHaveCount(0);
+    expect(await counts()).toEqual([5, 1]);
+
+    await modes.getByRole('button', { name: 'Image', exact: true }).click();
+    // The editor's keys do nothing behind the window; Enter answers it.
+    await page.keyboard.press('Control+z');
+    expect(await counts()).toEqual([5, 1]);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-toast]')).toContainText('Switched to Image, keeping scene 1. Want the video back?');
     expect(await counts()).toEqual([1, 1]);
+    expect(await page.evaluate(() => (globalThis as unknown as { __motionStudio: { editor: Scenes } }).__motionStudio.editor.getState().project.scenes[0]?.id)).toBe(firstScene);
     await expect(modes.getByRole('button', { name: 'Image', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
     await page.keyboard.press('Control+z');
     await expect.poll(counts).toEqual([5, 1]);
+  });
+
+  test('a single scene with no sound switches without asking', async ({ page }) => {
+    await open(page, '/');
+    const modes = page.getByRole('group', { name: 'Mode' });
+    await modes.getByRole('button', { name: 'Video', exact: true }).click();
+    await modes.getByRole('button', { name: 'Image', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Switch to Image mode?' })).toHaveCount(0);
+    await expect(modes.getByRole('button', { name: 'Image', exact: true })).toHaveAttribute('aria-pressed', 'true');
   });
 });
 

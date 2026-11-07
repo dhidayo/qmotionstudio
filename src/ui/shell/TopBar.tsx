@@ -191,15 +191,14 @@ function HistoryButton({
 /**
  * §1.1 / §1.2. Image and Video (D-155), named for what each makes. Switching
  * to Video keeps the image as scene 1 and lets you add more; switching back
- * keeps the *selected* scene and the layers over it, and sets the rest aside.
+ * keeps scene 1 and the layers over it, and sets the rest aside.
  *
- * That is destructive, and it is one undo away — which is why the toast says
- * so (`switchMode`) rather than a dialog asking first.
+ * That loses scenes, so a video of more than one scene, or with sound, asks
+ * first, and the switch is one undo away (`switchMode`, D-168).
  */
 function ModeSwitch(): React.JSX.Element {
   const mode = useEditor((s) => s.project.mode);
   const sceneCount = useEditor((s) => s.project.scenes.length);
-  const selectedScene = useEditor((s) => s.selectedScene);
 
   return (
     <div className="flex rounded-md border border-edge p-0.5" role="group" aria-label="Mode">
@@ -215,7 +214,7 @@ function ModeSwitch(): React.JSX.Element {
             onClick={() => { if (!active) switchMode(m); }}
             title={
               lossy
-                ? `${MODE_COPY[m].label} keeps scene ${selectedScene + 1} and the layers over it, and sets the other ${sceneCount - 1} aside. Undoable.`
+                ? `${MODE_COPY[m].label} keeps scene 1 and the layers over it, and sets the other ${sceneCount - 1} aside. It asks first, and can be undone.`
                 : MODE_COPY[m].hint
             }
             className="whitespace-nowrap rounded-sm px-2 py-0.5 text-[12px] transition-colors"

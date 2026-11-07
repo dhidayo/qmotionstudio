@@ -130,17 +130,17 @@ describe('switching modes', () => {
     expect(next.scenes).toHaveLength(1);
   });
 
-  it('keeps the selected scene, not the first, on the way back to Showcase', () => {
+  it('keeps scene 1, whichever is selected, on the way back to Image (D-168)', () => {
     const project = adProject();
     const next = actions.setMode('showcase').apply(project, scope(2));
 
     expect(next.mode).toBe('showcase');
     expect(next.scenes).toHaveLength(1);
-    expect(next.scenes[0]?.templateId).toBe('angle-fan');
+    expect(next.scenes[0]?.templateId).toBe('kinetic-statement');
     expect(next.scenes[0]?.transitionIn).toBeNull();
   });
 
-  it('keeps the layers over the kept scene, moved to its start, and sets the rest and the music aside (D-155)', () => {
+  it('keeps the layers over scene 1 and sets the rest and the music aside (D-155, D-168)', () => {
     // adProject's scenes run 0–3000, 2500–6500 and 6100–11100.
     const over = (id: string, startMs: number, endMs: number, track = 0): Overlay =>
       ({ id, track, startMs, endMs } as Overlay);
@@ -153,8 +153,7 @@ describe('switching modes', () => {
     const next = actions.setMode('showcase').apply(project, scope(1));
 
     expect(next.overlays.map((o) => [o.id, o.startMs, o.endMs, o.track])).toEqual([
-      ['second', 500, 2_500, 0],
-      ['spans', 2_500, 4_000, 1],
+      ['first', 0, 1_000, 0],
     ]);
     expect(next.audio).toEqual([]);
   });

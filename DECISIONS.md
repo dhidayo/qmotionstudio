@@ -3948,4 +3948,44 @@ selected row is marked and follows the picture; rows are 44px on touch, and
 scrolling respects reduced motion. The Add-an-element picker is now named as it
 reads, so a screen reader never hears two things called "Elements".
 
+## D-168 — Welcome back, a question before a video becomes an image, and Scene Cuts that read
+
+"When I open the application again, it goes straight to my last design … it would
+be nice to have a popup if an existing design exists to ask if user would like to
+discard existing design or start a new one. You can also let them know they can
+save the design." Opening the app afresh — a new tab or window, or the browser
+started again — onto a project with work in it asks **Welcome back**: the design's
+picture, its name and when it was last changed, **Continue editing** (also Escape)
+or **Start a new design** — the menu's New image or New video, in the mode of the
+design left. "Your designs save automatically on this device. Open them any time
+from Switch project, at the top" (on a phone, "from Open… in the menu"). Nothing
+is deleted: there is no discard here, since deleting a project cannot be undone.
+Work is anything that differs from a workspace's starter or an empty new video
+(`hasWork`). A reload of the tab in use is carrying on, not coming back, and asks
+nothing; nor does a deep link, a frozen frame or a thumbnail. Nothing else is
+remembered.
+
+"In a video mode of multiple scenes, if a user clicks to go back to Image mode,
+popup to tell user that their design will be lost and only one scene will be
+available in the image mode and let them confirm; let the available scene be
+scene 1." A video of more than one scene, or with sound, asks **Switch to Image
+mode?** and says exactly what stays and what is set aside — "An image is one scene.
+Scene 1 stays, with the layers over it; scenes 2–5, the layers over them and the
+sound are set aside. You can undo this." — with **Switch to Image** and **Stay in
+Video** (also Escape). Scene 1 is kept, not the selected scene (supersedes D-155's
+rule). It stays one undo step, and the toast after it says how to get the video
+back. A single scene with no sound switches without asking.
+
+Both questions are real modal windows: focus starts on the first answer and stays
+inside, Escape gives the answer that changes nothing, focus returns where it was,
+no key reaches the editor behind, and on a phone the buttons are full width and
+44px tall.
+
+Scene Cuts' photos fill the frame edge to edge in every shape: their box is the
+frame's own shape, 4% over, rather than the photo frame's 3:4, which left strips at
+the sides of a wide frame — the photograph is the frame, so Frame ratio no longer
+applies there. Their words, and the full-frame Photo Reveal designs', are light
+with a soft shadow over the scrim whatever the look, as Soft Pop's words over
+photos are: a light look's dark ink was unreadable on a dark photo ("Behind the
+shutters").
 

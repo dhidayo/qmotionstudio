@@ -52,3 +52,23 @@ export function untouchedStarterOf(project: Project): WorkspaceId | null {
   }
   return null;
 }
+
+/**
+ * What New video opens on: no scenes yet — they come from the library or from
+ * the person's saved images (D-140, D-155) — and no layers.
+ */
+export function emptyVideo(aspect: Aspect): Project {
+  return createProject({ name: 'Untitled video', aspect, mode: 'motionAd', templateId: 'blank', photoCount: 0 });
+}
+
+/**
+ * Whether a project holds anything worth coming back to (D-168): "users may
+ * be coming back to start a new design". False while it is still a
+ * workspace's starter or the empty video New video opens on — nothing there
+ * would be missed — and true once anything differs: a photo, a word, a
+ * colour, the name, a scene, a layer, a sound.
+ */
+export function hasWork(project: Project): boolean {
+  if (untouchedStarterOf(project) !== null) return false;
+  return !sameContent(project, emptyVideo(project.aspect));
+}

@@ -1,10 +1,10 @@
 import { colorFill, roleFill, type Keyframe, type Layer } from '@/core/types';
-import type { SceneInputs } from '@/document/types';
+import type { PhotoInput, SceneInputs } from '@/document/types';
 import type { BuildContext } from '../buildContext';
 import { num, pick, text, type SceneVariant } from '../catalog';
 import type { SceneTemplate } from '../schema';
 import { backgroundLayer, contentFloor } from '../_shared/chrome';
-import { fillSlots, photoProps, untagged } from '../_shared/photo';
+import { boxScale, fillSlots, photoProps, untagged } from '../_shared/photo';
 import { cardCount, defineScene, headlineSlot, kf, measureSlot, placeText, rect, sampled, shapeSlot } from './kit';
 import { hash } from '@/core/render/layers/kinetic';
 
@@ -17,6 +17,11 @@ import { hash } from '@/core/render/layers/kinetic';
  * next photo arrives through the transition — a copy of it, drawn through
  * masks — and when the cut completes the real one takes over. The last photo
  * cuts back to the first, so the scene loops.
+ *
+ * The photos fill the frame edge to edge in every shape, and the words over
+ * them are light with a soft shadow above a dark scrim, whatever the look
+ * (D-168: "Behind the shutters" was drawn in a light look's dark ink over a
+ * dark photo, and a 3:4 photo left strips at the sides of a wide frame).
  */
 
 type Shape =
@@ -28,7 +33,8 @@ const SHAPES: readonly Shape[] = ['iris', 'diamond', 'barnDoor', 'stripes', 'bli
 export function create(variant: SceneVariant): SceneTemplate {
   const p = variant.params;
   const shape = pick<Shape>(p, 'shape', SHAPES, 'iris');
-  const headline = headlineSlot(text(p, 'headline', 'Every angle'), { align: 'left' }, 60);
+  // A soft shadow under the words by default: they always sit on a photograph (D-168).
+  const headline = headlineSlot(text(p, 'headline', 'Every angle'), { align: 'left', shadow: true }, 60);
 
   const build = (inputs: SceneInputs, ctx: BuildContext): Layer[] => {
     const { durationMs, design, safe } = ctx;
@@ -39,12 +45,20 @@ export function create(variant: SceneVariant): SceneTemplate {
     const cy = design.h / 2;
     const turn = durationMs / n;
     const T = Math.min(turn * 0.45, num(p, 'cutMs', shape === 'flash' || shape === 'whip' ? 420 : 900));
-    const cover = Math.max(design.w, design.h) * 1.04;
+    /*
+     * The frame's own shape, 4% over, so no edge shows as a photo drifts or
+     * slides (D-168). A photo frame's shape would leave strips at the sides
+     * of a wide frame: here the photograph *is* the frame.
+     */
+    const fullFrame = (photo: PhotoInput): ReturnType<typeof photoProps> => {
+      const grow = 1.04 * boxScale(photo);
+      return { ...photoProps(photo, Math.max(design.w, design.h)), w: design.w * grow, h: design.h * grow };
+    };
     const layers: Layer[] = [backgroundLayer(inputs, ctx)];
 
     photos.forEach((photo, i) => {
       const start = i * turn;
-      const props = photoProps(photo, cover);
+      const props = fullFrame(photo);
       // The photo itself, for its turn: with a slow drift so a held frame is never dead.
       const baseTracks = sampled(0, turn, 100, (ms) => {
         const local = ms / turn;
@@ -58,13 +72,13 @@ export function create(variant: SceneVariant): SceneTemplate {
       // The next photo's arrival, in the last T of this turn.
       const next = photos[(i + 1) % n];
       if (!next) return;
-      const incoming = untagged(photoProps(next, cover));
+      const incoming = untagged(fullFrame(next));
       const from = start + turn - T;
       const to = start + turn;
       layers.push(...arrival(shape, ctx, incoming, from, to, T, design, cx, cy, u, i));
     });
 
-    // The words, low on the left, over a scrim.
+    // The words, low on the left, over a scrim: light, as on any photograph (pop.ts's `onPhoto`).
     layers.push({
       id: ctx.id('scrim'), type: 'gradient', startMs: 0, endMs: durationMs, anchorX: 0, anchorY: 0, tracks: {},
       props: { w: design.w, h: design.h, gradient: 'linear', angle: 90, stops: [{ at: 0, paint: colorFill('rgba(0,0,0,0)') }, { at: 0.6, paint: colorFill('rgba(0,0,0,0.08)') }, { at: 1, paint: colorFill('rgba(0,0,0,0.7)') }] },
@@ -72,7 +86,7 @@ export function create(variant: SceneVariant): SceneTemplate {
     const size = u * 0.075;
     const measured = measureSlot(ctx, headline, inputs, size, safe.w * 0.9);
     const top = contentFloor(design, safe) - measured.height;
-    layers.push(placeText(ctx, headline, inputs, { sizePx: size, maxWidthPx: safe.w * 0.9, x: safe.x, y: top, anchorX: 0, reveal: { kind: 'kinetic', unit: 'word', motion: 'rise', startMs: 400, durationMs: 650, staggerMs: 80 } }).layer);
+    layers.push(placeText(ctx, headline, inputs, { sizePx: size, maxWidthPx: safe.w * 0.9, x: safe.x, y: top, anchorX: 0, fill: colorFill('#ffffff'), reveal: { kind: 'kinetic', unit: 'word', motion: 'rise', startMs: 400, durationMs: 650, staggerMs: 80 } }).layer);
     return layers;
   };
 

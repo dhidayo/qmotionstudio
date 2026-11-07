@@ -232,6 +232,8 @@ test.describe('on a computer', () => {
     await add(page, 'sticker:check');
     await expect(page.locator('[data-overlay-clip]').first()).toHaveAttribute('aria-label', /^Check tick, layer 1/);
     await page.getByRole('group', { name: 'Mode' }).getByRole('button', { name: 'Image', exact: true }).click();
+    // Several scenes: asked first (D-168).
+    await page.getByRole('dialog', { name: 'Switch to Image mode?' }).getByRole('button', { name: 'Switch to Image' }).click();
     await expect.poll(async () => (await overlays(page)).map((o) => o.kind)).toEqual(['sticker']);
   });
 });

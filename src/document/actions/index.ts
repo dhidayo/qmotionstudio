@@ -1551,20 +1551,18 @@ export function duplicateProject(project: Project): Project {
 export function setMode(mode: ProjectMode): Action {
   return {
     label: `Switch to ${MODE_LABEL[mode]}`,
-    apply: (project, scope) => {
+    apply: (project) => {
       if (project.mode === mode) return project;
 
       if (mode === 'motionAd') {
         return { ...project, mode, updatedAt: Date.now() };
       }
 
-      // §5: showcase has exactly one scene and no music. Keeping the
-      // *selected* scene rather than the first is what makes this feel like
-      // "extract this beat" instead of "throw away my work" — and it is
-      // undoable either way.
-      const index = project.scenes[scope.sceneIndex] ? scope.sceneIndex : 0;
-      const kept = project.scenes[index];
-      const span = sceneSpans(project.scenes)[index];
+      // §5: showcase has exactly one scene and no music. Scene 1 is the one
+      // kept (D-168, superseding D-155's selected scene): "let the available
+      // scene be scene 1". The person is asked first, and it is one undo step.
+      const kept = project.scenes[0];
+      const span = sceneSpans(project.scenes)[0];
       if (!kept || !span) return project;
 
       // The layers over that scene come too, moved to its start (D-155): the
