@@ -18,3 +18,8 @@ coverage/
 /playwright-report/
 /blob-report/
 /.playwright/
+
+# graphify: the knowledge graph is rebuilt locally (`graphify update .`, ~30s, no API cost);
+# only the curated cluster names are kept.
+graphify-out/*
+!graphify-out/.graphify_labels.json
