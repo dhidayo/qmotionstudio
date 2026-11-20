@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import * as actions from '@/document/actions';
 import { useShallow } from 'zustand/react/shallow';
 import { projectPhotos } from '@/document/select/media';
@@ -69,6 +70,9 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
   const ids = library.filter((id) => store.has(id));
   const title = target.kind === 'logo' ? 'Replace the logo' : target.kind === 'background' ? 'Background picture' : 'Replace photo';
   const phone = useLayout() === 'phone';
+  // Focus goes in, goes round inside, and comes back when it closes (D-169); on a phone the sheet does this.
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox, { active: !phone });
 
   const upload = (
     <>
@@ -115,7 +119,7 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
               data-photo-choice={id}
               onClick={() => { apply(id); }}
               title={entry?.name ?? id}
-              className="aspect-square overflow-hidden rounded-md border border-edge hover:border-accent focus:border-accent focus:outline-none"
+              className="aspect-square overflow-hidden rounded-md border border-edge hover:border-accent focus:border-accent"
               style={{ background: 'var(--c-panel-alt)' }}
             >
               {url !== null && <img src={url} alt={entry?.name ?? 'Photo'} className="size-full object-cover" />}
@@ -137,6 +141,7 @@ function Picker({ target }: { target: PhotoTarget }): React.JSX.Element {
 
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label={title}

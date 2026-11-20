@@ -170,7 +170,7 @@ export function BarDelete({ label, onDelete }: { label: string; onDelete: () => 
       onClick={onDelete}
       aria-label={label}
       title={label}
-      className="grid size-8 shrink-0 place-items-center rounded-md hover:bg-panel-alt"
+      className="grid size-8 shrink-0 place-items-center rounded-md hover:bg-panel-alt pointer-coarse:size-11"
     >
       <svg aria-hidden width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
         <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />

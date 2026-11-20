@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import { starterProject } from '@/state/starter';
 import { readWorkspace } from '@/state/workspace';
 import { migrate } from '@/document/migrate';
@@ -123,8 +124,13 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
     }
   };
 
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox, { onEscape: onClose });
+
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label="Switch project"

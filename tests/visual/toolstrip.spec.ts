@@ -166,7 +166,7 @@ test.describe('on a phone', () => {
     if (!box) throw new Error('no canvas');
     await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
     await expect(page.locator('[data-phone-toolbar="selection"]')).toBeVisible();
-    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Done' }).tap();
+    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: /^Deselect/ }).tap();
     // Photos are added from Photos; the Add sheet has no second way to do it.
     await main.getByRole('button', { name: 'Add', exact: true }).tap();
     await expect(page.getByRole('group', { name: 'Add' }).locator('[data-add="photos"]')).toHaveCount(0);

@@ -167,21 +167,38 @@ test.describe('the phone layout', () => {
     await expect(page.locator('[data-phone-aspect]')).toContainText('4:5');
   });
 
-  test('the toolbar becomes the selection\'s tools, and Done puts it down', async ({ page }) => {
+  test('a selection keeps the main tools and adds its own row above them, with no Done (D-169)', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, LIFESTYLE);
-    await expect(page.locator('[data-phone-toolbar="main"]')).toBeVisible();
+    const main = page.locator('[data-phone-toolbar="main"]');
+    await expect(main).toBeVisible();
     await tap(page, await at(page, PHOTO.x, PHOTO.y));
-    const tools = page.locator('[data-phone-toolbar="selection"]');
+    const tools = page.getByRole('toolbar', { name: /^Photo \d actions$/ });
     await expect(tools).toBeVisible();
+    await expect(tools).toHaveAttribute('data-phone-toolbar', 'selection');
     // "Motion", once "Animate": it adds a motion at once, as "+ Motion" does (D-153).
-    for (const name of ['Replace', 'Crop', 'Effects', 'Motion', 'Delete', 'Done']) {
+    for (const name of ['Replace', 'Crop', 'Effects', 'Motion', 'Delete']) {
       await expect(tools.getByRole('button', { name, exact: true })).toBeVisible();
     }
-    // No floating toolbar over the picture on a phone: the bottom bar is it.
+    // The main tools stay, below the row, and nothing anywhere says Done.
+    await expect(main.getByRole('button')).toHaveCount(6);
+    const row = await tools.boundingBox();
+    const bar = await main.boundingBox();
+    expect((row?.y ?? 0) + (row?.height ?? 0)).toBeLessThanOrEqual((bar?.y ?? 0) + 1);
+    await expect(page.getByRole('button', { name: 'Done', exact: true })).toHaveCount(0);
+    // No floating toolbar over the picture on a phone: the row is it.
     await expect(page.locator('[data-selection-toolbar]')).toHaveCount(0);
-    await tools.getByRole('button', { name: 'Done' }).tap();
-    await expect(page.locator('[data-phone-toolbar="main"]')).toBeVisible();
+    // The quiet × puts it down.
+    await tools.getByRole('button', { name: 'Deselect' }).tap();
+    await expect(tools).toHaveCount(0);
+    await expect(main).toBeVisible();
+    expect((await state(page)).slot).toBeNull();
+    // So does tapping it again, once it is clearly not a double tap.
+    await tap(page, await at(page, PHOTO.x, PHOTO.y));
+    await expect(tools).toBeVisible();
+    await page.waitForTimeout(400);
+    await tap(page, await at(page, PHOTO.x, PHOTO.y));
+    await expect(tools).toHaveCount(0);
     expect((await state(page)).slot).toBeNull();
   });
 
@@ -235,14 +252,17 @@ test.describe('fingers on the canvas', () => {
     expect((await state(page)).slot).toMatch(/^text:/);
   });
 
-  test('a second tap selects and nothing more; press and hold brings the menu', async ({ page }) => {
+  test('a second tap puts it down and nothing more; press and hold brings the menu', async ({ page }) => {
     await open(page, LIFESTYLE);
     const photo = await at(page, PHOTO.x, PHOTO.y);
     await tap(page, photo);
+    expect((await state(page)).slot).toMatch(/^photo:/);
+    // Tapping the thing in hand again puts it down, as tapping a scene again does (D-169).
+    await page.waitForTimeout(400);
     await tap(page, photo);
     await page.waitForTimeout(500);
     await expect(page.getByRole('menu'), 'no menu from a plain tap').toHaveCount(0);
-    expect((await state(page)).slot).toMatch(/^photo:/);
+    expect((await state(page)).slot).toBeNull();
 
     const cdp = await fingers(page);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [photo] });

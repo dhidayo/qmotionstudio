@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useLayout } from '@/ui/shell/useLayout';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 
 /**
  * A panel that rises from the bottom of a phone screen (D-109).
@@ -42,9 +43,13 @@ export function BottomSheet({
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); };
   }, [onClose]);
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox);
 
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label={label ?? title}
@@ -102,7 +107,8 @@ export function BottomSheet({
               onClick={onClose}
               onPointerDown={(event) => { event.stopPropagation(); }}
               aria-label={closeLabel ?? `Close ${title.toLowerCase()}`}
-              className="grid size-9 place-items-center rounded-full text-[18px] leading-none text-ink-muted hover:bg-panel-alt"
+              // A thumb's 44px on a phone (D-169).
+              className={`grid ${phone ? 'size-11' : 'size-9'} shrink-0 place-items-center rounded-full text-[18px] leading-none text-ink-muted hover:bg-panel-alt`}
               style={{ background: 'var(--c-panel-alt)' }}
             >
               ✕

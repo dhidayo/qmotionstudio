@@ -338,6 +338,47 @@ test.describe('on a phone', () => {
     await expect(page.getByLabel('Counts to')).toBeVisible();
   });
 
+  test('one sticker plays at a time: the one nearest the middle, or the one a finger rests on (D-169)', async ({ page }) => {
+    await open(page, '/?template=pop-float&aspect=1:1&frozen=3000');
+    await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Add', exact: true }).tap();
+    await page.locator('[data-add="element"]').tap();
+    const dialog = picker(page);
+    await dialog.getByRole('tab', { name: 'Stickers', exact: true }).tap();
+    const playing = dialog.locator('[data-element-tile] canvas[data-playing]');
+    await expect(playing).toHaveCount(1);
+    await expect.poll(async () => dialog.locator('[data-element-tile] canvas').count()).toBeGreaterThan(6);
+    // Scrolled on, still one; then a finger resting on another tile gives it the turn.
+    await dialog.locator('[data-element-grid]').evaluate((el) => { el.scrollTop += 300; });
+    await page.waitForTimeout(300);
+    await expect(playing).toHaveCount(1);
+    // A tile wholly in view that is not the one playing.
+    const id = await dialog.locator('[data-element-grid]').evaluate((grid) => {
+      const view = grid.getBoundingClientRect();
+      const tiles = [...grid.querySelectorAll<HTMLElement>('[data-element-tile]')];
+      const inView = tiles.filter((t) => {
+        const box = t.getBoundingClientRect();
+        return box.top >= view.top && box.bottom <= view.bottom && t.querySelector('canvas[data-playing]') === null;
+      });
+      return inView.at(-1)?.dataset['elementTile'] ?? '';
+    });
+    expect(id).not.toBe('');
+    const other = dialog.locator(`[data-element-tile="${id}"]`);
+    await other.dispatchEvent('pointerdown', { pointerType: 'touch', isPrimary: true });
+    await expect(other.locator('canvas[data-playing]')).toHaveCount(1);
+    await expect(playing).toHaveCount(1);
+  });
+
+  test('nothing in the picker plays for someone who asked for reduced motion (D-169)', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await open(page, '/?template=pop-float&aspect=1:1&frozen=3000');
+    await page.locator('[data-phone-toolbar="main"]').getByRole('button', { name: 'Add', exact: true }).tap();
+    await page.locator('[data-add="element"]').tap();
+    const dialog = picker(page);
+    await dialog.getByRole('tab', { name: 'Stickers', exact: true }).tap();
+    await page.waitForTimeout(500);
+    await expect(dialog.locator('canvas[data-playing]')).toHaveCount(0);
+  });
+
   test('on a short phone the library still fits, with its chips in one row', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 600 });
     await open(page, '/?template=pop-float&aspect=1:1&frozen=3000');

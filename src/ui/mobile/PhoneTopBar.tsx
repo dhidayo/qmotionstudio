@@ -31,7 +31,7 @@ export function PhoneTopBar(): React.JSX.Element {
         onClick={() => { open('project'); }}
         aria-label="Menu"
         data-phone-menu
-        className="grid size-10 shrink-0 place-items-center rounded-lg active:bg-panel-alt"
+        className="grid size-11 shrink-0 place-items-center rounded-lg active:bg-panel-alt"
       >
         <Icon name="menu" size={24} />
       </button>
@@ -40,7 +40,7 @@ export function PhoneTopBar(): React.JSX.Element {
         onClick={() => { open('project'); }}
         aria-label={`Project: ${name}. Menu`}
         data-phone-project
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1.5 pr-1 text-left"
+        className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg pr-1 text-left"
       >
         <img src="/brand-q.png" alt="" aria-hidden width={26} height={26} className="size-[26px] shrink-0 rounded-md" />
         <span className="min-w-0 truncate text-[14px] font-semibold">{name}</span>
@@ -52,18 +52,21 @@ export function PhoneTopBar(): React.JSX.Element {
         onClick={() => { open('aspect'); }}
         aria-label={`Frame shape ${aspect}. Change`}
         data-phone-aspect
-        className="flex shrink-0 items-center gap-1 rounded-lg border border-edge px-2.5 py-1.5 text-[13px] font-medium tabular"
+        // 44px to the finger, around a slimmer pill (D-169).
+        className="flex h-11 shrink-0 items-center"
       >
-        {aspect} <span aria-hidden className="text-[10px] text-ink-faint">▾</span>
+        <span className="flex items-center gap-1 rounded-lg border border-edge px-2.5 py-1.5 text-[13px] font-medium tabular">
+          {aspect} <span aria-hidden className="text-[10px] text-ink-faint">▾</span>
+        </span>
       </button>
 
       <button
         type="button"
         onClick={() => { setExporting(true); }}
         data-tour="export"
-        className="shrink-0 rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink"
+        className="flex h-11 shrink-0 items-center"
       >
-        Export
+        <span className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink">Export</span>
       </button>
     </header>
   );

@@ -6,6 +6,7 @@ import { hashString } from '@/core/effects/random';
 import { drawLayer } from '@/core/render/drawLayer';
 import { TextMeasurer } from '@/core/text/measure';
 import type { MediaResolver } from '@/core/render/rig';
+import { prefersReducedMotion } from '@/ui/shell/reducedMotion';
 
 /**
  * A small live preview of one effect, drawn by the real renderer (D-100).
@@ -83,7 +84,8 @@ export function EffectPreview({
     observer.observe(canvas);
     return () => { observer.disconnect(); };
   }, [autoplay]);
-  const playing = active || (autoplay && visible);
+  // Nothing in the library moves for someone who asked for less motion (D-169), as the elements' tiles do not.
+  const playing = !prefersReducedMotion() && (active || (autoplay && visible));
 
   useEffect(() => {
     const canvas = ref.current;

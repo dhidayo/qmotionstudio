@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import { ELEMENT_EFFECTS, FRAME_EFFECTS } from '@/core/effects/catalog';
 import {
   ELEMENT_CATEGORIES, FRAME_CATEGORIES,
@@ -117,8 +118,13 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
       ? 'Goes at the playhead and covers everything — scenes and layers. Drag it on the FX lane to move it.'
       : 'Moods cover the whole scene; moments go at the playhead. Fine-tune them here or in Effects.';
 
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox);
+
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label="Effects"
@@ -140,9 +146,9 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder="Search effects"
             aria-label="Search effects"
-            className="order-last w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
+            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
           />
-          <button type="button" onClick={close} className="rounded-md border border-edge px-2.5 py-1 text-[12px] hover:bg-panel-alt">
+          <button type="button" onClick={close} className="min-h-11 rounded-md border border-edge px-3 py-1 text-[12px] hover:bg-panel-alt sm:min-h-0 sm:px-2.5">
             Cancel
           </button>
         </div>
@@ -197,7 +203,7 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
                     onBlur={() => { setHovered((h) => (h === card.id ? null : h)); }}
                     title={card.blurb}
                     aria-label={`${card.name} — ${card.blurb}`}
-                    className="group overflow-hidden rounded-md border border-edge text-left transition-colors hover:border-accent focus:border-accent focus:outline-none"
+                    className="group overflow-hidden rounded-md border border-edge text-left transition-colors hover:border-accent focus:border-accent"
                   >
                     <span className="block overflow-hidden" style={{ background: 'var(--c-panel-alt)' }}>
                       <EffectPreview

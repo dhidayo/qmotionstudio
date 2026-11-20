@@ -4007,4 +4007,46 @@ shutters").
 
 Linux reference pictures for the artboard tests are committed beside the macOS ones.
 
+## D-169 — no Done on a phone, Elements always in reach, and an app anyone can use
+
+"Accessibility is important to me right now. We need to clean this app up." And
+earlier: "Can you toggle the menu … so that I do not have to click on done to get
+the other menu; that way, I can have both context menu and regular menu with a
+single tap … than the Done which I never knew it was there."
+
+**Every selection keeps the main tools.** What D-166 did for a scene, everything
+now does on a phone: a photo or text of the design, a part, a layer (photo, text,
+shape, sticker, number, video clip), the logo, an effect, a sound or music clip.
+The toolbar — Designs/Templates, Add, Photos, Text, Effects, Style — stays, and
+the selection's own tools sit in a slim row above it, headed by what it is
+("Text · Headline", "Sticker · Subscribe button", "Part · Brand mark", "Music ·
+Lo-fi Haze"). Each keeps its tools; only their place changed. The row is a
+labelled toolbar, scrolls sideways with its name and × always in view, has 44px
+targets and Delete apart and last. The quiet × puts the selection down; so does
+tapping it again (after the double-tap window, so a double tap still edits) or
+the empty picture. There is no Done anywhere on a phone: the effect panel's
+became a × ("Deselect"), and the tablet sheet's reads Close.
+
+**Elements is one tap away whatever is selected**, beside Play in an image and a
+video alike, so it is no longer also in the scene's row (D-162: each action once).
+
+**Accessibility.** An audit of the editor, library, inspector tabs, phone
+toolbar and sheets, pickers, export window and both questions, at 1366×768 and
+390×844, light and dark, now runs as tests/visual/a11y.spec.ts and fails on
+serious or critical findings. Small print clears 4.5:1 everywhere: light muted
+#575761 and faint #66666f, dark faint #9a9aa6. Every window is modal in full —
+focus goes in, Tab stays inside, Escape closes (not while a video is being made),
+focus comes back — through one hook shared by the pickers, sheets, Export,
+Switch project, Save as and Shortcuts. The inspector's tabs work with the arrow
+keys. A phone's primary controls are 44px: the top bar, the transport, the
+sheets' ×, the pickers' search and Cancel. Picker tiles and menu items show the
+focus ring. Under reduced motion the chrome's scrolls jump and no preview loops.
+Two exceptions are accepted and listed in the test: the 9px test-release note,
+and the developer-only frame-time overlay. @axe-core/playwright is not yet
+installed; the test makes its checks directly and can adopt it later.
+
+**One sticker plays at a time on a touch screen.** In the + Element picker the
+tile a finger last rested on plays while it is in view, otherwise the one most
+in view nearest the middle; the rest show their still. A computer still plays a
+tile on hover or focus; nothing plays for reduced motion.
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import { SOUND_LIBRARY, soundMediaId, type LibrarySound, type SoundKind } from '@/audio/library';
 import { loadSound } from '@/media/sounds';
 import { useEditor } from '@/state/store';
@@ -148,8 +149,13 @@ function SoundDialog({ onUseFile, busy }: { onUseFile: () => void; busy: boolean
     .map((group) => ({ ...group, sounds: SOUND_LIBRARY.filter((sound) => sound.kind === group.kind && matches(sound)) }))
     .filter((group) => group.sounds.length > 0);
 
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox);
+
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label="Sounds"
@@ -171,9 +177,9 @@ function SoundDialog({ onUseFile, busy }: { onUseFile: () => void; busy: boolean
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder="Search sounds"
             aria-label="Search sounds"
-            className="order-last w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] focus:border-accent focus:outline-none sm:order-none sm:w-44 sm:py-1 sm:text-[12px]"
+            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-accent focus:outline-none sm:order-none sm:w-44 sm:py-1 sm:text-[12px]"
           />
-          <button type="button" onClick={close} className="rounded-md border border-edge px-2.5 py-1 text-[12px] hover:bg-panel-alt">
+          <button type="button" onClick={close} className="min-h-11 rounded-md border border-edge px-3 py-1 text-[12px] hover:bg-panel-alt sm:min-h-0 sm:px-2.5">
             Close
           </button>
         </div>

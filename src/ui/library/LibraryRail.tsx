@@ -409,7 +409,7 @@ function TemplateCard({
         onClick={onToggleFavourite}
         aria-pressed={favourite}
         aria-label={favourite ? `Unfavourite ${template.name}` : `Favourite ${template.name}`}
-        className="absolute left-1 top-1 grid size-5 place-items-center rounded-sm text-[11px] leading-none opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        className="absolute left-1 top-1 grid size-6 place-items-center rounded-sm text-[12px] leading-none opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
         style={{
           background: 'color-mix(in srgb, var(--c-panel) 85%, transparent)',
           color: favourite ? 'var(--c-pro)' : 'var(--c-ink-faint)',

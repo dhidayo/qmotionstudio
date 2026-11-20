@@ -230,6 +230,12 @@ export function CanvasSelection({
   const pinch = useRef<Pinch | null>(null);
   const pan = useRef<{ from: Point; zoom: ViewZoom } | null>(null);
   const lastTap = useRef<{ key: string; at: number } | null>(null);
+  /** A phone's tap on the element in hand puts it down, once it is clearly not a double tap (D-169). */
+  const putDownLater = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const keepHolding = (): void => {
+    if (putDownLater.current !== null) { clearTimeout(putDownLater.current); putDownLater.current = null; }
+  };
+  useEffect(() => keepHolding, []);
 
   /*
    * The selection box takes keyboard focus when something is clicked on the
@@ -577,6 +583,7 @@ export function CanvasSelection({
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0) return;
+    keepHolding();
     const touch = event.pointerType !== 'mouse';
     if (touch) fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
@@ -684,6 +691,13 @@ export function CanvasSelection({
       if (!tap.wasSelected) {
         select(tap.target);
         holdStill();
+      } else if (layout === 'phone') {
+        /*
+         * Tapped again, the thing in hand is put down and its row goes, as a
+         * scene's does (D-166, D-169) — after the double-tap window, so a
+         * double tap still edits it.
+         */
+        putDownLater.current = setTimeout(() => { putDownLater.current = null; select(null); }, DOUBLE_TAP_MS);
       }
       lastTap.current = { key: tap.target.key, at: now };
       return;

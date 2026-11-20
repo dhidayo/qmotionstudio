@@ -15,6 +15,7 @@ import { useOverlays } from '@/ui/shell/overlays';
 import { ELEMENT_SECTIONS, overlayName, overlayThis } from '@/ui/editing/commands';
 import { FontPicker } from './FontPicker';
 import { CounterSection, ShapeSection, StickerSection } from './ElementSections';
+import { chromeScroll } from '@/ui/shell/reducedMotion';
 
 /**
  * The overlay editor (§1.2, §3C).
@@ -49,7 +50,7 @@ export function OverlayPanel(): React.JSX.Element {
   const focus = useOverlays((o) => o.inspectorSection);
   useEffect(() => {
     if (focus === null || !(Object.values(ELEMENT_SECTIONS) as readonly string[]).includes(focus)) return;
-    document.querySelector(`[data-section="${focus}"]`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    document.querySelector(`[data-section="${focus}"]`)?.scrollIntoView({ block: 'start', behavior: chromeScroll() });
     useOverlays.getState().focusInspectorSection(null);
   }, [focus]);
 
@@ -86,7 +87,7 @@ export function OverlayPanel(): React.JSX.Element {
 
   return (
     <>
-      {/* A phone's toolbar says what is selected and has its own Done (D-109). */}
+      {/* A phone's selection row says what is selected and has its own × (D-169). */}
       {!phone && <div className="mb-3 flex items-center gap-2">
         <button
           type="button"

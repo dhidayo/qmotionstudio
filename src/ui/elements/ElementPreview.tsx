@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { Layer, Palette } from '@/core/types';
 import type { CounterContent, ShapeContent, StickerContent } from '@/document/types';
 import { drawLayer } from '@/core/render/drawLayer';
@@ -9,15 +9,17 @@ import { TextMeasurer } from '@/core/text/measure';
 import { fontString } from '@/fonts/registry';
 import { hashString } from '@/core/effects/random';
 import { EMPTY_MEDIA } from '@/core/render/rig';
+import { prefersReducedMotion } from '@/ui/shell/reducedMotion';
 
 /**
  * A live picture of one element (D-158), drawn by the real renderer — the
  * same builders and layers as the export, in the look's colours — so what a
  * tile shows is exactly what lands on the design.
  *
- * Still until it is hovered or focused, then it plays; on a touch screen it
- * plays while it is on screen, as the effects library does (D-109). Nothing
- * moves for someone who has asked for reduced motion.
+ * Still until it is hovered or focused, then it plays; on a touch screen one
+ * tile plays at a time, the one in view a finger last rested on or the one
+ * nearest the middle (D-169). Nothing moves for someone who has asked for
+ * reduced motion.
  */
 
 export type ElementContent = ShapeContent | StickerContent | CounterContent;
@@ -88,6 +90,81 @@ function build(content: ElementContent, size: number, measurer: TextMeasurer, se
   }
 }
 
+/*
+ * One tile plays at a time on a touch screen (D-169). Every sticker on screen
+ * playing at once was a phone's whole graphics budget spent on a grid, and a
+ * restless page to read. The one that plays is the last one a finger rested
+ * on while it is still well in view, otherwise, of those most in view, the
+ * one nearest the middle of the scrolled list; the rest show their still. A
+ * computer is unchanged: a tile plays while it is hovered or focused.
+ */
+type Seen = { readonly el: Element; ratio: number };
+const seen = new Map<string, Seen>();
+let touchedKey: string | null = null;
+let playingKey: string | null = null;
+const listeners = new Set<() => void>();
+
+/** How much of a tile must be in view for it to play. */
+const IN_VIEW = 0.6;
+
+function chooseLeader(): void {
+  let next: string | null = null;
+  const touched = touchedKey === null ? undefined : seen.get(touchedKey);
+  if (touched && touched.ratio >= IN_VIEW) next = touchedKey;
+  else {
+    let bestScore = -Infinity;
+    for (const [key, { el, ratio }] of seen) {
+      if (ratio < IN_VIEW) continue;
+      const box = el.getBoundingClientRect();
+      const view = el.closest('[data-element-grid]')?.getBoundingClientRect()
+        ?? { left: 0, top: 0, width: globalThis.innerWidth, height: globalThis.innerHeight };
+      const distance = Math.hypot(box.left + box.width / 2 - (view.left + view.width / 2), box.top + box.height / 2 - (view.top + view.height / 2));
+      // The most of it in view first, then the nearest the middle.
+      const score = Math.round(ratio * 20) * 1e6 - distance;
+      if (score > bestScore) { bestScore = score; next = key; }
+    }
+  }
+  if (next === playingKey) return;
+  playingKey = next;
+  for (const listener of listeners) listener();
+}
+
+/** A finger rested on this tile (the element holding a preview): it is the one that plays, while it is in view. */
+export function previewTouched(tile: Element): void {
+  for (const [key, { el }] of seen) {
+    if (!tile.contains(el)) continue;
+    touchedKey = key;
+    chooseLeader();
+    return;
+  }
+}
+
+function useLeader(enabled: boolean, ref: React.RefObject<HTMLCanvasElement | null>): boolean {
+  const key = useId();
+  const [leading, setLeading] = useState(false);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!enabled || !canvas || typeof IntersectionObserver !== 'function') return undefined;
+    const update = (): void => { setLeading(playingKey === key); };
+    listeners.add(update);
+    const observer = new IntersectionObserver(([entry]) => {
+      const entrySeen = seen.get(key);
+      if (entrySeen) entrySeen.ratio = entry?.intersectionRatio ?? 0;
+      chooseLeader();
+    }, { threshold: [0, 0.25, 0.5, IN_VIEW, 0.8, 1] });
+    seen.set(key, { el: canvas, ratio: 0 });
+    observer.observe(canvas);
+    return () => {
+      observer.disconnect();
+      listeners.delete(update);
+      seen.delete(key);
+      if (touchedKey === key) touchedKey = null;
+      chooseLeader();
+    };
+  }, [key, enabled, ref]);
+  return leading;
+}
+
 export function ElementPreview({
   content,
   active,
@@ -98,7 +175,7 @@ export function ElementPreview({
 }: {
   content: ElementContent;
   active: boolean;
-  /** Plays whenever it is on screen: a phone has no hover. */
+  /** A phone has no hover: plays when it is the one tile chosen to (D-169). */
   autoplay?: boolean;
   palette: Palette;
   /** CSS pixels, square. */
@@ -106,16 +183,10 @@ export function ElementPreview({
   seed?: string;
 }): React.JSX.Element {
   const ref = useRef<HTMLCanvasElement | null>(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!autoplay || !canvas || typeof IntersectionObserver !== 'function') return;
-    const observer = new IntersectionObserver(([entry]) => { setVisible(entry?.isIntersecting === true); }, { threshold: 0.6 });
-    observer.observe(canvas);
-    return () => { observer.disconnect(); };
-  }, [autoplay]);
-  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const playing = !still && (active || (autoplay && visible)) && content.kind !== 'shape';
+  const still = prefersReducedMotion();
+  // A shape never moves, so it never takes the turn from a sticker or a number.
+  const leading = useLeader(autoplay && !still && content.kind !== 'shape', ref);
+  const playing = !still && (active || (autoplay && leading)) && content.kind !== 'shape';
 
   useEffect(() => {
     const canvas = ref.current;
@@ -153,5 +224,5 @@ export function ElementPreview({
     return () => { cancelAnimationFrame(frame); };
   }, [content, playing, palette, size, seed]);
 
-  return <canvas ref={ref} aria-hidden className="block" style={{ width: size, height: size, maxWidth: '100%' }} />;
+  return <canvas ref={ref} aria-hidden data-playing={playing ? '' : undefined} className="block" style={{ width: size, height: size, maxWidth: '100%' }} />;
 }

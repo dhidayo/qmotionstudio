@@ -138,9 +138,10 @@ export function Artboard({ project, clock, rig, media, padding = 24 }: Props): R
               role="status"
               data-canvas-loading
               className="pointer-events-none absolute inset-0 grid place-items-center text-[13px]"
-              style={{ color: 'rgb(255 255 255 / 0.75)' }}
+              style={{ color: '#fff' }}
             >
-              <span className="flex items-center gap-2">
+              {/* On its own dark pill, so it reads over a light frame as well as a dark one (D-169). */}
+              <span className="flex items-center gap-2 rounded-full px-3 py-1" style={{ background: 'rgb(0 0 0 / 0.6)' }}>
                 <span aria-hidden className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
                 Loading design…
               </span>

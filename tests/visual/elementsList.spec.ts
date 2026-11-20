@@ -187,7 +187,7 @@ test.describe('on a phone', () => {
     await expect(page.locator('[data-selection-box="text:headline"]')).toBeVisible();
 
     // Opened again, the chosen one is marked; a part picks as well.
-    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Done' }).tap();
+    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: /^Deselect/ }).tap();
     await page.locator('[data-phone-elements]').tap();
     await row(page, 'shape:mark').tap();
     await expect(page.locator('[data-selection-box="shape:mark"]')).toBeVisible();
@@ -203,21 +203,22 @@ test.describe('on a phone', () => {
     await expect(row(page, 'shape:mark')).toHaveAttribute('aria-current', 'true');
     await shot(page, 'elements-phone-image');
     await page.getByRole('dialog', { name: 'Elements' }).getByRole('button', { name: /^Close/ }).tap();
-    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: 'Done' }).tap();
+    await page.locator('[data-phone-toolbar="selection"]').getByRole('button', { name: /^Deselect/ }).tap();
     await page.locator('[data-phone-elements]').tap();
     await expect(list(page).locator('[aria-current="true"]')).toHaveCount(0);
   });
 
-  test('a video scene’s row starts with Elements, and its list is that scene’s', async ({ page }) => {
+  test('a video’s Elements is beside play as an image’s is, and its list is the scene’s (D-169)', async ({ page }) => {
     test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     test.slow();
     await open(page, VIDEO);
     await page.locator('[data-phone-scene="1"]').tap();
     const sceneRow = page.locator('[data-phone-scene-row="1"]');
     await expect(sceneRow).toBeVisible();
-    await expect(sceneRow.locator('[data-scene-action]').first()).toHaveText('Elements');
+    // One way in, the same in both modes: not in the scene's row as well.
+    await expect(sceneRow.locator('[data-scene-action="elements"]')).toHaveCount(0);
     await shot(page, 'elements-phone-scene-row');
-    await sceneRow.locator('[data-scene-action="elements"]').tap();
+    await page.locator('[data-phone-elements]').tap();
     const sheet = page.getByRole('dialog', { name: 'Elements · Scene 2' });
     await expect(sheet).toBeVisible();
     await expect(list(page)).toContainText('Everything in scene 2.');

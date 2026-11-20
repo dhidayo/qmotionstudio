@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import * as actions from '@/document/actions';
 import { createSceneFrom, newId } from '@/document/defaults';
 import type { Project } from '@/document/types';
@@ -145,8 +146,13 @@ export function ScenePicker({
       ? 'Your image comes in animated, as it plays in Image, with its words and photos, after the selected scene.'
       : 'It goes after the selected scene, with your logo and colours. It starts with sample photos; yours are one tap away in Photos.';
 
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox);
+
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label={title}
@@ -168,12 +174,12 @@ export function ScenePicker({
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder={mode === 'add' && source === 'mine' ? 'Search your images' : 'Search designs'}
             aria-label={mode === 'add' && source === 'mine' ? 'Search your images' : 'Search designs'}
-            className="order-last w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
+            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
           />
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-edge px-2 py-1 text-[11px] hover:bg-panel-alt"
+            className="min-h-11 rounded-md border border-edge px-3 py-1 text-[11px] hover:bg-panel-alt sm:min-h-0 sm:px-2"
           >
             Cancel
           </button>

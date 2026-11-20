@@ -12,6 +12,7 @@ import { resolveStyle, slotWords } from '@/templates/_shared/text';
 import { parseSlotKey } from '@/core/render/slots';
 import { Button, ColorField, EmptyNote, NoSectionTabs, Row, Section, Segmented, Slider, TextInput, Toggle } from '../controls';
 import { SlotPlacement } from '../SlotPlacement';
+import { chromeScroll } from '@/ui/shell/reducedMotion';
 
 const WEIGHTS: readonly { value: TextStyle['weight']; label: string }[] = [
   { value: 400, label: 'Regular' },
@@ -56,7 +57,7 @@ export function TextTab({ template }: { template: SceneTemplate | null }): React
   const selectedTile = tileOf(selectedSlot);
   useEffect(() => {
     if (selectedTile === null) return;
-    document.querySelector(`[data-text-tile="${CSS.escape(selectedTile)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    document.querySelector(`[data-text-tile="${CSS.escape(selectedTile)}"]`)?.scrollIntoView({ block: 'nearest', behavior: chromeScroll() });
   }, [selectedTile]);
 
   if (!template) {

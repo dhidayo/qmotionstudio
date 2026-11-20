@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useDialogFocus } from './useDialogFocus';
 import { useOverlays } from './overlays';
 import { isApplePlatform, useInputCaps } from './platform';
 import { gestureGroups, shortcutGroups } from './shortcuts';
@@ -26,6 +27,9 @@ export function ShortcutsDialog(): React.JSX.Element | null {
     window.addEventListener('keydown', onKey);
     return () => { window.removeEventListener('keydown', onKey); };
   }, [open, setOpen]);
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox, { active: open });
 
   if (!open) return null;
   const groups = caps.keyboard ? shortcutGroups(isApplePlatform(), caps.touchToo) : gestureGroups(phone);
@@ -35,6 +39,7 @@ export function ShortcutsDialog(): React.JSX.Element | null {
   const stacked = !caps.keyboard && phone;
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label={caps.keyboard ? 'Keyboard shortcuts' : 'Touch gestures'}

@@ -18,9 +18,14 @@
   --c-edge: #e4e4e8;
   --c-edge-strong: #d2d2d9;
   --c-ink: #17171b;
-  --c-ink-muted: #6b6b76;
-  /* Readable as small print on white (about 3.6:1), not just present. */
-  --c-ink-faint: #85858f;
+  /*
+   * Small print clears WCAG AA, 4.5:1, on every light surface it sits on —
+   * the panels, the page and the grey stage (D-169: "Accessibility is
+   * important to me right now"). Faint was about 3.6:1 on white and 3:1 on
+   * the stage; it stays a step lighter than muted.
+   */
+  --c-ink-muted: #575761;
+  --c-ink-faint: #66666f;
 
   /* Brand (D-128): deep navy with off-white — the product's own colour, on
      its bars and headings. "A deep navy blue color for the background and
@@ -81,7 +86,8 @@
   --c-edge-strong: #41414c;
   --c-ink: #f4f4f6;
   --c-ink-muted: #b4b4be;
-  --c-ink-faint: #8c8c98;
+  /* 4.5:1 on the accent's soft tint too, where a chosen row's small print sits (D-169). */
+  --c-ink-faint: #9a9aa6;
 
   /* A step lighter than the light theme's, to stand off the dark panels. */
   --c-brand: #15285f;

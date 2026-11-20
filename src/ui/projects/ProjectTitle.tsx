@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useEditor } from '@/state/store';
 import { MAX_NAME, useProjectActions } from './useProjectActions';
@@ -116,9 +117,13 @@ function SaveAsDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
     await saveAs(draft);
     onClose();
   };
+  // Focus goes round inside, Escape closes, and focus comes back when it does (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox, { onEscape: onClose });
 
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       aria-label="Save as"
@@ -141,7 +146,6 @@ function SaveAsDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
           value={draft}
           maxLength={MAX_NAME}
           onChange={(event) => { setDraft(event.target.value); }}
-          onKeyDown={(event) => { if (event.key === 'Escape') onClose(); }}
           className="mt-1 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[12px] focus:border-accent focus:outline-none"
         />
         <div className="mt-4 flex justify-end gap-2">

@@ -15,6 +15,7 @@ import { restoreMedia } from '@/persist/media';
 import { SceneLayoutReset } from '../SlotPlacement';
 import { LogoSection } from '../LogoSection';
 import { DesignShapes, SelectedPart } from '../PartPanel';
+import { chromeScroll } from '@/ui/shell/reducedMotion';
 
 /**
  * What each colour paints, said plainly (D-126) — "please confirm that all the
@@ -49,7 +50,7 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
   // Picking the logo on the canvas opens Look; this brings its controls into view.
   useEffect(() => {
     if (!selectedLogo) return;
-    document.querySelector('[data-logo-section]')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    document.querySelector('[data-logo-section]')?.scrollIntoView({ block: 'start', behavior: chromeScroll() });
   }, [selectedLogo]);
 
   // "Change background…" from the canvas menu (D-120): its section, in view.
@@ -57,7 +58,7 @@ export function LookTab({ template }: { template: SceneTemplate | null }): React
   useEffect(() => {
     if (focus === null) return;
     const section = document.querySelector(`[data-inspector-section="${focus}"]`)?.closest('section');
-    section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    section?.scrollIntoView({ block: 'start', behavior: chromeScroll() });
     useOverlays.getState().focusInspectorSection(null);
   }, [focus]);
 

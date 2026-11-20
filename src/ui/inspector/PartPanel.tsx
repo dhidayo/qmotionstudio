@@ -10,6 +10,7 @@ import { PART_SECTION, entryEditing } from '@/ui/editing/parts';
 import { useOverlays } from '@/ui/shell/overlays';
 import { Button, ElementColorField, EmptyNote, Row, Section, TextInput } from './controls';
 import { SlotPlacement } from './SlotPlacement';
+import { chromeScroll } from '@/ui/shell/reducedMotion';
 
 /**
  * A design's own parts in Style (D-159): "The T and the background box cannot
@@ -47,7 +48,7 @@ export function SelectedPart(): React.JSX.Element | null {
   // "Colour" on the canvas brings this section into view, as Background does (D-120).
   useEffect(() => {
     if (focus !== PART_SECTION) return;
-    document.querySelector(`[data-inspector-section="${PART_SECTION}"]`)?.closest('section')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    document.querySelector(`[data-inspector-section="${PART_SECTION}"]`)?.closest('section')?.scrollIntoView({ block: 'start', behavior: chromeScroll() });
     useOverlays.getState().focusInspectorSection(null);
   }, [focus]);
 

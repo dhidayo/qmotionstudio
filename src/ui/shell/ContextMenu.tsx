@@ -114,7 +114,7 @@ export function ContextMenu(): React.JSX.Element | null {
             role="menuitem"
             disabled={item.disabled}
             onClick={(event) => { run(event, item); }}
-            className="flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left text-[12px] hover:bg-panel-alt focus:bg-panel-alt focus:outline-none disabled:opacity-40"
+            className="flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left text-[12px] hover:bg-panel-alt focus:bg-panel-alt focus-visible:-outline-offset-2 disabled:opacity-40"
             style={item.danger === true ? { color: 'var(--c-danger)' } : undefined}
           >
             <span className="truncate">{item.label}</span>

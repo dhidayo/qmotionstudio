@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import { useEditor } from '@/state/store';
 import { useMediaStore } from '@/ui/media/MediaProvider';
 import { useEntitlements } from '@/entitlements';
@@ -131,8 +132,14 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
   // The fallback is WebM only (§11.9), so the format choice is moot there.
   const formatLocked = !offline;
 
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  // Escape closes it as Close does — not while a video is being made, when Close is not offered either.
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox, running ? {} : { onEscape: onClose });
+
   return (
     <div
+      ref={dialogBox}
       className="fixed inset-0 z-40 grid place-items-center"
       style={{ background: 'color-mix(in srgb, var(--c-bg) 70%, transparent)' }}
       role="dialog"

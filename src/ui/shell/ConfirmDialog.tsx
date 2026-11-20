@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { useLayout } from './useLayout';
+import { useDialogLayer } from './useDialogFocus';
 
 /**
  * A short question with two or three answers (D-168): Welcome back, and
@@ -36,6 +37,8 @@ export function ConfirmDialog({ title, children, choices, onCancel, aside, testI
   const box = useRef<HTMLDivElement>(null);
   const cancel = useRef(onCancel);
   useEffect(() => { cancel.current = onCancel; }, [onCancel]);
+  // On top of any other window while it is open, so theirs leave Tab to this one (D-169).
+  useDialogLayer();
 
   useEffect(() => {
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;

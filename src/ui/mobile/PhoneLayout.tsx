@@ -142,35 +142,37 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
   });
 
   return (
-    <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-edge bg-panel px-3 py-1">
+    <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-edge bg-panel px-3 py-0.5" data-phone-transport>
       <span className="flex min-w-0 items-center gap-1.5">
-        {/* An image's line also holds Elements, so its time stands over its length rather than beside it (D-167). */}
-        <span className={`tabular text-[12px] text-ink-muted ${corporate ? '' : 'flex flex-col leading-tight'}`} data-phone-time>
+        {/* The line also holds Elements, so the time stands over its length rather than beside it (D-167). */}
+        <span className="tabular flex flex-col text-[12px] leading-tight text-ink-muted" data-phone-time>
           <span ref={now} className="text-ink">{clockTime(0)}</span>
-          {corporate ? ` / ${clockTime(durationMs)}` : <span className="text-[11px]">of {clockTime(durationMs)}</span>}
+          <span className="text-[11px]">of {clockTime(durationMs)}</span>
         </span>
         {/*
-          * Everything in the design, to pick (D-167), where an image has room
-          * for it: the toolbar keeps its six tools, Add is for adding, and
-          * Style is for the look. A video's way in is its scene's own row.
+          * Everything in the design or the scene, to pick (D-167), beside
+          * Play in an image and a video alike and whatever is selected
+          * (D-169), so it is always one tap away: the toolbar keeps its six
+          * tools, Add is for adding, Style is for the look, and a selection's
+          * row is for that one thing. A 44px target around a slimmer pill.
           */}
-        {!corporate && (
-          <button
-            type="button"
-            data-phone-elements
-            onClick={() => { useOverlays.getState().openPhonePanel('elements'); }}
-            className="flex h-9 shrink-0 items-center gap-1 rounded-full border border-edge px-2.5 text-[12px] font-medium"
-          >
+        <button
+          type="button"
+          data-phone-elements
+          onClick={() => { useOverlays.getState().openPhonePanel('elements'); }}
+          className="group flex h-11 shrink-0 items-center"
+        >
+          <span className="flex h-9 items-center gap-1 rounded-full border border-edge px-2.5 text-[12px] font-medium group-active:bg-panel-alt">
             <Icon name="layers" size={16} />
             Elements
-          </button>
-        )}
+          </span>
+        </button>
       </span>
       <button
         type="button"
         onClick={() => { if (clock.playing) clock.pause(); else clock.play(); }}
         aria-label={playing ? 'Pause' : ended ? 'Replay' : 'Play'}
-        className="grid size-10 place-items-center rounded-full"
+        className="grid size-11 place-items-center rounded-full"
         style={{ background: 'var(--c-panel-alt)', color: 'var(--c-ink)' }}
       >
         <Icon name={playing ? 'pause' : ended ? 'replay' : 'play'} size={20} />
@@ -188,15 +190,16 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
             onClick={continueAsVideo}
             title="Switch to Video mode: this image becomes scene 1"
             aria-label="Switch to Video mode: this image becomes scene 1"
-            className="mr-0.5 whitespace-nowrap rounded-full bg-accent px-2 py-1.5 text-[11px] font-semibold text-accent-ink"
+            className="mr-0.5 flex h-11 items-center"
           >
-            + Video mode
+            <span className="whitespace-nowrap rounded-full bg-accent px-2 py-1.5 text-[11px] font-semibold text-accent-ink">+ Video mode</span>
           </button>
         )}
-        <button type="button" onClick={undo} disabled={!canUndo()} aria-label="Undo" className="grid size-9 place-items-center rounded-full disabled:opacity-35">
+        {/* 44px tall, the height of a finger (D-169); narrower, so the line still fits a small phone. */}
+        <button type="button" onClick={undo} disabled={!canUndo()} aria-label="Undo" className="grid h-11 w-9 place-items-center rounded-full disabled:opacity-35">
           <Icon name="undo" size={20} />
         </button>
-        <button type="button" onClick={redo} disabled={!canRedo()} aria-label="Redo" className="grid size-9 place-items-center rounded-full disabled:opacity-35">
+        <button type="button" onClick={redo} disabled={!canRedo()} aria-label="Redo" className="grid h-11 w-9 place-items-center rounded-full disabled:opacity-35">
           <Icon name="redo" size={20} />
         </button>
       </span>

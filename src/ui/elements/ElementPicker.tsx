@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDialogFocus } from '@/ui/shell/useDialogFocus';
 import * as actions from '@/document/actions';
 import type { Overlay } from '@/document/types';
 import type { StickerCategory } from '@/core/stickers/types';
@@ -8,7 +9,7 @@ import { elementName, overlayLabel, undoHint } from '@/ui/editing/commands';
 import { noHover } from '@/ui/library/PlayingPreview';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
 import { useOverlays, type ElementPickerCategory, type ElementPickerState } from '@/ui/shell/overlays';
-import { ElementPreview, type ElementContent } from './ElementPreview';
+import { ElementPreview, previewTouched, type ElementContent } from './ElementPreview';
 import { elementTiles, stickerCategories, tileMatches, type ElementTile } from './presets';
 
 /**
@@ -104,8 +105,13 @@ function PickerDialog({ state }: { state: ElementPickerState }): React.JSX.Eleme
   const title = replacing ? 'Change sticker' : 'Add an element';
   const chips: readonly (ElementPickerCategory | 'All')[] = replacing ? [] : ['All', ...GROUPS];
 
+  // Focus goes in, goes round inside, and comes back when it closes (D-169).
+  const dialogBox = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialogBox);
+
   return (
     <div
+      ref={dialogBox}
       role="dialog"
       aria-modal="true"
       // Named as it reads, so it is never taken for the Elements list (D-167).
@@ -132,9 +138,9 @@ function PickerDialog({ state }: { state: ElementPickerState }): React.JSX.Eleme
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder={replacing ? 'Search stickers' : 'Search shapes, stickers, numbers'}
             aria-label="Search elements"
-            className="order-last w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] focus:border-accent focus:outline-none sm:order-none sm:w-56 sm:py-1 sm:text-[12px]"
+            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-accent focus:outline-none sm:order-none sm:w-56 sm:py-1 sm:text-[12px]"
           />
-          <button type="button" onClick={close} className="rounded-md border border-edge px-2.5 py-1 text-[12px] hover:bg-panel-alt">
+          <button type="button" onClick={close} className="min-h-11 rounded-md border border-edge px-3 py-1 text-[12px] hover:bg-panel-alt sm:min-h-0 sm:px-2.5">
             Cancel
           </button>
         </div>
@@ -170,13 +176,15 @@ function PickerDialog({ state }: { state: ElementPickerState }): React.JSX.Eleme
                     type="button"
                     data-element-tile={tile.id}
                     onClick={() => { choose(tile); }}
+                    // On a touch screen the tile a finger rests on is the one that plays (D-169).
+                    onPointerDown={(event) => { if (event.pointerType !== 'mouse') previewTouched(event.currentTarget); }}
                     onMouseEnter={() => { setHovered(tile.id); }}
                     onMouseLeave={() => { setHovered((h) => (h === tile.id ? null : h)); }}
                     onFocus={() => { setHovered(tile.id); }}
                     onBlur={() => { setHovered((h) => (h === tile.id ? null : h)); }}
                     aria-label={replacing ? `Change to ${tile.name}` : `Add ${tile.name}`}
                     title={tile.name}
-                    className="group overflow-hidden rounded-md border border-edge text-left transition-colors hover:border-accent focus:border-accent focus:outline-none"
+                    className="group overflow-hidden rounded-md border border-edge text-left transition-colors hover:border-accent focus:border-accent"
                   >
                     <span className="grid aspect-square place-items-center overflow-hidden" style={{ background: palette.bg }}>
                       <ElementPreview content={tile.content} active={hovered === tile.id} palette={palette} autoplay={touch} size={112} seed={tile.id} />
@@ -285,7 +293,7 @@ function OnThisDesign({
               onClick={() => { pick(overlay); }}
               aria-label={`Select ${overlayLabel(overlay)}`}
               title={elementName(overlay.content)}
-              className="block overflow-hidden rounded-md border border-edge hover:border-accent focus:border-accent focus:outline-none"
+              className="block overflow-hidden rounded-md border border-edge hover:border-accent focus:border-accent"
             >
               <span className="block" style={{ background: palette.bg }}>
                 <ElementPreview content={overlay.content} active={false} palette={palette} size={60} seed={overlay.id} />

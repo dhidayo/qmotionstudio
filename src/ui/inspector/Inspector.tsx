@@ -96,13 +96,38 @@ export function Inspector(): React.JSX.Element {
       style={{ width: 'var(--w-inspector)' }}
       aria-label="Inspector"
     >
-      <div className="brand-surface flex border-b border-edge" role="tablist">
+      {/*
+        * Tabs as a keyboard expects them (D-169): one Tab stop, the arrow
+        * keys, Home and End move between them, and each names its panel.
+        */}
+      <div
+        className="brand-surface flex border-b border-edge"
+        role="tablist"
+        aria-label="Inspector sections"
+        onKeyDown={(event) => {
+          const at = TABS.findIndex((t) => t.id === tab);
+          const next = event.key === 'ArrowRight' ? (at + 1) % TABS.length
+            : event.key === 'ArrowLeft' ? (at - 1 + TABS.length) % TABS.length
+            : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : null;
+          const to = next === null ? undefined : TABS[next];
+          if (!to) return;
+          event.preventDefault();
+          // Not also a nudge of whatever is selected on the picture.
+          event.stopPropagation();
+          setTab(to.id);
+          event.currentTarget.querySelector<HTMLElement>(`[data-inspector-tab="${to.id}"]`)?.focus();
+        }}
+      >
         {TABS.map(({ id, label }) => (
           <button
             key={id}
             type="button"
             role="tab"
+            id={`inspector-tab-${id}`}
+            data-inspector-tab={id}
             aria-selected={tab === id}
+            aria-controls="inspector-panel"
+            tabIndex={tab === id ? 0 : -1}
             onClick={() => { setTab(id); }}
             className="flex-1 whitespace-nowrap border-b-2 px-1 py-2.5 text-[12px] transition-colors"
             style={{
@@ -117,7 +142,7 @@ export function Inspector(): React.JSX.Element {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3" role="tabpanel">
+      <div className="flex-1 overflow-y-auto p-3" role="tabpanel" id="inspector-panel" aria-labelledby={`inspector-tab-${tab}`}>
         {tab === 'elements' && <ElementsList />}
         {tab === 'photos' && <PhotosTab template={template} />}
         {tab === 'text' && <TextTab template={template} />}

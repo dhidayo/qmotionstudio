@@ -280,7 +280,11 @@ export function TimelineEffectPanel(): React.JSX.Element {
 
   return (
     <div>
-      {/* The effect's own bar (D-131): its name and where it is, Done to put it down, delete beside it. */}
+      {/*
+        * The effect's own bar (D-131): its name and where it is, delete, and a
+        * quiet × to put it down — not a Done, which "I never knew it was
+        * there" (D-169).
+        */}
       <div className="brand-surface mb-3 flex items-center gap-1 rounded-[8px] py-1.5 pl-3 pr-1" data-effect-panel-bar>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[13px] font-semibold">{def?.name ?? clip.effectId}</h2>
@@ -288,10 +292,18 @@ export function TimelineEffectPanel(): React.JSX.Element {
             {where} · {seconds(origin + clip.startMs)} – {seconds(origin + endMs)}
           </p>
         </div>
-        <button type="button" onClick={() => { selectEffect(null); }} className="rounded-md px-2.5 py-1.5 text-[12px] font-semibold hover:bg-panel-alt">
-          Done
-        </button>
         <BarDelete label={`Delete ${def?.name ?? 'effect'}`} onDelete={remove} />
+        <button
+          type="button"
+          onClick={() => { selectEffect(null); }}
+          aria-label={`Deselect ${def?.name ?? 'effect'}`}
+          title="Deselect"
+          className="grid size-8 shrink-0 place-items-center rounded-md text-ink-muted hover:bg-panel-alt pointer-coarse:size-11"
+        >
+          <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+          </svg>
+        </button>
       </div>
       {def && <p className="mb-3 text-[11px] text-ink-muted">{def.blurb}</p>}
       <Slider label="Intensity" value={Math.round(clip.intensity * 100)} min={0} max={100} suffix="%"
