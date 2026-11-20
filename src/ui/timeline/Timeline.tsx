@@ -50,6 +50,9 @@ const SNAP_MS = 100;
 /** Pointer slop below which a press counts as a click rather than a drag. */
 const CLICK_SLOP_PX = 3;
 const MIN_OVERLAY_MS = 300;
+/** A scene's picture on its clip: this tall, and never narrower than a 16:9 one (D-170). */
+const STILL_H = 20;
+const STILL_MIN_W = 36;
 
 export function Timeline({
   clock,
@@ -657,13 +660,19 @@ export function Timeline({
                   }}
                 >
                   <span className={`flex items-center gap-1 truncate leading-[26px] ${active ? 'pr-6' : ''}`}>
-                    {/* The scene's own picture (D-166); the design's poster until it is drawn. */}
+                    {/*
+                      * The scene's own picture (D-166); the design's poster until it is drawn.
+                      * Never narrower than a 16:9 one (D-170): a tall video's picture at its
+                      * own shape was 11px wide, too thin to tell one scene from another, so it
+                      * shows the middle of the picture, where designs keep their words.
+                      */}
                     <span
                       aria-hidden
                       data-scene-still={stills.has(span.scene.id) ? 'own' : 'poster'}
-                      className="h-5 shrink-0 rounded-sm bg-cover bg-center"
+                      className="shrink-0 rounded-sm bg-cover bg-center"
                       style={{
-                        aspectRatio: `${ratioW} / ${ratioH}`,
+                        height: STILL_H,
+                        width: Math.max(STILL_MIN_W, Math.round((STILL_H * ratioW) / ratioH)),
                         backgroundColor: 'var(--c-edge)',
                         backgroundImage: `url("${stills.get(span.scene.id) ?? posterUrl(span.scene.templateId)}")`,
                       }}

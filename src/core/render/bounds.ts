@@ -380,6 +380,12 @@ export type SlotBox = {
    * a part with no words.
    */
   readonly edits?: { readonly slot: string; readonly item?: number };
+  /**
+   * Where it is picked, when that is less than its box (D-170): the part of
+   * it inside the frame and its mask's window, turned as the box is. Null
+   * when none of it can be seen; absent when all of it can.
+   */
+  readonly pick?: OrientedBox | null;
 };
 
 /**
@@ -505,23 +511,95 @@ export function slotBoxes(
     const scaleY = ownScaleY * parent.scaleY;
     const rotation = ownRotation + parent.rotation;
 
+    const box: OrientedBox = {
+      cx: centre.x * toFrameUnits + nudge.offsetX * frame.w,
+      cy: centre.y * toFrameUnits + nudge.offsetY * frame.h,
+      w: extent.size.w * scaleX * toFrameUnits,
+      h: extent.size.h * scaleY * toFrameUnits,
+      rotation,
+    };
+    /*
+     * Only what can be seen is picked (D-170): the part inside the frame, and
+     * inside the window of a mask it is drawn in. A marquee band or a ribbon
+     * runs well past the picture's edges, turned, and its whole rectangle
+     * picked the empty space round the picture. The pick box keeps the
+     * element's own turn. The box itself stays whole: the outline, the
+     * handles and a drag are about the whole element, so dragging one partly
+     * out of the picture neither shrinks its box nor slows it down.
+     */
+    const windows = parent.clip === null ? [FRAME_OF(frame)] : [FRAME_OF(frame), scaled(parent.clip, toFrameUnits)];
+    const pick = windows.reduce<OrientedBox | null>((kept, window) => (kept === null ? null : clipBox(kept, window)), box);
+
     seen.add(key);
     boxes.push({
       key,
       label: slot.kind === 'photo' ? `Photo ${slot.index + 1}` : slot.kind === 'shape' ? slot.label : slot.label ?? labelFor(slot.key),
       ...(slot.kind === 'text' ? { edits: slot.item === undefined ? { slot: slot.key } : { slot: slot.key, item: slot.item } } : {}),
       ...(slot.kind === 'shape' && slot.text ? { edits: slot.text } : {}),
-      box: {
-        cx: centre.x * toFrameUnits + nudge.offsetX * frame.w,
-        cy: centre.y * toFrameUnits + nudge.offsetY * frame.h,
-        w: extent.size.w * scaleX * toFrameUnits,
-        h: extent.size.h * scaleY * toFrameUnits,
-        rotation,
-      },
+      box,
+      ...(pick === box ? {} : { pick }),
     });
   }
 
   return boxes;
+}
+
+/** The frame as a box, in its own units. */
+const FRAME_OF = (frame: Size): OrientedBox => ({ cx: frame.w / 2, cy: frame.h / 2, w: frame.w, h: frame.h, rotation: 0 });
+
+function scaled(box: OrientedBox, by: number): OrientedBox {
+  return { cx: box.cx * by, cy: box.cy * by, w: box.w * by, h: box.h * by, rotation: box.rotation };
+}
+
+function cornersOf(box: OrientedBox): { x: number; y: number }[] {
+  return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx = 0, sy = 0]) => toFrame(box, { x: (sx * box.w) / 2, y: (sy * box.h) / 2 }));
+}
+
+/**
+ * The part of `box` inside `window` (D-170), as the smallest box turned as
+ * `box` is that holds it: the overlap of the two is clipped exactly
+ * (Sutherland–Hodgman, both are convex), then measured along `box`'s own
+ * sides. `box` itself when it is inside already; null when nothing of it is.
+ */
+export function clipBox(box: OrientedBox, window: OrientedBox): OrientedBox | null {
+  const corners = cornersOf(box);
+  if (corners.every((corner) => hitsWithin(window, corner))) return box;
+  let polygon = corners;
+  const edges = cornersOf(window);
+  // The window's corners go clockwise on screen (y down), so its inside is to the right of each edge.
+  for (let i = 0; i < edges.length && polygon.length > 0; i++) {
+    const a = edges[i] ?? { x: 0, y: 0 };
+    const b = edges[(i + 1) % edges.length] ?? { x: 0, y: 0 };
+    const side = (p: { x: number; y: number }): number => (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    const next: { x: number; y: number }[] = [];
+    for (let j = 0; j < polygon.length; j++) {
+      const p = polygon[j] ?? { x: 0, y: 0 };
+      const q = polygon[(j + 1) % polygon.length] ?? { x: 0, y: 0 };
+      const sp = side(p);
+      const sq = side(q);
+      if (sp >= 0) next.push(p);
+      if ((sp >= 0) !== (sq >= 0)) {
+        const t = sp / (sp - sq);
+        next.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+      }
+    }
+    polygon = next;
+  }
+  if (polygon.length < 3) return null;
+  const local = polygon.map((point) => toLocal(box, point));
+  const x0 = Math.min(...local.map((p) => p.x));
+  const x1 = Math.max(...local.map((p) => p.x));
+  const y0 = Math.min(...local.map((p) => p.y));
+  const y1 = Math.max(...local.map((p) => p.y));
+  if (x1 - x0 <= 1e-6 || y1 - y0 <= 1e-6) return null;
+  const centre = toFrame(box, { x: (x0 + x1) / 2, y: (y0 + y1) / 2 });
+  return { cx: centre.x, cy: centre.y, w: x1 - x0, h: y1 - y0, rotation: box.rotation };
+}
+
+/** `hits`, with a hair of slack so a box exactly on the frame's edge counts as inside. */
+function hitsWithin(box: OrientedBox, point: { x: number; y: number }): boolean {
+  const local = toLocal(box, point);
+  return Math.abs(local.x) <= box.w / 2 + 1e-6 && Math.abs(local.y) <= box.h / 2 + 1e-6;
 }
 
 /**
@@ -545,10 +623,12 @@ type Ancestry = {
   readonly scaleX: number;
   readonly scaleY: number;
   readonly rotation: number;
+  /** The window of the innermost mask it is drawn in, in scene design units, or null (D-170). */
+  readonly clip: OrientedBox | null;
 };
 
 function sceneRoot(timeMs: number): Ancestry {
-  return { timeMs, x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0 };
+  return { timeMs, x: 0, y: 0, scaleX: 1, scaleY: 1, rotation: 0, clip: null };
 }
 
 /** Groups and masks hold children; a tagged drawable may be inside either. */
@@ -575,14 +655,17 @@ function* flatten(
     const children = layer.type === 'group' && layer.props.depthSort === true
       ? depthOrdered(layer.children, localMs)
       : layer.children;
-    yield* flatten(children, {
-      timeMs: localMs,
-      x: origin.x,
-      y: origin.y,
-      scaleX: parent.scaleX * own.scaleX,
-      scaleY: parent.scaleY * own.scaleY,
-      rotation: parent.rotation + own.rotation,
-    });
+    const scaleX = parent.scaleX * own.scaleX;
+    const scaleY = parent.scaleY * own.scaleY;
+    const rotation = parent.rotation + own.rotation;
+    // A mask's window, drawn about its anchor as any box is: what is outside it is not seen.
+    const clip = layer.type !== 'mask' ? parent.clip : ((): OrientedBox => {
+      const w = layer.props.w * Math.abs(scaleX);
+      const h = layer.props.h * Math.abs(scaleY);
+      const centre = shiftBy(origin, { x: (0.5 - (layer.anchorX ?? 0.5)) * w, y: (0.5 - (layer.anchorY ?? 0.5)) * h }, rotation);
+      return { cx: centre.x, cy: centre.y, w, h, rotation };
+    })();
+    yield* flatten(children, { timeMs: localMs, x: origin.x, y: origin.y, scaleX, scaleY, rotation, clip });
   }
 }
 

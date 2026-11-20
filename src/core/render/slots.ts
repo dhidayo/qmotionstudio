@@ -184,14 +184,103 @@ function applyToLayer(
   const carried = carriedBy(walked, transforms, design, siblings);
 
   const slot = slotOf(carried);
-  if (!slot) return carried;
-
-  const transform = transforms[slotKey(slot)];
+  const transform = slot ? transforms[slotKey(slot)] : undefined;
   // `z` is handled by `restack`, not here — a layer that has only been
   // restacked needs no new tracks.
-  if (!transform || isIdentity(transform)) return carried;
+  const placed = !transform || isIdentity(transform) ? carried : { ...carried, tracks: nudgeTracks(carried.tracks, transform, design) };
 
-  return { ...carried, tracks: nudgeTracks(carried.tracks, transform, design) };
+  // Lines inside it that reach to a sibling, once the part itself is where it goes (D-170).
+  return reaching(placed, walked, transforms, design, siblings);
+}
+
+/**
+ * A line in a part that reaches to a sibling (D-170): a product callout's
+ * leader, from its dot on the product to its words. "Dragging a callout's
+ * words also drags its dot off the product": the part used to follow the
+ * words, so the dot went with them. Now the part stays — on the product, as
+ * the product moves (it follows the photograph) — and when the words move,
+ * the line's far end goes with them, carried exactly as a follower would be,
+ * while its near end stays on the dot: it turns and stretches to reach.
+ *
+ * `placed` is the part where the person's changes put it and `before` where
+ * the design drew it; the far end is worked out in the frame, carried by the
+ * words' nudge, and taken back into the part's own space. Sampled every
+ * 33 ms only where anything involved moves; at rest it is exact.
+ */
+function reaching(
+  placed: Layer,
+  before: Layer,
+  transforms: Readonly<Record<SlotKey, SlotTransform>>,
+  design: Size,
+  siblings: readonly Layer[],
+): Layer {
+  if (placed.type !== 'group' && placed.type !== 'mask') return placed;
+  if (!placed.children.some((child) => child.reaches !== undefined)) return placed;
+  const children = placed.children.map((child) => {
+    const key = child.reaches;
+    const t = key === undefined ? undefined : transforms[key];
+    if (key === undefined || !t || isIdentity(t) || child.type !== 'shape') return child;
+    const leader = siblings.find((sibling) => {
+      const slot = slotOf(sibling);
+      return slot !== null && slotKey(slot) === key;
+    });
+    if (!leader) return child;
+    return { ...child, tracks: reachTracks(child, placed, before, leader, t, design) };
+  });
+  if (children.every((child, i) => child === placed.children[i])) return placed;
+  return placed.type === 'group' ? { ...placed, children } : { ...placed, children };
+}
+
+function reachTracks(line: Layer & { type: 'shape' }, placed: Layer, before: Layer, leader: Layer, t: SlotTransform, design: Size): Tracks {
+  const { tracks } = line;
+  const near = pointAt(tracks, 0);
+  const anchorX = line.anchorX ?? 0.5;
+  const w = line.props.w;
+  // The far end, along the line as it rests: the end away from its anchor.
+  const along = anchorX >= 0.5 ? -w * anchorX : w * (1 - anchorX);
+  const rest = ((sampleTrack(tracks.rotation ?? [], 0) ?? 0) * Math.PI) / 180;
+  const far = { x: near.x + along * Math.cos(rest), y: near.y + along * Math.sin(rest) };
+  const base = Math.atan2(far.y - near.y, far.x - near.x);
+  const length = Math.hypot(far.x - near.x, far.y - near.y);
+  if (length === 0) return tracks;
+
+  /** At one moment of the part's own clock: how much further the line turns, in degrees, and how much longer it is. */
+  const at = (ms: number): { turn: number; stretch: number } => {
+    const sceneMs = ms + placed.startMs;
+    const origin = pointAt(before.tracks, ms);
+    // Where the design put the far end, in the frame, then where the words' nudge takes it.
+    const end = carry({ x: origin.x + far.x, y: origin.y + far.y }, pointAt(leader.tracks, sceneMs - leader.startMs), nudgeAt(t, sceneMs), design);
+    // Back into the part's space, as it now stands.
+    const centre = pointAt(placed.tracks, ms);
+    const scale = sampleTrack(placed.tracks.scaleX ?? [], ms) ?? 1;
+    const turned = ((sampleTrack(placed.tracks.rotation ?? [], ms) ?? 0) * Math.PI) / 180;
+    const dx = end.x - centre.x;
+    const dy = end.y - centre.y;
+    const local = {
+      x: (dx * Math.cos(turned) + dy * Math.sin(turned)) / (scale === 0 ? 1 : scale),
+      y: (-dx * Math.sin(turned) + dy * Math.cos(turned)) / (scale === 0 ? 1 : scale),
+    };
+    const reach = { x: local.x - near.x, y: local.y - near.y };
+    return { turn: ((Math.atan2(reach.y, reach.x) - base) * 180) / Math.PI, stretch: Math.hypot(reach.x, reach.y) / length };
+  };
+
+  const moving = animatedNudge(t)
+    || [placed.tracks, before.tracks, leader.tracks].some((track) => [track.x, track.y, track.scaleX, track.rotation].some((keys) => (keys?.length ?? 0) > 1));
+  if (!moving) {
+    const { turn, stretch } = at(0);
+    return { ...tracks, scaleX: multiply(tracks.scaleX, stretch), rotation: shift(tracks.rotation, turn, 0) };
+  }
+  const span = Math.max(0, line.endMs - line.startMs);
+  const times = new Set<number>([0, span]);
+  for (let ms = 0; ms <= span; ms += DENSE_MS) times.add(ms);
+  for (const key of [...(tracks.scaleX ?? []), ...(tracks.rotation ?? [])]) times.add(key.t);
+  const order = [...times].filter((ms) => ms >= 0 && ms <= span).sort((a, b) => a - b);
+  const samples = order.map((ms) => at(ms + line.startMs));
+  return {
+    ...tracks,
+    scaleX: order.map((ms, i) => ({ t: ms, v: (sampleTrack(tracks.scaleX ?? [], ms) ?? 1) * (samples[i]?.stretch ?? 1), ease: 'linear' })),
+    rotation: order.map((ms, i) => ({ t: ms, v: (sampleTrack(tracks.rotation ?? [], ms) ?? 0) + (samples[i]?.turn ?? 0), ease: 'linear' })),
+  };
 }
 
 /** The sibling a follower follows (D-159): the layer carrying that slot, which follows nothing itself. */

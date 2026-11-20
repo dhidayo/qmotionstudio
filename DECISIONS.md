@@ -3989,3 +3989,22 @@ with a soft shadow over the scrim whatever the look, as Soft Pop's words over
 photos are: a light look's dark ink was unreadable on a dark photo ("Behind the
 shutters").
 
+## D-170 — resets that reset everything, edits that stay put, stickers that never vanish
+
+"Reset the whole layout" put moved elements back but left recoloured, re-outlined and deleted parts as they were. It is now **Reset layout and shapes**: every position and every part back as the template made them, in one undo step. The note says what has changed and that words and photos stay, and a toast offers undo. Style's **Put every shape back** stays for bringing back deleted parts alone, colours kept.
+
+**Edits stay on what they were made on.** Taking a word out of a list (a step, a pillar, a feature, a quote) moves the entries after it up one, and now their nudges, effects, motion and part changes move with them. A change on the third step stays on that step, now the second. The changes on the entry taken out go with it. An entry's parts are found from what the design draws: everything joined to the entry's words by `follows` that repeats once per entry, such as a step's disc or a pillar's pill and number. Taking an entry out is an undo step of its own. A number taken out still leaves its place empty, so nothing moves. Photos behave the same way: Delete on the picture, and the Photo spots stepper dropping a sample from the middle, keep each photo's changes on that photo. Reordering photos still leaves changes with the spot. Typed numbers do not renumber when a word goes.
+
+**A design's parts are its own.** `shape:pill` in one design and in another are different shapes that share a name. A part's colour, outline, deletion, nudge, effects and motion are kept only while the design is the same, and go when the design changes, in the same undo step. Words, text styles, and text and photo nudges carry on as before (D-098), because a text slot's id means the same thing in every design.
+
+**Stickers never vanish (D-158 kept).** The Drawn arrow and the Scribbled circle were empty for about 4% at each end of their loop, so an Image resting there showed nothing. They are now whole across the seam. Late in each loop the stroke fades to a faint copy and a fresh one draws over it, then the whole stroke is back underneath, with no jump. A test now requires every sticker to show visible ink at every sampled moment.
+
+**Scene pictures on the timeline** are never narrower than a 16:9 one (36×20). A tall video's picture shows its middle, where designs keep their words; at its own shape it was 11px wide. Wide shapes are unchanged.
+
+**A product callout's dot stays on the product.** The dot and line are one part that moves with the product. Dragging the callout's words now turns and stretches the line so it reaches them, instead of carrying the dot off. Every still is unchanged.
+
+**Only what can be seen is picked.** An element is picked only by the part of it inside the picture and inside any mask window it is drawn in, so a marquee band or ribbon running past the edges no longer answers clicks on the space around the picture. Its outline, handles and drag still cover the whole element, so dragging something partly out of the picture neither shrinks its box nor slows it down.
+
+Linux reference pictures for the artboard tests are committed beside the macOS ones.
+
+

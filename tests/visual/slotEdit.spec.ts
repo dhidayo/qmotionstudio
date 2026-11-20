@@ -242,7 +242,7 @@ test.describe('the whole-scene reset', () => {
     await page.getByRole('tab', { name: 'Style' }).click();
     await expect(page.getByText(/2 elements have been moved/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Reset the whole layout' }).click();
+    await page.getByRole('button', { name: 'Reset layout and shapes' }).click();
     await expect(page.getByText(/elements have been moved/)).toBeHidden();
   });
 });

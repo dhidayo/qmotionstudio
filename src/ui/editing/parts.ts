@@ -1,7 +1,7 @@
 import * as actions from '@/document/actions';
 import type { SceneInputs } from '@/document/types';
 import type { Layer } from '@/core/types';
-import { entriesDrawn, partsIn, type PartInfo } from '@/core/render/parts';
+import { entriesDrawn, entryRows, partsIn, type PartInfo } from '@/core/render/parts';
 import { parseSlotKey } from '@/core/render/slots';
 import type { SceneTemplate } from '@/templates/schema';
 import { slotWords } from '@/templates/_shared/text';
@@ -71,7 +71,12 @@ export function entryEditing(
   return {
     text,
     maxLength: undefined,
-    write: (words) => actions.setListItem(def.id, item, words, { current, count, numbered, separator }),
+    write: (words) => {
+      // Taking a word out: each entry's keys as drawn, so the changes on later entries move up with them (D-170).
+      const removing = !numbered && layers !== null && (words === null || words.trim().length === 0);
+      const rows = removing ? entryRows(layers, def.id, count) : undefined;
+      return actions.setListItem(def.id, item, words, { current, count, numbered, separator, ...(rows ? { rows } : {}) });
+    },
   };
 }
 

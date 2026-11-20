@@ -10,6 +10,7 @@ import type { SceneTemplate } from '../schema';
 import { contentFloor } from '../_shared/chrome';
 import { create } from './cover';
 import { slotKey, slotOf } from '@/core/render/slots';
+import { entryRows } from '@/core/render/parts';
 
 /**
  * Covers & Thumbnails (D-151): "Text must never overflow the frame." The
@@ -193,5 +194,26 @@ describe('cover words drawn inside parts (D-159)', () => {
     expect(textsIn('tn-how-to', { stepNumbers: 'A' })).toEqual(expect.arrayContaining(['A', 'B', 'C']));
     expect(textsIn('bp-marketing-strategy', { pillarNumbers: '01, 02, 5' })).toEqual(expect.arrayContaining(['01', '02', '5', '6']));
     expect(textsIn('tn-top-five', { numbers: '5, 4, 3, 2, 1' })).toEqual(expect.arrayContaining(['5', '4', '3', '2', '1']));
+  });
+});
+
+describe('the keys of each entry of a list (D-170)', () => {
+  const rowsOf = (id: string, slotId: string, count: number): readonly (readonly string[])[] => {
+    const found = COVER_SCENES.find((v) => v.id === id);
+    if (!found) throw new Error(id);
+    const template = create(found);
+    const design = projectDesign('16:9');
+    const ctx = createBuildContext({ design, safe: safeBox(design), palette, durationMs: 6000, measureContext: measure });
+    return entryRows(template.build(inputs(template, {}), ctx), slotId, count);
+  };
+
+  it("joins a step's disc to its words, and nothing shared", () => {
+    const rows = rowsOf('tn-how-to', 'steps', 3);
+    expect(rows.map((row) => [...row].sort())).toEqual([0, 1, 2].map((j) => [`shape:step${j + 1}`, `text:steps#${j}`]));
+  });
+
+  it("joins a pillar's pill and number to its words", () => {
+    const rows = rowsOf('bp-marketing-strategy', 'pillars', 4);
+    expect(rows.map((row) => [...row].sort())).toEqual([0, 1, 2, 3].map((j) => [`shape:chip${j + 1}`, `text:pillarNumbers#${j}`, `text:pillars#${j}`]));
   });
 });

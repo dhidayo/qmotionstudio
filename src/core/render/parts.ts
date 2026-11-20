@@ -289,6 +289,57 @@ export function entriesDrawn(layers: readonly Layer[], slotId: string): number {
   return count;
 }
 
+/**
+ * The keys that make up each entry of a list text, as a scene draws them
+ * (D-170): entry `j` is `text:<slot>#j` and everything joined to it by
+ * `follows` either way — a step's disc, a pillar's pill and number. When an
+ * entry is taken out, the person's changes on each later entry's keys move
+ * one entry up with it, so they stay on the entry they were made on.
+ *
+ * A key drawn with more than one entry, or one that does not repeat from
+ * entry to entry (a rule under the whole list), belongs to the list, not to
+ * an entry, and is left out.
+ */
+export function entryRows(layers: readonly Layer[], slotId: string, count: number): readonly (readonly SlotKey[])[] {
+  const parent = new Map<SlotKey, SlotKey>();
+  const find = (key: SlotKey): SlotKey => {
+    let root = key;
+    while (parent.has(root) && parent.get(root) !== root) root = parent.get(root) ?? root;
+    return root;
+  };
+  const join = (a: SlotKey, b: SlotKey): void => {
+    if (!parent.has(a)) parent.set(a, a);
+    if (!parent.has(b)) parent.set(b, b);
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+  const visit = (list: readonly Layer[]): void => {
+    for (const layer of list) {
+      const slot = slotOf(layer);
+      if (slot) {
+        const key = slotKey(slot);
+        join(key, layer.follows ?? key);
+      }
+      if (layer.type === 'group' || layer.type === 'mask') visit(layer.children);
+    }
+  };
+  visit(layers);
+  const own = (j: number): SlotKey => `text:${slotId}#${j}`;
+  const rows = Array.from({ length: count }, (_, j) => {
+    const root = parent.has(own(j)) ? find(own(j)) : null;
+    const keys = root === null ? [] : [...parent.keys()].filter((key) => key !== own(j) && find(key) === root);
+    return [own(j), ...keys];
+  });
+  // Only what repeats, once per entry: the same key with another number, in another entry.
+  const shape = (key: SlotKey): string => key.replace(/\d+/g, '#');
+  const seen = new Map<SlotKey, number>();
+  for (const row of rows) for (const key of row) seen.set(key, (seen.get(key) ?? 0) + 1);
+  return rows.map((row, j) =>
+    row.filter((key) => key === own(j) || (seen.get(key) === 1 && rows.some((other, k) => k !== j && other.some((o) => o !== key && shape(o) === shape(key))))),
+  );
+}
+
 /** What a scene's layers call the element with this key — a part's name, a list entry's — if they name it. */
 export function labelIn(layers: readonly Layer[], key: SlotKey): string | null {
   for (const slot of slotsIn(layers)) {

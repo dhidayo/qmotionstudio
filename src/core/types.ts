@@ -500,6 +500,14 @@ type LayerBase = {
    * if the two were one. One level only — a leader never follows anything.
    */
   readonly follows?: string;
+  /**
+   * On a line inside a part: the slot key of a sibling of the part that the
+   * line's far end reaches to (D-170), a product callout's leader to its
+   * words. When the person moves that sibling, the far end goes with it and
+   * the near end stays, so the line turns and stretches instead of the whole
+   * part being carried. Only a shape inside a group or mask uses it.
+   */
+  readonly reaches?: string;
 };
 
 export type ShapeLayer = LayerBase & { readonly type: 'shape'; readonly props: ShapeProps };

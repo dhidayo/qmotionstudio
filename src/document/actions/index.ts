@@ -2,7 +2,7 @@ import type { Palette, PaletteRole, PropValues } from '@/core/types';
 import { DEFAULT_LOGO, newId, restyleLook, STARTER_PHOTO_IDS } from '../defaults';
 import { NO_SLOT_TRANSFORM } from '../types';
 import { isAnimated, overlayMediaId, poseAt, poseIndexAt } from '../select/overlay';
-import { nudgeAt, nudgePoses } from '@/core/render/slots';
+import { nudgeAt, nudgePoses, parseSlotKey } from '@/core/render/slots';
 import { MIN_MOTION_MS, movedSpan, newSpan, resizedSpan, spanOf } from '../select/motion';
 import { MAX_TRACKS, compactTracks, overlapsOn, placeNew, settleTrack, usedTracks } from '../select/tracks';
 import { sceneLengthMs, sceneSpans, totalDurationMs } from '../select/timeline';
@@ -14,7 +14,7 @@ import { layersInSpan, placeAmong } from '../select/sceneLayers';
 import { MODE_LABEL } from '../modeNames';
 import { LOGO_KEY } from '../types';
 import type { ElementColor, ShapeOverride } from '../types';
-import { withListItem } from '@/templates/_shared/numbering';
+import { listEntries, withListItem } from '@/templates/_shared/numbering';
 import type {
   AnimPreset,
   AudioClip,
@@ -208,14 +208,41 @@ function newSpot(photos: readonly PhotoInput[], at: number, mediaId: string): Ph
  * person's own is dropped only when there are no samples left to drop.
  */
 function shrunk(photos: readonly PhotoInput[], count: number): readonly PhotoInput[] {
-  if (count >= photos.length) return photos;
+  const kept = keptSpots(photos, count);
+  return kept.length === photos.length ? photos : kept.map((i) => photos[i]).filter((p): p is PhotoInput => p !== undefined);
+}
+
+/** Which spots `shrunk` keeps, by their place before, in order. */
+function keptSpots(photos: readonly PhotoInput[], count: number): readonly number[] {
+  const all = photos.map((_, i) => i);
+  if (count >= photos.length) return all;
   let surplus = photos.length - count;
   const drop = new Set<number>();
   for (let i = photos.length - 1; i >= 0 && surplus > 0; i--) {
     if (isSampleSpot(photos[i]?.mediaId ?? '')) { drop.add(i); surplus -= 1; }
   }
-  const kept = photos.filter((_, i) => !drop.has(i));
-  return kept.slice(0, count);
+  return all.filter((i) => !drop.has(i)).slice(0, count);
+}
+
+/**
+ * Where each photo spot's changes go when spots are taken out (D-170): a
+ * nudge, an effect or motion on a photo stays with that photo as the spots
+ * after it move up, and the changes on a spot taken out go with it. `kept`
+ * is the spots that stay, by their place before, in their new order.
+ */
+function spotMoves(before: number, kept: readonly number[]): ReadonlyMap<SlotKey, SlotKey | null> {
+  const moves = new Map<SlotKey, SlotKey | null>();
+  const stays = new Set(kept);
+  for (let i = 0; i < before; i++) if (!stays.has(i)) moves.set(`photo:${i}`, null);
+  kept.forEach((from, to) => { if (from !== to) moves.set(`photo:${from}`, `photo:${to}`); });
+  return moves;
+}
+
+/** Fewer spots, their changes kept on their photos (D-170). */
+function withSpots(inputs: SceneInputs, kept: readonly number[]): SceneInputs {
+  const photos = kept.map((i) => inputs.photos[i]).filter((p): p is PhotoInput => p !== undefined);
+  if (photos.length === inputs.photos.length) return inputs;
+  return withKeysMoved({ ...inputs, photos }, spotMoves(inputs.photos.length, kept));
 }
 
 /** Spots added at the end, up to `count`, each showing a sample the scene is not already showing. */
@@ -286,9 +313,10 @@ export function placeInSpots(
 export function removePhoto(index: number): Action {
   return {
     label: 'Remove photo',
+    // The photos after it move up one spot, and their nudges and effects with them (D-170).
     apply: (project, scope) =>
-      editPhotos(project, scope, (photos) =>
-        index < 0 || index >= photos.length ? photos : photos.filter((_, i) => i !== index),
+      editInputs(project, scope, (inputs) =>
+        index < 0 || index >= inputs.photos.length ? inputs : withSpots(inputs, inputs.photos.map((_, i) => i).filter((i) => i !== index)),
       ),
   };
 }
@@ -545,11 +573,13 @@ export function setPhotoCount(count: number, bounds: { min: number; max: number 
     label: 'Change photo count',
     coalesceKey: 'photoCount',
     apply: (project, scope) =>
-      keepInLibrary(project, editPhotos(project, scope, (photos) => {
+      keepInLibrary(project, editInputs(project, scope, (inputs) => {
+        const { photos } = inputs;
         const target = Math.round(clamp(count, bounds.min, bounds.max));
-        if (target === photos.length) return photos;
-        if (target < photos.length) return shrunk(photos, target);
-        return grownWithSamples(photos, target);
+        if (target === photos.length) return inputs;
+        // Samples go first, from wherever they are; the photos after one move up, their changes with them (D-170).
+        if (target < photos.length) return withSpots(inputs, keptSpots(photos, target));
+        return { ...inputs, photos: grownWithSamples(photos, target) };
       })),
   };
 }
@@ -893,15 +923,22 @@ export function resetSlot(key: SlotKey): Action {
   };
 }
 
+/**
+ * Style's "Reset layout and shapes": every element back where the design put
+ * it, and every part of the design (D-159) back as it was made — its colour,
+ * its outline, and back if it was deleted — in one undo step (D-170). Before,
+ * it reset the moves only, so a recoloured or deleted part outlived "the
+ * whole layout" being reset. Words, photos, the look and effects stay.
+ */
 export function resetSceneLayout(): Action {
   return {
-    label: 'Reset layout',
+    label: 'Reset layout and shapes',
     apply: (project, scope) =>
-      editInputs(project, scope, (inputs) =>
-        Object.keys(inputs.slotTransforms).length === 0
-          ? inputs
-          : { ...inputs, slotTransforms: {} },
-      ),
+      editInputs(project, scope, (inputs) => {
+        if (Object.keys(inputs.slotTransforms).length === 0 && inputs.shapeOverrides === undefined) return inputs;
+        const { shapeOverrides: _parts, ...rest } = inputs;
+        return { ...rest, slotTransforms: {} };
+      }),
   };
 }
 
@@ -1000,22 +1037,107 @@ export function showAllShapes(): Action {
  * list is written out in full — editing the third of "01" gives
  * "01, 02, 5, 04". Null takes the entry out: a word goes, a number's place
  * is left empty. Typing coalesces with the slot's own field.
+ *
+ * When a word leaves the list, the entries after it move up one, and so do
+ * the person's changes on them (D-170): a nudge, effect, motion or part
+ * change made on the third step stays on that step, now the second, rather
+ * than landing on whatever is drawn third. `rows` are each entry's keys as
+ * the scene draws them (`entryRows`); without them, an entry is its own key
+ * alone. Changes on the entry taken out go with it, in the same undo step.
  */
 export function setListItem(
   slotId: string,
   item: number,
   words: string | null,
-  options: { readonly current: string; readonly count: number; readonly numbered: boolean; readonly separator?: string },
+  options: {
+    readonly current: string;
+    readonly count: number;
+    readonly numbered: boolean;
+    readonly separator?: string;
+    readonly rows?: EntryRows;
+  },
 ): Action {
   return {
     label: words === null ? 'Remove from the list' : 'Edit text',
-    coalesceKey: `text:${slotId}`,
+    // Taking an entry out is a step of its own, not more of the typing before it.
+    ...(words === null ? {} : { coalesceKey: `text:${slotId}` }),
     apply: (project, scope) =>
       editInputs(project, scope, (inputs) => {
-        const text = withListItem(inputs.texts[slotId] ?? options.current, item, words, options);
-        return inputs.texts[slotId] === text ? inputs : { ...inputs, texts: { ...inputs.texts, [slotId]: text } };
+        const before = inputs.texts[slotId] ?? options.current;
+        const text = withListItem(before, item, words, options);
+        if (inputs.texts[slotId] === text) return inputs;
+        const next = { ...inputs, texts: { ...inputs.texts, [slotId]: text } };
+        const separator = options.separator ?? ',';
+        const removed = !options.numbered && listEntries(text, separator).length < listEntries(before, separator).length;
+        if (!removed) return next;
+        const count = Math.max(options.count, listEntries(before, separator).length);
+        // Entries the scene did not draw are their own key alone.
+        const rows = Array.from({ length: Math.max(count, options.rows?.length ?? 0) }, (_, j) => options.rows?.[j] ?? [`text:${slotId}#${j}`]);
+        return withKeysMoved(next, entryRemoval(rows, item));
       }),
   };
+}
+
+/** Each entry of a list's keys, in order (D-170): entry `j`'s own `text:<slot>#j` first. */
+export type EntryRows = readonly (readonly SlotKey[])[];
+
+/**
+ * Where each key's changes go when entry `removed` leaves the list (D-170):
+ * a later entry's key to the same key of the entry before it — the one that
+ * differs only in its numbers, `shape:step3` to `shape:step2` — and the
+ * removed entry's keys, and any left with nothing to go to, to null.
+ */
+export function entryRemoval(rows: EntryRows, removed: number): ReadonlyMap<SlotKey, SlotKey | null> {
+  const moves = new Map<SlotKey, SlotKey | null>();
+  if (removed < 0 || removed >= rows.length) return moves;
+  const shape = (key: SlotKey): string => key.replace(/\d+/g, '#');
+  for (let j = removed; j < rows.length; j++) {
+    for (const key of rows[j] ?? []) if (!moves.has(key)) moves.set(key, null);
+  }
+  for (let j = removed + 1; j < rows.length; j++) {
+    const into = [...(rows[j - 1] ?? [])];
+    for (const key of rows[j] ?? []) {
+      const at = into.findIndex((other) => shape(other) === shape(key));
+      if (at < 0) continue;
+      moves.set(key, into[at] ?? null);
+      into.splice(at, 1);
+    }
+  }
+  return moves;
+}
+
+/**
+ * The person's per-element changes — nudges, element effects, motion and
+ * part changes — with keys moved as `moves` says (null drops one). Keys not
+ * named stay. The same inputs when nothing moves.
+ */
+function withKeysMoved(inputs: SceneInputs, moves: ReadonlyMap<SlotKey, SlotKey | null>): SceneInputs {
+  if (moves.size === 0) return inputs;
+  const move = <T>(record: Readonly<Record<SlotKey, T>> | undefined): Readonly<Record<SlotKey, T>> | undefined => {
+    if (record === undefined || !Object.keys(record).some((key) => moves.has(key))) return record;
+    const out: Record<SlotKey, T> = {};
+    for (const [key, value] of Object.entries(record)) if (!moves.has(key)) out[key] = value;
+    for (const [key, value] of Object.entries(record)) {
+      const to = moves.get(key);
+      if (to !== undefined && to !== null) out[to] = value;
+    }
+    return out;
+  };
+  let next: SceneInputs = inputs;
+  const slotTransforms = move(inputs.slotTransforms) ?? {};
+  if (slotTransforms !== inputs.slotTransforms) next = { ...next, slotTransforms };
+  for (const field of ['elementEffects', 'slotMotion', 'shapeOverrides'] as const) {
+    const before = inputs[field];
+    const after = move<unknown>(before);
+    if (after === before) continue;
+    if (after === undefined || Object.keys(after).length === 0) {
+      const { [field]: _gone, ...rest } = next;
+      next = rest;
+    } else {
+      next = { ...next, [field]: after };
+    }
+  }
+  return next;
 }
 
 export function setLogoOpacity(opacity: number): Action {
@@ -1243,11 +1365,12 @@ export function setTemplate(
 
         const durationMs = options?.durationMs;
         const restyle = options?.look;
+        const inputs = withoutPartChanges(scene.inputs);
         const next: Scene = {
           ...scene,
           templateId,
           ...(durationMs === undefined ? {} : { durationMs }),
-          ...(restyle === undefined ? {} : { inputs: { ...scene.inputs, look: restyleLook(scene.inputs.look, restyle) } }),
+          inputs: restyle === undefined ? inputs : { ...inputs, look: restyleLook(inputs.look, restyle) },
         };
 
         const slots = options?.photoSlots;
@@ -1259,6 +1382,26 @@ export function setTemplate(
           : { ...next, inputs: { ...next.inputs, photos } };
       })),
   };
+}
+
+/**
+ * A design's parts are its own (D-170). `shape:pill` in one design and
+ * `shape:pill` in another are different shapes that happen to share a name,
+ * so a part's colour, outline, deletion, nudge, effects and motion are kept
+ * only while the design is the same: on a change of design they go, in the
+ * same undo step. Words, photos and their changes carry on as before — a
+ * text slot's id means the same thing in every design (the headline is the
+ * headline), so its words and its style in Text stay, as D-098 has it.
+ */
+function withoutPartChanges(inputs: SceneInputs): SceneInputs {
+  const moves = new Map<SlotKey, null>();
+  for (const record of [inputs.slotTransforms, inputs.elementEffects, inputs.slotMotion]) {
+    for (const key of Object.keys(record ?? {})) if (parseSlotKey(key)?.kind === 'shape') moves.set(key, null);
+  }
+  const moved = withKeysMoved(inputs, moves);
+  if (moved.shapeOverrides === undefined) return moved;
+  const { shapeOverrides: _parts, ...rest } = moved;
+  return rest;
 }
 
 /**

@@ -20,9 +20,10 @@ import { focusIn, roomyPoint, settleInto, turnsAlong, type Box } from './emphasi
  * its shelf or covers its name, and the others step back and darken.
  *
  * Every shelf, badge, swatch, callout, bullet, plinth, lens and box is a part
- * (D-159): picked, recoloured, moved and deleted. A callout's line and a
- * spec's bullet move with their words, a swatch and the NEW badge with their
- * product, the line through the old price with that price.
+ * (D-159): picked, recoloured, moved and deleted. A spec's bullet moves with
+ * its words, a swatch and the NEW badge with their product, the line through
+ * the old price with that price. A callout's dot stays on its product and its
+ * line reaches to its words wherever they are dragged (D-170).
  */
 
 /** Emphasis for a product standing on something: it grows upward, its foot where it was. */
@@ -162,11 +163,15 @@ export function create(variant: SceneVariant): SceneTemplate {
           const textW = Math.max(u * 0.16, Math.abs(edgeX - dotX) - size * 0.08);
           const reach = Math.max(u * 0.03, Math.abs(edgeX - dotX) - Math.min(textW, u * 0.3) - u * 0.02);
           const endX = dotX + spot.side * reach;
-          // The dot and its line, one part that moves with its words (D-159).
+          /*
+           * The dot and its line, one part (D-159). It stays on the product and
+           * moves with it; when the words are dragged, the line reaches to them
+           * and the dot stays where it points (D-170).
+           */
           layers.push(part(ctx, 'callout', shapeSlot(`callout${i + 1}`, `Callout ${i + 1}'s line`), { x: dotX, y: dotY }, [
             rect(ctx, 'dot', { w: u * 0.025, h: u * 0.025, x: dotX, y: dotY, ellipse: true, fill: roleFill('accent'), stroke: { paint: roleFill('bg'), width: Math.max(2, u * 0.004) }, tracks: { scaleX: [kf(at, 0), kf(at + 250, 1, 'outBack')], scaleY: [kf(at, 0), kf(at + 250, 1, 'outBack')] } }),
-            rect(ctx, 'leader', { w: reach, h: Math.max(2, u * 0.003), x: dotX, y: dotY, anchorX: spot.side < 0 ? 1 : 0, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 150, 0), kf(at + 500, 1, 'outCubic')] } }),
-          ], { follows: `text:point${i + 1}` }));
+            rect(ctx, 'leader', { w: reach, h: Math.max(2, u * 0.003), x: dotX, y: dotY, anchorX: spot.side < 0 ? 1 : 0, fill: roleFill('accent'), tracks: { scaleX: [kf(at + 150, 0), kf(at + 500, 1, 'outCubic')] }, reaches: `text:point${i + 1}` }),
+          ], { follows: 'photo:0' }));
           layers.push(placeText(ctx, slot(`point${i + 1}`), inputs, {
             sizePx: u * 0.036, maxWidthPx: Math.min(textW, u * 0.3), x: endX + spot.side * u * 0.012, y: dotY - u * 0.024, anchorX: spot.side < 0 ? 1 : 0,
             reveal: { kind: 'kinetic', unit: 'line', motion: spot.side < 0 ? 'slideRight' : 'slideLeft', startMs: at + 400, durationMs: 450, staggerMs: 0 },

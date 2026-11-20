@@ -387,7 +387,29 @@ export const swipeUp: StickerDef = {
   },
 };
 
-/** A hand-drawn curved arrow that draws itself on, its head snapping in at the end. */
+/** When in the loop the stroke is retraced: it dims, the fresh one draws, then the whole one is back. */
+const RETRACE = { dim: [0.58, 0.64], draw: [0.62, 0.86], done: 0.92 } as const;
+
+/**
+ * A drawn stroke that is never gone (D-170). It is whole across the loop's
+ * seam, so an Image that rests on any moment shows it. Late in each loop the
+ * stroke fades to a ghost and a fresh one draws itself over it; once the
+ * fresh one is whole, the stroke is whole again beneath it — the same
+ * picture, so nothing jumps. Wiping it away and drawing it on again, as these
+ * did, left the frame empty for about 4% at each end of the loop.
+ *
+ *   ghost   the alpha of the whole stroke: 1, down to 0.3 while it is retraced
+ *   shadow  how much of its soft shadow it keeps: the ghost has none, the fresh stroke has it
+ *   fresh   how much of the fresh stroke is drawn, or null when there is none
+ */
+function retrace(p: number): { ghost: number; shadow: number; fresh: number | null } {
+  if (p < RETRACE.dim[0] || p >= RETRACE.done) return { ghost: 1, shadow: 1, fresh: null };
+  const dim = easeInOutSine(seg(p, RETRACE.dim[0], RETRACE.dim[1]));
+  const fresh = p < RETRACE.draw[0] ? null : easeInOutSine(seg(p, RETRACE.draw[0], RETRACE.draw[1]));
+  return { ghost: 1 - 0.7 * dim, shadow: 1 - dim, fresh };
+}
+
+/** A hand-drawn curved arrow, its head snapping in, drawn over again late in each loop. */
 export const arrowCurve: StickerDef = {
   id: 'arrow-curve',
   name: 'Drawn arrow',
@@ -403,11 +425,10 @@ export const arrowCurve: StickerDef = {
   draw(ctx, s) {
     const { w: W, h: H, p } = s;
     const u = H;
-    // Drawn on at the start of the loop; wiped from the tail at the very end.
-    const on = easeInOutSine(seg(p, 0, 0.32));
-    const off = easeInOutSine(seg(p, 0.9, 1));
-    const head = easeOutBack(seg(p, 0.28, 0.4), 2);
-    const nudge = 0.025 * ring(seg(p, 0.4, 0.8), 1.5, 2.5);
+    const { ghost, shadow, fresh } = retrace(p);
+    // The fresh stroke's head snaps in as it arrives, whole before the stroke is whole again beneath it.
+    const head = easeOutBack(seg(p, RETRACE.draw[1] - 0.02, RETRACE.done - 0.01), 2);
+    const nudge = 0.025 * ring(seg(p, 0.1, 0.5), 1.5, 2.5);
     // The curve as points, from the tail at lower left to the tip at upper right.
     const n = 24;
     const pts: [number, number][] = [];
@@ -417,11 +438,11 @@ export const arrowCurve: StickerDef = {
       const y = 0.3 - 0.62 * t + 0.36 * Math.sin(t * Math.PI) * (1 - t * 0.4);
       pts.push([x * u, y * u]);
     }
-    const stroke = (dx: number, dy: number, color: string, alpha: number): void => {
+    const stroke = (dx: number, dy: number, color: string, alpha: number, on: number, size: number): void => {
       faded(ctx, alpha, () => {
         ctx.save();
         ctx.translate(dx, dy);
-        strokeSpan(ctx, pts, off, on);
+        strokeSpan(ctx, pts, 0, on);
         ctx.strokeStyle = color;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -429,9 +450,9 @@ export const arrowCurve: StickerDef = {
         ctx.stroke();
         const tip = pts[n] ?? [0, 0];
         const before = pts[n - 2] ?? [0, 0];
-        if (head > 0 && off < 0.95) {
+        if (size > 0) {
           const a = Math.atan2(tip[1] - before[1], tip[0] - before[0]);
-          const len = 0.2 * u * head;
+          const len = 0.2 * u * size;
           ctx.beginPath();
           ctx.moveTo(tip[0] + Math.cos(a + deg(150)) * len, tip[1] + Math.sin(a + deg(150)) * len);
           ctx.lineTo(tip[0], tip[1]);
@@ -443,8 +464,12 @@ export const arrowCurve: StickerDef = {
     };
     ctx.save();
     ctx.translate(W / 2 + nudge * u, H / 2 - nudge * u);
-    stroke(0.02 * u, 0.03 * u, s.secondary, 0.22);
-    stroke(0, 0, s.primary, 1);
+    stroke(0.02 * u, 0.03 * u, s.secondary, 0.22 * shadow, 1, 1);
+    stroke(0, 0, s.primary, ghost, 1, 1);
+    if (fresh !== null) {
+      stroke(0.02 * u, 0.03 * u, s.secondary, 0.22, fresh, head);
+      stroke(0, 0, s.primary, 1, fresh, head);
+    }
     ctx.restore();
   },
 };
@@ -463,9 +488,9 @@ export const circleScribble: StickerDef = {
   secondary: colorFill('#000000'),
   draw(ctx, s) {
     const { w: W, h: H, p } = s;
-    const on = easeInOutSine(seg(p, 0, 0.3));
-    const off = easeInOutSine(seg(p, 0.9, 1));
-    const pulse = 1 + 0.02 * bump(seg(p, 0.3, 0.6));
+    // Whole across the seam, and scribbled over again late in each loop (D-170).
+    const { ghost, shadow, fresh } = retrace(p);
+    const pulse = 1 + 0.02 * bump(seg(p, 0.15, 0.5));
     const n = 48;
     const pts: [number, number][] = [];
     for (let i = 0; i <= n; i++) {
@@ -480,11 +505,16 @@ export const circleScribble: StickerDef = {
     ctx.rotate(deg(-4));
     ctx.scale(pulse, pulse);
     const lw = Math.min(W, H) * 0.06;
-    for (const [dx, dy, color, alpha] of [[lw * 0.3, lw * 0.4, s.secondary, 0.2], [0, 0, s.primary, 1]] as const) {
+    const passes: (readonly [number, number, string, number, number])[] = [
+      [lw * 0.3, lw * 0.4, s.secondary, 0.2 * shadow, 1],
+      [0, 0, s.primary, ghost, 1],
+    ];
+    if (fresh !== null) passes.push([lw * 0.3, lw * 0.4, s.secondary, 0.2, fresh], [0, 0, s.primary, 1, fresh]);
+    for (const [dx, dy, color, alpha, on] of passes) {
       faded(ctx, alpha, () => {
         ctx.save();
         ctx.translate(dx, dy);
-        strokeSpan(ctx, pts, off, on);
+        strokeSpan(ctx, pts, 0, on);
         ctx.strokeStyle = color;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';

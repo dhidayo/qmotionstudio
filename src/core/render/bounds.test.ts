@@ -7,7 +7,7 @@ import { colorFill, type Aspect, type Layer, type Palette } from '@/core/types';
 import type { LogoPlacement, Overlay, SceneInputs, TextStyle } from '@/document/types';
 import type { DrawnScene } from './rig';
 import {
-  DESIGN_SHORT_EDGE, hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, slotBoxes,
+  clipBox, DESIGN_SHORT_EDGE, hits, logoBox, logoFreeFrom, overlayBox, projectDesign, safeBox, slotBoxes,
   toFrame, toLocal,
 } from './bounds';
 
@@ -647,6 +647,60 @@ describe('only what is on screen gets handles (D-091)', () => {
       children: [at('inner', 2, 0, 5_000, 400)],
     };
     expect(slotBoxes(drawn([group]), 1_500, { slotTransforms: {} }, '1:1', measure)).toHaveLength(0);
+  });
+});
+
+describe('only what can be seen is picked (D-170)', () => {
+  const frame = projectDesign('16:9');
+  const band = (rotation: number): Layer => ({
+    id: 'band', type: 'shape', startMs: 0, endMs: 4_000,
+    tracks: { x: [{ t: 0, v: frame.w / 2, ease: 'linear' }], y: [{ t: 0, v: frame.h / 2, ease: 'linear' }], rotation: [{ t: 0, v: rotation, ease: 'linear' }] },
+    props: { shape: 'rect', w: Math.hypot(frame.w, frame.h) * 1.2, h: 180, fill: colorFill('#ff0000'), slot: { kind: 'shape', key: 'band', label: 'Band', tint: 'accent' } },
+  });
+  const slotOf = (layers: readonly Layer[]) => slotBoxes({ sceneId: 's', layers, design: frame }, 0, { slotTransforms: {} }, '16:9', measure)[0];
+  const boxOf = (layers: readonly Layer[]) => slotOf(layers)?.pick ?? undefined;
+
+  it('picks a turned band that runs past the picture only by the part inside it, still turned', () => {
+    // The box stays whole, for the outline, the handles and a drag.
+    expect(slotOf([band(-7)])?.box.w).toBeCloseTo(Math.hypot(frame.w, frame.h) * 1.2, 6);
+    const box = boxOf([band(-7)]);
+    if (!box) throw new Error('no pick box');
+    expect(box.rotation).toBe(-7);
+    expect(box.h).toBeCloseTo(180, 6);
+    // About the frame's width along the band, not 1.2 times its diagonal.
+    expect(box.w).toBeLessThan(frame.w / Math.cos((7 * Math.PI) / 180) + 180 * Math.tan((7 * Math.PI) / 180) + 1);
+    expect(box.w).toBeGreaterThan(frame.w * 0.95);
+    // Empty space beside the picture no longer picks it; the band inside still does.
+    expect(hits(box, { x: -40, y: frame.h / 2 + 30 })).toBe(false);
+    expect(hits(box, { x: frame.w + 40, y: frame.h / 2 - 30 })).toBe(false);
+    expect(hits(box, { x: frame.w / 2, y: frame.h / 2 })).toBe(true);
+    // Near the left edge, on the band: turned -7°, it is lower there.
+    expect(hits(box, { x: 20, y: frame.h / 2 + (frame.w / 2 - 20) * Math.tan((7 * Math.PI) / 180) })).toBe(true);
+  });
+
+  it('leaves a box inside the frame exactly as it was', () => {
+    const inside = { cx: 500, cy: 400, w: 300, h: 100, rotation: 20 };
+    expect(clipBox(inside, { cx: frame.w / 2, cy: frame.h / 2, w: frame.w, h: frame.h, rotation: 0 })).toBe(inside);
+    expect(clipBox(inside, { cx: -1000, cy: -1000, w: 10, h: 10, rotation: 0 })).toBeNull();
+  });
+
+  it('picks what is drawn in a mask only inside its window', () => {
+    const photo: Layer = {
+      id: 'p', type: 'image', startMs: 0, endMs: 4_000,
+      tracks: { x: [{ t: 0, v: 0, ease: 'linear' }], y: [{ t: 0, v: 0, ease: 'linear' }] },
+      props: { mediaId: 'm', slot: { kind: 'photo', index: 0 }, w: 800, h: 800, fit: 'cover' },
+    };
+    const mask: Layer = {
+      id: 'mask', type: 'mask', startMs: 0, endMs: 4_000,
+      tracks: { x: [{ t: 0, v: 600, ease: 'linear' }], y: [{ t: 0, v: 500, ease: 'linear' }] },
+      props: { shape: 'rect', w: 400, h: 300 },
+      children: [photo],
+    };
+    const box = boxOf([mask]);
+    expect(box?.cx).toBeCloseTo(600, 6);
+    expect(box?.cy).toBeCloseTo(500, 6);
+    expect(box?.w).toBeCloseTo(400, 6);
+    expect(box?.h).toBeCloseTo(300, 6);
   });
 });
 

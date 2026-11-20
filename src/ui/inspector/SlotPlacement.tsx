@@ -2,6 +2,7 @@ import * as actions from '@/document/actions';
 import { useEditor } from '@/state/store';
 import { Button, EmptyNote, Section } from './controls';
 import { SlotKeyframes } from './SlotKeyframes';
+import { undoHint } from '@/ui/editing/commands';
 
 /**
  * Putting a nudged element back where the template had it (B).
@@ -109,24 +110,46 @@ export function SlotPlacement({ slotKey }: { slotKey: string }): React.JSX.Eleme
   );
 }
 
-/** The same, for every element in the scene at once. */
+/**
+ * The same, for every element in the scene at once — and for the design's
+ * own parts too (D-170): a recoloured, re-outlined or deleted part is put
+ * back as the design made it in the same undo step, so "reset" means the
+ * design as it came. Style's Shapes list keeps "Put every shape back" for
+ * bringing back deleted parts alone, colours kept.
+ */
 export function SceneLayoutReset(): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
-  const count = useEditor(
+  const showToast = useEditor((s) => s.showToast);
+  const moved = useEditor(
     (s) => Object.keys(s.project.scenes[s.selectedScene]?.inputs.slotTransforms ?? {}).length,
   );
+  const changed = useEditor(
+    (s) => Object.keys(s.project.scenes[s.selectedScene]?.inputs.shapeOverrides ?? {}).length,
+  );
 
-  if (count === 0) return null;
+  if (moved === 0 && changed === 0) return null;
+
+  const elements = moved === 1 ? 'One element has' : `${moved} elements have`;
+  const shapes = changed === 1 ? 'shape' : 'shapes';
+  const summary =
+    changed === 0 ? `${elements} been moved.`
+      : moved === 0 ? `${changed === 1 ? 'One shape has' : `${changed} shapes have`} been changed or deleted.`
+        : `${elements} been moved, and ${changed === 1 ? 'one' : changed} ${shapes} changed or deleted.`;
 
   return (
     <Section title="Layout">
       <EmptyNote>
-        {count === 1 ? 'One element has' : `${count} elements have`} been moved from the
-        template&rsquo;s layout.
+        {summary} Resetting puts every position and shape back as the template made them; your
+        words and photos stay.
       </EmptyNote>
       <div className="mt-2 flex gap-1.5">
-        <Button onClick={() => { dispatch(actions.resetSceneLayout()); }}>
-          Reset the whole layout
+        <Button
+          onClick={() => {
+            dispatch(actions.resetSceneLayout());
+            showToast(`Layout and shapes reset. ${undoHint()}`);
+          }}
+        >
+          Reset layout and shapes
         </Button>
       </div>
     </Section>

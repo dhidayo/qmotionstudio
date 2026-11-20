@@ -123,6 +123,8 @@ type Target =
        */
       readonly poseAtMs: number | null;
       readonly box: OrientedBox;
+      /** Where it is picked when that is less than its box: the part that can be seen (D-170). */
+      readonly pick?: OrientedBox | null;
       readonly label: string;
       /** What typing into it changes: a text, a list entry, a part's letter or number (D-159). */
       readonly edits?: Entry;
@@ -306,6 +308,7 @@ export function CanvasSelection({
           transform,
           poseAtMs: hasNudgePoses(transform) ? sceneTimeMs : null,
           box: slot.box,
+          ...(slot.pick === undefined ? {} : { pick: slot.pick }),
           label: slot.label,
           ...(slot.edits ? { edits: slot.edits } : {}),
         });
@@ -469,7 +472,9 @@ export function CanvasSelection({
     const list = targetsNow();
     for (let i = list.length - 1; i >= 0; i--) {
       const target = list[i];
-      if (target && hits(target.box, point)) return target;
+      // Only by what can be seen of it (D-170).
+      const area = target?.kind === 'slot' && target.pick !== undefined ? target.pick : target?.box;
+      if (target && area && hits(area, point)) return target;
     }
     return null;
   };

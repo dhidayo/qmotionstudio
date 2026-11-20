@@ -161,12 +161,15 @@ export function rect(
     readonly slot?: SlotRef;
     /** The slot key of the sibling it sits behind and moves with (D-159). */
     readonly follows?: string;
+    /** In a part: the slot key its far end reaches to, turning and stretching as that moves (D-170). */
+    readonly reaches?: string;
   },
 ): Layer {
   return {
     id: ctx.id(prefix),
     type: 'shape',
     ...(options.follows === undefined ? {} : { follows: options.follows }),
+    ...(options.reaches === undefined ? {} : { reaches: options.reaches }),
     startMs: options.startMs ?? 0,
     endMs: options.endMs ?? ctx.durationMs,
     anchorX: options.anchorX ?? 0.5,
