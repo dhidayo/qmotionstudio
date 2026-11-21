@@ -97,15 +97,16 @@ export function ContextMenu(): React.JSX.Element | null {
       role="menu"
       aria-label={menu.title}
       data-context-menu
-      className="fixed z-[60] w-60 rounded-lg border border-edge bg-panel py-1 shadow-xl"
+      // Frosted, as everything that floats is (D-174).
+      className="glass ui-menu fixed z-[60] w-60 p-1.5"
       style={{ left: menu.x, top: menu.y, visibility: 'hidden' }}
       onContextMenu={(event) => { event.preventDefault(); }}
     >
-      <div className="truncate px-3 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+      <div className="truncate px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
         {menu.title}
       </div>
       {menu.items.map((item, i) => {
-        if (item.kind === 'separator') return <div key={`sep-${i}`} role="separator" className="my-1 border-t border-edge" />;
+        if (item.kind === 'separator') return <div key={`sep-${i}`} role="separator" className="mx-1.5 my-1.5 border-t border-edge" />;
         const hint = item.hint ?? (item.keys === undefined ? undefined : keyLabel(item.keys, caps));
         return (
           <button
@@ -114,7 +115,7 @@ export function ContextMenu(): React.JSX.Element | null {
             role="menuitem"
             disabled={item.disabled}
             onClick={(event) => { run(event, item); }}
-            className="flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left text-[12px] hover:bg-panel-alt focus:bg-panel-alt focus-visible:-outline-offset-2 disabled:opacity-40"
+            className="ui-menu-item flex w-full items-baseline justify-between gap-3 px-2.5 py-1.5 text-left text-[12.5px] hover:bg-sunk focus:bg-sunk focus-visible:-outline-offset-2 disabled:opacity-40"
             style={item.danger === true ? { color: 'var(--c-danger)' } : undefined}
           >
             {/* The label whole, the hint shortened if one must give (D-172): "Save project file", not "Save projec…". */}

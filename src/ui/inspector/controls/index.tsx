@@ -137,7 +137,7 @@ function TitledSection({ title, children, actions, defaultOpen }: { title: strin
 
   return (
     <section className="mb-2" data-section={sectionKey(title)}>
-      <div className={`brand-surface flex items-center gap-1 pr-1 ${open ? 'rounded-t-[8px]' : 'rounded-[8px]'}`}>
+      <div className="brand-surface ui-section-bar flex items-center gap-1 pr-1" data-open={open ? '' : undefined}>
         <h3 className="min-w-0 flex-1">
           <button
             type="button"
@@ -146,14 +146,14 @@ function TitledSection({ title, children, actions, defaultOpen }: { title: strin
             aria-controls={id}
             className="flex w-full items-center gap-2 px-2.5 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider"
           >
-            <span aria-hidden className="inline-block w-3 text-center text-[13px] leading-none transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
+            <span aria-hidden className="inline-block w-3 text-center text-[13px] leading-none text-ink-muted transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)', transitionTimingFunction: 'var(--ease-out)' }}>›</span>
             <span className="min-w-0 flex-1 truncate">{title}</span>
           </button>
         </h3>
         {actions}
       </div>
       {open && (
-        <div id={id} className="rounded-b-[8px] border border-t-0 border-edge px-2.5 pb-2.5 pt-3">
+        <div id={id} className="ui-section-body px-2.5 pb-2.5 pt-3">
           {/* A section inside this one folds on its own; it does not close this one. */}
           <AccordionContext.Provider value={null}>{children}</AccordionContext.Provider>
         </div>
@@ -170,9 +170,9 @@ export function BarDelete({ label, onDelete }: { label: string; onDelete: () => 
       onClick={onDelete}
       aria-label={label}
       title={label}
-      className="grid size-8 shrink-0 place-items-center rounded-md hover:bg-panel-alt pointer-coarse:size-11"
+      className="ui-iconbtn size-8 shrink-0 pointer-coarse:size-11"
     >
-      <svg aria-hidden width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+      <svg aria-hidden width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
         <path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13" />
       </svg>
     </button>
@@ -217,7 +217,7 @@ export function Slider({
          */
         onPointerUp={endInteraction}
         onBlur={endInteraction}
-        className="h-1 w-full accent-[var(--c-accent)]"
+        className="ui-range w-full"
       />
     </Row>
   );
@@ -271,7 +271,7 @@ function StepButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      className="grid size-6 place-items-center rounded-md border border-edge text-[13px] leading-none hover:bg-panel-alt disabled:opacity-30"
+      className="ui-iconbtn ui-iconbtn--edge size-7 text-[14px] pointer-coarse:size-11"
     >
       {children}
     </button>
@@ -296,7 +296,7 @@ export function Segmented<T extends string | number>({
       <div
         role="group"
         aria-label={label}
-        className="grid gap-1"
+        className="ui-seg grid"
         style={{ gridTemplateColumns: `repeat(${columns ?? options.length}, minmax(0, 1fr))` }}
       >
         {options.map((option) => {
@@ -307,14 +307,7 @@ export function Segmented<T extends string | number>({
               type="button"
               onClick={() => { onChange(option.value); }}
               aria-pressed={active}
-              className="truncate rounded-md border px-1.5 py-1 text-[11px] transition-colors"
-              style={{
-                borderColor: active ? 'var(--c-accent)' : 'var(--c-edge)',
-                background: active ? 'var(--c-accent-soft)' : 'transparent',
-                color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
-                fontWeight: active ? 600 : 400,
-                transitionDuration: 'var(--t-fast)',
-              }}
+              className="ui-seg-opt truncate px-1.5 py-1 text-[11px]"
             >
               {option.label}
             </button>
@@ -340,21 +333,22 @@ export function Toggle({
       role="switch"
       aria-checked={checked}
       onClick={() => { onChange(!checked); }}
-      className="flex w-full items-center justify-between rounded-md border border-edge px-2 py-1.5 text-[11px] hover:bg-panel-alt"
+      className="flex w-full items-center justify-between rounded-md border border-edge bg-panel px-2.5 py-1.5 text-[11px] transition-colors hover:bg-panel-alt"
     >
       <span style={{ color: checked ? 'var(--c-ink)' : 'var(--c-ink-muted)' }}>{label}</span>
       <span
         className="grid h-4 w-7 shrink-0 items-center rounded-full px-0.5 transition-colors"
         style={{
-          background: checked ? 'var(--c-accent)' : 'var(--c-edge-strong)',
+          background: checked ? 'var(--c-accent)' : 'var(--c-edge-field)',
           transitionDuration: 'var(--t-fast)',
         }}
       >
         <span
-          className="block size-3 rounded-full bg-white transition-transform"
+          className="block size-3 rounded-full bg-white shadow-sm transition-transform"
           style={{
             transform: checked ? 'translateX(12px)' : 'translateX(0)',
             transitionDuration: 'var(--t-fast)',
+            transitionTimingFunction: 'var(--ease-out)',
           }}
         />
       </span>
@@ -386,7 +380,7 @@ export function ColorField({
         value={normaliseHex(value)}
         onChange={(e) => { onChange(e.target.value); }}
         onBlur={endInteraction}
-        className="size-6 shrink-0 cursor-pointer rounded-md border border-edge bg-transparent p-0.5"
+        className="size-7 shrink-0 cursor-pointer rounded-md border border-edge-field bg-panel p-0.5"
       />
     </div>
   );
@@ -429,7 +423,7 @@ export function TextInput({
     // Leaving the field seals the undo entry, so a subsequent edit is separate.
     onBlur: endInteraction,
     className:
-      'w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none',
+      'ui-field w-full px-2.5 py-1.5 text-[12px]',
   };
 
   return multiline === true ? <textarea {...shared} rows={2} /> : <input type="text" {...shared} />;
@@ -446,10 +440,11 @@ export function Button({
   variant?: 'default' | 'danger' | 'accent';
   disabled?: boolean;
 }): React.JSX.Element {
-  const styles: Record<string, React.CSSProperties> = {
-    default: { borderColor: 'var(--c-edge)', color: 'var(--c-ink-muted)' },
-    danger: { borderColor: 'var(--c-edge)', color: 'var(--c-danger)' },
-    accent: { borderColor: 'var(--c-accent)', background: 'var(--c-accent-soft)', color: 'var(--c-accent)' },
+  // The shared buttons (D-174): a hairline secondary, a danger, and the accent for the one main action.
+  const styles: Record<string, string> = {
+    default: 'ui-btn--secondary',
+    danger: 'ui-btn--danger',
+    accent: 'ui-btn--primary',
   };
 
   return (
@@ -457,8 +452,7 @@ export function Button({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex-1 rounded-md border px-2 py-1.5 text-[11px] transition-colors hover:bg-panel-alt disabled:opacity-40"
-      style={{ ...styles[variant], transitionDuration: 'var(--t-fast)' }}
+      className={`ui-btn ui-btn--sm flex-1 ${styles[variant] ?? ''}`}
     >
       {children}
     </button>
@@ -546,7 +540,7 @@ export function NumberField({
         if (e.key === 'Enter') { e.preventDefault(); commit(); }
         if (e.key === 'Escape') { e.stopPropagation(); setDraft(null); }
       }}
-      className="tabular w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[12px] text-ink focus:border-accent focus:outline-none"
+      className="ui-field tabular w-full px-2.5 py-1.5 text-[12px]"
     />
   );
 }

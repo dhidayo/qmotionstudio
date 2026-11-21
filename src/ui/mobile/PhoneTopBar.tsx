@@ -18,7 +18,8 @@ export function PhoneTopBar(): React.JSX.Element {
 
   return (
     <header
-      className="brand-surface flex shrink-0 items-center gap-1.5 border-b border-edge bg-panel pl-1.5 pr-3"
+      // Frosted, like the computer's bar (D-174).
+      className="glass-bar flex shrink-0 items-center gap-1.5 border-b pl-1.5 pr-3"
       style={{ height: 52, paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       {/*
@@ -31,7 +32,7 @@ export function PhoneTopBar(): React.JSX.Element {
         onClick={() => { open('project'); }}
         aria-label="Menu"
         data-phone-menu
-        className="grid size-11 shrink-0 place-items-center rounded-lg active:bg-panel-alt"
+        className="ui-iconbtn size-11 shrink-0 text-ink"
       >
         <Icon name="menu" size={24} />
       </button>
@@ -55,7 +56,7 @@ export function PhoneTopBar(): React.JSX.Element {
         // 44px to the finger, around a slimmer pill (D-169).
         className="flex h-11 shrink-0 items-center"
       >
-        <span className="flex items-center gap-1 rounded-lg border border-edge px-2.5 py-1.5 text-[13px] font-medium tabular">
+        <span className="ui-chip h-8 gap-1 px-3 text-[13px] font-medium tabular">
           {aspect} <span aria-hidden className="text-[10px] text-ink-faint">▾</span>
         </span>
       </button>
@@ -66,7 +67,7 @@ export function PhoneTopBar(): React.JSX.Element {
         data-tour="export"
         className="flex h-11 shrink-0 items-center"
       >
-        <span className="rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-semibold text-accent-ink">Export</span>
+        <span className="ui-btn ui-btn--primary min-h-8 px-4 text-[13px]">Export</span>
       </button>
     </header>
   );

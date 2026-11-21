@@ -135,7 +135,7 @@ function EffectCard({
   const [open, setOpen] = useState(true);
   return (
     <div className="mb-2" data-effect-row={testId}>
-      <div className={`brand-surface flex items-center gap-1 pr-1 ${open ? 'rounded-t-[8px]' : 'rounded-[8px]'}`}>
+      <div className="brand-surface ui-section-bar flex items-center gap-1 pr-1" data-open={open ? '' : undefined}>
         <button
           type="button"
           onClick={() => { setOpen(!open); }}
@@ -143,15 +143,15 @@ function EffectCard({
           aria-label={`${open ? 'Fold' : 'Unfold'} ${name}`}
           className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left"
         >
-          <span aria-hidden className="inline-block w-3 text-center text-[13px] leading-none transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
+          <span aria-hidden className="inline-block w-3 text-center text-[13px] leading-none text-ink-muted transition-transform" style={{ transform: open ? 'rotate(90deg)' : 'none', transitionDuration: 'var(--t-fast)' }}>›</span>
           <span className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</span>
-          <span className="shrink-0 rounded-full px-2 py-0.5 text-[9px] uppercase tracking-wide" style={{ background: 'rgb(255 255 255 / 0.14)' }}>
+          <span className="shrink-0 rounded-full border border-edge bg-panel px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-ink-muted">
             {badge}
           </span>
         </button>
         <BarDelete label={`Remove ${name}`} onDelete={onRemove} />
       </div>
-      {open && <div className="rounded-b-[8px] border border-t-0 border-edge px-2.5 pb-1 pt-2.5">{children}</div>}
+      {open && <div className="ui-section-body px-2.5 pb-1 pt-2.5">{children}</div>}
     </div>
   );
 }
@@ -285,7 +285,7 @@ export function TimelineEffectPanel(): React.JSX.Element {
         * quiet × to put it down — not a Done, which "I never knew it was
         * there" (D-169).
         */}
-      <div className="brand-surface mb-3 flex items-center gap-1 rounded-[8px] py-1.5 pl-3 pr-1" data-effect-panel-bar>
+      <div className="brand-surface ui-section-bar mb-3 flex items-center gap-1 py-1.5 pl-3 pr-1" data-effect-panel-bar>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-[13px] font-semibold">{def?.name ?? clip.effectId}</h2>
           <p className="truncate text-[11px] text-ink-muted">

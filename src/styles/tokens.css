@@ -8,104 +8,299 @@
  * Theme resolution: data-theme on <html> is set pre-paint by the inline script
  * in index.html, so there is no flash. prefers-color-scheme is the fallback
  * only when the user has never chosen.
+ *
+ * Soft editorial · Clay (D-174). "I need you to do a major facelifting for
+ * this application … I prioritise clarity and softness that can cause
+ * stickiness for the users." Warm paper, ink text, fine hairlines, gentle
+ * diffuse shadows, and one terracotta accent kept for actions and highlights,
+ * so the person's designs stay the most colourful thing on the screen.
+ *
+ * Three layers, each reading only from the one above it:
+ *   1. Primitives (--p-*): raw values, named for what they are. Never used by
+ *      components directly.
+ *   2. Semantic (--c-*, --r-*, --shadow-*, --t-*): named for their job. Every
+ *      name the app already used is kept and re-pointed, so nothing breaks.
+ *   3. Component (--btn-*, --field-*, --glass-* …): one component's choices,
+ *      read by the shared classes in index.css.
+ * Dark mode re-points layer 2 only; layers 1 and 3 do not change. The
+ * contrast of every pair is listed in DESIGN.md.
  */
 
 :root {
-  /* Neutral ramp — light */
-  --c-bg: #f6f6f7;
-  --c-panel: #ffffff;
-  --c-panel-alt: #fbfbfc;
-  --c-edge: #e4e4e8;
-  --c-edge-strong: #d2d2d9;
-  --c-ink: #17171b;
+  /* ── 1 · Primitives ─────────────────────────────────────────────────── */
+
+  /* Paper: warm off-whites, lightest first. */
+  --p-paper-0: #fffcf7;
+  --p-paper-0-rgb: 255 252 247;
+  --p-paper-50: #f8f3ec;
+  --p-paper-100: #f7f2ea;
+  --p-paper-200: #f1ebe2;
+  --p-paper-250: #ebe4da;
+  --p-paper-300: #e9e1d5;
+  --p-paper-500: #dcd3c6;
+  --p-paper-700: #928677;
+
+  /* Ink: warm near-blacks and their greys. */
+  --p-ink-900: #211d18;
+  --p-ink-600: #5b544a;
+  --p-ink-500: #685f54;
+
+  /* Charcoal: the dark theme's surfaces, warm rather than black. */
+  --p-char-950: #100e0c;
+  --p-char-900: #171411;
+  --p-char-850: #211d19;
+  --p-char-850-rgb: 33 29 25;
+  --p-char-800: #2a2520;
+  --p-char-780: #2b2621;
+  --p-char-750: #352f29;
+  --p-char-700: #37302a;
+  --p-char-650: #4a423a;
+  --p-char-500: #7d7266;
+  --p-char-300: #aa9f91;
+  --p-char-200: #c4baac;
+  --p-char-50: #f3ede4;
+
+  /* Clay: the one accent, terracotta. */
+  --p-clay-50: #f9e9df;
+  --p-clay-300: #ee9470;
+  --p-clay-400: #e57d55;
+  --p-clay-600: #ad4824;
+  --p-clay-700: #963b1b;
+  --p-clay-900: #3d281d;
+  --p-clay-950: #1a0f08;
+  /* The warm tone in the colour field behind the chrome. */
+  --p-sand: #e9b98f;
+  --p-sand-dark: #7a4a2a;
+
+  /* Status. */
+  --p-amber-700: #8a5000;
+  --p-amber-100: #fbefd5;
+  --p-amber-400: #f0b542;
+  --p-amber-950: #3a2c12;
+  --p-red-700: #b42318;
+  --p-red-300: #f4857a;
+
+  /* The neutral void around the artboard: no hue to argue with a design. */
+  --p-stage-light: #e7e3dd;
+  --p-stage-dark: #100e0c;
+
+  /* ── 2 · Semantic ───────────────────────────────────────────────────── */
+
+  /* Surfaces, from the page up. */
+  --c-bg: var(--p-paper-100); /* the page */
+  --c-panel: var(--p-paper-0); /* reading surfaces: panels, cards, dialogs */
+  /* The same, as channels, for the frosts: rgb() with an alpha, which every
+     contrast checker reads, where color-mix() is not read by all of them. */
+  --c-panel-rgb: var(--p-paper-0-rgb);
+  --c-panel-alt: var(--p-paper-50); /* fields, hover */
+  --c-sunk: var(--p-paper-200); /* a quiet band: section headers, tracks */
+  --c-sunk-hover: var(--p-paper-300);
+
+  /* Hairlines. --c-edge is decoration; --c-edge-field is a control's own
+     outline and clears 3:1 (WCAG 1.4.11) on every surface it sits on. */
+  --c-edge: var(--p-paper-250);
+  --c-edge-strong: var(--p-paper-500);
+  --c-edge-field: var(--p-paper-700);
+
+  --c-ink: var(--p-ink-900);
   /*
    * Small print clears WCAG AA, 4.5:1, on every light surface it sits on —
-   * the panels, the page and the grey stage (D-169: "Accessibility is
-   * important to me right now"). Faint was about 3.6:1 on white and 3:1 on
-   * the stage; it stays a step lighter than muted.
+   * the panels, the page, the sunk bands and the stage (D-169: "Accessibility
+   * is important to me right now"). Faint stays a step lighter than muted.
    */
-  --c-ink-muted: #575761;
-  --c-ink-faint: #66666f;
+  --c-ink-muted: var(--p-ink-600);
+  --c-ink-faint: var(--p-ink-500);
 
-  /* Brand (D-128): deep navy with off-white — the product's own colour, on
-     its bars and headings. "A deep navy blue color for the background and
-     offwhite color for the text… Make deep navy blue one of my main colors." */
-  --c-brand: #0d1b45;
-  --c-brand-hover: #182a63;
-  --c-brand-ink: #f7f4ec;
+  /*
+   * Brand (D-128) was a deep navy for bars and headings. In Soft editorial
+   * (D-174) there are no navy blocks: "brand" is the quiet sunk band a
+   * section's header sits on, with ink words. The names stay so the bars
+   * keep working.
+   */
+  --c-brand: var(--c-sunk);
+  --c-brand-hover: var(--c-sunk-hover);
+  --c-brand-ink: var(--c-ink);
 
-  /* Accent: a clear blue from the same family, for actions and selection. */
-  --c-accent: #2546c4;
-  --c-accent-hover: #1c39a6;
+  /* Accent: terracotta, for actions, selection and focus — used sparingly. */
+  --c-accent: var(--p-clay-600);
+  --c-accent-hover: var(--p-clay-700);
   --c-accent-ink: #ffffff;
-  --c-accent-soft: #e8ecfb;
+  --c-accent-soft: var(--p-clay-50);
+  --c-focus: var(--c-accent);
 
   /* Status */
-  --c-pro: #b45309;
-  --c-pro-soft: #fef3c7;
-  --c-danger: #dc2626;
+  --c-pro: var(--p-amber-700);
+  --c-pro-soft: var(--p-amber-100);
+  --c-danger: var(--p-red-700);
 
-  /* The void around the artboard — deliberately darker than the panels in both
-     themes so the canvas edge reads as an edge. */
-  --c-stage: #e9e9ec;
+  /* The void around the artboard — calm and neutral in both themes, a step
+     from the panels so the canvas edge reads as an edge. */
+  --c-stage: var(--p-stage-light);
 
-  /* Geometry */
-  --r-sm: 4px;
-  --r-md: 7px;
-  --r-lg: 11px;
-  --r-xl: 16px;
+  /* The colour field behind the chrome (painted once, in index.css). */
+  --c-field-accent: color-mix(in srgb, var(--p-clay-400) 16%, transparent);
+  --c-field-warm: color-mix(in srgb, var(--p-sand) 26%, transparent);
 
-  /* Elevation */
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.07), 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.06);
+  /* Type: Archivo for headlines, Inter for everything else (D-026). */
+  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Archivo', 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  /* Geometry: larger and softer than before. */
+  --r-xs: 5px;
+  --r-sm: 7px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+  --r-2xl: 24px;
+  --r-pill: 999px;
+
+  /* Elevation: diffuse and warm, never a hard grey drop. */
+  --shadow-sm: 0 1px 2px rgb(60 40 20 / 0.06);
+  --shadow-md: 0 1px 2px rgb(60 40 20 / 0.05), 0 8px 22px -12px rgb(60 40 20 / 0.24);
+  --shadow-lg: 0 2px 6px rgb(60 40 20 / 0.06), 0 26px 50px -22px rgb(60 40 20 / 0.38);
+  /* A little light along the top edge of what floats. */
+  --shadow-lip: inset 0 1px 0 rgb(255 255 255 / 0.65);
+
+  /* Icons: one stroke, three sizes. */
+  --icon-stroke: 1.75;
+  --icon-sm: 14px;
+  --icon-md: 18px;
+  --icon-lg: 22px;
 
   /* Chrome layout */
   --h-topbar: 52px;
   --w-library: 264px;
   --w-inspector: 312px;
 
-  /* Motion — chrome only. §13: prefers-reduced-motion suppresses these and
-     never touches the artboard. */
-  --t-fast: 110ms;
-  --t-base: 180ms;
-  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Motion — chrome only. §13: prefers-reduced-motion collapses these and
+     never touches the artboard. Exits are quicker than entrances. */
+  --t-instant: 80ms;
+  --t-fast: 120ms;
+  --t-base: 200ms;
+  --t-slow: 300ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* ── 3 · Component ──────────────────────────────────────────────────── */
+
+  /* Glass: only for what floats over something else — the top bars, menus,
+     popovers, dialogs, sheets, toasts and the phone's toolbar. Reading
+     surfaces stay solid, so contrast never depends on what is behind. */
+  --glass-bg: rgb(var(--c-panel-rgb) / 0.76);
+  /* Dialogs and sheets carry more to read: frostier, the blur only a hint. */
+  --glass-bg-strong: rgb(var(--c-panel-rgb) / 0.9);
+  --glass-bg-solid: var(--c-panel);
+  --glass-blur: 18px;
+  --glass-saturate: 1.5;
+  --glass-edge: color-mix(in srgb, var(--c-ink) 9%, transparent);
+  --glass-shadow: var(--shadow-lip), 0 18px 40px -24px rgb(60 40 20 / 0.42);
+  --scrim: rgb(33 29 24 / 0.28);
+
+  --btn-h: 32px;
+  --btn-h-sm: 26px;
+  --btn-radius: var(--r-pill);
+  --btn-primary-bg: var(--c-accent);
+  --btn-primary-bg-hover: var(--c-accent-hover);
+  --btn-primary-ink: var(--c-accent-ink);
+  --btn-primary-shadow: 0 8px 18px -12px var(--c-accent);
+  --btn-secondary-bg: var(--c-panel);
+  --btn-secondary-edge: var(--c-edge-strong);
+  --btn-quiet-hover: var(--c-sunk);
+
+  --field-bg: var(--c-panel-alt);
+  --field-edge: var(--c-edge-field);
+  --field-radius: var(--r-sm);
+
+  --seg-track: var(--c-sunk);
+  --seg-thumb: var(--c-panel);
+  --seg-radius: var(--r-sm);
+
+  --chip-on-bg: var(--c-ink);
+  --chip-on-ink: var(--c-panel);
+
+  --section-bg: var(--c-sunk);
+  --section-ink: var(--c-ink);
+  --section-radius: var(--r-md);
+
+  --toast-radius: var(--r-pill);
+  --menu-radius: var(--r-lg);
+  --dialog-radius: var(--r-xl);
+  --sheet-radius: var(--r-2xl);
 }
 
 :root[data-theme='dark'] {
   /*
-   * Lifted a step from near-black (D-109): panels that were #151519 on a
-   * #0d0d10 page read as one dark mass, and the faint text was below 3:1.
-   * Each surface is now a visible step from the next, and small print clears
-   * 4.5:1 on the panels.
+   * Warm charcoal rather than black (D-174; D-109 lifted it off near-black).
+   * Each surface is a visible step from the next, small print clears 4.5:1
+   * on all of them, and the accent is lightened to keep its contrast.
    */
-  --c-bg: #111115;
-  --c-panel: #1a1a20;
-  --c-panel-alt: #222229;
-  --c-edge: #2f2f38;
-  --c-edge-strong: #41414c;
-  --c-ink: #f4f4f6;
-  --c-ink-muted: #b4b4be;
+  --c-bg: var(--p-char-900);
+  --c-panel: var(--p-char-850);
+  --c-panel-rgb: var(--p-char-850-rgb);
+  --c-panel-alt: var(--p-char-800);
+  --c-sunk: var(--p-char-780);
+  --c-sunk-hover: var(--p-char-750);
+  --c-edge: var(--p-char-700);
+  --c-edge-strong: var(--p-char-650);
+  --c-edge-field: var(--p-char-500);
+  --c-ink: var(--p-char-50);
+  --c-ink-muted: var(--p-char-200);
   /* 4.5:1 on the accent's soft tint too, where a chosen row's small print sits (D-169). */
-  --c-ink-faint: #9a9aa6;
+  --c-ink-faint: var(--p-char-300);
 
-  /* A step lighter than the light theme's, to stand off the dark panels. */
-  --c-brand: #15285f;
-  --c-brand-hover: #1e3373;
-  --c-brand-ink: #f7f4ec;
+  --c-accent: var(--p-clay-400);
+  --c-accent-hover: var(--p-clay-300);
+  --c-accent-ink: var(--p-clay-950);
+  --c-accent-soft: var(--p-clay-900);
 
-  --c-accent: #6f8dff;
-  --c-accent-hover: #89a2ff;
-  --c-accent-ink: #0d1b45;
-  --c-accent-soft: #1b2552;
+  --c-pro: var(--p-amber-400);
+  --c-pro-soft: var(--p-amber-950);
+  --c-danger: var(--p-red-300);
 
-  --c-pro: #fbbf24;
-  --c-pro-soft: #3a2d10;
-  --c-danger: #f87171;
+  --c-stage: var(--p-stage-dark);
 
-  --c-stage: #0a0a0d;
+  --c-field-accent: color-mix(in srgb, var(--p-clay-400) 12%, transparent);
+  --c-field-warm: color-mix(in srgb, var(--p-sand-dark) 22%, transparent);
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
-  --shadow-md: 0 2px 8px rgb(0 0 0 / 0.45), 0 1px 2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.55), 0 2px 8px rgb(0 0 0 / 0.35);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 24px -12px rgb(0 0 0 / 0.7);
+  --shadow-lg: 0 2px 8px rgb(0 0 0 / 0.45), 0 28px 54px -22px rgb(0 0 0 / 0.85);
+  --shadow-lip: inset 0 1px 0 rgb(255 245 230 / 0.06);
+
+  --glass-bg: rgb(var(--c-panel-rgb) / 0.8);
+  --glass-bg-strong: rgb(var(--c-panel-rgb) / 0.92);
+  --glass-edge: rgb(255 245 230 / 0.09);
+  --glass-shadow: var(--shadow-lip), 0 22px 48px -22px rgb(0 0 0 / 0.8);
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
+/* Where the browser cannot blur, or the person asks for less transparency,
+   what floats is solid: legibility first. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root,
+  :root[data-theme='dark'] {
+    --glass-bg: var(--glass-bg-solid);
+    --glass-bg-strong: var(--glass-bg-solid);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  :root,
+  :root[data-theme='dark'] {
+    --glass-bg: var(--glass-bg-solid);
+    --glass-bg-strong: var(--glass-bg-solid);
+    --glass-blur: 0px;
+  }
+}
+
+/* Reduced motion collapses the durations (§13); the rule in index.css stops
+   whatever is left. Colour and opacity changes stay, instant. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-instant: 0ms;
+    --t-fast: 0ms;
+    --t-base: 0ms;
+    --t-slow: 0ms;
+  }
 }

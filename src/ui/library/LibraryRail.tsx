@@ -389,7 +389,7 @@ function TemplateCard({
 
       {locked && (
         <span
-          className="pointer-events-none absolute right-1 top-1 rounded-sm px-1 py-0.5 text-[9px] font-bold uppercase"
+          className="pointer-events-none absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
           style={{ background: 'var(--c-pro-soft)', color: 'var(--c-pro)' }}
         >
           Pro
@@ -397,8 +397,9 @@ function TemplateCard({
       )}
       {template.isNew === true && !locked && (
         <span
-          className="pointer-events-none absolute right-1 top-1 rounded-sm px-1 py-0.5 text-[9px] font-bold uppercase"
-          style={{ background: 'var(--c-accent)', color: 'var(--c-accent-ink)' }}
+          className="pointer-events-none absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+          // Ink, not the accent (D-174): a label on every card must not outshout the designs.
+          style={{ background: 'var(--chip-on-bg)', color: 'var(--chip-on-ink)' }}
         >
           New
         </span>

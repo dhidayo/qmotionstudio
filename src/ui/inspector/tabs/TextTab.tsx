@@ -133,7 +133,7 @@ function TileHead({
   children?: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div className={`brand-surface flex items-center gap-1 pr-1 ${open ? 'rounded-t-[7px]' : 'rounded-[7px]'}`}>
+    <div className={`brand-surface flex items-center gap-1 pr-1 ${open ? 'rounded-t-[calc(var(--r-lg)-1px)]' : 'rounded-[calc(var(--r-lg)-1px)]'}`}>
       <button
         type="button"
         onClick={onToggle}

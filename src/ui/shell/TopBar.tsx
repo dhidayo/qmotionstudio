@@ -23,14 +23,15 @@ export function TopBar(): React.JSX.Element {
 
   return (
     <header
-      className="brand-surface flex shrink-0 items-center gap-2 overflow-x-auto border-b border-edge bg-panel px-3 lg:gap-4"
+      // Frosted over the colour field (D-174): it floats over the page, it is not a navy block.
+      className="glass-bar flex shrink-0 items-center gap-2 overflow-x-auto border-b px-3 lg:gap-4"
       style={{ height: 'var(--h-topbar)' }}
     >
       <AppMenu />
       <div className="flex shrink-0 items-center gap-2 pr-1">
         {/* The owner's Q, cut from their own artwork by `npm run brand`. */}
         <img src="/brand-q.png" alt="" aria-hidden width={24} height={24} className="size-6 rounded-md" />
-        <span className="hidden text-[13px] font-semibold tracking-tight lg:inline">
+        <span className="font-headline hidden text-[14px] font-bold lg:inline">
           Q Motion Studio
         </span>
       </div>
@@ -43,12 +44,12 @@ export function TopBar(): React.JSX.Element {
           type="button"
           onClick={() => { useOverlays.getState().openPhonePanel('aspect'); }}
           aria-label={`Frame shape ${project.aspect}. Change`}
-          className="flex shrink-0 items-center gap-1 rounded-md border border-edge px-2 py-1 text-[12px] font-medium tabular hover:bg-panel-alt"
+          className="ui-chip h-7 shrink-0 gap-1 px-2.5 text-[12px] font-medium tabular"
         >
           {project.aspect} <span aria-hidden className="text-[10px] text-ink-faint">▾</span>
         </button>
       ) : (
-      <div className="flex items-center gap-1" role="group" aria-label="Aspect ratio">
+      <div className="ui-seg items-center" role="group" aria-label="Aspect ratio">
         {ASPECTS.map((aspect) => (
           <AspectButton
             key={aspect}
@@ -94,7 +95,7 @@ export function TopBar(): React.JSX.Element {
         <button
           type="button"
           onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); }}
-          className="rounded-md border border-edge px-2 py-1 text-[12px] hover:bg-panel-alt"
+          className="ui-btn ui-btn--secondary ui-btn--sm"
           aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
         >
           {theme === 'dark' ? 'Light' : 'Dark'}
@@ -106,7 +107,7 @@ export function TopBar(): React.JSX.Element {
             onClick={() => { useOverlays.getState().setShortcutsOpen(true); }}
             title="Keyboard shortcuts (?)"
             aria-label="Keyboard shortcuts"
-            className="grid size-7 place-items-center rounded-md border border-edge text-[12px] font-semibold text-ink-muted hover:bg-panel-alt"
+            className="ui-iconbtn ui-iconbtn--edge size-7 rounded-full text-[12px] font-semibold"
           >
             ?
           </button>
@@ -127,7 +128,7 @@ function ExportButton(): React.JSX.Element {
       onClick={() => { setExporting(true); }}
       data-tour="export"
       title={keyboard ? `Export (${chord('mod+E')})` : 'Export'}
-      className="rounded-md bg-accent px-3 py-1 text-[12px] font-medium text-accent-ink hover:bg-accent-hover"
+      className="ui-btn ui-btn--primary"
     >
       Export
     </button>
@@ -144,7 +145,7 @@ function UndoRedo(): React.JSX.Element {
   const redoName = history.future[0]?.label ?? null;
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-0.5">
       <HistoryButton
         onClick={undo}
         disabled={undoName === null}
@@ -181,7 +182,7 @@ function HistoryButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className="grid size-6 place-items-center rounded-md border border-edge text-[13px] leading-none hover:bg-panel-alt disabled:opacity-30"
+      className="ui-iconbtn size-7 text-[15px]"
     >
       {children}
     </button>
@@ -201,7 +202,7 @@ function ModeSwitch(): React.JSX.Element {
   const sceneCount = useEditor((s) => s.project.scenes.length);
 
   return (
-    <div className="flex rounded-md border border-edge p-0.5" role="group" aria-label="Mode">
+    <div className="ui-seg" role="group" aria-label="Mode">
       {(['showcase', 'motionAd'] as const).map((m) => {
         const active = mode === m;
         const lossy = m === 'showcase' && sceneCount > 1;
@@ -217,12 +218,7 @@ function ModeSwitch(): React.JSX.Element {
                 ? `${MODE_COPY[m].label} keeps scene 1 and the layers over it, and sets the other ${sceneCount - 1} aside. It asks first, and can be undone.`
                 : MODE_COPY[m].hint
             }
-            className="whitespace-nowrap rounded-sm px-2 py-0.5 text-[12px] transition-colors"
-            style={
-              active
-                ? { background: 'var(--c-accent-soft)', color: 'var(--c-accent)', fontWeight: 600 }
-                : { color: 'var(--c-ink-faint)' }
-            }
+            className="ui-seg-opt whitespace-nowrap px-2.5 py-1 text-[12px]"
           >
             {MODE_COPY[m].label}
           </button>
@@ -246,14 +242,7 @@ function AspectButton({
       type="button"
       onClick={() => { onSelect(aspect); }}
       aria-pressed={active}
-      className="rounded-md border px-2 py-1 text-[11px] tabular transition-colors"
-      style={{
-        borderColor: active ? 'var(--c-accent)' : 'var(--c-edge)',
-        background: active ? 'var(--c-accent-soft)' : 'transparent',
-        color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
-        fontWeight: active ? 600 : 400,
-        transitionDuration: 'var(--t-fast)',
-      }}
+      className="ui-seg-opt px-2 py-1 text-[11px] tabular"
     >
       {aspect}
     </button>
@@ -336,9 +325,9 @@ function AppMenu(): React.JSX.Element {
         // Says what is in it (D-172): New image and New video are how to start afresh.
         title="Menu: New image, New video, Open, Save"
         data-app-menu
-        className="grid size-9 shrink-0 place-items-center rounded-md hover:bg-panel-alt"
+        className="ui-iconbtn size-9 shrink-0 text-ink"
       >
-        <svg aria-hidden width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+        <svg aria-hidden width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round">
           <path d="M4 7h16M4 12h16M4 17h16" />
         </svg>
       </button>

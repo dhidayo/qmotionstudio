@@ -59,7 +59,7 @@ export function Icon({ name, size = 22 }: { name: IconName; size?: number }): Re
       viewBox="0 0 24 24"
       fill={filled ? 'currentColor' : 'none'}
       stroke="currentColor"
-      strokeWidth={filled ? 0 : 1.7}
+      strokeWidth={filled ? 0 : 1.75}
       strokeLinecap="round"
       strokeLinejoin="round"
     >

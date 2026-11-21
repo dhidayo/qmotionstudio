@@ -51,15 +51,16 @@ test('a short press on a scene is still a click, not a drag', async ({ page }) =
   await expect(sceneClip(page, 1)).toContainText('Stack Drop');
 });
 
-test('a section folds under its navy bar and stays folded after a reload', async ({ page }) => {
+test('a section folds under its header band and stays folded after a reload', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('canvas');
   await page.getByRole('tab', { name: 'Style' }).click();
   const bar = page.getByRole('button', { name: 'Looks', exact: true });
   await expect(bar).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[data-look="cream"]')).toBeVisible();
-  const navy = await bar.evaluate((el) => getComputedStyle(el.closest('.brand-surface') ?? el).backgroundColor);
-  expect(navy).toBe('rgb(13, 27, 69)');
+  // D-174: the soft editorial header band (the sunk paper, --c-sunk), where D-130 had navy.
+  const band = await bar.evaluate((el) => getComputedStyle(el.closest('.brand-surface') ?? el).backgroundColor);
+  expect(band).toBe('rgb(241, 235, 226)');
 
   await bar.click();
   await expect(bar).toHaveAttribute('aria-expanded', 'false');

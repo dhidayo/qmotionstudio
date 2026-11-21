@@ -6,8 +6,11 @@
   --color-bg: var(--c-bg);
   --color-panel: var(--c-panel);
   --color-panel-alt: var(--c-panel-alt);
+  --color-sunk: var(--c-sunk);
+  --color-sunk-hover: var(--c-sunk-hover);
   --color-edge: var(--c-edge);
   --color-edge-strong: var(--c-edge-strong);
+  --color-edge-field: var(--c-edge-field);
   --color-ink: var(--c-ink);
   --color-ink-muted: var(--c-ink-muted);
   --color-ink-faint: var(--c-ink-faint);
@@ -20,45 +23,14 @@
   --color-danger: var(--c-danger);
   --color-stage: var(--c-stage);
 
+  --radius-xs: var(--r-xs);
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
   --radius-xl: var(--r-xl);
-}
+  --radius-2xl: var(--r-2xl);
 
-/*
- * A navy area (D-128): the top bar, the library's category bars, the
- * inspector's tabs, the Text tab's tiles. Re-points the chrome tokens inside
- * it, so everything already written against them — buttons, borders, muted
- * text, the accent — reads correctly on navy without a second set of classes.
- */
-.brand-surface {
-  --c-panel: var(--c-brand);
-  --c-panel-alt: var(--c-brand-hover);
-  --c-edge: rgb(255 255 255 / 0.16);
-  --c-edge-strong: rgb(255 255 255 / 0.3);
-  --c-ink: var(--c-brand-ink);
-  --c-ink-muted: rgb(247 244 236 / 0.8);
-  --c-ink-faint: rgb(247 244 236 / 0.66);
-  --c-accent: #9fb5ff;
-  --c-accent-hover: #b7c7ff;
-  --c-accent-ink: #0d1b45;
-  --c-accent-soft: rgb(255 255 255 / 0.14);
-  --c-pro: #fbbf24;
-  --c-pro-soft: rgb(251 191 36 / 0.16);
-  background-color: var(--c-brand);
-  color: var(--c-brand-ink);
-}
-
-/*
- * A chosen chip or segment (D-150): deep navy with light words, the same navy
- * as the top bar, so what is picked reads at a glance in light and dark.
- */
-.chip-on {
-  background-color: var(--c-brand);
-  border-color: var(--c-brand);
-  color: var(--c-brand-ink);
-  font-weight: 600;
+  --font-headline: var(--font-display);
 }
 
 @layer base {
@@ -68,15 +40,39 @@
     height: 100%;
   }
 
+  /* The page colour is on <html>; the body stays clear so the field shows through. */
+  html {
+    background: var(--c-bg);
+    accent-color: var(--c-accent);
+  }
+
   body {
     margin: 0;
-    background: var(--c-bg);
+    background: transparent;
     color: var(--c-ink);
-    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-ui);
     font-size: 13px;
     line-height: 1.45;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
+  }
+
+  /*
+   * The colour field behind the chrome (D-174): the accent from the top
+   * corner and a warm sand from the bottom, painted once with gradients — no
+   * blur filter, nothing animated, so a modest phone does no work. Reading
+   * surfaces and the stage are solid, so in the studio it shows only through
+   * what floats: the top bar, the phone's toolbar, menus and sheets.
+   */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(40rem 22rem at 94% -10%, var(--c-field-accent), transparent 70%),
+      radial-gradient(34rem 22rem at -6% 108%, var(--c-field-warm), transparent 70%);
   }
 
   /* Numbers in the inspector and the perf overlay must not jitter as they change. */
@@ -86,14 +82,410 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--c-accent);
+    outline: 2px solid var(--c-focus);
     outline-offset: 2px;
-    border-radius: var(--r-sm);
   }
 
   button {
     font: inherit;
     color: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--c-accent) 24%, transparent);
+  }
+}
+
+/*
+ * The shared components (D-174), restyled once so every screen inherits them.
+ * In the components layer, so a utility written beside one (a size, a margin)
+ * still wins. DESIGN.md has the rules for each.
+ */
+@layer components {
+  /*
+   * What floats is frosted; what is read is solid.
+   *
+   * The blur is on a layer of its own behind the content, not on the element:
+   * an element with a backdrop-filter becomes the frame of every `fixed` thing
+   * inside it, and a design's full-screen preview opened from a sheet then
+   * sat inside the sheet instead of over the screen. The tint stays on the
+   * element, so contrast checkers read it. `position: relative` yields to a
+   * `fixed` or `absolute` written beside it.
+   */
+  .glass {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--glass-bg);
+    border-color: var(--glass-edge);
+  }
+  .glass::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  }
+  .glass {
+    box-shadow: var(--glass-shadow);
+  }
+
+  /*
+   * A bar along an edge — the top bars, the phone's toolbar and selection
+   * rows: the frost's tint over the colour field, a hairline, no shadow. No
+   * blur: nothing passes under a bar, and blurring a still gradient changes
+   * nothing. Nor a stacking context, which would trap the windows the bar
+   * opens (Save as, Rename) under the picture.
+   */
+  .glass-bar {
+    background-color: var(--glass-bg);
+    border-color: var(--glass-edge);
+  }
+
+  .scrim {
+    background: var(--scrim);
+  }
+
+  /* Headlines: Archivo, tightened as it grows. */
+  .font-headline {
+    letter-spacing: -0.012em;
+  }
+
+  /* ── Buttons ── */
+  .ui-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: var(--btn-h);
+    padding: 0 14px;
+    border: 1px solid transparent;
+    border-radius: var(--btn-radius);
+    font-size: 12.5px;
+    font-weight: 600;
+    /* A long label in a narrow panel wraps inside the pill, never past it. */
+    line-height: 1.2;
+    text-align: center;
+    padding-block: 4px;
+    cursor: pointer;
+    transition:
+      background-color var(--t-fast) ease,
+      border-color var(--t-fast) ease,
+      color var(--t-fast) ease,
+      box-shadow var(--t-fast) ease,
+      transform var(--t-fast) var(--ease-out);
+  }
+  .ui-btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .ui-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .ui-btn--sm {
+    min-height: var(--btn-h-sm);
+    padding: 0 10px;
+    font-size: 11.5px;
+  }
+  .ui-btn--primary {
+    background-color: var(--btn-primary-bg);
+    color: var(--btn-primary-ink);
+    box-shadow: var(--btn-primary-shadow);
+  }
+  .ui-btn--secondary {
+    background-color: var(--btn-secondary-bg);
+    border-color: var(--btn-secondary-edge);
+    color: var(--c-ink);
+  }
+  .ui-btn--quiet {
+    background-color: transparent;
+    color: var(--c-ink-muted);
+  }
+  .ui-btn--danger {
+    background-color: var(--btn-secondary-bg);
+    border-color: var(--btn-secondary-edge);
+    color: var(--c-danger);
+  }
+  @media (hover: hover) {
+    .ui-btn--primary:hover:not(:disabled) {
+      background-color: var(--btn-primary-bg-hover);
+    }
+    .ui-btn--secondary:hover:not(:disabled) {
+      background-color: var(--c-panel-alt);
+      border-color: var(--c-edge-field);
+    }
+    .ui-btn--quiet:hover:not(:disabled) {
+      background-color: var(--btn-quiet-hover);
+      color: var(--c-ink);
+    }
+    .ui-btn--danger:hover:not(:disabled) {
+      background-color: var(--c-panel-alt);
+      border-color: var(--c-danger);
+    }
+  }
+
+  /* A button that is only an icon (or one glyph): quiet until pointed at. */
+  .ui-iconbtn {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: var(--r-md);
+    color: var(--c-ink-muted);
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      background-color var(--t-fast) ease,
+      color var(--t-fast) ease,
+      transform var(--t-fast) var(--ease-out);
+  }
+  .ui-iconbtn:active:not(:disabled) {
+    transform: scale(0.94);
+  }
+  .ui-iconbtn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  @media (hover: hover) {
+    .ui-iconbtn:hover:not(:disabled) {
+      background-color: var(--btn-quiet-hover);
+      color: var(--c-ink);
+    }
+  }
+  /* An outlined one, where it sits among other outlined controls. */
+  .ui-iconbtn--edge {
+    border-color: var(--c-edge-strong);
+  }
+
+  /* ── Chips: a pill of one choice or one action ── */
+  .ui-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--c-edge-strong);
+    border-radius: var(--r-pill);
+    background-color: var(--c-panel);
+    color: var(--c-ink);
+    white-space: nowrap;
+    transition:
+      background-color var(--t-fast) ease,
+      border-color var(--t-fast) ease,
+      color var(--t-fast) ease,
+      transform var(--t-fast) var(--ease-out);
+  }
+  .ui-chip:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .ui-chip:disabled {
+    opacity: 0.4;
+  }
+  @media (hover: hover) {
+    .ui-chip:hover:not(:disabled, .chip-on) {
+      border-color: var(--c-edge-field);
+      background-color: var(--c-panel-alt);
+    }
+  }
+  .ui-chip--accent {
+    border-color: color-mix(in srgb, var(--c-accent) 55%, var(--c-edge-strong));
+    color: var(--c-accent);
+    font-weight: 600;
+  }
+  .ui-chip--ready {
+    border-color: color-mix(in srgb, var(--c-accent) 55%, var(--c-edge-strong));
+    background-color: var(--c-accent-soft);
+    color: var(--c-accent);
+  }
+  @media (hover: hover) {
+    .ui-chip--accent:hover:not(:disabled),
+    .ui-chip--ready:hover:not(:disabled) {
+      border-color: var(--c-accent);
+      background-color: var(--c-accent-soft);
+    }
+  }
+
+  /* ── Segmented control: a sunk track, the chosen one raised on it ── */
+  .ui-seg {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: calc(var(--seg-radius) + 2px);
+    background-color: var(--seg-track);
+  }
+  .ui-seg-opt {
+    border-radius: var(--seg-radius);
+    color: var(--c-ink-muted);
+    transition:
+      background-color var(--t-fast) ease,
+      color var(--t-fast) ease,
+      box-shadow var(--t-fast) ease;
+  }
+  @media (hover: hover) {
+    .ui-seg-opt:hover:not([aria-pressed='true']) {
+      color: var(--c-ink);
+    }
+  }
+  .ui-seg-opt[aria-pressed='true'] {
+    background-color: var(--seg-thumb);
+    color: var(--c-ink);
+    font-weight: 600;
+    box-shadow: var(--shadow-sm), 0 0 0 1px var(--c-edge);
+  }
+
+  /* ── Fields ── */
+  .ui-field {
+    border: 1px solid var(--field-edge);
+    border-radius: var(--field-radius);
+    background-color: var(--field-bg);
+    color: var(--c-ink);
+    transition: border-color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+  }
+  .ui-field::placeholder {
+    color: var(--c-ink-faint);
+  }
+  .ui-field:focus {
+    outline: none;
+    border-color: var(--c-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 22%, transparent);
+  }
+
+  /* ── Slider: a hairline track and a soft thumb in the accent ── */
+  .ui-range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 20px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .ui-range::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: var(--r-pill);
+    background: var(--c-edge-strong);
+  }
+  .ui-range::-moz-range-track {
+    height: 4px;
+    border-radius: var(--r-pill);
+    background: var(--c-edge-strong);
+  }
+  .ui-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -6px;
+    border: 2px solid var(--c-panel);
+    border-radius: 50%;
+    background: var(--c-accent);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+    transition: transform var(--t-fast) var(--ease-out);
+  }
+  .ui-range::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--c-panel);
+    border-radius: 50%;
+    background: var(--c-accent);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  }
+  .ui-range:active::-webkit-slider-thumb {
+    transform: scale(1.12);
+  }
+  .ui-range:focus-visible {
+    outline-offset: 1px;
+  }
+  @media (pointer: coarse) {
+    .ui-range {
+      height: 32px;
+    }
+    .ui-range::-webkit-slider-thumb {
+      width: 22px;
+      height: 22px;
+      margin-top: -9px;
+    }
+  }
+
+  /* ── Tabs: words, the chosen one in ink over an accent rule ── */
+  .ui-tab {
+    color: var(--c-ink-faint);
+    box-shadow: inset 0 -2px 0 transparent;
+    transition: color var(--t-fast) ease, box-shadow var(--t-fast) ease;
+  }
+  @media (hover: hover) {
+    .ui-tab:hover {
+      color: var(--c-ink);
+    }
+  }
+  .ui-tab[aria-selected='true'] {
+    color: var(--c-ink);
+    font-weight: 600;
+    box-shadow: inset 0 -2px 0 var(--c-accent);
+  }
+
+  /* ── Sections (D-131): a header band and its settings, one soft card ── */
+  .ui-section-bar {
+    border-radius: var(--section-radius);
+  }
+  .ui-section-bar[data-open] {
+    border-radius: var(--section-radius) var(--section-radius) 0 0;
+  }
+  .ui-section-body {
+    border: 1px solid var(--c-edge);
+    border-top: 0;
+    border-radius: 0 0 var(--section-radius) var(--section-radius);
+    background-color: var(--c-panel);
+  }
+
+  /* ── Menus and popovers ── */
+  /* Menus and notices can open over the picture itself: the stronger frost,
+     so their words never depend on the colours of a design behind them. */
+  .ui-menu {
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--menu-radius);
+    background-color: var(--glass-bg-strong);
+  }
+  .ui-menu-item {
+    border-radius: var(--r-sm);
+    transition: background-color var(--t-instant) ease;
+  }
+
+  /* ── Dialogs, sheets and notices ── */
+  .ui-dialog {
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--dialog-radius);
+    background-color: var(--glass-bg-strong);
+    box-shadow: var(--shadow-lip), var(--shadow-lg);
+  }
+  .ui-toast {
+    border: 1px solid var(--glass-edge);
+    border-radius: var(--toast-radius);
+    background-color: var(--glass-bg-strong);
+    color: var(--c-ink);
+  }
+
+  /*
+   * A section's header (D-131), the library's category bars, the photo rows
+   * (D-174). These were deep navy blocks (D-128); in Soft editorial they are
+   * a quiet sunk band with ink words — "clarity and softness" — and fold
+   * exactly as before. The name stays so every bar that used it changes at
+   * once. Inside it a hover darkens the band a step rather than lightening it.
+   * Last in the layer, with .chip-on, so they win over a chip's own look.
+   */
+  .brand-surface {
+    --c-panel-alt: var(--c-sunk-hover);
+    background-color: var(--section-bg);
+    color: var(--section-ink);
+  }
+
+  /*
+   * A chosen chip (D-150): filled with ink and light words, so what is picked
+   * reads at a glance in light and dark without spending the accent (D-174).
+   */
+  .chip-on {
+    background-color: var(--chip-on-bg);
+    border-color: var(--chip-on-bg);
+    color: var(--chip-on-ink);
+    font-weight: 600;
   }
 }
 
@@ -122,11 +514,12 @@
   }
 }
 
+/* A notice rises a little as it arrives and settles back as it goes (D-174). */
 @keyframes toast-in-out {
-  0% { opacity: 0; transform: translate(-50%, 6px); }
-  8% { opacity: 1; transform: translate(-50%, 0); }
-  88% { opacity: 1; transform: translate(-50%, 0); }
-  100% { opacity: 0; transform: translate(-50%, 6px); }
+  0% { opacity: 0; transform: translate(-50%, 8px) scale(0.98); }
+  6% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  92% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, 4px) scale(0.99); }
 }
 
 .toast {
@@ -135,12 +528,12 @@
 
 /* A failure's notice (D-171) comes in the same way and stays. */
 @keyframes toast-in {
-  from { opacity: 0; transform: translate(-50%, 6px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translate(-50%, 8px) scale(0.98); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
 }
 
 .toast-stay {
-  animation: toast-in 200ms var(--ease-out) both;
+  animation: toast-in var(--t-base) var(--ease-out) both;
 }
 
 /*
@@ -187,5 +580,11 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .ui-btn:active:not(:disabled),
+  .ui-chip:active:not(:disabled),
+  .ui-iconbtn:active:not(:disabled) {
+    transform: none;
   }
 }

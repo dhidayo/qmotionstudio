@@ -101,7 +101,7 @@ export function Inspector(): React.JSX.Element {
         * keys, Home and End move between them, and each names its panel.
         */}
       <div
-        className="brand-surface flex border-b border-edge"
+        className="flex border-b border-edge px-1"
         role="tablist"
         aria-label="Inspector sections"
         onKeyDown={(event) => {
@@ -129,13 +129,8 @@ export function Inspector(): React.JSX.Element {
             aria-controls="inspector-panel"
             tabIndex={tab === id ? 0 : -1}
             onClick={() => { setTab(id); }}
-            className="flex-1 whitespace-nowrap border-b-2 px-1 py-2.5 text-[12px] transition-colors"
-            style={{
-              borderColor: tab === id ? 'var(--c-accent)' : 'transparent',
-              color: tab === id ? 'var(--c-ink)' : 'var(--c-ink-faint)',
-              fontWeight: tab === id ? 600 : 400,
-              transitionDuration: 'var(--t-fast)',
-            }}
+            // Words, the chosen one in ink over an accent rule (D-174).
+            className="ui-tab flex-1 whitespace-nowrap px-1 py-3 text-[12px]"
           >
             {label}
           </button>

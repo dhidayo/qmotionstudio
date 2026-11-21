@@ -72,11 +72,10 @@ export function ConfirmDialog({ title, children, choices, onCancel, aside, testI
     };
   }, []);
 
-  const button = phone ? 'min-h-11 px-4 py-2.5 text-[15px]' : 'px-3 py-1.5 text-[13px]';
+  const button = phone ? 'min-h-11 px-5 text-[15px]' : 'min-h-9 px-4 text-[13px]';
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
-      style={{ background: 'rgb(0 0 0 / 0.5)' }}
+      className="scrim fixed inset-0 z-[60] flex items-center justify-center p-4"
       onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }}
     >
       <div
@@ -86,22 +85,23 @@ export function ConfirmDialog({ title, children, choices, onCancel, aside, testI
         aria-labelledby={titleId}
         aria-describedby={bodyId}
         data-confirm-dialog={testId}
-        className="max-h-[90vh] w-full max-w-[440px] overflow-y-auto rounded-lg border border-edge bg-panel p-4 text-ink shadow-lg sm:p-5"
+        // Frosted, like every window (D-174).
+        className="glass ui-dialog max-h-[90vh] w-full max-w-[440px] overflow-y-auto p-5 text-ink sm:p-6"
       >
         <div className="flex items-start gap-3">
           {aside}
           <div className="min-w-0 flex-1">
-            <h2 id={titleId} className={`font-semibold ${phone ? 'text-[18px]' : 'text-[16px]'}`}>{title}</h2>
+            <h2 id={titleId} className={`font-headline font-bold ${phone ? 'text-[19px]' : 'text-[17px]'}`}>{title}</h2>
             <div id={bodyId} className={`mt-1.5 space-y-1.5 text-ink-muted ${phone ? 'text-[15px]' : 'text-[13px]'}`}>{children}</div>
           </div>
         </div>
-        <div className={`mt-4 flex gap-2 ${phone ? 'flex-col' : 'flex-row-reverse flex-wrap'}`}>
+        <div className={`mt-5 flex gap-2 ${phone ? 'flex-col' : 'flex-row-reverse flex-wrap'}`}>
           {choices.map((choice) => (
             <button
               key={choice.label}
               type="button"
               onClick={choice.onSelect}
-              className={`rounded-md font-medium ${button} ${choice.primary === true ? 'bg-accent font-semibold text-accent-ink hover:bg-accent-hover' : 'border border-edge hover:bg-panel-alt'}`}
+              className={`ui-btn ${button} ${choice.primary === true ? 'ui-btn--primary' : 'ui-btn--secondary font-medium'}`}
             >
               {choice.label}
             </button>

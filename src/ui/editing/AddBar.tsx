@@ -128,13 +128,13 @@ export function AddBar({
  * accent's soft tint with an accent border. + Photos used to be a solid
  * accent button whose hover the shared one overrode, white on white.
  */
-const CHIP = 'flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border bg-panel px-2.5 text-[12px] font-medium transition-colors hover:border-accent hover:bg-accent-soft disabled:opacity-40';
+const CHIP = 'ui-chip h-7 shrink-0 px-3 text-[12px] font-medium';
 /** Templates, and every add item that is not lit: ink, with a clear border. */
-const PLAIN = 'border-edge-strong text-ink';
+const PLAIN = '';
 /** + Photos, the main action, and + Video mode: the accent's words and border, nothing filled. */
-const ACCENT = 'border-accent font-semibold text-accent';
+const ACCENT = 'ui-chip--accent';
 /** + Motion with something selected: the accent, tinted, so it says it is ready. */
-const READY = 'border-accent bg-accent-soft text-accent';
+const READY = 'ui-chip--ready';
 
 /**
  * One action in the bar: its icon and "+ Text". + Photos, the main one, in
@@ -188,13 +188,13 @@ function Tile({ item, onClick }: { item: AddItem; onClick: () => void }): React.
       onClick={onClick}
       disabled={item.busy !== null}
       title={item.title}
-      className="flex min-w-0 items-center gap-2.5 rounded-xl border border-edge px-2.5 py-2.5 text-left active:bg-panel-alt disabled:opacity-50"
+      className="flex min-w-0 items-center gap-2.5 rounded-xl border border-edge bg-panel px-2.5 py-2.5 text-left transition-colors active:bg-sunk disabled:opacity-50"
     >
       <span
         className="grid size-9 shrink-0 place-items-center rounded-lg"
         style={item.primary
           ? { background: 'var(--c-accent)', color: 'var(--c-accent-ink)' }
-          : { background: 'var(--c-accent-soft)', color: 'var(--c-accent)' }}
+          : { background: 'var(--c-sunk)', color: 'var(--c-ink)' }}
       >
         <Icon name={item.icon} size={20} />
       </span>

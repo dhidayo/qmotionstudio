@@ -62,7 +62,7 @@ function CrashScreen({ saved }: { readonly saved: 'saving' | 'saved' | 'failed' 
   return (
     <div className="grid h-full place-items-center bg-bg p-6 text-center text-ink" role="alert" data-crash>
       <div className="max-w-[360px]">
-        <h1 className="mb-2 text-[16px] font-semibold">
+        <h1 className="font-headline mb-2 text-[18px] font-bold">
           {failed ? 'Something went wrong' : CRASHED}
         </h1>
         <p className="mb-4 text-[13px] leading-relaxed text-ink-muted">
@@ -72,7 +72,7 @@ function CrashScreen({ saved }: { readonly saved: 'saving' | 'saved' | 'failed' 
         </p>
         <button
           type="button"
-          className="rounded-md bg-accent px-4 py-2 text-[13px] font-semibold text-accent-ink"
+          className="ui-btn ui-btn--primary px-5 text-[13px]"
           style={{ minHeight: 44 }}
           onClick={() => { location.reload(); }}
         >
@@ -154,7 +154,7 @@ export class PartBoundary extends Component<{
           <p className="mb-3 text-[13px] leading-relaxed text-ink-muted">{partFailureMessage(error)}</p>
           <button
             type="button"
-            className="rounded-md bg-accent px-4 py-2 text-[13px] font-semibold text-accent-ink"
+            className="ui-btn ui-btn--primary px-5 text-[13px]"
             style={{ minHeight: 44 }}
             onClick={() => { saveAndReload(useEditor.getState().project); }}
           >

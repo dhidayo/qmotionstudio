@@ -53,23 +53,19 @@ export function Toast(): React.JSX.Element | null {
       role={toast.urgent === true ? 'alert' : 'status'}
       data-toast
       data-toast-sticky={lasting ? '' : undefined}
-      className={`${lasting ? 'toast-stay pointer-events-auto max-w-[min(560px,calc(100vw-32px))]' : 'toast pointer-events-none max-w-[calc(100vw-32px)]'} fixed left-1/2 z-[60] flex w-max items-center gap-2 rounded-md px-3 py-2 text-[12px]`}
+      className={`${lasting ? 'toast-stay pointer-events-auto max-w-[min(560px,calc(100vw-32px))] rounded-[var(--r-lg)] py-1.5 pl-3.5 pr-1.5' : 'toast pointer-events-none max-w-[calc(100vw-32px)] px-4 py-2'} glass ui-toast fixed left-1/2 z-[60] flex w-max items-center gap-2.5 text-[12.5px] font-medium`}
       style={{
         // On a phone, under the top bar: the bottom of the screen is the toolbar.
         ...(phone ? { top: 'calc(env(safe-area-inset-top, 0px) + 60px)' } : { bottom: 64 }),
         ...(lasting ? {} : { animationDuration: `${shownFor(toast.message)}ms` }),
-        background: 'var(--c-panel)',
-        border: '1px solid var(--c-edge)',
-        color: 'var(--c-ink)',
-        boxShadow: 'var(--shadow-lg)',
       }}
     >
-      <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: toast.urgent === true ? 'var(--c-danger)' : 'var(--c-accent)' }} />
+      <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: toast.urgent === true ? 'var(--c-danger)' : 'var(--c-accent)' }} />
       <span className={lasting ? 'min-w-0 leading-snug' : undefined}>{toast.message}</span>
       {toast.action !== undefined && (
         <button
           type="button"
-          className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-[12px] font-semibold text-accent-ink"
+          className="ui-btn ui-btn--primary ui-btn--sm shrink-0 text-[12px]"
           style={phone ? { minHeight: 44 } : undefined}
           onClick={() => { const run = toast.action?.run; clear(); run?.(); }}
         >
@@ -80,7 +76,7 @@ export function Toast(): React.JSX.Element | null {
         <button
           type="button"
           aria-label="Dismiss"
-          className="grid shrink-0 place-items-center rounded-md text-ink-muted hover:text-ink"
+          className="ui-iconbtn shrink-0 rounded-full text-[15px]"
           style={phone ? { width: 44, height: 44 } : { width: 24, height: 24 }}
           onClick={clear}
         >

@@ -23,7 +23,7 @@ const PATHS: Readonly<Record<ShapeKind, string>> = {
 
 export function ShapeIcon({ shape, size = 20 }: { shape: ShapeKind; size?: number }): React.JSX.Element {
   return (
-    <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round">
+    <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round">
       <path d={PATHS[shape]} />
     </svg>
   );

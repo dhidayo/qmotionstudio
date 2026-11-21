@@ -474,8 +474,8 @@ function PhotoLayers({ blank }: { blank: boolean }): React.JSX.Element {
           const mediaId = layer.content.kind === 'photo' ? layer.content.mediaId : '';
           const url = store.previewUrl(mediaId);
           return (
-            <div key={layer.id} data-photo-layer={layer.id} className="brand-surface flex items-center gap-2 rounded-[7px] p-1.5">
-              <span className="size-11 shrink-0 overflow-hidden rounded-md" style={{ background: 'rgb(255 255 255 / 0.12)' }}>
+            <div key={layer.id} data-photo-layer={layer.id} className="brand-surface flex items-center gap-2 rounded-[var(--r-md)] p-1.5">
+              <span className="size-11 shrink-0 overflow-hidden rounded-md" style={{ background: 'var(--c-sunk-hover)' }}>
                 {url !== null && <img src={url} alt="" className="size-full object-cover" />}
               </span>
               <div className="min-w-0 flex-1">

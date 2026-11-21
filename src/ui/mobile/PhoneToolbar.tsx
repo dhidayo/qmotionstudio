@@ -251,7 +251,8 @@ export function PhoneToolbar(): React.JSX.Element {
     <nav
       aria-label="Tools"
       data-phone-toolbar="main"
-      className="shrink-0 border-t border-edge bg-panel"
+      // Frosted, over the colour field (D-174).
+      className="glass-bar shrink-0 border-t"
       style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
     >
       <div className="flex items-stretch justify-around px-1 py-1">
@@ -262,7 +263,7 @@ export function PhoneToolbar(): React.JSX.Element {
             data-tour={tool.tour}
             data-phone-tool={tool.label.toLowerCase()}
             onClick={tool.onSelect}
-            className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1 text-[11px] active:bg-panel-alt"
+            className="flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 py-1 text-[11px] font-medium transition-colors active:bg-sunk"
             style={{ color: 'var(--c-ink)' }}
           >
             <Icon name={tool.icon} />
@@ -293,7 +294,7 @@ function ActionRow({ name, tools, onClose, closeLabel, attrs, actionAttr }: {
 }): React.JSX.Element {
   const kept = tools.filter((tool) => tool.danger !== true);
   const away = tools.filter((tool) => tool.danger === true);
-  const chip = 'flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-medium active:bg-panel-alt disabled:opacity-40';
+  const chip = 'flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--r-md)] px-2.5 text-[12px] font-medium transition-colors active:bg-sunk disabled:opacity-40';
   const button = (tool: Tool): React.JSX.Element => (
     <button
       key={tool.label}
@@ -314,7 +315,8 @@ function ActionRow({ name, tools, onClose, closeLabel, attrs, actionAttr }: {
       role="toolbar"
       aria-label={`${name} actions`}
       {...attrs}
-      className="flex shrink-0 items-center border-t border-edge bg-panel pl-3"
+      // Frosted, like the toolbar under it (D-174).
+      className="glass-bar flex shrink-0 items-center border-t pl-3"
     >
       <span className="max-w-[42%] shrink-0 truncate pr-1.5 text-[12px] font-semibold text-accent">{name}</span>
       {/* Fades at its right edge, so a row wider than the phone reads as one to scroll; a spacer at its end lets Delete clear the fade. */}
@@ -330,7 +332,7 @@ function ActionRow({ name, tools, onClose, closeLabel, attrs, actionAttr }: {
         type="button"
         onClick={onClose}
         aria-label={closeLabel}
-        className="grid size-11 shrink-0 place-items-center text-ink-muted"
+        className="ui-iconbtn size-11 shrink-0 rounded-full"
       >
         <svg aria-hidden width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
           <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />

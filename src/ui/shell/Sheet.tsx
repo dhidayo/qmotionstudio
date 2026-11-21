@@ -38,13 +38,12 @@ export function Sheet({
       aria-modal="true"
       aria-label={title}
       data-sheet={side}
-      className="fixed inset-0 z-40 flex flex-col justify-end"
-      style={{ background: 'rgb(0 0 0 / 0.35)' }}
+      className="scrim fixed inset-0 z-40 flex flex-col justify-end"
       onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div
-        className="flex max-h-[72%] min-h-0 flex-col rounded-t-xl border-t border-edge bg-panel"
-        style={{ boxShadow: 'var(--shadow-lg)' }}
+        // Frosted, as everything that floats is (D-174).
+        className="glass flex max-h-[72%] min-h-0 flex-col rounded-t-2xl border-t"
       >
         <div className="flex items-center gap-2 border-b border-edge px-3 py-2">
           {/* The grab bar people expect at the top of a sheet, even though this
@@ -54,7 +53,7 @@ export function Sheet({
             type="button"
             onClick={onClose}
             aria-label={`Close ${title.toLowerCase()}`}
-            className="absolute right-3 min-h-11 rounded-md px-3 text-[12px] font-medium hover:bg-panel-alt"
+            className="ui-btn ui-btn--quiet absolute right-3 min-h-11 px-4 text-[12px] text-ink"
           >
             {/* Close, not Done: it closes the sheet and leaves the selection as it is (D-169). */}
             Close

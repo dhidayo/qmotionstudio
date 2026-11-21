@@ -60,8 +60,7 @@ export function PurposeBar({ variant }: { variant: 'wide' | 'phone' }): React.JS
                 event.stopPropagation();
                 move(index, step);
               }}
-              className={`whitespace-nowrap rounded-full border transition-colors ${on ? 'chip-on' : 'border-edge bg-panel text-ink-muted hover:bg-panel-alt'} ${phone ? 'h-8 px-3 text-[13px]' : 'h-7 px-3.5 text-[12px]'}`}
-              style={{ transitionDuration: 'var(--t-fast)' }}
+              className={`ui-chip ${on ? 'chip-on' : 'text-ink-muted'} ${phone ? 'h-8 px-3 text-[13px]' : 'h-7 px-3.5 text-[12px]'}`}
             >
               {WORKSPACES[id].short}
             </button>
