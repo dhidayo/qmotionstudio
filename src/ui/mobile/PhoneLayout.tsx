@@ -7,6 +7,8 @@ import { sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/t
 import { useEditor } from '@/state/store';
 import { posterUrl } from '@/templates/manifest';
 import { Artboard } from '@/ui/artboard/Artboard';
+import { PerfOverlay } from '@/dev/PerfOverlay';
+import { renderParams } from '@/dev/renderParams';
 import { ScrubBar } from '@/ui/artboard/ScrubBar';
 import { useOverlays } from '@/ui/shell/overlays';
 import { useClockFrames } from '@/ui/hooks/useClockFrames';
@@ -66,6 +68,8 @@ export function PhoneLayout({
       <PurposeBar variant="phone" />
       <main className="relative min-h-0 flex-1" style={{ background: 'var(--c-stage)' }}>
         <Artboard project={project} clock={clock} rig={rig} media={media} padding={12} />
+        {/* §14's readout on a phone too, when asked for with ?perf=1 (D-171); never by default, even in development. */}
+        {renderParams().perf && <PerfOverlay rig={rig} />}
         {/* A test release is open to anyone with the link, so it says what it is — on one line. */}
         <p
           data-disclaimer

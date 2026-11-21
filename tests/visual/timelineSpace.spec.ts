@@ -74,6 +74,7 @@ test.describe('only the rows in use', () => {
   });
 
   test('an effect sits in a layer’s gap, and moves down a lane when a layer is in the way (D-162)', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
     await open(page);
     // A caption at the start, and an effect later on: one lane holds both.
     await page.getByRole('button', { name: '+ Text' }).click();

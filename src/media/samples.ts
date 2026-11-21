@@ -116,6 +116,7 @@ export async function loadSamples(
         id,
         name,
         artboardLongestEdge: options.artboardLongestEdge,
+        use: 'preview',
       });
       store.set(entry);
     }),

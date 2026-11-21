@@ -4064,4 +4064,24 @@ The accessibility test now also runs axe (WCAG 2.1 A and AA) on every screen, wi
 
 The menu's tooltip names New image and New video, the way to start afresh, and its labels are no longer cut short. Welcome back is unchanged: a reload of the tab in use does not ask.
 
+## D-171 — what ships is what was tested, fast enough on a phone, and no failure is silent
+
+**The production build is under test.** The suite runs against `vite build` + `vite preview` with `PW_PROD=1`: 302 passed, 0 failed, 114 skipped. The tests that read the dev-only handle skip there with a reason (`a11y`, `library`, `sounds`, `timelineSpace`, `welcomeBack`, one in `phonePhotos`). A new version of the app now waits for the person: the service worker no longer skips its wait, and a notice offers Reload, saved first. Taking over at once left the open page running old code, whose designs could then fail to load.
+
+**On a phone.** `npm run measure:phone` measures cold load, first frame, preview frame rate and memory on a 390×844 touch screen with Fast 3G and the CPU slowed four times. The build names each purpose's opening design in the page as a `modulepreload` (`deploy/openers.ts`, checked by a test), so it downloads with the editor rather than a round trip after it. The first frame came 0.5–0.85s sooner. The preview keeps a photo only as sharp as the preview can show: its short edge at most the artboard's long edge, its long edge at most twice. A 4000×3000 photo is 2560×1920 (20MB) rather than 3840×2880 (44MB); eight added 230MB rather than 400MB. The video export decodes the files itself as before, and a picture larger than 1920 decodes them again (§9's two bitmaps). Cold load is about 4.5s against §14's 2.5s: the editor's code (275KB compressed) and fonts (82KB) are 2.1s of Fast 3G on their own. Code-splitting is the next step. `?perf=1` shows the readout on a phone too.
+
+**Nothing fails without a word.** One module (`src/ui/shell/failures.ts`) chooses the words from the error, and a notice can carry its action and stay until dismissed.
+- **Full device:** "This device is out of storage…", only when the browser says so.
+- **A design or window that did not download:** offline-aware, with Reload. Chrome remembers a failed module, so only a reload fetches it again; it saves first.
+- **MP4 unavailable:** "MP4 is not available in this browser — WebM will be used", and Export stays pressable.
+- **Export:** out of memory, no storage, a missing download, a worker that stopped without a word, and keep this tab open. A sound that is not ready keeps its own words (D-172).
+- **An error while drawing the editor:** a boundary saves the document and shows "Something went wrong — your work is saved" with Reload.
+
+**MP4 tested up to the encoder.** The container and encoder settings live in `src/export/container.ts`, which the worker uses. Unit tests check H.264 High with key frames every two seconds, AAC, and a fast-start MP4 that reads back as 1080×1920 with both tracks. The format check asks with the export's own frame rate and bitrate. Mediabunny requests level 4.1 at 1080p60, where the H.264 table says 4.2. This is pinned by a test and on the owner's checklist; if a browser refuses it, the check falls back to WebM, and the fix is `fullCodecString` `avc1.64002a`. This build's Chromium encodes H.264 High, so the MP4 export tests run here too.
+
+Rejected:
+- An in-page "Try again" for a failed download, because Chrome never fetches the module again.
+- Lowering §9's export-size rule, which would make exports soft.
+- Caching drawn shadows to raise the frame rate on this GPU-less machine: not contained, and not representative of a phone.
+
 

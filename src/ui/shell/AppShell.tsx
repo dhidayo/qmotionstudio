@@ -30,6 +30,9 @@ import { useRestore } from '@/ui/persist/useRestore';
 import { WelcomeBackDialog } from '@/ui/persist/WelcomeBack';
 import { ImageModeConfirm } from './ImageModeConfirm';
 import { Toast } from './Toast';
+import { WindowBoundary } from './Boundaries';
+import { saveAndReload } from './reload';
+import { designFailureMessage, isChunkLoadError } from './failures';
 import { QuickStart } from '@/ui/onboarding/QuickStart';
 import { markRestoreReady } from '@/ui/onboarding/purposeState';
 import { PurposeBar } from './PurposeBar';
@@ -248,6 +251,13 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
         // §16: a malformed or missing template is a build mistake, not
         // something to paper over with an empty artboard.
         console.error('Failed to load a scene template.', error);
+        if (cancelled) return;
+        // Nor left as a picture that never arrives (D-171): said, with the way to fetch it again.
+        useEditor.getState().showToast(designFailureMessage(error), {
+          sticky: true,
+          urgent: true,
+          ...(isChunkLoadError(error) ? { action: { label: 'Reload', run: () => { saveAndReload(useEditor.getState().project); } } } : {}),
+        });
       });
     return () => { cancelled = true; };
   }, [templateIds, activeTemplateId, templateLoaded, rig, setLoadedTemplate]);
@@ -450,10 +460,17 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
       {/* Designs, opened from the row of actions, and a scene's timing, as windows (D-116, D-162). */}
       <PhonePanels clock={clock} scenePicker={false} />
       </>}
-      <Suspense fallback={null}>
-        {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
-        {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
-      </Suspense>
+      {/* A window whose code did not download is closed and said, not a crash (D-171). */}
+      <WindowBoundary onFailed={() => { setExporting(false); }}>
+        <Suspense fallback={null}>
+          {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
+        </Suspense>
+      </WindowBoundary>
+      <WindowBoundary onFailed={() => { setProjectsOpen(false); }}>
+        <Suspense fallback={null}>
+          {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
+        </Suspense>
+      </WindowBoundary>
       <QuickStart />
       {/* On opening afresh onto saved work: carry on, or start anew (D-168). */}
       <WelcomeBackDialog />

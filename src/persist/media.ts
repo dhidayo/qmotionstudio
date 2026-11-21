@@ -88,7 +88,8 @@ function decodeStored(stored: StoredMedia): Promise<MediaEntry> {
   const options = { id: stored.id, name: stored.name };
   switch (stored.kind) {
     case 'image':
-      return decodeImage(stored.blob, { ...options, artboardLongestEdge: ARTBOARD_LONGEST_EDGE });
+      // The preview's display size (D-171); exports decode again at their own.
+      return decodeImage(stored.blob, { ...options, artboardLongestEdge: ARTBOARD_LONGEST_EDGE, use: 'preview' });
     case 'video':
       return decodeVideo(stored.blob, options);
     case 'audio':

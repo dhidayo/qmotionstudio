@@ -54,9 +54,42 @@ export function targetSize(
   return { w: Math.max(1, Math.round(srcW * scale)), h: Math.max(1, Math.round(srcH * scale)) };
 }
 
+/**
+ * The size a photograph is kept at for the *preview* (§9's "display-resolution
+ * bitmap", D-171).
+ *
+ * The preview is never drawn larger than the artboard's longest edge (D-154:
+ * at most 1080 on the short edge, 1920 on the long), so a photo whose short
+ * edge reaches that already covers the frame at full sharpness whichever way
+ * round it is placed. Kept at §9's 2× instead, a 4000×3000 phone photo was
+ * 3840×2880 — 44MB of decoded pixels each, 350MB for eight, which is what
+ * runs a phone out of memory. Now 2560×1920, 20MB.
+ *
+ * The export keeps §9's 2× (`targetSize`): the video is made in a worker that
+ * decodes the files again for itself, and a high-resolution picture export
+ * decodes them again too (src/export/stills.ts).
+ */
+export function previewSize(
+  srcW: number,
+  srcH: number,
+  artboardLongestEdge: number,
+): { w: number; h: number } {
+  const byLongest = (artboardLongestEdge * MAX_EDGE_MULTIPLE) / Math.max(srcW, srcH);
+  const byShortest = artboardLongestEdge / Math.min(srcW, srcH);
+  const scale = Math.min(byLongest, byShortest);
+  if (scale >= 1) return { w: srcW, h: srcH };
+  return { w: Math.max(1, Math.round(srcW * scale)), h: Math.max(1, Math.round(srcH * scale)) };
+}
+
 export async function decodeImage(
   blob: Blob,
-  options: { id: string; name: string; artboardLongestEdge: number },
+  options: {
+    id: string;
+    name: string;
+    artboardLongestEdge: number;
+    /** `preview` keeps the smaller display bitmap (D-171); the default is §9's export size. */
+    use?: 'preview' | 'export';
+  },
 ): Promise<MediaEntry> {
   const head = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
   const isHeic = sniffHeic(head);
@@ -96,7 +129,7 @@ export async function decodeImage(
     }
   }
 
-  const target = targetSize(probe.width, probe.height, options.artboardLongestEdge);
+  const target = (options.use === 'preview' ? previewSize : targetSize)(probe.width, probe.height, options.artboardLongestEdge);
 
   if (target.w === probe.width && target.h === probe.height) {
     return {

@@ -247,6 +247,7 @@ test.describe('photos not in the design (D-165)', () => {
 
 test.describe('switching to Video (D-165)', () => {
   test('+ Video mode opens no picker; a tip points at Add, once per device', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', DEV_ONLY);
     await open(page, LIFESTYLE);
     const button = page.locator('[data-continue-video]');
     await expect(button).toHaveText('+ Video mode');

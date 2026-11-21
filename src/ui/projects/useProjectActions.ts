@@ -6,6 +6,7 @@ import { SCHEMA_VERSION, type Project } from '@/document/types';
 import { writeLastOpened, writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
 import { MODE_COPY } from '@/ui/shell/modeLabels';
+import { isQuotaError } from '@/ui/shell/failures';
 
 /**
  * Everything that saves, copies, renames or starts a project (D-099).
@@ -58,7 +59,10 @@ export function useProjectActions(): {
     // §16: never silently. The badge says "Not saved"; the toast says why.
     console.error(`Could not ${what}.`, error);
     setSaveState('failed');
-    showToast(`Could not ${what}. Your device may be out of space.`);
+    // Out of space only when the browser says so (D-171): a guess sends people deleting projects for nothing.
+    showToast(isQuotaError(error)
+      ? `Could not ${what}: this device is out of storage. Delete projects you no longer need, then try again.`
+      : `Could not ${what}. Try again, or save a project file from the menu.`, { sticky: true, urgent: true });
   }, [setSaveState, showToast]);
 
   const rename = useCallback(async (name: string): Promise<void> => {

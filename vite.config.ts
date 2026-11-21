@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 import { apacheHtaccess, cloudflareHeaders, headersFor } from './deploy/headers';
+import { OPENER_MODULES } from './deploy/openers';
 
 /**
  * The host configuration, from one definition (D-094).
@@ -36,11 +37,63 @@ function previewHeaders(): Plugin {
   };
 }
 
+/**
+ * The opening designs' code, fetched with the editor rather than after it
+ * (D-171, deploy/openers.ts).
+ *
+ * Each opener's chunk and the chunks it imports in turn are named in the page
+ * as `modulepreload` links, after the editor's own. The editor's entry chunk
+ * is left out — the page already loads it — and so is anything it pulls in
+ * statically, which is already on its way.
+ */
+function preloadOpeners(): Plugin {
+  return {
+    name: 'motion-studio:preload-openers',
+    apply: 'build',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, context) {
+        const bundle = context.bundle;
+        if (bundle === undefined) return html;
+        const chunks = Object.values(bundle).filter((output) => output.type === 'chunk');
+        const eager = new Set<string>();
+        const visitEager = (fileName: string): void => {
+          if (eager.has(fileName)) return;
+          eager.add(fileName);
+          const chunk = chunks.find((c) => c.fileName === fileName);
+          for (const next of chunk?.imports ?? []) visitEager(next);
+        };
+        for (const entry of chunks.filter((c) => c.isEntry)) visitEager(entry.fileName);
+
+        const wanted = new Set<string>();
+        const visit = (fileName: string): void => {
+          if (wanted.has(fileName) || eager.has(fileName)) return;
+          wanted.add(fileName);
+          const chunk = chunks.find((c) => c.fileName === fileName);
+          for (const next of chunk?.imports ?? []) visit(next);
+        };
+        for (const path of OPENER_MODULES) {
+          const chunk = chunks.find((c) => c.facadeModuleId?.replaceAll('\\', '/').endsWith(`/${path}`) === true);
+          // A missing opener is a build mistake: say so rather than quietly preloading nothing.
+          if (chunk === undefined) throw new Error(`deploy/openers.ts names ${path}, which is not a chunk of its own in this build.`);
+          visit(chunk.fileName);
+        }
+        return [...wanted].map((fileName) => ({
+          tag: 'link',
+          attrs: { rel: 'modulepreload', crossorigin: true, href: `/${fileName}` },
+          injectTo: 'head' as const,
+        }));
+      },
+    },
+  };
+}
+
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
     hostConfig(),
+    preloadOpeners(),
     previewHeaders(),
     /*
      * §13: "PWA via vite-plugin-pwa, installable, offline-capable".
@@ -51,7 +104,8 @@ export default defineConfig({
      * bundled, the media is in IndexedDB, and the encoders are the browser's.
      */
     VitePWA({
-      registerType: 'autoUpdate',
+      // A new version waits until the person reloads, offered by a notice (src/pwa.ts, D-171).
+      registerType: 'prompt',
       // Registered by the app once the editor is up and idle (src/pwa.ts), not
       // on page load, where its download competed with the first visit (D-112).
       injectRegister: false,
@@ -88,7 +142,13 @@ export default defineConfig({
         // plugin registered it; a late registration must not mean "offline
         // only from the next visit".
         clientsClaim: true,
-        skipWaiting: true,
+        /*
+         * But an *update* waits (D-171). Skipping the wait swapped the cached
+         * files under a page still running the old code, whose lazy designs
+         * then failed to load. The notice's Reload sends the worker its
+         * SKIP_WAITING message once the project is saved.
+         */
+        skipWaiting: false,
         runtimeCaching: [
           {
             urlPattern: ({ url }) => /^\/(thumbs|samples)\/[^/]+\.webp$/.test(url.pathname),

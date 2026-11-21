@@ -28,6 +28,7 @@ import { playedAudio } from '@/document/select/videoSound';
 import { usePreviewClock } from '@/ui/shell/ClockProvider';
 import { isAppleTouch } from '@/ui/shell/platform';
 import { Button, Row, Section, Segmented } from '@/ui/inspector/controls';
+import { exportFailureMessage, KEEP_OPEN, MP4_FALLBACK, WAS_HIDDEN } from '@/ui/shell/failures';
 
 type Phase =
   | { kind: 'idle' }
@@ -68,16 +69,63 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
 
   const probeW = size.w;
   const probeH = size.h;
+  const probeFps = settings.fps;
+  const probeQuality = settings.quality;
+  /** Whether the person picked the format themselves; until then, MP4 gives way to WebM where it must (D-171). */
+  const chosenFormat = useRef(false);
+  const [fellBack, setFellBack] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    // §11.1: probed per resolution, since support is not uniform across sizes.
-    void probeFormats({ w: probeW, h: probeH }).then((probed) => {
-      if (!cancelled) setFormats(probed);
-    });
+    // §11.1: probed per resolution, rate and quality, since support is not uniform across them.
+    probeFormats({ w: probeW, h: probeH }, { fps: probeFps, quality: probeQuality })
+      .then((probed) => {
+        if (cancelled) return;
+        setFormats(probed);
+        /*
+         * §11.9: "Tell the user plainly why MP4 is unavailable." And then use
+         * WebM, rather than leaving Export greyed out over a red line until
+         * the person works out that the other format is the answer (D-171).
+         */
+        const mp4 = probed.find((f) => f.format === 'mp4');
+        const webm = probed.find((f) => f.format === 'webm');
+        if (mp4?.available === false && webm?.available === true && !chosenFormat.current) {
+          setSettings((s) => (s.format === 'mp4' ? { ...s, format: 'webm' } : s));
+          setFellBack(mp4.reason ?? null);
+        } else if (mp4?.available === true) {
+          setFellBack(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        /*
+         * The encoder's code did not load — offline before it was kept,
+         * usually. Said, and Export left pressable to try again, rather than
+         * greyed out for good with nothing to explain it (D-171).
+         */
+        console.error('Could not check which formats this browser can export.', error);
+        setFormats([]);
+        setPhase({ kind: 'error', message: exportFailureMessage(error) });
+      });
     return () => { cancelled = true; };
-  }, [probeW, probeH]);
+  }, [probeW, probeH, probeFps, probeQuality]);
+
+  /*
+   * A phone may stop a page's work while it is in the background, and an
+   * export that silently stopped reads as one still going (D-171). Noted if
+   * the tab was hidden while a video was being made, and said beside the
+   * progress until it finishes.
+   */
+  const [wasHidden, setWasHidden] = useState(false);
+  const exportRunning = phase.kind === 'running';
+  useEffect(() => {
+    if (!exportRunning) return;
+    const onVisibility = (): void => { if (document.visibilityState === 'hidden') setWasHidden(true); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { document.removeEventListener('visibilitychange', onVisibility); };
+  }, [exportRunning]);
 
   const run = useCallback(() => {
+    setWasHidden(false);
     setPhase({ kind: 'running', progress: { stage: 'preparing', frame: 0, totalFrames, path: 'offline' } });
 
     const started = startExport({
@@ -111,9 +159,9 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
           setPhase({ kind: 'idle' });
           return;
         }
-        // §16: never swallow an export error.
+        // §16: never swallow an export error. In plain words, with what to try next (D-171).
         console.error('Export failed.', error);
-        setPhase({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
+        setPhase({ kind: 'error', message: exportFailureMessage(error) });
       })
       .finally(() => { handle.current = null; });
   }, [project, settings, media, totalFrames, limits.watermark]);
@@ -192,7 +240,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
                 { value: 'mp4', label: 'MP4 · H.264' },
                 { value: 'webm', label: 'WebM · VP9' },
               ]}
-              onChange={(format) => { setSettings((s) => ({ ...s, format })); }}
+              onChange={(format) => { chosenFormat.current = true; setSettings((s) => ({ ...s, format })); }}
             />
           )}
           <Segmented<720 | 1080>
@@ -225,6 +273,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
           />
         </Section>
 
+        {fellBack !== null && settings.format === 'webm' && !formatLocked && (
+          <p className="mb-3 rounded-md border border-edge p-2 text-[11px] leading-relaxed text-ink-muted" data-export-mp4-fallback>
+            <strong style={{ color: 'var(--c-ink)' }}>{MP4_FALLBACK}</strong> {fellBack}
+          </p>
+        )}
+
         {blocked && availability.reason !== undefined && (
           <p className="mb-3 text-[11px] leading-relaxed" style={{ color: 'var(--c-danger)' }}>
             {availability.reason}
@@ -238,6 +292,11 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
         )}
 
         {phase.kind === 'running' && <Progress progress={phase.progress} />}
+        {phase.kind === 'running' && (
+          <p className="mb-3 text-[11px] leading-relaxed text-ink-muted" data-export-keep-open role={wasHidden ? 'alert' : undefined}>
+            {wasHidden ? WAS_HIDDEN : KEEP_OPEN}
+          </p>
+        )}
 
         {phase.kind === 'done' && !phase.toPhotos && (
           <p className="mb-3 text-[11px] leading-relaxed text-ink-muted">

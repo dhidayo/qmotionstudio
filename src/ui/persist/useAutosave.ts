@@ -7,6 +7,7 @@ import { isBundledMediaId } from '@/media/sounds';
 import { writeLastOpened, writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
 import type { SaveState } from './saveState';
+import { mediaSaveFailureMessage, saveFailureMessage } from '@/ui/shell/failures';
 
 /**
  * §13's autosave: "Reloading the tab must not lose work."
@@ -50,6 +51,7 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
         .then(() => {
           void askToKeep();
           if (!cancelled) setState('saved');
+          saved();
         })
         .catch((error: unknown) => {
           if (cancelled) return;
@@ -57,6 +59,7 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
           // which is the one thing the user must not be wrong about.
           console.error('Could not save the project.', error);
           setState('failed');
+          tell(saveFailureMessage(error));
         });
     }, DEBOUNCE_MS);
 
@@ -89,10 +92,11 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
         timer = null;
         setState('saving');
         void queued(() => save(useEditor.getState().project, media, known.current))
-          .then(() => { setState('saved'); })
+          .then(() => { setState('saved'); saved(); })
           .catch((error: unknown) => {
             console.error('Could not save a new photograph.', error);
             setState('failed');
+            tell(mediaSaveFailureMessage(error));
           });
       }, 0);
     });
@@ -134,6 +138,25 @@ export function useAutosave(project: Project, media: MediaStore, enabled: boolea
       window.removeEventListener('pagehide', flush);
     };
   }, [enabled]);
+}
+
+/**
+ * Whether the person has been told the current run of failed saves (D-171).
+ *
+ * "Not saved" in the top bar says *that*; the notice says *why* and what to
+ * do — "This device is out of storage…" — once per run of failures rather
+ * than on every keystroke's retry, and again only after a save has worked.
+ */
+let toldOfFailure = false;
+
+function tell(message: string): void {
+  if (toldOfFailure) return;
+  toldOfFailure = true;
+  useEditor.getState().showToast(message, { sticky: true, urgent: true });
+}
+
+function saved(): void {
+  toldOfFailure = false;
 }
 
 /**

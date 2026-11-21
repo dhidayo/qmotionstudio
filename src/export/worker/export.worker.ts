@@ -2,13 +2,9 @@
 import {
   AudioSample,
   AudioSampleSource,
-  BufferTarget,
   canEncodeAudio,
   CanvasSource,
-  Mp4OutputFormat,
-  Output,
   Quality,
-  WebMOutputFormat,
 } from 'mediabunny';
 import { registerAacEncoder } from '@mediabunny/aac-encoder';
 import type { Project } from '@/document/types';
@@ -20,9 +16,8 @@ import { MediaStore } from '@/media/store';
 import { decodeImage } from '@/media/image/decode';
 import { decodeVideo } from '@/media/video/decode';
 import { videoDemands } from '@/document/select/media';
-import {
-  AUDIO_BITRATE, AUDIO_CODEC, bitrateFor, frameCount, VIDEO_CODEC, type ExportSettings,
-} from '../config';
+import { frameCount } from '../config';
+import { audioEncodingFor, makeOutput, videoEncodingFor } from '../container';
 import type { ExportRequest, WorkerMessage } from '../protocol';
 import { interleave } from '@/core/audio/mixdown';
 
@@ -124,15 +119,17 @@ async function run(request: ExportRequest): Promise<void> {
     // §12, from the request rather than from any ambient state in the worker.
     rig = createRenderRig(media, () => request.watermark);
     const output = makeOutput(request.settings);
+    // The encoding and the container come from ../container.ts, where they are tested (D-171).
+    const video = videoEncodingFor(request.settings, request.size);
     const source = new CanvasSource(canvas, {
-      codec: VIDEO_CODEC[request.settings.format],
-      quality: new Quality({ bitrate: bitrateFor(request.size, request.settings.fps, request.settings.quality) }),
+      codec: video.codec,
+      quality: new Quality({ bitrate: video.bitrate }),
       // §11.4 asks for a key frame every two seconds; that is this field's
       // default, so the manual `i % (fps * 2)` modulo is unnecessary.
-      keyFrameInterval: 2,
+      keyFrameInterval: video.keyFrameInterval,
     });
 
-    output.addVideoTrack(source, { frameRate: request.settings.fps });
+    output.addVideoTrack(source, { frameRate: video.frameRate });
 
     /*
      * §10: the mix is muxed as a second track, sharing one microsecond
@@ -229,7 +226,7 @@ async function run(request: ExportRequest): Promise<void> {
 async function makeAudioSource(request: ExportRequest): Promise<AudioSampleSource | null> {
   if (!request.audio || request.audio.channels.length === 0) return null;
 
-  const codec = AUDIO_CODEC[request.settings.format];
+  const { codec, bitrate } = audioEncodingFor(request.settings);
   if (codec === 'aac' && !(await canEncodeAudio('aac'))) {
     registerAacEncoder();
   }
@@ -242,10 +239,7 @@ async function makeAudioSource(request: ExportRequest): Promise<AudioSampleSourc
     );
   }
 
-  return new AudioSampleSource({
-    codec,
-    bitrate: AUDIO_BITRATE,
-  });
+  return new AudioSampleSource({ codec, bitrate });
 }
 
 /**
@@ -314,9 +308,3 @@ class AudioFeeder {
   }
 }
 
-function makeOutput(settings: ExportSettings): Output<Mp4OutputFormat | WebMOutputFormat, BufferTarget> {
-  return new Output({
-    format: settings.format === 'mp4' ? new Mp4OutputFormat() : new WebMOutputFormat(),
-    target: new BufferTarget(),
-  });
-}

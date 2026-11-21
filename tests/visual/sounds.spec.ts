@@ -42,6 +42,7 @@ const audio = (page: Page): Promise<Clip[]> =>
 
 test.describe('+ Sound (D-156)', () => {
   test('lists background music and effects, searches them, and Listen plays one', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
     await openAd(page);
     await openSounds(page);
     const dialog = picker(page);
@@ -74,6 +75,7 @@ test.describe('+ Sound (D-156)', () => {
   });
 
   test('a background loop plays under the whole video, follows it, and undo takes it away', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
     await openAd(page);
     await openSounds(page);
     await picker(page).getByRole('button', { name: 'Add Lo-fi Haze' }).click();
@@ -103,6 +105,7 @@ test.describe('+ Sound (D-156)', () => {
   });
 
   test('choosing another background replaces the first', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
     await openAd(page);
     await openSounds(page);
     await picker(page).getByRole('button', { name: 'Add Lo-fi Haze' }).click();
@@ -116,6 +119,7 @@ test.describe('+ Sound (D-156)', () => {
   });
 
   test('an effect lands at the playhead on the Audio row, selected; overlapping ones stack', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
     await openAd(page);
     await page.evaluate(() => { (globalThis as unknown as { __motionStudio: Handle }).__motionStudio.clock.seek(2_000); });
     await openSounds(page);
@@ -171,6 +175,7 @@ test.describe('+ Sound on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test('the library is a sheet from the bottom, and adds from there', async ({ page }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
     await page.goto('/?template=quick-pitch&aspect=9:16&frozen=1000');
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_500);

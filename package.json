@@ -22,6 +22,7 @@
     "fixtures": "tsx scripts/gen-fixtures.ts",
     "e2e:prod": "PW_PROD=1 playwright test",
     "measure:load": "tsx scripts/measure-cold-load.ts",
+    "measure:phone": "tsx scripts/measure-phone.ts",
     "brand": "tsx scripts/brand-icons.ts"
   },
   "dependencies": {

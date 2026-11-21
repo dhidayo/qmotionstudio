@@ -11,6 +11,11 @@
  * Production only, like the worker itself (see vite.config.ts).
  */
 
+import { SCHEMA_VERSION } from '@/document/types';
+import { writeProject } from '@/persist/db';
+import { useEditor } from '@/state/store';
+import { UPDATE_READY } from '@/ui/shell/failures';
+
 /** Long enough for the opening design and its photographs to have arrived. */
 const SETTLE_MS = 4_000;
 
@@ -24,7 +29,33 @@ export function registerOfflineSupport(): void {
   const register = (): void => {
     void import('virtual:pwa-register')
       .then(({ registerSW }) => {
-        registerSW({ immediate: true });
+        const update = registerSW({
+          immediate: true,
+          /*
+           * A newer version has been downloaded and is waiting (D-171). It
+           * used to take over the open page at once, while that page was
+           * still running the old code — which then asked for designs and
+           * windows by file names the new version no longer had, and they
+           * failed to load. Now the old version keeps serving this page until
+           * the person chooses to reload, saved first.
+           */
+          onNeedRefresh: () => {
+            useEditor.getState().showToast(UPDATE_READY, {
+              sticky: true,
+              action: {
+                label: 'Reload',
+                run: () => {
+                  void writeProject({ schemaVersion: SCHEMA_VERSION, project: useEditor.getState().project })
+                    .catch((error: unknown) => { console.error('Could not save before updating.', error); })
+                    .finally(() => { void update(true); });
+                },
+              },
+            });
+          },
+          onRegisterError: (error: unknown) => {
+            console.warn('Offline support could not be set up.', error);
+          },
+        });
         void navigator.serviceWorker.ready.then(keepWhatWasShown);
       })
       .catch((error: unknown) => {

@@ -1,7 +1,8 @@
 import type { Project } from '@/document/types';
 import type { Size } from '@/core/types';
-import { videoDemands } from '@/document/select/media';
-import { createRenderRig, disposeRenderRig, type RenderRig } from '@/core/render/rig';
+import { referencedMedia, videoDemands } from '@/document/select/media';
+import { createRenderRig, disposeRenderRig, type MediaResolver, type RenderRig } from '@/core/render/rig';
+import { decodeImage } from '@/media/image/decode';
 import { renderFrame } from '@/core/render/renderFrame';
 import { loadTemplate } from '@/templates/registry';
 import type { MediaStore } from '@/media/store';
@@ -76,7 +77,8 @@ export async function renderStill(options: {
   canvas.height = size.h;
   const ctx = canvas.getContext('2d', { alpha: false });
   if (!ctx) throw new Error('Images: could not acquire a 2D context.');
-  const rig = createRenderRig(media, () => watermark);
+  const sharp = await exportBitmaps(project, media, size);
+  const rig = createRenderRig(sharp.resolver, () => watermark);
   try {
     await drawStill(ctx, project, media, atMs, rig);
     const type = format === 'png' ? 'image/png' : 'image/jpeg';
@@ -89,8 +91,47 @@ export async function renderStill(options: {
     );
   } finally {
     disposeRenderRig(rig);
+    sharp.dispose();
     // Let go of the pixels at once: a 4K canvas holds 33 MB, which a phone notices.
     canvas.width = 0;
     canvas.height = 0;
   }
+}
+
+/** The longest edge the preview's photos are kept for (src/ui/media/useUpload.ts and the rest). */
+const PREVIEW_LONGEST_EDGE = 1920;
+
+/**
+ * §9's export-resolution photographs, for a picture larger than the
+ * preview's (D-171).
+ *
+ * The editor keeps each photo at the preview's size (`previewSize`), which
+ * covers any picture up to 1920 on its long edge — every free size. A 4K
+ * picture would be drawn from those and come out soft, so its photos are
+ * decoded again from their files at the size it needs, one at a time, and
+ * let go as soon as it is encoded.
+ */
+async function exportBitmaps(
+  project: Project,
+  media: MediaStore,
+  size: Size,
+): Promise<{ readonly resolver: MediaResolver; readonly dispose: () => void }> {
+  const longest = Math.max(size.w, size.h);
+  if (longest <= PREVIEW_LONGEST_EDGE) return { resolver: media, dispose: () => undefined };
+
+  const sharper = new Map<string, ImageBitmap>();
+  for (const id of referencedMedia(project)) {
+    const entry = media.get(id);
+    if (entry?.kind !== 'image') continue;
+    const decoded = await decodeImage(entry.blob, { id, name: entry.name, artboardLongestEdge: longest / 2 });
+    if (decoded.bitmap !== null && decoded.width > entry.width) sharper.set(id, decoded.bitmap);
+    else decoded.bitmap?.close();
+  }
+  return {
+    resolver: {
+      getBitmap: (id) => sharper.get(id) ?? media.getBitmap(id),
+      getVideoFrame: (id, timeMs) => media.getVideoFrame(id, timeMs),
+    },
+    dispose: () => { for (const bitmap of sharper.values()) bitmap.close(); },
+  };
 }

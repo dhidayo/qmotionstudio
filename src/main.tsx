@@ -4,6 +4,7 @@ import App from './App';
 import { loadFonts } from '@/fonts/registry';
 import { loadSavedFonts } from '@/fonts/userFonts';
 import { registerOfflineSupport } from './pwa';
+import { CrashBoundary } from '@/ui/shell/Boundaries';
 import './styles/index.css';
 
 const host = document.getElementById('root');
@@ -28,7 +29,10 @@ loadFonts(document.fonts)
   .then(() => {
     root.render(
       <StrictMode>
-        <App />
+        {/* An error while drawing says so and offers a reload, never a blank page (D-171). */}
+        <CrashBoundary>
+          <App />
+        </CrashBoundary>
       </StrictMode>,
     );
     registerOfflineSupport();

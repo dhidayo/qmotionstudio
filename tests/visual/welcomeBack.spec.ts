@@ -43,6 +43,7 @@ async function openAgain(context: BrowserContext): Promise<Page> {
 const welcome = (page: Page) => page.getByRole('dialog', { name: 'Welcome back' });
 
 test('opening again onto work asks first; Continue editing and Escape keep it', async ({ page, context }) => {
+  test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
   await openEditor(page);
   await makeWork(page);
   const before = await project(page);
@@ -83,6 +84,7 @@ test('opening again onto work asks first; Continue editing and Escape keep it', 
 });
 
 test('Start a new design opens a new one and keeps the old in the project list', async ({ page, context }) => {
+  test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
   await openEditor(page);
   await makeWork(page);
   const before = await project(page);
@@ -122,6 +124,7 @@ test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test('the window fits the screen, its buttons a thumb wide, and names the phone menu', async ({ page, context }) => {
+    test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
     await openEditor(page);
     // Work: the image made a video (the store's own switch, as the menu does it).
     await page.evaluate(() => {

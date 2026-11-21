@@ -391,7 +391,9 @@ inspector control may mutate the document directly.
   a broken bitmap.
 - Decode with `createImageBitmap` and downscale so the longest edge is at most 2× the
   artboard's longest edge. Full-resolution phone photos will exhaust memory on mobile.
-- Keep both a display-resolution and an export-resolution bitmap where they differ.
+- Keep both a display-resolution and an export-resolution bitmap where they differ. The
+  preview keeps each photo with its short edge at most the artboard's long edge (and its
+  long edge at most 2×); exports decode at 2× from the file (D-171).
 - Transfer bitmaps to the export worker as `ImageBitmap` (transferable). Never as data URLs.
 - Custom media (Pro) accepts short MP4/WebM clips; decode via `VideoDecoder` and
   present the frame nearest the requested timestamp. Cache decoded frames in a small ring buffer.
@@ -484,6 +486,8 @@ free exports carry a small watermark.
   selected scene; Delete and ⌘D act on it too (D-162). Keys are written per platform
   (D-161).
 - `prefers-reduced-motion` suppresses editor chrome animation only, never the artboard.
+- An update waits and is offered by a notice with Reload (saved first); failures are said
+  in plain words with the way on, and an error boundary keeps the work (D-171).
 - Responsive down to tablet. On phones, inspector and library become bottom sheets.
   On tablets the inspector is a sheet opened by Settings at the end of the row of
   actions. On phones the toolbar is Designs/Templates, Add, Photos, Text, Effects,
@@ -500,6 +504,7 @@ free exports carry a small watermark.
 | Template `build()` | ≤ 16ms |
 | Cold load to interactive editor | ≤ 2.5s on a fast 3G throttle |
 | Peak heap, 8 photos + 60s audio | ≤ 900MB |
+| Phone measurement (`npm run measure:phone`: 390×844, CPU 4×, Fast 3G) | reported beside the cold-load row; cold load measured 4.5s (D-171), code-splitting next |
 | Preview backing store while playing on a computer or tablet | ≤ 0.8 MP per frame; screen sharpness (≤ 1080 short edge) when paused (D-154) |
 
 A performance overlay, in development and with `?perf=1` in a build, shows frame rate,

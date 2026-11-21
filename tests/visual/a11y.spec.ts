@@ -56,6 +56,8 @@ const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
 // axe takes a few seconds a screen, and a test audits up to eight screens.
 test.describe.configure({ timeout: 120_000 });
+// Every part of the audit sets its theme, mode and windows through the dev-only handle (D-171).
+test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
 
 /** axe's WCAG 2.1 A and AA rules over the whole page, the picture's canvas aside (it has no DOM to judge). */
 async function axeFindings(page: Page): Promise<Finding[]> {

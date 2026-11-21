@@ -3,8 +3,8 @@ import type { Project } from '@/document/types';
 import { totalDurationMs } from '@/document/select/timeline';
 import type { MediaStore } from '@/media/store';
 import {
-  CONTAINER_MIME, exportSize, fileNameFor, VIDEO_CODEC,
-  type ExportFormat, type ExportSettings, type FormatAvailability,
+  bitrateFor, CONTAINER_MIME, exportSize, fileNameFor, VIDEO_CODEC,
+  type ExportFormat, type ExportSettings, type FormatAvailability, type QualityTier,
 } from './config';
 import type { ExportRequest, WorkerMessage } from './protocol';
 import {
@@ -37,17 +37,30 @@ export type { ExportHandle, ExportProgress, ExportResult, ExportPath } from './t
  * Probed per format and per resolution, because support is not uniform — a
  * browser may encode H.264 at 720p and refuse 1080p on a given machine.
  */
-export async function probeFormats(size: Size): Promise<FormatAvailability[]> {
+export async function probeFormats(
+  size: Size,
+  /**
+   * The rate and quality the export will use (D-171). The codec string a
+   * browser is asked about carries a level, and the level follows the frame
+   * rate and bitrate as well as the size — so a probe without them could say
+   * yes to 1080p30 and leave a 1080p60 export to fail in the encoder.
+   */
+  rate?: { readonly fps: number; readonly quality: QualityTier },
+): Promise<FormatAvailability[]> {
   const formats: ExportFormat[] = ['mp4', 'webm'];
 
   // Loaded when the export window asks, not with the editor (D-112).
-  const { canEncodeVideo } = await import('mediabunny');
+  const { canEncodeVideo, Quality } = await import('mediabunny');
   return Promise.all(
     formats.map(async (format): Promise<FormatAvailability> => {
       try {
         const ok = await canEncodeVideo(VIDEO_CODEC[format], {
           width: size.w,
           height: size.h,
+          ...(rate === undefined ? {} : {
+            frameRate: rate.fps,
+            quality: new Quality({ bitrate: bitrateFor(size, rate.fps, rate.quality) }),
+          }),
         });
         return ok
           ? { format, available: true }

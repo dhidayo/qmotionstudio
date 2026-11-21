@@ -17,6 +17,7 @@ import { purposeOf } from '@/templates/purpose';
 import { groupOrder, orderWithin } from '@/templates/workspaces';
 import { useWorkspace } from '@/state/workspace';
 import { loadSceneTemplate } from '@/templates/registry';
+import { designFailureMessage } from '@/ui/shell/failures';
 import { useEditor } from '@/state/store';
 
 /**
@@ -134,7 +135,7 @@ export function ScenePicker({
     } catch (error: unknown) {
       // §16: a design that will not load is a real failure, said out loud.
       console.error(`Could not load the "${summary.id}" design.`, error);
-      showToast('That design could not be loaded. Try another, or reload the page.');
+      showToast(designFailureMessage(error));
       setBusy(null);
     }
   };

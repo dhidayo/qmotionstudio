@@ -145,6 +145,8 @@ export function useUpload(
                   id,
                   name: file.name,
                   artboardLongestEdge: options.artboardLongestEdge,
+                  // Kept at the preview's size; exports decode the file again (D-171).
+                  use: 'preview',
                 });
           store.set(entry);
           added.push(id);

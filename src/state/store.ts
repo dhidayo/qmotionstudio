@@ -11,6 +11,8 @@ import { totalDurationMs } from '@/document/select/timeline';
 import type { SceneTemplate } from '@/templates/schema';
 import { prepareTemplateChange } from './templateChange';
 import { undoKeys } from '@/ui/shell/platform';
+import { designFailureMessage, isChunkLoadError } from '@/ui/shell/failures';
+import { saveAndReload } from '@/ui/shell/reload';
 import { summaryFor } from '@/templates/manifest';
 import { designLook } from '@/templates/looks';
 import { renderParams } from '@/dev/renderParams';
@@ -22,6 +24,21 @@ import {
 
 export type InspectorTab = 'elements' | 'photos' | 'text' | 'motion' | 'look';
 export type Theme = 'light' | 'dark';
+
+/**
+ * A failure's notice can carry the one thing to do about it — "Try again",
+ * "Reload" — and stay until it is done or dismissed, because a failure that
+ * fades after three seconds is a failure half the people never saw (D-171).
+ */
+export type ToastOptions = {
+  readonly action?: { readonly label: string; readonly run: () => void };
+  /** Stays until dismissed or acted on, rather than fading. */
+  readonly sticky?: boolean;
+  /** Read out at once by a screen reader: for failures, not confirmations. */
+  readonly urgent?: boolean;
+};
+
+export type Toast = { readonly id: number; readonly message: string } & ToastOptions;
 
 /**
  * Editor state.
@@ -120,7 +137,7 @@ type EditorState = {
    * draws it is the shell. `id` changes every time, so the same message twice
    * in a row still shows twice.
    */
-  toast: { readonly id: number; readonly message: string } | null;
+  toast: Toast | null;
 
   selectScene: (index: number) => void;
   selectOverlay: (id: string | null) => void;
@@ -145,7 +162,7 @@ type EditorState = {
   setExporting: (exporting: boolean) => void;
   setSaveState: (state: SaveState) => void;
   setProjectsOpen: (open: boolean) => void;
-  showToast: (message: string) => void;
+  showToast: (message: string, options?: ToastOptions) => void;
   clearToast: () => void;
   dispatch: (action: actions.Action) => void;
   /** Ends a coalescing run — call on pointer-up after a drag. */
@@ -431,7 +448,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   setProjectsOpen: (projectsOpen) => { set({ projectsOpen }); },
 
-  showToast: (message) => { set({ toast: { id: Date.now() + Math.random(), message } }); },
+  showToast: (message, options) => { set({ toast: { id: Date.now() + Math.random(), message, ...options } }); },
 
   clearToast: () => { set({ toast: null }); },
 
@@ -513,6 +530,18 @@ export const useEditor = create<EditorState>((set, get) => ({
         // §16: a template that will not load is a build mistake, and silently
         // leaving the old one selected would hide it.
         console.error(`Failed to load template "${templateId}".`, error);
+        /*
+         * And said (D-171). Offline before the design was kept, the inspector
+         * otherwise stayed empty and nothing said why. The document keeps
+         * the design it had. A download that failed is not fetched again
+         * until the page reloads (src/ui/shell/reload.ts), so that is what
+         * the notice offers.
+         */
+        get().showToast(designFailureMessage(error), {
+          sticky: true,
+          urgent: true,
+          ...(isChunkLoadError(error) ? { action: { label: 'Reload', run: () => { saveAndReload(get().project); } } } : {}),
+        });
       });
   },
 

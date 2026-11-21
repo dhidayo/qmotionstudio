@@ -53,6 +53,7 @@ test('a card is the colour of the design it opens', async ({ page }) => {
  * library says so first, and the toast after says how to get them back.
  */
 test('in Video, the library says a template replaces the scenes, and the toast how to get them back (D-160)', async ({ page }) => {
+  test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
   await page.goto('/?template=story-big-news&aspect=9:16');
   await page.waitForSelector('canvas');
   const library = page.getByRole('complementary', { name: 'Template library' });
@@ -108,6 +109,7 @@ test('a card a mouse rests on plays live in the project\'s frame shape (D-160)',
  * scene would be — without adding anything until it is chosen.
  */
 test('the scene picker\'s cards play live in the video\'s frame shape, and only when chosen add a scene (D-160)', async ({ page }) => {
+  test.skip(process.env['PW_PROD'] === '1', 'Reads the dev-only editor handle, which the production build rightly omits.');
   await page.goto('/?template=quick-pitch&aspect=1:1');
   await page.waitForSelector('canvas');
   const scenes = (): Promise<number> => page.evaluate(() =>
