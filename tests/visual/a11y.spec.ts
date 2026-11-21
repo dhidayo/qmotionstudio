@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
 
 /**
@@ -9,14 +10,15 @@ import { expect, test, type CDPSession, type Page } from '@playwright/test';
  * the inspector's tabs, the phone's toolbar and sheets, the pickers, the
  * export window and the two questions (Welcome back, Switch to Image mode?).
  *
- * @axe-core/playwright is not installed in this repository, so these are the
- * checks it would make that matter here, made directly: Chromium's own
- * accessibility tree (over the DevTools protocol) for names, roles and
- * headings; computed colours for contrast; boxes for touch targets; real Tab
- * presses for focus; and the running animations under reduced motion. A test
- * fails on a serious or critical finding. Knowingly accepted exceptions are
- * listed in ACCEPTED, each with its reason. A11Y_REPORT=1 prints every
- * finding, moderate ones too.
+ * Two kinds of check, on every screen. axe (@axe-core/playwright, D-172) runs
+ * the WCAG 2.1 A and AA rules. Alongside it, checks made directly, for what
+ * axe does not reach or judges differently: Chromium's own accessibility tree
+ * (over the DevTools protocol) for names, roles and headings; computed
+ * colours for contrast; boxes for touch targets; real Tab presses for focus;
+ * and the running animations under reduced motion. A test fails on a serious
+ * or critical finding of either. Knowingly accepted exceptions are listed in
+ * ACCEPTED, and kept out of axe by AXE_EXCLUDED, each with its reason.
+ * A11Y_REPORT=1 prints every finding, moderate and minor ones too.
  */
 
 type Impact = 'critical' | 'serious' | 'moderate';
@@ -40,6 +42,41 @@ const ACCEPTED: readonly { readonly match: RegExp; readonly reason: string }[] =
     reason: 'The frame-time overlay is a developer tool: shown only in development or with ?perf, never to the people using the app.',
   },
 ];
+
+/**
+ * The same two exceptions, as axe excludes (D-172): the developer overlay
+ * from every rule, the test-release note from contrast alone.
+ */
+const AXE_EXCLUDED: readonly { readonly selector: string; readonly rules?: readonly string[]; readonly reason: string }[] = [
+  { selector: '[data-perf-overlay]', reason: 'The frame-time overlay is a developer tool, never shown to the people using the app.' },
+  { selector: '[data-disclaimer]', rules: ['color-contrast'], reason: 'The test-release note is 9px faint print by design; it is repeated in Help and goes before release.' },
+];
+
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+
+// axe takes a few seconds a screen, and a test audits up to eight screens.
+test.describe.configure({ timeout: 120_000 });
+
+/** axe's WCAG 2.1 A and AA rules over the whole page, the picture's canvas aside (it has no DOM to judge). */
+async function axeFindings(page: Page): Promise<Finding[]> {
+  let builder = new AxeBuilder({ page }).withTags(AXE_TAGS);
+  for (const excluded of AXE_EXCLUDED) if (excluded.rules === undefined) builder = builder.exclude(excluded.selector);
+  const { violations } = await builder.analyze();
+  const out: Finding[] = [];
+  for (const violation of violations) {
+    for (const node of violation.nodes) {
+      const target = node.target.map(String).join(' ');
+      if (AXE_EXCLUDED.some((e) => e.rules?.includes(violation.id) === true && node.html.includes(e.selector.slice(1, -1)))) continue;
+      const impact = node.impact ?? violation.impact;
+      out.push({
+        rule: `axe ${violation.id}`,
+        impact: impact === 'critical' || impact === 'serious' ? impact : 'moderate',
+        where: `${target} ${node.html.slice(0, 120)}`,
+      });
+    }
+  }
+  return out;
+}
 
 type Handle = { __motionStudio: { editor: { getState: () => { setTheme: (t: string) => void } } } };
 
@@ -260,6 +297,7 @@ async function trapFindings(page: Page, dialogName: string | RegExp): Promise<Fi
 async function audit(page: Page, label: string, opts: { phone?: boolean; focus?: boolean } = {}): Promise<Finding[]> {
   const cdp = await page.context().newCDPSession(page);
   const findings = [
+    ...await axeFindings(page),
     ...await treeFindings(cdp),
     ...await contrastFindings(page),
     ...(opts.phone === true ? await targetFindings(page) : []),

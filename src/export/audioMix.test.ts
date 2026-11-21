@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createProject } from '@/document/defaults';
 import type { AudioClip } from '@/document/types';
+import { makeOverlay } from '@/document/actions';
 import type { MediaStore } from '@/media/store';
 import { AudioNotReadyError, mixForExport } from './audioMix';
 
@@ -27,6 +28,14 @@ describe('mixing for export', () => {
   it('refuses a sound this build does not have', async () => {
     const project = { ...createProject({ mode: 'motionAd' }), audio: [clip('sound:retired')] };
     await expect(mixForExport(project, store({}), 10_000)).rejects.toThrow(/does not have/);
+  });
+
+  it('says a video has not loaded yet, rather than exporting without its sound (D-172)', async () => {
+    const base = createProject({ mode: 'motionAd' });
+    const overlay = { ...makeOverlay({ kind: 'customMedia', mediaId: 'upload:clip' }, { startMs: 0, endMs: 4_000, track: 0 }) };
+    const run = mixForExport({ ...base, overlays: [overlay] }, store({}), 10_000);
+    await expect(run).rejects.toBeInstanceOf(AudioNotReadyError);
+    await expect(run).rejects.toThrow(/A video in this design has not loaded yet/);
   });
 
   it('has nothing to mix in a silent project', async () => {

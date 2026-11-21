@@ -117,8 +117,9 @@ export function ContextMenu(): React.JSX.Element | null {
             className="flex w-full items-baseline justify-between gap-3 px-3 py-1.5 text-left text-[12px] hover:bg-panel-alt focus:bg-panel-alt focus-visible:-outline-offset-2 disabled:opacity-40"
             style={item.danger === true ? { color: 'var(--c-danger)' } : undefined}
           >
-            <span className="truncate">{item.label}</span>
-            {hint !== undefined && <span className="shrink-0 text-[10px] text-ink-faint">{hint}</span>}
+            {/* The label whole, the hint shortened if one must give (D-172): "Save project file", not "Save projec…". */}
+            <span className="shrink-0">{item.label}</span>
+            {hint !== undefined && <span className="min-w-0 truncate text-[10px] text-ink-faint">{hint}</span>}
           </button>
         );
       })}

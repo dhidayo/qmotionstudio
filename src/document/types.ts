@@ -459,6 +459,14 @@ export type AudioClip = {
   readonly loopPhaseMs?: number;
   /** A loop that runs to the end of the video, however long it becomes. */
   readonly fitsVideo?: boolean;
+  /**
+   * The loop window is exact even where the source is shorter (D-172): each
+   * time round lasts `trimEndMs - trimStartMs`, the source padded with
+   * silence, rather than being cut to the source's length. Only a video
+   * layer's derived sound sets it, so its repeats stay in step with the
+   * picture's; never stored.
+   */
+  readonly exactWindow?: boolean;
 };
 
 export type Brand = {

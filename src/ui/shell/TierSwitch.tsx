@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
 
 /**
@@ -29,13 +30,16 @@ export function TierSwitch({ size = 'small' }: { size?: 'small' | 'large' }): Re
       data-tier-switch
       onClick={() => { setTier(other); }}
       title={`Test switch: try the app as Free or as Pro. Now ${tier}; click for ${other}.`}
-      aria-label={`Tier: ${tier}. Switch to ${other}.`}
+      // The words it shows, then what it does (D-172): voice control says what it sees.
+      aria-label={`Free / Pro test switch: now ${tier}. Switch to ${other}.`}
       className="inline-flex shrink-0 items-center overflow-hidden rounded-full border font-bold uppercase tracking-wide"
       style={{ borderColor: 'var(--c-pro)' }}
     >
-      {(['free', 'pro'] as const).map((side) => (
+      {(['free', 'pro'] as const).map((side, i) => (
+        <Fragment key={side}>
+        {/* Spaced in the markup, so what it shows reads as two words (D-172). */}
+        {i > 0 && ' '}
         <span
-          key={side}
           aria-hidden
           className={text}
           style={side === tier
@@ -44,6 +48,7 @@ export function TierSwitch({ size = 'small' }: { size?: 'small' | 'large' }): Re
         >
           {side}
         </span>
+        </Fragment>
       ))}
     </button>
   );

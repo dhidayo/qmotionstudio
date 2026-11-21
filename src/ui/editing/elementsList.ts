@@ -88,12 +88,19 @@ export function secondsLabel(ms: number): string {
   return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
 }
 
+/**
+ * A row's accessible name. What the row shows comes first, in the order it
+ * shows it — the words, the times, Sample or Put back — and what it does not
+ * show (what kind of thing it is, that it was deleted) after: someone using
+ * voice control says what they see, so the name has to contain it as one
+ * run (WCAG 2.5.3, axe's label-content-name-mismatch, D-172).
+ */
 function labelOf(name: string, detail: string | null, kind: string | null, state: ElementRow['state'], when: ElementRow['when']): string {
   return [
     detail !== null && detail.length > 0 ? `${name}: ${detail}` : name,
-    kind,
-    state === 'sample' ? 'sample' : state === 'deleted' ? 'deleted — put back' : null,
-    when ? `${secondsLabel(when.startMs)} to ${secondsLabel(when.endMs)}` : null,
+    when ? `${secondsLabel(when.startMs)}–${secondsLabel(when.endMs)}` : null,
+    state === 'sample' ? 'sample' : null,
+    state === 'deleted' ? `put back — deleted${kind === null ? '' : ` ${kind}`}` : kind,
   ].filter((part): part is string => part !== null).join(', ');
 }
 

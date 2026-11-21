@@ -4050,3 +4050,18 @@ tile a finger last rested on plays while it is in view, otherwise the one most
 in view nearest the middle; the rest show their still. A computer still plays a
 tile on hover or focus; nothing plays for reduced motion.
 
+## D-172 — a video's sound in step with its picture, Frame ratio only where it works, and axe
+
+A video layer's sound loops over exactly the picture's length (`exactWindow`). A decoded track a few milliseconds shorter than its picture is padded with silence each time round, and a longer one is cut, so every repeat starts with the picture's. Before, a shorter sound came round early and drifted further out of step on every loop. Preview and export share this through the one scheduler. An export started while a video has not loaded yet stops and says so, rather than leaving its sound out without a word.
+
+A design whose photos keep a shape of their own declares `photoFrameRatio: false`: Scene Cuts (whose photos fill the frame), the Business, Pitch Deck and Cover designs, and Contact Sheet. On these, the Photos tab shows "This design's photos fill the frame." in place of Frame ratio, and keeps Size mode and Crop. A test builds every design at three ratios and holds the flag to what actually changes.
+
+The accessibility test now also runs axe (WCAG 2.1 A and AA) on every screen, with the same two accepted exceptions. Its findings are fixed:
+- Visible words are part of each control's name (effect tiles, the Free / Pro switch, Elements rows, look tiles).
+- A clip's ⋯ sits beside the clip rather than inside it.
+- Trim handles are hidden from assistive technology.
+- Looks and Text styles are groups of buttons, no longer list items.
+
+The menu's tooltip names New image and New video, the way to start afresh, and its labels are no longer cut short. Welcome back is unchanged: a reload of the tab in use does not ask.
+
+

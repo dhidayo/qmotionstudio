@@ -11,7 +11,7 @@ import { OPEN_TEST_RELEASE } from '../../src/entitlements/testRelease';
 
 test.use({ viewport: { width: 1500, height: 940 } });
 
-const tierToggle = (page: Page) => page.getByRole('button', { name: /^Tier: / });
+const tierToggle = (page: Page) => page.getByRole('button', { name: /^Free \/ Pro test switch/ });
 
 async function setTier(page: Page, tier: 'free' | 'pro'): Promise<void> {
   // The public build has no switch and is always free (D-093): asking for
@@ -21,9 +21,9 @@ async function setTier(page: Page, tier: 'free' | 'pro'): Promise<void> {
     return;
   }
   const label = await tierToggle(page).getAttribute('aria-label');
-  if (label?.startsWith(`Tier: ${tier}`) === true) return;
+  if (label?.includes(`now ${tier}.`) === true) return;
   await tierToggle(page).click();
-  await expect(tierToggle(page)).toHaveAttribute('aria-label', new RegExp(`^Tier: ${tier}`));
+  await expect(tierToggle(page)).toHaveAttribute('aria-label', new RegExp(`now ${tier}\\.`));
 }
 
 /** Mean luminance of the corner the watermark sits in. */
@@ -138,7 +138,7 @@ test.describe('the public build (D-093)', () => {
     await page.goto('/?template=launch-story&aspect=9:16');
     await page.waitForSelector('canvas');
 
-    await expect(page.getByRole('button', { name: /^Tier: / })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Free \/ Pro test switch/ })).toHaveCount(0);
 
     const upsell = page.locator('[data-duration-upsell]');
     await expect(upsell).toBeVisible();

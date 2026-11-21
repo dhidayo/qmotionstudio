@@ -164,12 +164,13 @@ function Row({ row, selected, tabStop, onChoose }: { row: ElementRow; selected: 
         <span className={`font-semibold ${deleted ? 'line-through decoration-1' : ''}`}>{row.name}</span>
         {row.detail !== null && <span className="text-ink-muted"> — {row.detail}</span>}
       </span>
-      {row.when && <span className="tabular shrink-0 text-[11px] text-ink-muted">{secondsLabel(row.when.startMs)}–{secondsLabel(row.when.endMs)}</span>}
-      {row.state === 'sample' && <span className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-ink-muted" style={{ background: 'var(--c-panel-alt)' }}>Sample</span>}
+      {/* Spaced in the markup too, so what the row shows reads as words, as its name does (D-172). */}
+      {row.when && <>{' '}<span className="tabular shrink-0 text-[11px] text-ink-muted">{secondsLabel(row.when.startMs)}–{secondsLabel(row.when.endMs)}</span></>}
+      {row.state === 'sample' && <>{' '}<span className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-ink-muted" style={{ background: 'var(--c-panel-alt)' }}>Sample</span></>}
       {deleted && (
-        <span className="shrink-0 rounded-md border border-edge-strong px-2 py-0.5 text-[12px] font-semibold" style={{ color: 'var(--c-accent)' }}>
+        <>{' '}<span className="shrink-0 rounded-md border border-edge-strong px-2 py-0.5 text-[12px] font-semibold" style={{ color: 'var(--c-accent)' }}>
           Put back
-        </span>
+        </span></>
       )}
     </button>
   );

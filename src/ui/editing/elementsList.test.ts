@@ -122,7 +122,7 @@ describe('the Elements list (D-167)', () => {
     const mark = rows.find((r) => r.id === 'shape:mark');
     expect(mark?.state).toBe('deleted');
     expect(mark?.restore).toEqual({ kind: 'shape', key: 'shape:mark' });
-    expect(mark?.label).toBe('Brand mark: Q, shape, deleted — put back');
+    expect(mark?.label).toBe('Brand mark: Q, put back — deleted shape');
     const headline = rows.find((r) => r.id === 'text:headline');
     expect(headline?.state).toBe('deleted');
     expect(headline?.detail).toBeNull();
@@ -161,12 +161,12 @@ describe('the Elements list (D-167)', () => {
     const added = (index: number): string[] => elementGroups({ project, sceneIndex: index, template: TEMPLATE, layers: null })
       .find((g) => g.id === 'added')?.rows.map((r) => r.label) ?? [];
     expect(added(0)).toEqual([
-      'Text: First only, added on top, 0.0s to 3.0s',
-      'Video clip 1, added on top, 2.0s to 5.0s',
+      'Text: First only, 0.0s–3.0s, added on top',
+      'Video clip 1, 2.0s–5.0s, added on top',
     ]);
     expect(added(1)).toEqual([
-      'Video clip 1, added on top, 2.0s to 5.0s',
-      'Text: Later, added on top, 6.0s to 7.0s',
+      'Video clip 1, 2.0s–5.0s, added on top',
+      'Text: Later, 6.0s–7.0s, added on top',
     ]);
   });
 

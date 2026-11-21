@@ -61,7 +61,7 @@ export function PhotosTab({ template }: { template: SceneTemplate | null }): Rea
   return (
     <div>
       <DesignPhotos slots={slots} />
-      <SpotSettings />
+      <SpotSettings frameRatio={template?.photoFrameRatio !== false} />
       <PhotoLayers blank={false} />
     </div>
   );
@@ -336,8 +336,12 @@ function SpotTile({
 /**
  * The chosen spot's frame, size and crop, with Replace on its bar — another
  * picture for this one spot (D-107), from the device or from Your photos.
+ *
+ * Frame ratio only where it changes something (D-172): a design that gives
+ * its photos their shape — Scene Cuts' fill the frame — declares so
+ * (`photoFrameRatio: false`), and the control is one quiet line instead.
  */
-function SpotSettings(): React.JSX.Element | null {
+function SpotSettings({ frameRatio }: { frameRatio: boolean }): React.JSX.Element | null {
   const dispatch = useEditor((s) => s.dispatch);
   const selected = useEditor((s) => s.selectedPhoto);
   const photos = useScenePhotos();
@@ -361,19 +365,25 @@ function SpotSettings(): React.JSX.Element | null {
           </button>
         )}
       >
-        <Segmented<PhotoFrame>
-          label="Frame ratio"
-          value={current.frame}
-          columns={5}
-          options={[
-            { value: '1:1', label: '1:1' },
-            { value: '4:3', label: '4:3' },
-            { value: '3:4', label: '3:4' },
-            { value: '16:9', label: '16:9' },
-            { value: '9:16', label: '9:16' },
-          ]}
-          onChange={(frame) => { dispatch(actions.setPhotoFrame(index, frame)); }}
-        />
+        {frameRatio ? (
+          <Segmented<PhotoFrame>
+            label="Frame ratio"
+            value={current.frame}
+            columns={5}
+            options={[
+              { value: '1:1', label: '1:1' },
+              { value: '4:3', label: '4:3' },
+              { value: '3:4', label: '3:4' },
+              { value: '16:9', label: '16:9' },
+              { value: '9:16', label: '9:16' },
+            ]}
+            onChange={(frame) => { dispatch(actions.setPhotoFrame(index, frame)); }}
+          />
+        ) : (
+          <p data-no-frame-ratio className="mb-2.5 text-[11px] leading-relaxed text-ink-faint">
+            This design’s photos fill the frame.
+          </p>
+        )}
 
         <Segmented<PhotoSizeMode>
           label="Size mode"

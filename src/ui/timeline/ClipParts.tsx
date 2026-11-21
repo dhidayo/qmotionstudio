@@ -10,25 +10,26 @@
  * beginning and ending having some form of strong border (dotted) to show that
  * I can adjust them". An invisible eight-pixel strip worked for anyone who
  * already knew it was there, which is nobody new.
+ *
+ * A pointer's affordance, hidden from assistive technology: it is not a
+ * control a keyboard can reach, and a name on a presentational element is
+ * not allowed (axe's aria-prohibited-attr, D-172). The clip's title says the
+ * dotted ends resize it.
  */
 export function TrimHandle({
   side,
   onDown,
   onMove,
   onUp,
-  label,
 }: {
   side: 'start' | 'end';
   onDown: (event: React.PointerEvent<HTMLElement>) => void;
   onMove: (event: React.PointerEvent<HTMLElement>) => void;
   onUp: () => void;
-  /** What the end is of, for assistive technology: "Snow". */
-  label?: string;
 }): React.JSX.Element {
   return (
     <span
-      role="presentation"
-      aria-label={`${side === 'start' ? 'Trim start' : 'Trim end'}${label === undefined ? '' : ` of ${label}`}`}
+      aria-hidden
       data-trim={side}
       onPointerDown={onDown}
       onPointerMove={onMove}
@@ -47,10 +48,31 @@ export function TrimHandle({
 }
 
 /**
+ * The "⋯" of a selected clip, beside the clip rather than inside it (D-172):
+ * a clip is a button, and a button inside a button is lost to assistive
+ * technology (axe's nested-interactive). Laid over the clip's own box, so it
+ * sits where it always did, and after it in the tab order; only the button
+ * itself takes the pointer.
+ */
+export function ClipMore({ box, color, label, onOpen }: {
+  /** The clip's position and size, and its drag offset while dragged. */
+  box: React.CSSProperties;
+  color: string;
+  label: string;
+  onOpen: (x: number, y: number) => void;
+}): React.JSX.Element {
+  return (
+    <span data-clip-more className="pointer-events-none absolute z-10 overflow-hidden" style={{ ...box, color }}>
+      <MoreButton label={label} onOpen={onOpen} />
+    </span>
+  );
+}
+
+/**
  * "⋯" on a selected clip: the menu, for anyone who does not right-click — a
  * trackpad without a secondary click set up, a keyboard, a first-time user.
  */
-export function MoreButton({ label, onOpen }: { label: string; onOpen: (x: number, y: number) => void }): React.JSX.Element {
+function MoreButton({ label, onOpen }: { label: string; onOpen: (x: number, y: number) => void }): React.JSX.Element {
   return (
     <button
       type="button"
@@ -62,7 +84,7 @@ export function MoreButton({ label, onOpen }: { label: string; onOpen: (x: numbe
         const box = e.currentTarget.getBoundingClientRect();
         onOpen(box.left, box.bottom + 2);
       }}
-      className="absolute inset-y-0 right-3 z-10 my-auto grid h-4 w-5 place-items-center rounded-sm text-[11px] font-bold leading-none hover:bg-panel"
+      className="pointer-events-auto absolute inset-y-0 right-3 z-10 my-auto grid h-4 w-5 place-items-center rounded-sm text-[11px] font-bold leading-none hover:bg-panel"
       style={{ color: 'currentColor' }}
     >
       ⋯

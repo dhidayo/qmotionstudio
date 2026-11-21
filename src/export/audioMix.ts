@@ -1,5 +1,5 @@
 import type { Project } from '@/document/types';
-import { playedAudio } from '@/document/select/videoSound';
+import { playedAudio, videoSoundsPending } from '@/document/select/videoSound';
 import { renderMixdown, type Mixdown } from '@/core/audio/mixdown';
 import { soundFor } from '@/audio/library';
 import { SoundLoadError, loadSounds } from '@/media/sounds';
@@ -18,6 +18,10 @@ import type { MediaStore } from '@/media/store';
  * its end (`resolvedAudio`), and each video layer's own sound plays with its
  * picture at its volume, unless it is muted (`playedAudio`, D-163) — the
  * same clips the preview schedules.
+ *
+ * A video's sound is only known once the video is read, so a project
+ * reopened and exported at once could have left a video's sound out without
+ * a word: it now stops and says the video has not loaded yet (D-172).
  */
 
 /** An export stopped because a clip's sound is not there to mix; the message says which and what to do. */
@@ -29,6 +33,14 @@ export class AudioNotReadyError extends Error {
 }
 
 export async function mixForExport(project: Project, media: MediaStore, durationMs: number): Promise<Mixdown | null> {
+  const pending = videoSoundsPending(project.overlays, (id) => media.has(id));
+  if (pending.length > 0) {
+    throw new AudioNotReadyError(
+      pending.length === 1
+        ? 'A video in this design has not loaded yet, so its sound is not ready to export. Wait a moment and export again; if it still has not loaded, add the video again or remove its layer.'
+        : `${pending.length} videos in this design have not loaded yet, so their sound is not ready to export. Wait a moment and export again; if they still have not loaded, add them again or remove their layers.`,
+    );
+  }
   const clips = playedAudio(project, media.videoSoundOf);
   try {
     await loadSounds(media, clips.map((clip) => clip.mediaId));

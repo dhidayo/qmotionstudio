@@ -27,6 +27,8 @@ export function defineScene(
     readonly build: (inputs: SceneInputs, ctx: BuildContext) => Layer[];
     readonly look?: LookDef;
     readonly supportsLogo?: boolean;
+    /** False where the photo frame ratio has no effect on the design (D-172). */
+    readonly photoFrameRatio?: false;
   },
 ): SceneTemplate {
   return {
@@ -46,6 +48,7 @@ export function defineScene(
     textSlots: parts.textSlots,
     supportsLogo: parts.supportsLogo ?? true,
     look: parts.look ?? FULL_LOOK,
+    ...(parts.photoFrameRatio === false ? { photoFrameRatio: false as const } : {}),
     build: parts.build,
   };
 }

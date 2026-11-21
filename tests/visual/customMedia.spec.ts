@@ -56,8 +56,8 @@ test.describe('custom media (§9)', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_500);
 
-    await page.getByRole('button', { name: /^Tier: free/ }).click();
-    await expect(page.getByRole('button', { name: /^Tier: pro/ })).toBeVisible();
+    await page.getByRole('button', { name: /test switch: now free/ }).click();
+    await expect(page.getByRole('button', { name: /test switch: now pro/ })).toBeVisible();
   });
 
   test('an uploaded clip decodes and draws', async ({ page }) => {

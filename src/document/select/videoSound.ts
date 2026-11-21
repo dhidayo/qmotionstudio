@@ -18,6 +18,14 @@ import { resolvedAudio } from './timeline';
  * is as long as the overlay. A video has no in-point or trim of its own yet;
  * when it gains one, this is the one place that must learn it.
  *
+ * The window is the picture's length exactly, not the sound's (D-172): a
+ * decoded track is often a few milliseconds shorter or longer than the
+ * picture, and a loop of the sound's own length would come round that much
+ * early or late every time, drifting further out of step on each repeat. So
+ * the clip asks for an exact window (`exactWindow`): a longer sound is cut to
+ * the picture each time round, and a shorter one padded with silence, so
+ * every repeat starts with the picture's.
+ *
  * `volumeDb` is the clip's gain, 0 dB (as recorded) when unset. A muted
  * video gives no clip, so nothing is scheduled. A video with no sound track
  * gives none either: the lookup returns null for it.
@@ -64,9 +72,28 @@ export function videoSoundClips(overlays: readonly Overlay[], soundOf: VideoSoun
       loop: true,
       lengthMs,
       loopPhaseMs: 0,
+      exactWindow: true,
     });
   }
   return clips;
+}
+
+/**
+ * The videos whose sound cannot be known yet: a layer that would play
+ * (unmuted, with some length) whose media is not in the store — a reopened
+ * project whose video is still being read, or one that could not be (D-172).
+ * Its sound is decoded with its picture, so until the entry lands there is no
+ * telling whether it has any, and an export then would leave it out without
+ * a word. Each media id once, in layer order.
+ */
+export function videoSoundsPending(overlays: readonly Overlay[], isLoaded: (mediaId: string) => boolean): readonly string[] {
+  const pending = new Set<string>();
+  for (const overlay of overlays) {
+    if (overlay.content.kind !== 'customMedia' || overlay.content.muted === true) continue;
+    if (overlay.endMs - overlay.startMs <= 0) continue;
+    if (!isLoaded(overlay.content.mediaId)) pending.add(overlay.content.mediaId);
+  }
+  return [...pending];
 }
 
 /**

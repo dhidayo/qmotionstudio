@@ -216,6 +216,8 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
                       />
                     </span>
                     <span className="block truncate px-1.5 pt-1 text-[11px] font-medium">{card.name}</span>
+                    {/* A space between name and line, so the words shown read as the tile's name does (D-172). */}
+                    {' '}
                     <span className="block truncate px-1.5 pb-1 text-[10px] text-ink-faint">{card.blurb}</span>
                   </button>
                 ))}

@@ -322,7 +322,7 @@ test.describe('the background and the plan (D-120, D-122)', () => {
   test('the menu carries the Free/Pro test switch', async ({ page }) => {
     await open(page, LIFESTYLE);
     await page.locator('[data-phone-menu]').click();
-    const tier = page.getByRole('button', { name: /^Tier: / });
+    const tier = page.getByRole('button', { name: /^Free \/ Pro test switch/ });
     await expect(tier).toBeVisible();
     const before = await tier.getAttribute('aria-label');
     await tier.click();

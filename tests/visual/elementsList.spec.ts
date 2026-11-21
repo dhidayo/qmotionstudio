@@ -126,7 +126,7 @@ test.describe('on a computer', () => {
     await page.getByRole('tab', { name: 'Elements' }).click();
     const mark = row(page, 'shape:mark');
     await expect(mark).toHaveAttribute('data-element-state', 'deleted');
-    await expect(mark).toHaveAccessibleName(/^Brand mark: \w, shape, deleted — put back$/);
+    await expect(mark).toHaveAccessibleName(/^Brand mark: \w, put back — deleted shape$/);
     await expect(mark).toContainText('Put back');
     await mark.click();
     await expect(page.locator('[data-selection-box="shape:mark"]')).toBeVisible();

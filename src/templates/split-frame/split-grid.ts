@@ -191,6 +191,8 @@ const template: SceneTemplate = {
   textSlots: [SLOTS.headline, SLOTS.caption],
   supportsLogo: true,
   look: FULL_LOOK,
+  // The contact sheet's cells give every photo their shape, whatever its frame ratio (D-172).
+  photoFrameRatio: false,
   build,
 };
 

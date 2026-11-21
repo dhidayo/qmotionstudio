@@ -36,7 +36,8 @@ export function TextGallery({ onAdded }: { onAdded: (id: string) => void }): Rea
   };
 
   return (
-    <div className="mb-3 grid grid-cols-2 gap-1.5" role="list" aria-label="Text styles" data-text-gallery>
+    // A group of buttons, not a list: a button given the role of a list item stops being a button (D-172).
+    <div className="mb-3 grid grid-cols-2 gap-1.5" role="group" aria-label="Text styles" data-text-gallery>
       {TEXT_PRESETS.map((preset) => {
         const s = preset.style;
         const color = s.color.length > 0 ? s.color : ink;
@@ -46,7 +47,6 @@ export function TextGallery({ onAdded }: { onAdded: (id: string) => void }): Rea
           <button
             key={preset.id}
             type="button"
-            role="listitem"
             data-text-preset={preset.id}
             onClick={() => { add(preset); }}
             aria-label={`${preset.name} — add to the canvas`}

@@ -557,5 +557,6 @@ export function create(variant: SceneVariant): SceneTemplate {
     return layers;
   };
 
-  return defineScene(variant, { textSlots: slots, build });
+  // Each photo takes the shape of the box the design gives it, whatever its frame ratio (D-172).
+  return defineScene(variant, { textSlots: slots, build, photoFrameRatio: false });
 }

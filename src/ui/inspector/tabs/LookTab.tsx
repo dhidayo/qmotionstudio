@@ -293,14 +293,14 @@ function LooksSection({ looks }: { looks: readonly LookPreset[] }): React.JSX.El
             </button>
           )}
         </div>
-        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-3" role="list" aria-label="Looks">
+        {/* A group of buttons, not a list: a button given the role of a list item stops being a button (D-172). */}
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-3" role="group" aria-label="Looks">
           {looks.map((preset) => {
             const active = isLook(look, preset);
             return (
               <button
                 key={preset.id}
                 type="button"
-                role="listitem"
                 data-look={preset.id}
                 onClick={() => { dispatch(actions.applyLook(preset)); }}
                 aria-pressed={active}
@@ -309,7 +309,12 @@ function LooksSection({ looks }: { looks: readonly LookPreset[] }): React.JSX.El
                 style={{ borderColor: active ? 'var(--c-accent)' : 'transparent', boxShadow: active ? 'none' : 'inset 0 0 0 1px var(--c-edge)' }}
               >
                 <span className="relative block h-12 w-full" style={{ background: swatchGround(preset) }}>
-                  <span className="absolute left-1.5 top-1 text-[15px] font-extrabold leading-none" style={{ color: preset.palette.ink }}>Aa</span>
+                  {/*
+                    * The ink's sample, drawn by CSS rather than written: "Aa" is a
+                    * picture of the type, not words of the button's name, which says
+                    * the look (WCAG 2.5.3, D-172).
+                    */}
+                  <span aria-hidden className="absolute left-1.5 top-1 text-[15px] font-extrabold leading-none before:content-['Aa']" style={{ color: preset.palette.ink }} />
                   <span className="absolute bottom-1.5 left-1.5 h-1 w-5 rounded-full" style={{ background: preset.palette.accent }} />
                   <span className="absolute bottom-1.5 right-1.5 h-5 w-6 rounded-sm" style={{ background: preset.palette.surface, boxShadow: `inset 0 0 0 1px ${preset.palette.inkMuted}40` }} />
                 </span>

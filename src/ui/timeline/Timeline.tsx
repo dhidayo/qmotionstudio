@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PreviewClock } from '@/core/time/clock';
 import type { Overlay } from '@/document/types';
 import { resolvedAudio, sceneSpans, timelineSpanMs, totalDurationMs } from '@/document/select/timeline';
@@ -10,7 +10,7 @@ import { LongPress } from '@/ui/shell/ContextMenu';
 import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { elementName, overlayMenu, sceneMenu } from '@/ui/editing/commands';
 import { EffectClipView, laneEffects } from './EffectRows';
-import { MoreButton, TrimHandle } from './ClipParts';
+import { ClipMore, TrimHandle } from './ClipParts';
 import { useEditor } from '@/state/store';
 import { AddBar } from '@/ui/editing/AddBar';
 import { Icon } from '@/ui/mobile/Icon';
@@ -603,12 +603,21 @@ export function Timeline({
               const active = span.index === selectedScene && selectedOverlay === null && selectedEffect === null;
               const name = designName(span.scene.templateId);
               const moves = sceneMoves(span.scene);
+              const dragged = reorder.drag?.from === span.index;
+              const box: React.CSSProperties = {
+                top: 4,
+                height: 28,
+                left: `${msToPct(span.startMs, durationMs)}%`,
+                width: `${msToPct(span.endMs, durationMs) - msToPct(span.startMs, durationMs)}%`,
+                // Lifted while dragged (D-130): it follows the pointer, over the others.
+                ...(dragged && reorder.drag ? { transform: `translateX(${reorder.drag.dx}px)`, zIndex: 10 } : {}),
+              };
               return (
+                <Fragment key={span.scene.id}>
                 <div
-                  key={span.scene.id}
                   role="button"
                   tabIndex={0}
-                  // Its name and number, not the "⋯" inside it, which names itself.
+                  // Its name and number; the "⋯" beside it names itself (D-172).
                   aria-label={`${span.index + 1}. ${name}`}
                   data-scene-clip={span.index}
                   onClick={(e) => {
@@ -642,19 +651,13 @@ export function Timeline({
                   title={`${name} · ${formatSeconds(span.endMs - span.startMs)}${moves ? ' · something in it moves' : ''} — drag to rearrange, right-click for more`}
                   className="absolute cursor-pointer select-none overflow-hidden rounded-md border px-1.5 text-left text-[10px] transition-colors"
                   style={{
-                    top: 4,
-                    height: 28,
-                    // Lifted while dragged (D-130): it follows the pointer, over the others.
-                    ...(reorder.drag?.from === span.index
-                      ? { transform: `translateX(${reorder.drag.dx}px)`, zIndex: 10, opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' }
-                      : {}),
-                    left: `${msToPct(span.startMs, durationMs)}%`,
-                    width: `${msToPct(span.endMs, durationMs) - msToPct(span.startMs, durationMs)}%`,
+                    ...box,
+                    ...(dragged ? { opacity: 0.9, cursor: 'grabbing', boxShadow: 'var(--shadow-lg)' } : {}),
                     borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
                     background: active ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
                     color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
                     fontWeight: active ? 600 : 400,
-                    ...(reorder.drag?.from === span.index ? {} : { boxShadow: active && sceneClipSelected ? '0 0 0 1px var(--c-accent)' : 'none' }),
+                    ...(dragged ? {} : { boxShadow: active && sceneClipSelected ? '0 0 0 1px var(--c-accent)' : 'none' }),
                     transitionDuration: 'var(--t-fast)',
                     WebkitTouchCallout: 'none',
                   }}
@@ -691,13 +694,16 @@ export function Timeline({
                       }}
                     />
                   )}
-                  {active && (
-                    <MoreButton
-                      label={`More for scene ${span.index + 1}`}
-                      onOpen={(x, y) => { openSceneMenu(span.index, x, y); }}
-                    />
-                  )}
                 </div>
+                {active && (
+                  <ClipMore
+                    box={box}
+                    color="var(--c-accent)"
+                    label={`More for scene ${span.index + 1}`}
+                    onOpen={(x, y) => { openSceneMenu(span.index, x, y); }}
+                  />
+                )}
+                </Fragment>
               );
             })}
             {slotMoving && (
@@ -768,9 +774,16 @@ export function Timeline({
             <div className="pointer-events-none absolute inset-y-0 right-0" style={{ left: LABEL_PX }} data-lane="true">
               {project.overlays.map((overlay) => {
                     const active = overlay.id === selectedOverlay;
+                    const box: React.CSSProperties = {
+                      top: overlay.track * ROW_PX + 4,
+                      height: ROW_PX - 9,
+                      left: `${msToPct(overlay.startMs, durationMs)}%`,
+                      width: `${Math.max(1.2, msToPct(overlay.endMs, durationMs) - msToPct(overlay.startMs, durationMs))}%`,
+                    };
+                    const color = active ? 'var(--c-accent)' : 'var(--c-ink-muted)';
                     return (
+                      <Fragment key={overlay.id}>
                       <div
-                        key={overlay.id}
                         role="button"
                         tabIndex={0}
                         aria-pressed={active}
@@ -794,13 +807,10 @@ export function Timeline({
                         data-moves={(overlay.poses?.length ?? 0) >= 2 ? '' : undefined}
                         className={`pointer-events-auto absolute cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] ${moving?.id === overlay.id ? 'leading-[12px]' : 'leading-[18px]'}`}
                         style={{
-                          top: overlay.track * ROW_PX + 4,
-                          height: ROW_PX - 9,
-                          left: `${msToPct(overlay.startMs, durationMs)}%`,
-                          width: `${Math.max(1.2, msToPct(overlay.endMs, durationMs) - msToPct(overlay.startMs, durationMs))}%`,
+                          ...box,
                           borderColor: active ? 'var(--c-accent)' : 'var(--c-edge-strong)',
                           background: active ? 'var(--c-accent-soft)' : 'var(--c-panel-alt)',
-                          color: active ? 'var(--c-accent)' : 'var(--c-ink-muted)',
+                          color,
                           WebkitTouchCallout: 'none',
                         }}
                       >
@@ -810,11 +820,12 @@ export function Timeline({
                         {(overlay.poses?.length ?? 0) >= 2 && !active && (
                           <span aria-hidden className="pointer-events-none absolute inset-x-3 bottom-0.5 h-0.5 rounded-full" style={{ background: 'var(--c-accent)', opacity: 0.55 }} />
                         )}
-                        {active && (
-                          <MoreButton label={`More for ${labelFor(overlay)}`} onOpen={(x, y) => { openOverlayMenu(overlay, x, y); }} />
-                        )}
                         <TrimHandle side="end" onDown={(e) => { beginClipDrag(e, overlay, 'trimEnd'); }} onMove={onClipMove} onUp={endClipDrag} />
                       </div>
+                      {active && (
+                        <ClipMore box={box} color={color} label={`More for ${labelFor(overlay)}`} onOpen={(x, y) => { openOverlayMenu(overlay, x, y); }} />
+                      )}
+                      </Fragment>
                     );
                 })}
               {fx.all.map((effect) => (

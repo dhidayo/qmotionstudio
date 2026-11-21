@@ -71,6 +71,15 @@ export type SceneTemplate = TemplateBase & {
   readonly supportsLogo: boolean;
   readonly look: LookDef;
   /**
+   * False for a design whose photos keep a shape of their own whatever the
+   * photo's frame ratio — Scene Cuts' fill the frame (D-168), a business
+   * design's sit in its own boxes — so the Photos tab hides Frame ratio,
+   * which would do nothing there (D-172). Absent means it applies. Declared,
+   * not guessed: a test builds every design at two ratios and holds this to
+   * what changes.
+   */
+  readonly photoFrameRatio?: false;
+  /**
    * §3B: called once per (template, structural inputs, aspect) change and
    * memoised. Never per frame. Must be pure and deterministic — identical
    * inputs must produce identical layers, including ids (which is why

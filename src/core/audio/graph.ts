@@ -85,7 +85,7 @@ export function scheduleClips(
     }
 
     const source = ctx.createBufferSource();
-    source.buffer = buffer;
+    source.buffer = plan.loop && plan.padToMs !== undefined ? paddedBuffer(ctx, buffer, plan.padToMs) : buffer;
     source.connect(gain);
     gain.connect(destination);
     if (plan.loop) {
@@ -118,6 +118,8 @@ export type SourcePlan =
       readonly playMs: number;
       readonly loopStartMs: number;
       readonly loopEndMs: number;
+      /** The source is shorter than an exact window: play it padded with silence to this length (D-172). */
+      readonly padToMs?: number;
     };
 
 /** A window shorter than this cannot loop usefully; it would buzz rather than repeat. */
@@ -149,10 +151,45 @@ export function loopPlan(
   sourceLengthMs: number,
 ): SourcePlan | null {
   const loopStartMs = Math.min(clip.trimStartMs, sourceLengthMs);
-  const loopEndMs = Math.min(clip.trimEndMs, sourceLengthMs);
+  /*
+   * An exact window (a video's sound, D-172) is not cut to the source: a
+   * sound a few milliseconds shorter than its picture would otherwise come
+   * round that much early every time, and drift out of step with it. The
+   * source is padded with silence to the window instead; a longer one is
+   * cut to it, as any window is.
+   */
+  const exact = clip.exactWindow === true && clip.trimEndMs > sourceLengthMs && loopStartMs < sourceLengthMs;
+  const loopEndMs = exact ? clip.trimEndMs : Math.min(clip.trimEndMs, sourceLengthMs);
   if (loopEndMs - loopStartMs < MIN_LOOP_WINDOW_MS || remainingMs <= 0) return null;
   const offsetMs = sourceMsAt({ ...clip, trimStartMs: loopStartMs, trimEndMs: loopEndMs }, intoClip);
-  return { loop: true, offsetMs, playMs: remainingMs, loopStartMs, loopEndMs };
+  return { loop: true, offsetMs, playMs: remainingMs, loopStartMs, loopEndMs, ...(exact ? { padToMs: loopEndMs } : {}) };
+}
+
+/**
+ * A copy of `buffer` padded with silence to at least `lengthMs` (D-172), so a
+ * source node can loop a window longer than the sound itself — its loop end
+ * is otherwise clamped to the buffer. Whole sample-frames, rounded up, so the
+ * window's end always falls inside it. Made once per sound and length, and
+ * shared by the preview and the export: a buffer belongs to no one context.
+ */
+const padded = new WeakMap<AudioBuffer, Map<number, AudioBuffer>>();
+
+export function paddedBuffer(ctx: BaseAudioContext, buffer: AudioBuffer, lengthMs: number): AudioBuffer {
+  const frames = Math.ceil((lengthMs / 1000) * buffer.sampleRate);
+  if (frames <= buffer.length) return buffer;
+  let byLength = padded.get(buffer);
+  if (!byLength) {
+    byLength = new Map();
+    padded.set(buffer, byLength);
+  }
+  const hit = byLength.get(frames);
+  if (hit) return hit;
+  const out = ctx.createBuffer(buffer.numberOfChannels, frames, buffer.sampleRate);
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    out.copyToChannel(buffer.getChannelData(channel), channel);
+  }
+  byLength.set(frames, out);
+  return out;
 }
 
 /** Stops and disconnects everything a `scheduleClips` call produced. */

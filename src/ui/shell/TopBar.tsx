@@ -333,6 +333,8 @@ function AppMenu(): React.JSX.Element {
         type="button"
         onClick={open}
         aria-label="Menu"
+        // Says what is in it (D-172): New image and New video are how to start afresh.
+        title="Menu: New image, New video, Open, Save"
         data-app-menu
         className="grid size-9 shrink-0 place-items-center rounded-md hover:bg-panel-alt"
       >

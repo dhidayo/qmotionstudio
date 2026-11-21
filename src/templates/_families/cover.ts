@@ -1217,7 +1217,8 @@ export function create(variant: SceneVariant): SceneTemplate {
     }
   };
 
-  return defineScene(variant, { textSlots: slots, build });
+  // Each photo takes the shape of the box the cover gives it, whatever its frame ratio (D-172).
+  return defineScene(variant, { textSlots: slots, build, photoFrameRatio: false });
 }
 
 /** A repeatable number in [0, 1) for confetti: the same on every build (§3B). */

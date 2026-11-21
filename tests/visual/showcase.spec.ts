@@ -175,6 +175,20 @@ test.describe('inspector', () => {
     await expect(increase).toBeDisabled();
     await expect(page.getByText('of 6')).toBeVisible();
   });
+
+  test('offers Frame ratio only where it changes the design (D-172)', async ({ page }) => {
+    // Parallax Depth's photos take the frame's shape: the control is there.
+    await expect(page.getByText('Frame ratio', { exact: true })).toBeVisible();
+    await expect(page.locator('[data-no-frame-ratio]')).toHaveCount(0);
+
+    // Scene Cuts' photos fill the frame (D-168): one quiet line instead, with Size mode and Crop kept.
+    await page.goto('/?template=cut-iris&frozen=2000');
+    await page.waitForSelector('canvas');
+    await expect(page.locator('[data-no-frame-ratio]')).toHaveText('This design’s photos fill the frame.');
+    await expect(page.getByText('Frame ratio', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Size mode', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Crop', { exact: true }).first()).toBeVisible();
+  });
 });
 
 /** The headline's field, in its tile in the Text tab (D-124). */

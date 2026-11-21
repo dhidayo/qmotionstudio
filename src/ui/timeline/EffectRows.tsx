@@ -9,7 +9,7 @@ import { LongPress } from '@/ui/shell/ContextMenu';
 import { useHoldStill } from '@/ui/shell/ClockProvider';
 import { effectMenu } from '@/ui/editing/commands';
 import { capturePointer } from './pointerCapture';
-import { MoreButton, TrimHandle, laneTimeAt } from './ClipParts';
+import { ClipMore, TrimHandle, laneTimeAt } from './ClipParts';
 import { dragResult, formatSeconds, msToPct, snap, type ClipDrag } from './timelineGeometry';
 
 /**
@@ -196,7 +196,16 @@ export function EffectClipView({
     endInteraction();
   };
 
+  const box: React.CSSProperties = {
+    top: row * EFFECT_ROW_PX + 4,
+    height: EFFECT_ROW_PX - 9,
+    left: `${msToPct(fx.startMs, durationMs)}%`,
+    width: `${Math.max(1.5, msToPct(fx.endMs, durationMs) - msToPct(fx.startMs, durationMs))}%`,
+  };
+  const color = active ? 'var(--c-pro)' : 'var(--c-ink-muted)';
+
   return (
+    <>
     <div
       role="button"
       tabIndex={0}
@@ -221,21 +230,19 @@ export function EffectClipView({
       }}
       className="pointer-events-auto absolute cursor-grab touch-none select-none overflow-hidden rounded-sm border text-[10px] leading-[18px]"
       style={{
-        top: row * EFFECT_ROW_PX + 4,
-        height: EFFECT_ROW_PX - 9,
-        left: `${msToPct(fx.startMs, durationMs)}%`,
-        width: `${Math.max(1.5, msToPct(fx.endMs, durationMs) - msToPct(fx.startMs, durationMs))}%`,
+        ...box,
         borderColor: active ? 'var(--c-pro)' : 'color-mix(in srgb, var(--c-pro) 45%, var(--c-edge-strong))',
         borderStyle: fx.sceneIndex === null ? 'solid' : 'dashed',
         background: active ? 'var(--c-pro-soft)' : 'color-mix(in srgb, var(--c-pro-soft) 55%, var(--c-panel-alt))',
-        color: active ? 'var(--c-pro)' : 'var(--c-ink-muted)',
+        color,
         WebkitTouchCallout: 'none',
       }}
     >
-      <TrimHandle side="start" label={name} onDown={(e) => { begin(e, 'trimStart'); }} onMove={move} onUp={end} />
+      <TrimHandle side="start" onDown={(e) => { begin(e, 'trimStart'); }} onMove={move} onUp={end} />
       <span className="pointer-events-none block truncate px-3">✦ {label}</span>
-      {active && <MoreButton label={`More for ${name}`} onOpen={(x, y) => { openMenu({ x, y, title: label, items: effectMenu(clip.id, onSeek, fx.startMs) }); }} />}
-      <TrimHandle side="end" label={name} onDown={(e) => { begin(e, 'trimEnd'); }} onMove={move} onUp={end} />
+      <TrimHandle side="end" onDown={(e) => { begin(e, 'trimEnd'); }} onMove={move} onUp={end} />
     </div>
+    {active && <ClipMore box={box} color={color} label={`More for ${name}`} onOpen={(x, y) => { openMenu({ x, y, title: label, items: effectMenu(clip.id, onSeek, fx.startMs) }); }} />}
+    </>
   );
 }

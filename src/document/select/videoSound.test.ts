@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { AudioClip, Overlay, OverlayContent, Project } from '@/document/types';
 import { createProject } from '@/document/defaults';
 import { clipEndMs, sourceMsAt } from '@/core/audio/envelope';
-import { loopPlan } from '@/core/audio/graph';
+import { loopPlan, scheduleClips } from '@/core/audio/graph';
 import { wrap } from '@/media/video/clip';
 import * as actions from '@/document/actions';
 import { resolvedAudio } from './timeline';
-import { VIDEO_SOUND_PREFIX, playedAudio, videoSoundClips, type VideoSoundLookup } from './videoSound';
+import { VIDEO_SOUND_PREFIX, playedAudio, videoSoundClips, videoSoundsPending, type VideoSoundLookup } from './videoSound';
 
 /** A video layer's own sound (D-163): derived from the overlay, never stored. */
 
@@ -73,6 +73,85 @@ describe('the clip a video layer sounds as', () => {
   it('ignores every other kind of layer', () => {
     const photo = actions.makeOverlay({ kind: 'photo', mediaId: 'clip' }, { startMs: 0, endMs: 5_000, track: 0 });
     expect(videoSoundClips([photo], withSound)).toEqual([]);
+  });
+});
+
+/**
+ * A decoded track is rarely exactly as long as its picture (D-172). The
+ * source node is driven through the one scheduler the preview and export
+ * share, and then played out frame by frame as Web Audio's looping source
+ * does: its loop end clamped to the buffer, its playhead wrapping back by the
+ * loop's length when it reaches it. Each repeat must start where the
+ * picture's does.
+ */
+describe('a video’s sound stays in step with its picture', () => {
+  const RATE = 48_000;
+  const PICTURE_MS = 2_000;
+  const LOOPS = 20;
+
+  type Source = { buffer: { length: number; sampleRate: number } | null; loop: boolean; loopStart: number; loopEnd: number; start: number[] };
+
+  function schedule(soundMs: number): Source {
+    const sources: Source[] = [];
+    const param = { setValueAtTime: () => param, linearRampToValueAtTime: () => param };
+    const decoded = { length: Math.round((soundMs / 1000) * RATE), sampleRate: RATE, numberOfChannels: 1, duration: soundMs / 1000, getChannelData: () => new Float32Array(0) };
+    const ctx = {
+      createGain: () => ({ gain: param, connect: () => undefined, disconnect: () => undefined }),
+      createBuffer: (channels: number, length: number, sampleRate: number) => ({ numberOfChannels: channels, length, sampleRate, duration: length / sampleRate, copyToChannel: () => undefined }),
+      createBufferSource: () => {
+        const source: Source = { buffer: null, loop: false, loopStart: 0, loopEnd: 0, start: [] };
+        sources.push(source);
+        return Object.assign(source, { connect: () => undefined, disconnect: () => undefined, start: (...args: number[]) => { source.start = args; }, stop: () => undefined });
+      },
+    } as unknown as BaseAudioContext;
+    const sound: VideoSoundLookup = () => ({ lengthMs: PICTURE_MS });
+    const clips = videoSoundClips([video({}, { startMs: 0, endMs: PICTURE_MS * LOOPS })], sound);
+    scheduleClips(ctx, {} as AudioNode, clips, () => decoded as unknown as AudioBuffer, { fromMs: 0, atContextTime: 0 });
+    const [source] = sources;
+    if (!source?.buffer) throw new Error('nothing was scheduled');
+    return source;
+  }
+
+  /** The output frame at which each repeat after the first begins, as a looping source plays it. */
+  function repeatStarts(source: Source): number[] {
+    const buffer = source.buffer;
+    if (!buffer) return [];
+    const loopStart = source.loopStart * RATE;
+    const loopEnd = Math.min(source.loopEnd * RATE, buffer.length);
+    let position = (source.start[1] ?? 0) * RATE;
+    const starts: number[] = [];
+    for (let frame = 0; starts.length < LOOPS - 1; frame++) {
+      if (position >= loopEnd) {
+        position -= loopEnd - loopStart;
+        starts.push(frame);
+      }
+      position += 1;
+    }
+    return starts;
+  }
+
+  for (const soundMs of [1_980, 2_030]) {
+    it(`starts every repeat of a ${String(soundMs / 1000)}s sound within a frame of the picture’s loop`, () => {
+      const source = schedule(soundMs);
+      expect(source.loop).toBe(true);
+      expect(source.loopEnd).toBe(PICTURE_MS / 1000);
+      repeatStarts(source).forEach((frame, i) => {
+        expect(Math.abs(frame - ((i + 1) * PICTURE_MS * RATE) / 1000)).toBeLessThanOrEqual(1);
+      });
+    });
+  }
+});
+
+describe('a video still loading when the design is exported (D-172)', () => {
+  it('names each unmuted video whose media is not in yet, once', () => {
+    const second = { ...video(), id: 'ovl_two' };
+    expect(videoSoundsPending([video(), second], () => false)).toEqual(['clip']);
+    expect(videoSoundsPending([video()], (id) => id === 'clip')).toEqual([]);
+  });
+
+  it('does not wait for a muted video, a layer with no length or another kind of layer', () => {
+    const photo = actions.makeOverlay({ kind: 'photo', mediaId: 'clip' }, { startMs: 0, endMs: 5_000, track: 0 });
+    expect(videoSoundsPending([video({ muted: true }), video({}, { startMs: 1_000, endMs: 1_000 }), photo], () => false)).toEqual([]);
   });
 });
 

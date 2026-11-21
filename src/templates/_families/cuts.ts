@@ -90,7 +90,8 @@ export function create(variant: SceneVariant): SceneTemplate {
     return layers;
   };
 
-  return defineScene(variant, { textSlots: [headline], build });
+  // The photograph is the frame (D-168), so a photo's frame ratio has nothing to change (D-172).
+  return defineScene(variant, { textSlots: [headline], build, photoFrameRatio: false });
 }
 
 /** The incoming photo, centred on (0, 0) in a mask's own space. */
