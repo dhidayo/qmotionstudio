@@ -56,6 +56,8 @@ test.describe('custom media (§9)', () => {
     await page.waitForSelector('canvas');
     await page.waitForTimeout(1_500);
 
+    // In the account menu (D-175).
+    await page.getByRole('button', { name: 'Account' }).click();
     await page.getByRole('button', { name: /test switch: now free/ }).click();
     await expect(page.getByRole('button', { name: /test switch: now pro/ })).toBeVisible();
   });

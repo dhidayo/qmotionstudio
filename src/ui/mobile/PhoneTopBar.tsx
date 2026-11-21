@@ -1,6 +1,7 @@
 import { useEditor } from '@/state/store';
 import { useOverlays } from '@/ui/shell/overlays';
 import { Icon } from './Icon';
+import { AccountButton } from '@/ui/shell/AccountMenu';
 
 /**
  * The phone's top bar (D-109): one row, nothing hidden off the edge.
@@ -9,6 +10,7 @@ import { Icon } from './Icon';
  * the Export button — "who would know there are some hidden elements on the
  * top-right?" Here there are three things: the project (and its menu), the
  * frame shape, and Export. Everything else moved into the project menu.
+ * And since D-175 the account's circle at the end, as on a computer.
  */
 export function PhoneTopBar(): React.JSX.Element {
   const name = useEditor((s) => s.project.name);
@@ -19,7 +21,7 @@ export function PhoneTopBar(): React.JSX.Element {
   return (
     <header
       // Frosted, like the computer's bar (D-174).
-      className="glass-bar flex shrink-0 items-center gap-1.5 border-b pl-1.5 pr-3"
+      className="glass-bar flex shrink-0 items-center gap-1.5 border-b pl-1.5 pr-1.5"
       style={{ height: 52, paddingTop: 'env(safe-area-inset-top, 0px)' }}
     >
       {/*
@@ -70,6 +72,8 @@ export function PhoneTopBar(): React.JSX.Element {
         {/* The one main action, in the accent (D-176). */}
         <span className="ui-btn ui-btn--cta min-h-8 px-4 text-[13px]">Export</span>
       </button>
+      {/* The account (D-175): the same window as the computer's, from the same corner. */}
+      <AccountButton phone />
     </header>
   );
 }

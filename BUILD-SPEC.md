@@ -53,7 +53,12 @@ and exports a longer ad.
 ### 1.3 Shared
 - Aspect presets: 16:9, 4:3, 1:1, 4:5, 9:16. Switching re-lays-out, it does not crop.
 - Right-hand inspector with four tabs: **Photos**, **Text**, **Logo**, **Look**.
-- Light/dark theme toggle.
+- Light, dark or system theme, in the account menu (D-175).
+- A landing page at `/` markets the app; the studio is at `/studio`. The studio is open to
+  everyone; signing in is asked for only at Export (D-177). Signed in, `/` opens the studio
+  until Sign out. Editor parameters open the studio at either address (D-175).
+- An account circle in the top bar: plan, storage on this device, preferences, help,
+  Sign out (D-175).
 - Export to MP4 (H.264 + AAC) and WebM (VP9 + Opus); Image also exports PNG or JPG
   pictures (D-155).
 - One row of actions under the picture, each action once; the inspector's tabs are
@@ -478,7 +483,12 @@ free exports carry a small watermark.
 - Autosave the document to IndexedDB on a debounce; blobs stored separately by `mediaId`.
 - Project list on load, with rename, duplicate and delete.
 - PWA via `vite-plugin-pwa`, installable, offline-capable.
-- Light/dark theme toggle persisted to `localStorage`.
+- Theme (light, dark or system) persisted to `localStorage` as `ms.theme`.
+- `ms.session` in `localStorage` is signing in on this device; real accounts replace it
+  (D-175). The page at `/` and `/studio` is the same file: `public/route-boot.js`, written
+  into the page and allowed by its CSP hash, chooses the page and starts only its chunks.
+  Hosts rewrite `/studio` to it, the service worker serves it offline, and the PWA's
+  `start_url` is `/studio` (D-175).
 - "Set up for" choice (`ms.workspace`) and the library's folds, one set per choice,
   in `localStorage` — a device preference, never part of a project or project file.
 - Keyboard: space = play/pause, ⌘Z/⌘⇧Z = undo/redo, arrows = step one frame,

@@ -31,6 +31,12 @@ import { execFileSync } from 'node:child_process';
  * Set PHONE_CHROMIUM to a browser binary to use one other than Playwright's.
  * `PHONE_TRACE=1` lists the median cold load's downloads and when each
  * arrived; `PHONE_COLD_ONLY=1` stops after the cold load (D-173).
+ *
+ * Since the landing page (D-175) `/` is the studio only to someone signed in
+ * on this device, so the studio's runs are signed in, and the landing page's
+ * own cold load is measured first, signed out: to its words and both its
+ * pictures on screen, and to the moving picture drawn by the renderer.
+ * `PHONE_LANDING_ONLY=1` stops after it.
  */
 
 const URL = (process.env['PHONE_URL'] ?? 'http://localhost:4173').replace(/\/$/, '');
@@ -43,19 +49,20 @@ const FIVE_SCENES = '/?template=film-product-launch&aspect=9:16&perf=1';
 
 /** The suite's first-visit state (tests/support/storage.ts), so no question covers the editor. */
 const SEEDED = [
+  { name: 'ms.session', value: '{"kind":"device","since":0}' },
   { name: 'ms.quickstart', value: 'done' },
   { name: 'ms.workspace', value: 'both' },
   { name: 'ms.timeline', value: 'open' },
 ];
 
-async function phone(browser: Browser): Promise<BrowserContext> {
+async function phone(browser: Browser, signedIn = true): Promise<BrowserContext> {
   return browser.newContext({
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 3,
     isMobile: true,
     hasTouch: true,
     userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
-    storageState: { cookies: [], origins: [{ origin: URL, localStorage: SEEDED }] },
+    storageState: { cookies: [], origins: signedIn ? [{ origin: URL, localStorage: SEEDED }] : [] },
   });
 }
 
@@ -114,6 +121,54 @@ async function coldLoad(browser: Browser): Promise<ColdLoad> {
       return { total, byKind, trace };
     }, interactive);
     return { interactive, firstFrame, transferred };
+  } finally {
+    await context.close();
+  }
+}
+
+type LandingLoad = { shown: number; moving: number | null; transferred: number; studio: number };
+
+/**
+ * The landing page's cold load, signed out (D-175): to the headline, both
+ * designs' stills and Open Studio on screen; then to the renderer's own
+ * picture taking their place. What it downloaded by then, and whether any
+ * of the studio's own code came with it (it should not).
+ */
+async function landingLoad(browser: Browser): Promise<LandingLoad> {
+  const context = await phone(browser, false);
+  try {
+    const page = await context.newPage();
+    await throttle(page, true);
+    const started = Date.now();
+    await page.goto(`${URL}/`, { waitUntil: 'commit' });
+    await page.locator('.lp-hero [data-open-studio]').waitFor({ state: 'visible', timeout: 120_000 });
+    await page.waitForFunction(() => [...document.querySelectorAll('.lp-frame img')].every((img) => (img as HTMLImageElement).complete), undefined, { timeout: 120_000, polling: 100 });
+    const shown = Date.now() - started;
+    const moving = await page.locator('[data-hero-canvas].is-drawn').nth(1).waitFor({ timeout: 60_000 })
+      .then(() => Date.now() - started).catch(() => null);
+    const { transferred, studio } = await page.evaluate((untilMs) => {
+      // The studio's own chunks: those its page names that the landing page's does not (vite.config.ts).
+      // Written out, not as a helper: a named function in here would need the bundler's own helper in the page.
+      const paths = ['landing-preload', 'studio-preload'].map((id) => new Set([...(document.getElementById(id) as HTMLTemplateElement | null)?.content.querySelectorAll('link') ?? []]
+        .map((link) => new globalThis.URL(link.getAttribute('href') ?? '', location.href).pathname)));
+      const landingOwn = paths[0] ?? new Set<string>();
+      const studioOnly = [...(paths[1] ?? [])].filter((path) => !landingOwn.has(path));
+      let total = 0;
+      let studioBytes = 0;
+      for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[]) {
+        // What had arrived by then: a download the page started as it settled is not part of it.
+        if (entry.responseEnd > untilMs) continue;
+        total += entry.transferSize || 0;
+        if (studioOnly.includes(new globalThis.URL(entry.name).pathname)) studioBytes += entry.transferSize || 0;
+      }
+      return { transferred: total, studio: studioBytes };
+    }, shown);
+    if (process.env['PHONE_TRACE'] === '1') {
+      const trace = await page.evaluate(() => (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+        .map((e) => `${(e.startTime / 1000).toFixed(2)}–${(e.responseEnd / 1000).toFixed(2)}s ${(e.transferSize / 1024).toFixed(1).padStart(6)} KB ${new globalThis.URL(e.name).pathname}`));
+      console.log(`  landing, shown at ${s(shown)}:\n  ${trace.join('\n  ')}`);
+    }
+    return { shown, moving, transferred, studio };
   } finally {
     await context.close();
   }
@@ -261,14 +316,24 @@ async function main(): Promise<void> {
   const browser = await chromium.launch(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE });
   try {
     const pid = await browserPid(browser);
+    const kb = (bytes: number): string => `${(bytes / 1024).toFixed(0)} KB`;
+
+    const landings: LandingLoad[] = [];
+    for (let i = 0; i < RUNS; i++) landings.push(await landingLoad(browser));
+    landings.sort((a, b) => a.shown - b.shown);
+    const landing = landings[Math.floor(landings.length / 2)];
+    if (landing === undefined) throw new Error('no landing runs');
+    console.log(`Phone (390×844, CPU ×${CPU}, Fast 3G), ${URL}`);
+    console.log(`Landing page, signed out: ${landings.map((l) => s(l.shown)).join(', ')} — median ${s(landing.shown)} to its words and pictures; ${kb(landing.transferred)} transferred, ${kb(landing.studio)} of it the studio's`);
+    console.log(`Landing, moving picture:  ${landings.map((l) => (l.moving === null ? 'still' : s(l.moving))).join(', ')}`);
+    if (process.env['PHONE_LANDING_ONLY'] === '1') return;
+
     const loads: ColdLoad[] = [];
     for (let i = 0; i < RUNS; i++) loads.push(await coldLoad(browser));
     loads.sort((a, b) => a.interactive - b.interactive);
     const median = loads[Math.floor(loads.length / 2)];
     if (median === undefined) throw new Error('no cold-load runs');
-    const kb = (bytes: number): string => `${(bytes / 1024).toFixed(0)} KB`;
     const kinds = Object.entries(median.transferred.byKind).sort((a, b) => b[1] - a[1]).map(([kind, bytes]) => `${kind} ${kb(bytes)}`).join(', ');
-    console.log(`Phone (390×844, CPU ×${CPU}, Fast 3G), ${URL}`);
     console.log(`Cold load to interactive: ${loads.map((l) => s(l.interactive)).join(', ')} — median ${s(median.interactive)} (budget 2.50s)`);
     console.log(`First drawn frame:        ${loads.map((l) => s(l.firstFrame)).join(', ')} — median ${s(median.firstFrame)}`);
     console.log(`Transferred on cold load: ${kb(median.transferred.total)} (${kinds})`);

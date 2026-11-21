@@ -472,3 +472,59 @@ test.describe('reduced motion', () => {
     expectClean(all);
   });
 });
+
+/*
+ * The landing page and the account menu (D-175): the same audit, both themes,
+ * on a computer and a phone. The landing page is for someone not signed in,
+ * so it starts from nothing; its sections rise into place as they come on
+ * screen, so the page is scrolled through first and every word is judged.
+ */
+async function openLanding(page: Page, theme: 'light' | 'dark'): Promise<void> {
+  await page.emulateMedia({ colorScheme: theme });
+  await page.addInitScript((t) => { localStorage.setItem('ms.theme', t); }, theme);
+  await page.goto('/');
+  await page.waitForSelector('.lp-hero');
+  for (let y = 0; y < 14_000; y += 600) {
+    await page.evaluate((top) => { window.scrollTo(0, top); }, y);
+    await page.waitForTimeout(40);
+  }
+  await page.waitForSelector('[data-design-link]');
+  await page.evaluate(() => { window.scrollTo(0, 0); });
+  await page.waitForTimeout(900);
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test.describe(`the landing page, ${theme}`, () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+
+    test('on a computer', async ({ page }) => {
+      await page.setViewportSize(DESKTOP);
+      await openLanding(page, theme);
+      expectClean(await audit(page, `landing desktop ${theme}`, { focus: true }));
+    });
+
+    test('on a phone', async ({ page }) => {
+      await page.setViewportSize(PHONE);
+      await openLanding(page, theme);
+      expectClean(await audit(page, `landing phone ${theme}`, { phone: true }));
+    });
+  });
+
+  test.describe(`the account menu, ${theme}`, () => {
+    test('on a computer', async ({ page }) => {
+      await page.setViewportSize(DESKTOP);
+      await open(page, IMAGE, theme);
+      await page.getByRole('button', { name: 'Account' }).click();
+      await expect(page.getByRole('dialog', { name: 'Account' })).toBeVisible();
+      expectClean([...await audit(page, `account desktop ${theme}`), ...await trapFindings(page, 'Account')]);
+    });
+
+    test('on a phone', async ({ page }) => {
+      await page.setViewportSize(PHONE);
+      await open(page, IMAGE, theme);
+      await page.getByRole('button', { name: 'Account' }).click();
+      await expect(page.getByRole('dialog', { name: 'Account' })).toBeVisible();
+      expectClean([...await audit(page, `account phone ${theme}`, { phone: true }), ...await trapFindings(page, 'Account')]);
+    });
+  });
+}

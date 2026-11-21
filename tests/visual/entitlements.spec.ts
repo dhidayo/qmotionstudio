@@ -20,10 +20,15 @@ async function setTier(page: Page, tier: 'free' | 'pro'): Promise<void> {
     if (tier === 'pro') throw new Error('The public build cannot be switched to Pro.');
     return;
   }
+  // The switch is in the account menu (D-175); closed again after, so it covers nothing.
+  await page.getByRole('button', { name: 'Account' }).click();
   const label = await tierToggle(page).getAttribute('aria-label');
-  if (label?.includes(`now ${tier}.`) === true) return;
-  await tierToggle(page).click();
-  await expect(tierToggle(page)).toHaveAttribute('aria-label', new RegExp(`now ${tier}\\.`));
+  if (label?.includes(`now ${tier}.`) !== true) {
+    await tierToggle(page).click();
+    await expect(tierToggle(page)).toHaveAttribute('aria-label', new RegExp(`now ${tier}\\.`));
+  }
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Account' })).toHaveCount(0);
 }
 
 /** Mean luminance of the corner the watermark sits in. */
@@ -138,7 +143,9 @@ test.describe('the public build (D-093)', () => {
     await page.goto('/?template=launch-story&aspect=9:16');
     await page.waitForSelector('canvas');
 
+    await page.getByRole('button', { name: 'Account' }).click();
     await expect(page.getByRole('button', { name: /^Free \/ Pro test switch/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
 
     const upsell = page.locator('[data-duration-upsell]');
     await expect(upsell).toBeVisible();

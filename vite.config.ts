@@ -3,15 +3,16 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
-import { apacheHtaccess, cloudflareHeaders, headersFor } from './deploy/headers';
+import { ROUTE_BOOT, apacheHtaccess, cloudflareHeaders, cloudflareRedirects, headersFor } from './deploy/headers';
 import { OPENER_MODULES } from './deploy/openers';
 import { LAYOUT_MEDIA, LAYOUT_MODULES } from './deploy/layouts';
+import { PAGE_MODULES } from './deploy/routes';
 
 /**
  * The host configuration, from one definition (D-094).
  *
- * Writes `_headers` for Cloudflare Pages and `.htaccess` for Apache/cPanel into
- * the build, and sends the same headers from `vite preview` — so
+ * Writes `_headers` and `_redirects` for Cloudflare Pages and `.htaccess` for
+ * Apache/cPanel into the build, and sends the same headers from `vite preview` — so
  * `npm run e2e:prod` runs the whole suite under the real security policy
  * rather than discovering on launch day that it blocks something.
  */
@@ -21,6 +22,7 @@ function hostConfig(): Plugin {
     apply: 'build',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: '_headers', source: cloudflareHeaders() });
+      this.emitFile({ type: 'asset', fileName: '_redirects', source: cloudflareRedirects() });
       this.emitFile({ type: 'asset', fileName: '.htaccess', source: apacheHtaccess() });
     },
   };
@@ -50,6 +52,13 @@ function previewHeaders(): Plugin {
  * Each device's layout the same way (D-173, deploy/layouts.ts): the phone's
  * chunks and the wide layout's behind media queries that match `useLayout`,
  * so a device fetches only its own; the chunks both share, for any device.
+ *
+ * Since the landing page (D-175, deploy/routes.ts) the editor is a chunk of
+ * its own, and none of this may download for someone reading the landing
+ * page. So the links go in a `<template>` per page — inert until used — and
+ * `public/route-boot.js`, written into the page, puts the opened page's to
+ * use as the head is read; the landing page uses the studio's again once it
+ * has loaded and is idle, so Open Studio opens at once.
  */
 function preloadOpeners(): Plugin {
   return {
@@ -78,13 +87,15 @@ function preloadOpeners(): Plugin {
           return into;
         };
         const chunkOf = (path: string, list: string): string => {
-          const chunk = chunks.find((c) => c.facadeModuleId?.replaceAll('\\', '/').endsWith(`/${path}`) === true);
+          const named = (id: string | null): boolean => id?.replaceAll('\\', '/').endsWith(`/${path}`) === true;
+          // Its own chunk; or, where Rollup kept no facade for it (the studio's entry, D-175), the chunk holding it.
+          const chunk = chunks.find((c) => named(c.facadeModuleId)) ?? chunks.find((c) => c.moduleIds.some(named));
           // A missing module is a build mistake: say so rather than quietly preloading nothing.
           if (chunk === undefined) throw new Error(`${list} names ${path}, which is not a chunk of its own in this build.`);
           return chunk.fileName;
         };
 
-        const wanted = new Set<string>();
+        const wanted = closure(chunkOf(PAGE_MODULES.studio, 'deploy/routes.ts'), new Set());
         for (const path of OPENER_MODULES) closure(chunkOf(path, 'deploy/openers.ts'), wanted);
 
         const phone = closure(chunkOf(LAYOUT_MODULES.phone, 'deploy/layouts.ts'), new Set());
@@ -93,15 +104,27 @@ function preloadOpeners(): Plugin {
         for (const fileName of phone) media.set(fileName, wide.has(fileName) ? undefined : LAYOUT_MEDIA.phone);
         for (const fileName of wide) if (!phone.has(fileName)) media.set(fileName, LAYOUT_MEDIA.wide);
 
-        const link = (fileName: string, query?: string) => ({
-          tag: 'link',
-          attrs: { rel: 'modulepreload', crossorigin: true, href: `/${fileName}`, ...(query === undefined ? {} : { media: query }) },
-          injectTo: 'head' as const,
-        });
-        return [
+        const landing = closure(chunkOf(PAGE_MODULES.landing, 'deploy/routes.ts'), new Set());
+
+        const link = (fileName: string, query?: string): string =>
+          `<link rel="modulepreload" crossorigin href="/${fileName}"${query === undefined ? '' : ` media="${query}"`}>`;
+        const template = (id: string, links: readonly string[]): string =>
+          `<template id="${id}">${links.join('')}</template>`;
+        const studio = template('studio-preload', [
           ...[...wanted].map((fileName) => link(fileName)),
           ...[...media].filter(([fileName]) => !wanted.has(fileName)).map(([fileName, query]) => link(fileName, query)),
-        ];
+        ]);
+        /*
+         * The templates, then the boot script written into the page itself, in
+         * place of the page's `<script src="/route-boot.js">`: run as the head
+         * is read, it starts the opened page's downloads at once. Fetched as a
+         * file, it cost a round trip before any of them began — 0.6s of a phone
+         * on Fast 3G. The security policy allows this one script by its hash
+         * (deploy/headers.ts), and still no other inline script.
+         */
+        const tag = '<script src="/route-boot.js"></script>';
+        if (!html.includes(tag)) throw new Error(`index.html must load the boot script as ${tag}.`);
+        return html.replace(tag, `${studio}${template('landing-preload', [...landing].map((fileName) => link(fileName)))}<script>${ROUTE_BOOT}</script>`);
       },
     },
   };
@@ -128,16 +151,19 @@ export default defineConfig({
       // Registered by the app once the editor is up and idle (src/pwa.ts), not
       // on page load, where its download competed with the first visit (D-112).
       injectRegister: false,
-      includeAssets: ['favicon-32.png', 'favicon-48.png', 'apple-touch-icon.png', 'brand-q.png'],
+      includeAssets: ['favicon.svg', 'favicon-32.png', 'favicon-48.png', 'apple-touch-icon.png', 'brand-q.png'],
       manifest: {
         name: 'Q Motion Studio',
         short_name: 'Q Motion',
-        description: 'Turn photographs into motion. Everything stays on your device.',
-        theme_color: '#0d1b45',
-        background_color: '#0d0d10',
+        description: 'Turn your photos into posts and videos that move.',
+        // Paper, the landing page's and the studio's own colour (D-174, D-175).
+        theme_color: '#f7f2ea',
+        background_color: '#f7f2ea',
         display: 'standalone',
         orientation: 'any',
-        start_url: '/',
+        // The installed app is the studio (D-175): it opens there, signed in on this device.
+        start_url: '/studio',
+        scope: '/',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
@@ -157,6 +183,13 @@ export default defineConfig({
          * been seen is there offline and nothing else is fetched for nothing.
          */
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,wasm}'],
+        /*
+         * Every address that is the page itself — `/` and `/studio` (D-175) —
+         * is the precached index.html offline, which `route-boot.js` then
+         * opens as the right page. Files with an extension are not pages.
+         */
+        navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/\/[^/?]+\.[^/?]+$/],
         // Takes over the open page as soon as it is ready, as it did when the
         // plugin registered it; a late registration must not mean "offline
         // only from the next visit".

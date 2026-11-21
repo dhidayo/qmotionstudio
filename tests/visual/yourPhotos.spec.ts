@@ -156,7 +156,8 @@ test.describe('the quick start', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('points at one button at a time and moves on when it is pressed', async ({ page }) => {
-    await open(page, '/');
+    // The studio's own address (D-175): `/` is now the landing page on a first visit.
+    await open(page, '/studio');
     const tour = page.locator('[data-quick-start]');
     // First the purpose (D-150), on the bar above the picture.
     await expect(tour).toHaveAttribute('data-quick-step', '1');

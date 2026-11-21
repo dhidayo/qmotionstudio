@@ -3,14 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Which page this address is — the landing page or the studio — before
+         anything draws, and that page's code fetched at once (D-175). The
+         build writes it into the page, with each page's downloads before it. -->
+    <script src="/route-boot.js"></script>
     <meta name="color-scheme" content="light dark" />
-    <meta name="description" content="Turn photos into motion. Everything renders on your device — nothing is uploaded." />
+    <meta name="description" content="Turn your photos into posts and videos that move. Pick a design, add your photos, export." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <!-- Matches the dark shell, so an installed window has no bright seam. -->
-    <meta name="theme-color" content="#15285f" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#0d1b45" media="(prefers-color-scheme: light)" />
+    <!-- The page's own paper, light and dark (D-174), so a browser's bar has no seam. -->
+    <meta name="theme-color" content="#171411" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f7f2ea" media="(prefers-color-scheme: light)" />
     <title>Q Motion Studio</title>
     <!-- The two faces the editor waits for before it draws (src/fonts/registry.ts),
          fetched alongside the script rather than after it (D-112). -->
@@ -22,20 +27,22 @@
     <!-- The first thing a slow connection shows, before any script has
          arrived (D-112); React replaces it when the editor is ready. -->
     <style>
-      .boot { display: grid; place-items: center; height: 100%; background: #f6f6f7; color: #6b6b76;
+      .boot { display: grid; place-items: center; height: 100%; background: #f7f2ea; color: #5b544a;
         font: 14px ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; text-align: center; }
-      :root[data-theme='dark'] .boot { background: #111115; color: #b4b4be; }
+      :root[data-theme='dark'] .boot { background: #171411; color: #c4baac; }
+      /* The landing page draws its own first screen; the editor's start-up words are not for it (D-175). */
+      :root[data-route='landing'] .boot > div { visibility: hidden; }
       .boot img { width: 56px; height: 56px; border-radius: 14px; display: block; margin: 0 auto 14px; }
-      .boot strong { display: block; color: #17171b; font-size: 16px; margin-bottom: 4px; }
-      :root[data-theme='dark'] .boot strong { color: #f4f4f6; }
+      .boot strong { display: block; color: #211d18; font-size: 16px; margin-bottom: 4px; }
+      :root[data-theme='dark'] .boot strong { color: #f3ede4; }
       .boot-bar { width: 140px; height: 3px; margin: 16px auto 0; border-radius: 3px; overflow: hidden; background: rgb(127 127 140 / 0.2); }
-      .boot-bar::after { content: ''; display: block; width: 40%; height: 100%; border-radius: 3px; background: #0d1b45;
+      .boot-bar::after { content: ''; display: block; width: 40%; height: 100%; border-radius: 3px; background: #ad4824;
         animation: boot-slide 1.1s ease-in-out infinite; }
       @keyframes boot-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
     </style>
   </head>
   <body>
-    <div id="root"><div class="boot" role="status"><div><img src="/brand-q.png" alt="" /><strong>Q Motion Studio</strong>Getting the editor ready…<div class="boot-bar"></div></div></div></div>
+    <div id="root"><div class="boot" role="status"><div><img src="/favicon.svg" alt="" /><strong>Q Motion Studio</strong>Getting the editor ready…<div class="boot-bar"></div></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

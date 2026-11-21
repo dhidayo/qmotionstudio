@@ -23,7 +23,8 @@ const seeded = (workspace: string | null) => async (
   ));
 };
 
-async function open(page: Page, url = '/'): Promise<void> {
+// The studio's own address (D-175): `/` is the landing page to anyone not yet signed in.
+async function open(page: Page, url = '/studio'): Promise<void> {
   await page.goto(url);
   await page.waitForSelector('canvas');
   await page.waitForTimeout(600);

@@ -18,3 +18,10 @@ export function saveAndReload(project: Project): void {
     .catch((error: unknown) => { console.error('Could not save before reloading.', error); })
     .finally(() => { location.reload(); });
 }
+
+/** Saves the document, then opens `url` in its place: Sign out's way to the landing page (D-175). */
+export function saveAndLeave(project: Project, url: string): void {
+  writeProject({ schemaVersion: SCHEMA_VERSION, project })
+    .catch((error: unknown) => { console.error('Could not save before leaving.', error); })
+    .finally(() => { location.assign(url); });
+}

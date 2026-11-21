@@ -154,7 +154,8 @@ test.describe('a first visit', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
   test('the quick start points at each step in turn, and stays closed once skipped (D-148)', async ({ page }) => {
-    await page.goto('/');
+    // The studio's own address (D-175): `/` is now the landing page on a first visit.
+    await page.goto('/studio');
     await page.waitForSelector('canvas');
     const tour = page.locator('[data-quick-start]');
     await expect(tour).toBeVisible();

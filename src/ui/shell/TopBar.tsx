@@ -1,6 +1,6 @@
 import { ASPECTS, type Aspect } from '@/core/types';
 import { useEditor } from '@/state/store';
-import { TierSwitch } from './TierSwitch';
+import { AccountButton } from './AccountMenu';
 import type { SaveState } from '@/ui/persist/saveState';
 import { ProjectTitle } from '@/ui/projects/ProjectTitle';
 import { MODE_COPY } from './modeLabels';
@@ -15,8 +15,6 @@ import { showQuickStart } from '@/ui/onboarding/quickStartState';
 export function TopBar(): React.JSX.Element {
   const project = useEditor((s) => s.project);
   const setAspect = useEditor((s) => s.setAspect);
-  const theme = useEditor((s) => s.theme);
-  const setTheme = useEditor((s) => s.setTheme);
   const save = useEditor((s) => s.saveState);
   const compact = useLayout() !== 'desktop';
   const caps = useInputCaps();
@@ -75,31 +73,6 @@ export function TopBar(): React.JSX.Element {
           * that has to be believed when it says *not* saved (§16).
           */}
         <SaveBadge state={save} />
-        {/*
-          * §9 requires the UI to say this, and it still does at every width —
-          * the Photos panel carries "Nothing is uploaded" where the files
-          * actually arrive, which is the more useful place for it on a small
-          * screen anyway. Here it is the first thing to go when the bar runs
-          * out of room, rather than being allowed to squeeze the controls.
-          */}
-        <span className="hidden text-[11px] text-ink-faint xl:inline">
-          Nothing leaves your device
-        </span>
-        {/*
-          * §12's dev toggle. The stub "returns a tier from local state with a
-          * dev toggle", and without one the Pro paths — custom media most of
-          * all — cannot be reached, let alone tested. The upsell UI and the
-          * free-tier watermark remain M7; this is only the switch.
-          */}
-        <TierSwitch />
-        <button
-          type="button"
-          onClick={() => { setTheme(theme === 'dark' ? 'light' : 'dark'); }}
-          className="ui-btn ui-btn--secondary ui-btn--sm"
-          aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-        >
-          {theme === 'dark' ? 'Light' : 'Dark'}
-        </button>
         {/* Only where there is a keyboard (D-161); a touch screen finds its gestures in the menu. */}
         {caps.keyboard && (
           <button
@@ -113,6 +86,14 @@ export function TopBar(): React.JSX.Element {
           </button>
         )}
         <ExportButton />
+        {/*
+          * The account (D-175): its circle at the end of the bar, and in its
+          * menu the plan with the Free/Pro test switch (§12), the theme and
+          * Sign out, which used to sit loose here. "Nothing leaves your
+          * device" is said there, as how it works today, and still where the
+          * photos arrive (§9).
+          */}
+        <AccountButton />
       </div>
     </header>
   );

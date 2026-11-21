@@ -4,8 +4,10 @@
 try {
   var stored = localStorage.getItem('ms.theme');
   // Light unless someone has chosen dark (D-109): it reads better on phones,
-  // in daylight, and is what most people expect of a creative tool.
-  var theme = stored === 'dark' ? 'dark' : 'light';
+  // in daylight, and is what most people expect of a creative tool. "System"
+  // follows the device (D-175, src/entry/theme.ts).
+  var system = stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var theme = stored === 'dark' || system ? 'dark' : 'light';
   document.documentElement.dataset.theme = theme;
 } catch (error) {
   document.documentElement.dataset.theme = 'light';

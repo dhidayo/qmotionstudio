@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { renderParams } from '@/dev/renderParams';
+import { TAB_KEY } from '@/entry/session';
 
 /**
  * Whether to ask "Welcome back" (D-168): "it goes straight to my last
@@ -12,10 +13,9 @@ import { renderParams } from '@/dev/renderParams';
  * an in-app navigation keep and a new tab does not. Never over a deep link,
  * a thumbnail or a frozen frame (the build scripts and the visual suite).
  * Nothing else is remembered: it is asked on every fresh open while there is
- * work.
+ * work. Going into the studio from the landing page counts as opening it
+ * afresh: Open Studio clears the tab's mark (D-175, src/entry/session.ts).
  */
-
-const TAB_KEY = 'ms.tab';
 
 export type WelcomeBack = { readonly savedAt: number };
 

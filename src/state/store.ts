@@ -16,6 +16,7 @@ import { saveAndReload } from '@/ui/shell/reload';
 import { summaryFor } from '@/templates/manifest';
 import { designLook } from '@/templates/looks';
 import { renderParams } from '@/dev/renderParams';
+import { followSystemTheme, readThemeChoice, resolveTheme, type Theme } from '@/entry/theme';
 import * as actions from '@/document/actions';
 import {
   canRedo, canUndo, commit, emptyHistory, redo, redoLabel,
@@ -23,7 +24,7 @@ import {
 } from './undo';
 
 export type InspectorTab = 'elements' | 'photos' | 'text' | 'motion' | 'look';
-export type Theme = 'light' | 'dark';
+export type { Theme } from '@/entry/theme';
 
 /**
  * A failure's notice can carry the one thing to do about it — "Try again",
@@ -219,14 +220,9 @@ const THEME_KEY = 'ms.theme';
 const FAVOURITES_KEY = 'ms.favourites';
 
 function readStoredTheme(): Theme {
-  try {
-    const stored = localStorage.getItem(THEME_KEY);
-    if (stored === 'light' || stored === 'dark') return stored;
-  } catch {
-    // Private mode or blocked storage — fall through to the default.
-  }
-  // Light by default, whatever the device prefers; dark is a choice (D-109).
-  return 'light';
+  // Light by default, whatever the device prefers; dark is a choice (D-109),
+  // and so is following the device (D-175, src/entry/theme.ts).
+  return resolveTheme(readThemeChoice());
 }
 
 function applyTheme(theme: Theme): void {
@@ -598,3 +594,6 @@ export function useSelectedOverlay(): Project['overlays'][number] | undefined {
     s.selectedOverlay === null ? undefined : s.project.overlays.find((o) => o.id === s.selectedOverlay),
   );
 }
+
+/* While the theme follows the device (D-175), the editor follows it too. */
+followSystemTheme((theme) => { useEditor.setState({ theme }); });

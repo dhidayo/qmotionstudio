@@ -7,7 +7,11 @@ import { TIER_SWITCHABLE, setTier, useEntitlements } from '@/entitlements';
  * both plans: "add on toggle for FREE and PRO to test for now". Otherwise the
  * plan, stated, and nothing to press.
  */
-export function TierSwitch({ size = 'small' }: { size?: 'small' | 'large' }): React.JSX.Element {
+export function TierSwitch({ size = 'small', tall = false }: {
+  size?: 'small' | 'large';
+  /** 44px to the finger, for a phone's account menu (D-169, D-175). */
+  tall?: boolean;
+}): React.JSX.Element {
   const { tier } = useEntitlements();
   const other = tier === 'pro' ? 'free' : 'pro';
   const text = size === 'large' ? 'text-[13px] px-3 py-1.5' : 'text-[10px] px-1.5 py-0.5';
@@ -32,7 +36,7 @@ export function TierSwitch({ size = 'small' }: { size?: 'small' | 'large' }): Re
       title={`Test switch: try the app as Free or as Pro. Now ${tier}; click for ${other}.`}
       // The words it shows, then what it does (D-172): voice control says what it sees.
       aria-label={`Free / Pro test switch: now ${tier}. Switch to ${other}.`}
-      className="inline-flex shrink-0 items-center overflow-hidden rounded-full border font-bold uppercase tracking-wide"
+      className={`inline-flex shrink-0 items-stretch overflow-hidden rounded-full border font-bold uppercase tracking-wide ${tall ? 'min-h-11' : ''}`}
       style={{ borderColor: 'var(--c-pro)' }}
     >
       {(['free', 'pro'] as const).map((side, i) => (
@@ -41,7 +45,7 @@ export function TierSwitch({ size = 'small' }: { size?: 'small' | 'large' }): Re
         {i > 0 && ' '}
         <span
           aria-hidden
-          className={text}
+          className={`inline-flex items-center ${text}`}
           style={side === tier
             ? { background: 'var(--c-pro)', color: 'var(--c-panel)' }
             : { color: 'var(--c-pro)' }}

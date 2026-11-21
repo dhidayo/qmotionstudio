@@ -17,7 +17,8 @@ const quickStartDone = async (
 };
 
 async function open(page: Page): Promise<void> {
-  await page.goto('/');
+  // The studio's own address (D-175): `/` is the landing page to anyone not yet signed in.
+  await page.goto('/studio');
   await page.waitForSelector('canvas');
   await page.waitForTimeout(600);
 }
