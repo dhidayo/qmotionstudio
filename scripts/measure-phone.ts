@@ -29,6 +29,8 @@ import { execFileSync } from 'node:child_process';
  * prints them and leaves the judgement to whoever runs it. `PHONE_RUNS`
  * repeats the cold load (median printed); `PHONE_CPU` changes the slowdown.
  * Set PHONE_CHROMIUM to a browser binary to use one other than Playwright's.
+ * `PHONE_TRACE=1` lists the median cold load's downloads and when each
+ * arrived; `PHONE_COLD_ONLY=1` stops after the cold load (D-173).
  */
 
 const URL = (process.env['PHONE_URL'] ?? 'http://localhost:4173').replace(/\/$/, '');
@@ -72,8 +74,13 @@ async function throttle(page: Page, network: boolean): Promise<CDPSession> {
   return cdp;
 }
 
+/** What a cold load downloaded before the editor answered, by kind, in bytes (D-173). */
+type Transfer = { total: number; byKind: Record<string, number>; trace: string[] };
+
+type ColdLoad = { interactive: number; firstFrame: number; transferred: Transfer };
+
 /** Cold load: navigation to an editor whose first frame is drawn and whose Export answers. */
-async function coldLoad(browser: Browser): Promise<{ interactive: number; firstFrame: number; transferred: number }> {
+async function coldLoad(browser: Browser): Promise<ColdLoad> {
   const context = await phone(browser);
   try {
     const page = await context.newPage();
@@ -86,8 +93,26 @@ async function coldLoad(browser: Browser): Promise<{ interactive: number; firstF
     const firstFrame = Date.now() - started;
     await page.getByRole('button', { name: /Export/ }).first().waitFor({ state: 'visible', timeout: 120_000 });
     const interactive = Date.now() - started;
-    const transferred = await page.evaluate(() => performance.getEntriesByType('resource')
-      .reduce((sum, entry) => sum + ((entry as PerformanceResourceTiming).transferSize || 0), 0));
+    /*
+     * Only what arrived before the editor answered: the chunks fetched when
+     * idle afterwards (D-173) are not part of the cold load, and counting them
+     * would hide what the split saved.
+     */
+    const transferred = await page.evaluate((untilMs) => {
+      const byKind: Record<string, number> = {};
+      const trace: string[] = [];
+      let total = 0;
+      for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[]) {
+        if (entry.startTime > untilMs) continue;
+        const path = new globalThis.URL(entry.name).pathname;
+        const kind = /\.js$/.test(path) ? 'script' : /\.woff2$/.test(path) ? 'font' : /\.css$/.test(path) ? 'style' : /\.(webp|png|svg)$/.test(path) ? 'picture' : 'other';
+        const size = entry.transferSize || 0;
+        byKind[kind] = (byKind[kind] ?? 0) + size;
+        total += size;
+        trace.push(`${(entry.startTime / 1000).toFixed(2)}–${(entry.responseEnd / 1000).toFixed(2)}s ${(size / 1024).toFixed(1).padStart(6)} KB ${path}`);
+      }
+      return { total, byKind, trace };
+    }, interactive);
     return { interactive, firstFrame, transferred };
   } finally {
     await context.close();
@@ -236,15 +261,21 @@ async function main(): Promise<void> {
   const browser = await chromium.launch(EXECUTABLE === undefined ? {} : { executablePath: EXECUTABLE });
   try {
     const pid = await browserPid(browser);
-    const loads: { interactive: number; firstFrame: number; transferred: number }[] = [];
+    const loads: ColdLoad[] = [];
     for (let i = 0; i < RUNS; i++) loads.push(await coldLoad(browser));
     loads.sort((a, b) => a.interactive - b.interactive);
     const median = loads[Math.floor(loads.length / 2)];
     if (median === undefined) throw new Error('no cold-load runs');
+    const kb = (bytes: number): string => `${(bytes / 1024).toFixed(0)} KB`;
+    const kinds = Object.entries(median.transferred.byKind).sort((a, b) => b[1] - a[1]).map(([kind, bytes]) => `${kind} ${kb(bytes)}`).join(', ');
     console.log(`Phone (390×844, CPU ×${CPU}, Fast 3G), ${URL}`);
     console.log(`Cold load to interactive: ${loads.map((l) => s(l.interactive)).join(', ')} — median ${s(median.interactive)} (budget 2.50s)`);
     console.log(`First drawn frame:        ${loads.map((l) => s(l.firstFrame)).join(', ')} — median ${s(median.firstFrame)}`);
-    console.log(`Transferred on cold load: ${(median.transferred / 1024).toFixed(0)} KB`);
+    console.log(`Transferred on cold load: ${kb(median.transferred.total)} (${kinds})`);
+    // `PHONE_TRACE=1` lists each download of the median run, when it started and finished.
+    if (process.env['PHONE_TRACE'] === '1') for (const line of median.transferred.trace) console.log(`  ${line}`);
+    // `PHONE_COLD_ONLY=1` stops after the cold load, for a quick before-and-after.
+    if (process.env['PHONE_COLD_ONLY'] === '1') return;
 
     const eight = await playing(browser, EIGHT_PHOTOS);
     console.log(`Playing, eight photos:    ${eight.fps.toFixed(0)} fps, late ${eight.late}, canvas ${eight.backing} (budget ≥ 30fps on a laptop)`);

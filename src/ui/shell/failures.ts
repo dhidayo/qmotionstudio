@@ -103,6 +103,19 @@ export function windowFailureMessage(error: unknown): string {
   return 'That window could not be opened. Try again, or reload the page.';
 }
 
+/**
+ * Said where a part of the editor fetched on first use (D-173) — a layout,
+ * the timeline — could not be loaded, in the space it would have filled.
+ */
+export function partFailureMessage(error: unknown): string {
+  if (isChunkLoadError(error)) {
+    return offline()
+      ? 'This part of the editor is not on this device yet. Connect to the internet, then reload the page.'
+      : 'This part of the editor could not be downloaded. Check your connection, then reload the page.';
+  }
+  return 'This part of the editor could not be opened. Reload the page to try again.';
+}
+
 /** The plain-words line for an export that failed, with what to try next. */
 export function exportFailureMessage(error: unknown): string {
   if (isMemoryError(error)) {

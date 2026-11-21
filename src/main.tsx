@@ -5,12 +5,21 @@ import { loadFonts } from '@/fonts/registry';
 import { loadSavedFonts } from '@/fonts/userFonts';
 import { registerOfflineSupport } from './pwa';
 import { CrashBoundary } from '@/ui/shell/Boundaries';
+import { preloadLayout } from '@/ui/shell/layouts';
 import './styles/index.css';
 
 const host = document.getElementById('root');
 if (!host) throw new Error('Missing #root — index.html and main.tsx have diverged.');
 
 const root = createRoot(host);
+
+/*
+ * This device's layout, downloading while the fonts do rather than after
+ * them (D-173). The page names it too, as a `modulepreload` (vite.config.ts);
+ * this is for a browser that does not. A failed download is said by the
+ * layout's boundary when the editor draws (src/App.tsx), so not here.
+ */
+preloadLayout().catch(() => undefined);
 
 /**
  * §3E: fonts resolve before the first frame is drawn.

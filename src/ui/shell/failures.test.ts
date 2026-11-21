@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   designFailureMessage, exportFailureMessage, isChunkLoadError, isMemoryError, isQuotaError,
-  mediaSaveFailureMessage, MP4_FALLBACK, saveFailureMessage, windowFailureMessage,
+  mediaSaveFailureMessage, MP4_FALLBACK, partFailureMessage, saveFailureMessage, windowFailureMessage,
 } from './failures';
 
 /** What IndexedDB rejects with when the device is full. Node has DOMException too. */
@@ -72,6 +72,14 @@ describe('what a design or window that will not load says', () => {
 
   it('a design that is broken rather than missing', () => {
     expect(designFailureMessage(new Error('Template "x" is invalid'))).toBe('That design could not be loaded. Try another, or reload the page.');
+  });
+
+  it('a part of the editor fetched on first use says the same, in its own words (D-173)', () => {
+    online(false);
+    expect(partFailureMessage(missing)).toBe('This part of the editor is not on this device yet. Connect to the internet, then reload the page.');
+    online(true);
+    expect(partFailureMessage(missing)).toMatch(/could not be downloaded/);
+    expect(partFailureMessage(new Error('x'))).toMatch(/could not be opened/);
   });
 });
 

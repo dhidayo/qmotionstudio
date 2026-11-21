@@ -62,7 +62,12 @@ export function SceneTip(): React.JSX.Element | null {
     let scrolled = false;
     const measure = (): void => {
       const anchor = document.querySelector<HTMLElement>(selector);
-      if (anchor === null) { setPlace(null); return; }
+      /*
+       * Not drawn yet: the video's timeline is fetched when first needed
+       * (D-173), so + Scene can arrive a moment after the switch. Looked
+       * for again each frame until it does, or the tip goes by itself.
+       */
+      if (anchor === null) { setPlace(null); frame = requestAnimationFrame(measure); return; }
       // + Scene may be scrolled out of view along the bar: bring it in, once.
       if (!scrolled) { scrolled = true; anchor.scrollIntoView({ block: 'nearest', inline: 'center' }); }
       const rect = anchor.getBoundingClientRect();

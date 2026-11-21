@@ -15,7 +15,7 @@ import { useClockFrames } from '@/ui/hooks/useClockFrames';
 import { useClockEnded } from '@/ui/hooks/useClockEnded';
 import { PurposeBar } from '@/ui/shell/PurposeBar';
 import { Icon } from './Icon';
-import { PhonePanels } from './PhonePanels';
+import { PhonePanelsPart } from './phonePanelsPart';
 import { PhoneToolbar } from './PhoneToolbar';
 import { PhoneTopBar } from './PhoneTopBar';
 import { continueAsVideo } from '@/ui/editing/commands';
@@ -81,7 +81,7 @@ export function PhoneLayout({
       <PhoneTransport clock={clock} />
       {project.mode === 'motionAd' ? <PhoneTimeline clock={clock} /> : <ScrubBar clock={clock} variant="phone" />}
       <PhoneToolbar />
-      <PhonePanels clock={clock} />
+      <PhonePanelsPart clock={clock} />
       <SidewaysNote />
     </div>
   );

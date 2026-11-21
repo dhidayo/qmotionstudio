@@ -504,12 +504,14 @@ free exports carry a small watermark.
 | Template `build()` | ≤ 16ms |
 | Cold load to interactive editor | ≤ 2.5s on a fast 3G throttle |
 | Peak heap, 8 photos + 60s audio | ≤ 900MB |
-| Phone measurement (`npm run measure:phone`: 390×844, CPU 4×, Fast 3G) | reported beside the cold-load row; cold load measured 4.5s (D-171), code-splitting next |
+| Phone measurement (`npm run measure:phone`: 390×844, CPU 4×, Fast 3G) | reported beside the cold-load row; cold load 3.9s after code-splitting (D-173; 4.5s in D-171). 2.5s needs ≤ ~170KB before the first frame, of which fonts and CSS are 100KB. |
 | Preview backing store while playing on a computer or tablet | ≤ 0.8 MP per frame; screen sharpness (≤ 1080 short edge) when paused (D-154) |
 
 A performance overlay, in development and with `?perf=1` in a build, shows frame rate,
 mean frame time, the share of late frames while playing, the canvas size, build time
 and heap (D-154).
+
+Each device downloads only its own layout. Windows, pickers, panels and a video's timeline are fetched on first use or when the editor is idle (D-173).
 
 ---
 

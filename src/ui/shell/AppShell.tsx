@@ -1,10 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
-import { Artboard } from '@/ui/artboard/Artboard';
-import { ScrubBar } from '@/ui/artboard/ScrubBar';
-import { Timeline } from '@/ui/timeline/Timeline';
-import { LibraryRail } from '@/ui/library/LibraryRail';
-import { Inspector } from '@/ui/inspector/Inspector';
-import { PerfOverlay } from '@/dev/PerfOverlay';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { pendingAdTemplateId, useEditor } from '@/state/store';
@@ -14,9 +8,8 @@ import { playedAudio } from '@/document/select/videoSound';
 import { MediaProvider } from '@/ui/media/MediaProvider';
 import { watermarked } from '@/entitlements';
 import { ClockProvider } from './ClockProvider';
-import { Sheet } from './Sheet';
 import { useOverlays } from './overlays';
-import { useLayout } from './useLayout';
+import type { Layout } from './useLayout';
 import type { MediaStore } from '@/media/store';
 import { loadSamples, sampleNamesIn, type SampleName } from '@/media/samples';
 import { loadSounds, soundIdsIn } from '@/media/sounds';
@@ -30,34 +23,28 @@ import { useRestore } from '@/ui/persist/useRestore';
 import { WelcomeBackDialog } from '@/ui/persist/WelcomeBack';
 import { ImageModeConfirm } from './ImageModeConfirm';
 import { Toast } from './Toast';
-import { WindowBoundary } from './Boundaries';
 import { saveAndReload } from './reload';
 import { designFailureMessage, isChunkLoadError } from './failures';
 import { QuickStart } from '@/ui/onboarding/QuickStart';
 import { markRestoreReady } from '@/ui/onboarding/purposeState';
-import { PurposeBar } from './PurposeBar';
-import { PaneResizer, restorePaneWidths } from './PaneResizer';
 import { ContextMenu } from './ContextMenu';
-import { EffectPicker } from '@/ui/effects/EffectPicker';
 import { SoundPicker } from '@/ui/audio/SoundPicker';
-import { ElementPicker } from '@/ui/elements/ElementPicker';
-import { PhotoPickerDialog } from '@/ui/media/PhotoPickerDialog';
 import { PhotoInputs } from '@/ui/editing/useAddYourPhotos';
 import { SceneTip } from '@/ui/onboarding/SceneTip';
-import { ShortcutsDialog } from './ShortcutsDialog';
-import { PhoneLayout } from '@/ui/mobile/PhoneLayout';
-import { PhonePanels } from '@/ui/mobile/PhonePanels';
 import { usePlayOnce } from './usePlayOnce';
+import { PHONE_LAYOUT, WIDE_LAYOUT } from './layouts';
+import {
+  EFFECT_PICKER, ELEMENT_PICKER, EXPORT_DIALOG, LazyWindow, PHOTO_PICKER, PROJECTS_DIALOG, SHORTCUTS,
+} from './parts';
+import { prefetchLikelyParts } from './prefetch';
 
 /*
  * Opened rarely and heavy — the export pipeline, the project list — so they
- * load when first opened rather than with the editor (D-112).
+ * load when first opened rather than with the editor (D-112). So do the
+ * pickers, and each device's layout is a chunk of its own (D-173,
+ * ./parts.tsx, ./layouts.ts).
  */
-const loadExportDialog = () => import('@/ui/export/ExportDialog');
-const ExportDialog = lazy(async () => ({ default: (await loadExportDialog()).ExportDialog }));
-const ProjectsDialog = lazy(async () => ({ default: (await import('@/ui/projects/ProjectsDialog')).ProjectsDialog }));
-
-export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
+export function AppShell({ media, layout }: { media: MediaStore; layout: Layout }): React.JSX.Element {
   const project = useEditor((s) => s.project);
 
   /*
@@ -113,15 +100,12 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   usePlayOnce(clock, project);
 
   /*
-   * The export window is fetched once the editor has settled, so pressing
-   * Export opens it at once rather than after a download (D-112).
+   * The export window, the pickers and the panels are fetched once the
+   * editor has settled, so pressing Export or + Add opens at once rather than
+   * after a download (D-112, D-173). For the layout the editor opened in.
    */
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadExportDialog().catch((error: unknown) => { console.warn('Could not prepare the export window.', error); });
-    }, 3_000);
-    return () => { clearTimeout(timer); };
-  }, []);
+  const [firstLayout] = useState(layout);
+  useEffect(() => prefetchLikelyParts(firstLayout), [firstLayout]);
 
   /*
    * Publish the playhead, wherever the transport happens to be.
@@ -399,12 +383,11 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   // Choosing a purpose never swaps the design until the last project has reopened (D-150).
   useEffect(() => { if (restore.phase === 'ready') markRestoreReady(); }, [restore.phase]);
 
-  const layout = useLayout();
-  // The panel widths chosen on an earlier visit (D-150).
-  useEffect(() => { if (layout === 'desktop') restorePaneWidths(); }, [layout]);
-  /** The inspector as a sheet, below desktop width. */
-  const sheet = useOverlays((o) => o.inspectorSheet);
-  const setSheet = useOverlays((o) => o.setInspectorSheet);
+  // Which pickers are open: each is fetched the first time it is (D-173).
+  const effectPicker = useOverlays((o) => o.picker !== null);
+  const elementPicker = useOverlays((o) => o.elementPicker !== null);
+  const photoPicker = useOverlays((o) => o.photoPicker !== null);
+  const shortcutsOpen = useOverlays((o) => o.shortcutsOpen);
 
   const exporting = useEditor((s) => s.exporting);
   const setExporting = useEditor((s) => s.setExporting);
@@ -417,60 +400,13 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
   return (
     <MediaProvider store={media}>
       <ClockProvider clock={clock}>
-      {/* A phone gets a layout of its own, not this one squeezed (D-109). */}
-      {layout === 'phone' ? <PhoneLayout project={project} clock={clock} rig={rig} media={media} /> : <>
-      <div className="flex h-full min-h-0 flex-1">
-        {/*
-          * §13. Below tablet width the two side columns stop being columns:
-          * at 1100px an artboard with both of them open is down to about
-          * 520px, which is the point the preview stops being the biggest
-          * thing on screen. They become sheets you open when you need them.
-          */}
-        {layout === 'desktop' && <><LibraryRail /><PaneResizer pane="library" /></>}
-
-        <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
-          <PurposeBar variant="wide" />
-          <div className="relative min-h-0 flex-1">
-            <Artboard project={project} clock={clock} rig={rig} media={media} />
-            {(import.meta.env.DEV || renderParams().perf) && <PerfOverlay rig={rig} />}
-          </div>
-          {/*
-            * One row of actions under the picture, in the timeline's header or
-            * above the slider (D-162) — no strip of tools: the inspector's tabs
-            * are the way to Photos, Text, Effects and Style.
-            */}
-          {project.mode === 'motionAd' ? <Timeline clock={clock} /> : <ScrubBar clock={clock} />}
-        </main>
-
-        {layout === 'desktop' && <><PaneResizer pane="inspector" /><Inspector /></>}
-      </div>
-
-      {layout !== 'desktop' && (
-        <>
-          <Sheet
-            open={sheet}
-            title="Photos, text and style"
-            side="right"
-            onClose={() => { setSheet(false); }}
-          >
-            <Inspector />
-          </Sheet>
-        </>
-      )}
-      {/* Designs, opened from the row of actions, and a scene's timing, as windows (D-116, D-162). */}
-      <PhonePanels clock={clock} scenePicker={false} />
-      </>}
+      {/* A phone gets a layout of its own, not this one squeezed (D-109), each a chunk of its own (D-173). */}
+      {layout === 'phone'
+        ? <PHONE_LAYOUT.Component project={project} clock={clock} rig={rig} media={media} />
+        : <WIDE_LAYOUT.Component project={project} clock={clock} rig={rig} media={media} layout={layout} />}
       {/* A window whose code did not download is closed and said, not a crash (D-171). */}
-      <WindowBoundary onFailed={() => { setExporting(false); }}>
-        <Suspense fallback={null}>
-          {exporting && <ExportDialog onClose={() => { setExporting(false); }} />}
-        </Suspense>
-      </WindowBoundary>
-      <WindowBoundary onFailed={() => { setProjectsOpen(false); }}>
-        <Suspense fallback={null}>
-          {projectsOpen && <ProjectsDialog onClose={() => { setProjectsOpen(false); }} />}
-        </Suspense>
-      </WindowBoundary>
+      <LazyWindow open={exporting} part={EXPORT_DIALOG} props={{ onClose: () => { setExporting(false); } }} onFailed={() => { setExporting(false); }} />
+      <LazyWindow open={projectsOpen} part={PROJECTS_DIALOG} props={{ onClose: () => { setProjectsOpen(false); } }} onFailed={() => { setProjectsOpen(false); }} />
       <QuickStart />
       {/* On opening afresh onto saved work: carry on, or start anew (D-168). */}
       <WelcomeBackDialog />
@@ -482,11 +418,12 @@ export function AppShell({ media }: { media: MediaStore }): React.JSX.Element {
       <SceneTip />
       <Toast />
       <ContextMenu />
-      <EffectPicker />
+      {/* The pickers, each fetched the first time it opens (D-173). */}
+      <LazyWindow open={effectPicker} part={EFFECT_PICKER} props={{}} onFailed={() => { useOverlays.getState().closePicker(); }} />
       <SoundPicker />
-      <ElementPicker />
-      <PhotoPickerDialog />
-      <ShortcutsDialog />
+      <LazyWindow open={elementPicker} part={ELEMENT_PICKER} props={{}} onFailed={() => { useOverlays.getState().openElementPicker(null); }} />
+      <LazyWindow open={photoPicker} part={PHOTO_PICKER} props={{}} onFailed={() => { useOverlays.getState().openPhotoPicker(null); }} />
+      <LazyWindow open={shortcutsOpen} part={SHORTCUTS} props={{}} onFailed={() => { useOverlays.getState().setShortcutsOpen(false); }} />
       </ClockProvider>
     </MediaProvider>
   );

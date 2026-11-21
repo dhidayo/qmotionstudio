@@ -5,6 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath, URL } from 'node:url';
 import { apacheHtaccess, cloudflareHeaders, headersFor } from './deploy/headers';
 import { OPENER_MODULES } from './deploy/openers';
+import { LAYOUT_MEDIA, LAYOUT_MODULES } from './deploy/layouts';
 
 /**
  * The host configuration, from one definition (D-094).
@@ -45,6 +46,10 @@ function previewHeaders(): Plugin {
  * as `modulepreload` links, after the editor's own. The editor's entry chunk
  * is left out — the page already loads it — and so is anything it pulls in
  * statically, which is already on its way.
+ *
+ * Each device's layout the same way (D-173, deploy/layouts.ts): the phone's
+ * chunks and the wide layout's behind media queries that match `useLayout`,
+ * so a device fetches only its own; the chunks both share, for any device.
  */
 function preloadOpeners(): Plugin {
   return {
@@ -65,24 +70,38 @@ function preloadOpeners(): Plugin {
         };
         for (const entry of chunks.filter((c) => c.isEntry)) visitEager(entry.fileName);
 
-        const wanted = new Set<string>();
-        const visit = (fileName: string): void => {
-          if (wanted.has(fileName) || eager.has(fileName)) return;
-          wanted.add(fileName);
+        const closure = (fileName: string, into: Set<string>): Set<string> => {
+          if (into.has(fileName) || eager.has(fileName)) return into;
+          into.add(fileName);
           const chunk = chunks.find((c) => c.fileName === fileName);
-          for (const next of chunk?.imports ?? []) visit(next);
+          for (const next of chunk?.imports ?? []) closure(next, into);
+          return into;
         };
-        for (const path of OPENER_MODULES) {
+        const chunkOf = (path: string, list: string): string => {
           const chunk = chunks.find((c) => c.facadeModuleId?.replaceAll('\\', '/').endsWith(`/${path}`) === true);
-          // A missing opener is a build mistake: say so rather than quietly preloading nothing.
-          if (chunk === undefined) throw new Error(`deploy/openers.ts names ${path}, which is not a chunk of its own in this build.`);
-          visit(chunk.fileName);
-        }
-        return [...wanted].map((fileName) => ({
+          // A missing module is a build mistake: say so rather than quietly preloading nothing.
+          if (chunk === undefined) throw new Error(`${list} names ${path}, which is not a chunk of its own in this build.`);
+          return chunk.fileName;
+        };
+
+        const wanted = new Set<string>();
+        for (const path of OPENER_MODULES) closure(chunkOf(path, 'deploy/openers.ts'), wanted);
+
+        const phone = closure(chunkOf(LAYOUT_MODULES.phone, 'deploy/layouts.ts'), new Set());
+        const wide = closure(chunkOf(LAYOUT_MODULES.wide, 'deploy/layouts.ts'), new Set());
+        const media = new Map<string, string | undefined>();
+        for (const fileName of phone) media.set(fileName, wide.has(fileName) ? undefined : LAYOUT_MEDIA.phone);
+        for (const fileName of wide) if (!phone.has(fileName)) media.set(fileName, LAYOUT_MEDIA.wide);
+
+        const link = (fileName: string, query?: string) => ({
           tag: 'link',
-          attrs: { rel: 'modulepreload', crossorigin: true, href: `/${fileName}` },
+          attrs: { rel: 'modulepreload', crossorigin: true, href: `/${fileName}`, ...(query === undefined ? {} : { media: query }) },
           injectTo: 'head' as const,
-        }));
+        });
+        return [
+          ...[...wanted].map((fileName) => link(fileName)),
+          ...[...media].filter(([fileName]) => !wanted.has(fileName)).map(([fileName, query]) => link(fileName, query)),
+        ];
       },
     },
   };

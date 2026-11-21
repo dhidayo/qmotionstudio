@@ -3,7 +3,7 @@ import { SCHEMA_VERSION } from '@/document/types';
 import { writeProject } from '@/persist/db';
 import { useEditor } from '@/state/store';
 import { hasWork } from '@/state/starter';
-import { CRASHED, windowFailureMessage } from './failures';
+import { CRASHED, isChunkLoadError, partFailureMessage, windowFailureMessage } from './failures';
 import { saveAndReload } from './reload';
 
 /**
@@ -113,5 +113,55 @@ export class WindowBoundary extends Component<{
 
   override render(): ReactNode {
     return this.state.failed ? null : this.props.children;
+  }
+}
+
+/**
+ * A part of the editor fetched on first use (D-173) — a layout, the timeline
+ * — that could not be. Unlike a window there is nothing to close, so it says
+ * so in the space the part would have filled and offers the reload that
+ * fetches it again, saved first (D-171). Never a blank, never the crash screen.
+ *
+ * Only a download that failed: any other error is passed on to the crash
+ * boundary above, which saves the work and says so.
+ */
+export class PartBoundary extends Component<{
+  readonly children: ReactNode;
+  /** Fills the screen, for a layout; otherwise sits in a row. */
+  readonly whole?: boolean;
+}, { error: Error | null }> {
+  override state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: unknown): { error: Error } {
+    return { error: error instanceof Error ? error : new Error(String(error)) };
+  }
+
+  override componentDidCatch(error: unknown): void {
+    if (isChunkLoadError(error)) console.error('A part of the editor could not be loaded.', error);
+  }
+
+  override render(): ReactNode {
+    const { error } = this.state;
+    if (error === null) return this.props.children;
+    if (!isChunkLoadError(error)) throw error;
+    return (
+      <div
+        role="alert"
+        data-part-failed
+        className={`grid place-items-center p-4 text-center ${this.props.whole === true ? 'h-full flex-1 bg-bg' : 'shrink-0'}`}
+      >
+        <div className="max-w-[360px]">
+          <p className="mb-3 text-[13px] leading-relaxed text-ink-muted">{partFailureMessage(error)}</p>
+          <button
+            type="button"
+            className="rounded-md bg-accent px-4 py-2 text-[13px] font-semibold text-accent-ink"
+            style={{ minHeight: 44 }}
+            onClick={() => { saveAndReload(useEditor.getState().project); }}
+          >
+            Reload
+          </button>
+        </div>
+      </div>
+    );
   }
 }

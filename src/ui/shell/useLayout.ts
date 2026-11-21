@@ -25,7 +25,7 @@ export type Layout = 'desktop' | 'tablet' | 'phone';
  * where one panel beside the artboard is already too many.
  */
 const TABLET_MAX = 1100;
-const PHONE_MAX = 760;
+export const PHONE_MAX = 760;
 
 function subscribe(onChange: () => void): () => void {
   window.addEventListener('resize', onChange);
@@ -37,7 +37,7 @@ function subscribe(onChange: () => void): () => void {
 }
 
 /** Shorter than this on a touch screen is a phone on its side, whatever its width. */
-const PHONE_SIDEWAYS_MAX_HEIGHT = 500;
+export const PHONE_SIDEWAYS_MAX_HEIGHT = 500;
 
 function read(): Layout {
   const width = window.innerWidth;
