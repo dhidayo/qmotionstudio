@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { PreviewClock } from '@/core/time/clock';
 import { createRenderRig, disposeRenderRig } from '@/core/render/rig';
 import { pendingAdTemplateId, useEditor } from '@/state/store';
@@ -46,6 +46,20 @@ import { prefetchLikelyParts } from './prefetch';
  */
 export function AppShell({ media, layout }: { media: MediaStore; layout: Layout }): React.JSX.Element {
   const project = useEditor((s) => s.project);
+
+  /*
+   * Studio calm (D-176): "the work area shouldn't be distracting". While the
+   * studio is open, <html> carries data-surface="studio", which re-points the
+   * palette to near-neutral chrome, a true-grey stage and an accent spent only
+   * on Export and focus (tokens.css). On <html> rather than a wrapper so the
+   * menus, dialogs and notices portalled to <body> follow it; before paint,
+   * so the studio never shows a frame in the landing page's colours.
+   */
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.dataset['surface'] = 'studio';
+    return () => { delete root.dataset['surface']; };
+  }, []);
 
   /*
    * The playhead travels the whole lane, not just the video.

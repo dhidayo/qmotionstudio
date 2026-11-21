@@ -128,7 +128,8 @@ function ExportButton(): React.JSX.Element {
       onClick={() => { setExporting(true); }}
       data-tour="export"
       title={keyboard ? `Export (${chord('mod+E')})` : 'Export'}
-      className="ui-btn ui-btn--primary"
+      // The studio's one main action, and the only button in the accent (D-176).
+      className="ui-btn ui-btn--cta"
     >
       Export
     </button>

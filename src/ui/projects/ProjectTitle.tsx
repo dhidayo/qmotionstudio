@@ -146,7 +146,7 @@ function SaveAsDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
           value={draft}
           maxLength={MAX_NAME}
           onChange={(event) => { setDraft(event.target.value); }}
-          className="mt-1 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[12px] focus:border-accent focus:outline-none"
+          className="mt-1 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[12px] focus:border-focus focus:outline-none"
         />
         <div className="mt-4 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-md border border-edge px-3 py-1 text-[12px] hover:bg-panel-alt">

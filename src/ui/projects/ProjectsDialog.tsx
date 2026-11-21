@@ -200,7 +200,7 @@ export function ProjectsDialog({ onClose }: { onClose: () => void }): React.JSX.
                       value={current.name}
                       onChange={(event) => { dispatch(actions.renameProject(event.target.value)); }}
                       onBlur={() => { void refresh(); }}
-                      className="w-full rounded-sm border border-edge bg-transparent px-1.5 py-0.5 text-[12px] focus:border-accent focus:outline-none"
+                      className="w-full rounded-sm border border-edge bg-transparent px-1.5 py-0.5 text-[12px] focus:border-focus focus:outline-none"
                     />
                   ) : (
                     <button

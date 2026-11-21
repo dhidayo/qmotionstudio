@@ -66,7 +66,8 @@ export function PhoneLayout({
     <div className="flex h-full min-h-0 flex-1 flex-col" data-layout="phone">
       <PhoneTopBar />
       <PurposeBar variant="phone" />
-      <main className="relative min-h-0 flex-1" style={{ background: 'var(--c-stage)' }}>
+      {/* Notices sit at the foot of the stage, over the picture's margin, never over a control (D-176). */}
+      <main className="relative min-h-0 flex-1 bg-stage" data-toast-anchor>
         <Artboard project={project} clock={clock} rig={rig} media={media} padding={12} />
         {/* §14's readout on a phone too, when asked for with ?perf=1 (D-171); never by default, even in development. */}
         {renderParams().perf && <PerfOverlay rig={rig} />}
@@ -98,10 +99,10 @@ function SidewaysNote(): React.JSX.Element | null {
   return (
     <div className="fixed inset-0 z-[70] grid place-items-center p-6" style={{ background: 'rgb(0 0 0 / 0.55)' }} role="dialog" aria-label="Turn your phone upright">
       <div className="max-w-sm rounded-2xl bg-panel p-5 text-center" style={{ boxShadow: 'var(--shadow-lg)' }}>
-        <div aria-hidden className="mx-auto mb-3 h-12 w-7 rounded-md border-2" style={{ borderColor: 'var(--c-accent)' }} />
+        <div aria-hidden className="mx-auto mb-3 h-12 w-7 rounded-md border-2 border-ink" />
         <p className="text-[15px] font-semibold">Turn your phone upright</p>
         <p className="mt-1 text-[13px] text-ink-muted">The editor is laid out for a phone held upright, so the picture has room.</p>
-        <button type="button" onClick={() => { setDismissed(true); }} className="mt-4 rounded-lg border border-edge px-4 py-2 text-[13px] font-medium">
+        <button type="button" onClick={() => { setDismissed(true); }} className="ui-btn ui-btn--secondary mt-4 min-h-11 px-4 text-[13px] font-medium">
           Keep going sideways
         </button>
       </div>
@@ -146,6 +147,7 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
   });
 
   return (
+    // On the shared classes and the studio's calm palette (D-176): ink and hairlines, no accent.
     <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center border-t border-edge bg-panel px-3 py-0.5" data-phone-transport>
       <span className="flex min-w-0 items-center gap-1.5">
         {/* The line also holds Elements, so the time stands over its length rather than beside it (D-167). */}
@@ -166,7 +168,7 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
           onClick={() => { useOverlays.getState().openPhonePanel('elements'); }}
           className="group flex h-11 shrink-0 items-center"
         >
-          <span className="flex h-9 items-center gap-1 rounded-full border border-edge px-2.5 text-[12px] font-medium group-active:bg-panel-alt">
+          <span className="ui-chip h-9 gap-1 px-2.5 text-[12px] font-medium group-active:bg-panel-alt">
             <Icon name="layers" size={16} />
             Elements
           </span>
@@ -176,8 +178,7 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
         type="button"
         onClick={() => { if (clock.playing) clock.pause(); else clock.play(); }}
         aria-label={playing ? 'Pause' : ended ? 'Replay' : 'Play'}
-        className="grid size-11 place-items-center rounded-full"
-        style={{ background: 'var(--c-panel-alt)', color: 'var(--c-ink)' }}
+        className="ui-iconbtn size-11 rounded-full bg-panel-alt text-ink"
       >
         <Icon name={playing ? 'pause' : ended ? 'replay' : 'play'} size={20} />
       </button>
@@ -196,14 +197,15 @@ function PhoneTransport({ clock }: { clock: PreviewClock }): React.JSX.Element {
             aria-label="Switch to Video mode: this image becomes scene 1"
             className="mr-0.5 flex h-11 items-center"
           >
-            <span className="whitespace-nowrap rounded-full bg-accent px-2 py-1.5 text-[11px] font-semibold text-accent-ink">+ Video mode</span>
+            {/* A hairline pill in ink: a change of mode, not the screen's main action (D-176). */}
+            <span className="ui-btn ui-btn--secondary ui-btn--sm whitespace-nowrap px-1.5 text-[11px]">+ Video mode</span>
           </button>
         )}
         {/* 44px tall, the height of a finger (D-169); narrower, so the line still fits a small phone. */}
-        <button type="button" onClick={undo} disabled={!canUndo()} aria-label="Undo" className="grid h-11 w-9 place-items-center rounded-full disabled:opacity-35">
+        <button type="button" onClick={undo} disabled={!canUndo()} aria-label="Undo" className="ui-iconbtn h-11 w-9 rounded-full text-ink">
           <Icon name="undo" size={20} />
         </button>
-        <button type="button" onClick={redo} disabled={!canRedo()} aria-label="Redo" className="grid h-11 w-9 place-items-center rounded-full disabled:opacity-35">
+        <button type="button" onClick={redo} disabled={!canRedo()} aria-label="Redo" className="ui-iconbtn h-11 w-9 rounded-full text-ink">
           <Icon name="redo" size={20} />
         </button>
       </span>
@@ -367,21 +369,21 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
       </div>
       <div className="mt-1.5 flex items-center gap-1.5 text-[11px] text-ink-muted">
         {/* What the full timeline holds — only what is used, as on a computer (D-153). */}
-        {project.overlays.length > 0 && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Layers · {project.overlays.length}</span>}
-        {fxCount > 0 && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Effects · {fxCount}</span>}
-        {moving && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Motion</span>}
-        {project.audio.length > 0 && <span className="rounded-md bg-panel-alt px-1.5 py-0.5">Music</span>}
+        {project.overlays.length > 0 && <span className="rounded-sm bg-sunk px-1.5 py-0.5">Layers · {project.overlays.length}</span>}
+        {fxCount > 0 && <span className="rounded-sm bg-sunk px-1.5 py-0.5">Effects · {fxCount}</span>}
+        {moving && <span className="rounded-sm bg-sunk px-1.5 py-0.5">Motion</span>}
+        {project.audio.length > 0 && <span className="rounded-sm bg-sunk px-1.5 py-0.5">Music</span>}
         <button
           type="button"
           onClick={() => { open('timeline'); }}
-          className="ml-auto flex items-center gap-1 rounded-md px-2 py-1 font-semibold text-accent"
+          className="ui-btn ui-btn--quiet ui-btn--sm ml-auto gap-1 px-2 text-[11px] text-ink"
           aria-label="Open the full timeline"
         >
           <Icon name="up" size={14} /> Timeline
         </button>
       </div>
       {tip && !sceneTip && (
-        <div className="mt-1.5 flex items-center gap-1 rounded-lg py-1 pl-2 pr-1 text-[11px]" style={{ background: 'var(--c-accent-soft)' }} role="note">
+        <div className="mt-1.5 flex items-center gap-1 rounded-md bg-sunk py-1 pl-2 pr-1 text-[11px]" role="note">
           <span className="min-w-0 flex-1">
             Detailed timing work is easier on a larger screen. Everything still works here — tap Timeline to open it.
           </span>
@@ -390,7 +392,7 @@ function PhoneTimeline({ clock }: { clock: PreviewClock }): React.JSX.Element {
             type="button"
             onClick={closeTip}
             aria-label="Close tip"
-            className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-ink-muted hover:bg-panel-alt"
+            className="ui-iconbtn size-7 shrink-0 rounded-full"
           >
             <svg aria-hidden width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
               <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />

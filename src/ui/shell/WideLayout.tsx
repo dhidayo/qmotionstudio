@@ -40,9 +40,10 @@ export function WideLayout({ project, clock, rig, media, layout }: LayoutProps &
           */}
         {layout === 'desktop' && <><LibraryRail /><PaneResizer pane="library" /></>}
 
-        <main className="flex min-w-0 flex-1 flex-col" style={{ background: 'var(--c-stage)' }}>
+        <main className="flex min-w-0 flex-1 flex-col bg-stage">
           <PurposeBar variant="wide" />
-          <div className="relative min-h-0 flex-1">
+          {/* Notices sit at the foot of this, over the stage, never over a control (D-176). */}
+          <div className="relative min-h-0 flex-1" data-toast-anchor>
             <Artboard project={project} clock={clock} rig={rig} media={media} />
             {(import.meta.env.DEV || renderParams().perf) && <PerfOverlay rig={rig} />}
           </div>

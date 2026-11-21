@@ -117,9 +117,14 @@ export function PaneResizer({ pane }: { pane: Pane }): React.JSX.Element {
           if (event.key === 'End') { event.preventDefault(); set(spec.max); }
         }}
       >
+        {/*
+          * A hairline that shows where to grab (D-176): the control's own grey
+          * when pointed at, ink while dragged, and the focus ring's colour —
+          * the accent — only when reached by keyboard.
+          */}
         <span
           aria-hidden
-          className={`absolute inset-y-0 left-[3px] w-[2px] transition-colors ${dragging ? 'bg-accent' : 'bg-transparent group-hover:bg-accent group-focus-visible:bg-accent'}`}
+          className={`absolute inset-y-0 left-[3px] w-0.5 transition-colors ${dragging ? 'bg-ink' : 'bg-transparent group-hover:bg-edge-field group-focus-visible:bg-focus'}`}
           style={{ transitionDuration: 'var(--t-fast)' }}
         />
       </div>

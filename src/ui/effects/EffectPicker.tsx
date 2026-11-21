@@ -146,7 +146,7 @@ function PickerDialog({ picker }: { picker: PickerState }): React.JSX.Element {
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder="Search effects"
             aria-label="Search effects"
-            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
+            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-focus focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
           />
           <button type="button" onClick={close} className="min-h-11 rounded-md border border-edge px-3 py-1 text-[12px] hover:bg-panel-alt sm:min-h-0 sm:px-2.5">
             Cancel

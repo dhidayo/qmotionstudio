@@ -8,18 +8,24 @@ The reference for how the editor's chrome looks, moves and reads. Chosen directi
 > views, the user experience upgrade, and accessibility upgrade … I prioritise clarity and
 > softness that can cause stickiness for the users."
 
-Tokens live in `src/styles/tokens.css`; the shared component classes in
+> After seeing UX0 in the studio (D-176): "Think well if that color works perfectly for
+> the work area; I guess it is perfect for landing page. But, the work area shouldn't be
+> distracting … I need a product that will resonate well with a larger audience."
+
+So there are **two surfaces**: the landing page keeps Clay at full warmth; the studio
+re-points the same tokens to **Studio calm** (below). Tokens live in `src/styles/tokens.css`; the shared component classes in
 `src/styles/index.css` (`@layer components`). The artboard never reads either: the
 renderer stays pure (D-001), and nothing here changes a design's pixels.
 
 ## Principles
 
-1. **The designs are the colour.** The chrome is warm paper and ink. Whatever a person
-   makes must be the most colourful thing on the screen.
-2. **One accent, used sparingly.** Terracotta marks the one main action in a place
-   (Export, Add, Save), the focus ring, sliders and switches that are on, and the chosen
-   tab's rule. Labels on every card (New), chosen filter chips and section headers do not
-   spend it: they use ink.
+1. **The designs are the colour.** The chrome is paper and ink — warm on the landing
+   page, near-neutral in the studio. Whatever a person makes must be the most colourful
+   thing on the screen.
+2. **One accent, used sparingly.** On the landing page terracotta marks the main action,
+   focus, sliders, switches and the chosen tab. In the studio it is spent on exactly two
+   things — Export and the focus ring — under the **accent budget** below; everything else
+   that is chosen, on or primary is ink.
 3. **Clarity and softness.** Fine hairlines instead of outlines, generous radii, diffuse
    warm shadows, calm motion. Every word clears WCAG AA in both themes.
 4. **Glass only for what floats.** Top bars, the phone's toolbar and selection rows,
@@ -45,6 +51,9 @@ Tailwind sees the semantic colours as utilities: `bg-panel`, `bg-sunk`, `text-in
 headline face as `font-headline`.
 
 ### Colour
+
+Clay: the landing page's palette, and the default wherever `data-surface` is not set.
+The studio's own values are under **Studio calm** below.
 
 | Token | Light | Dark | Job |
 | --- | --- | --- | --- |
@@ -120,6 +129,103 @@ The script that computed these is a one-file node check (relative luminance, WCA
 - **Icons**: one set, one stroke. 24-unit icons at `1.75`; the small 12-unit glyphs
   (×, chevrons) at `1.6`. Sizes `--icon-sm 14`, `--icon-md 18`, `--icon-lg 22`.
 
+## Studio calm (D-176)
+
+While the studio is open, `AppShell` sets `data-surface="studio"` on `<html>` (on `<html>`
+so the menus, dialogs and notices portalled to `<body>` follow it). That re-points the
+semantic layer once more; no component names a different token. The landing page (no
+attribute) keeps Clay.
+
+| Token | Light | Dark | Job in the studio |
+| --- | --- | --- | --- |
+| `--c-bg` | `#f6f5f3` | `#181817` | The page: stone, only a whisper of warmth / a neutral charcoal, not brown |
+| `--c-panel` | `#fdfdfc` | `#201f1e` | Panels, cards, dialogs |
+| `--c-panel-alt` | `#f6f5f3` | `#292827` | Fields, hover |
+| `--c-sunk` | `#efeeeb` | `#2a2928` | Section bands, segmented tracks, summary tags |
+| `--c-sunk-hover` | `#e6e5e1` | `#343331` | Hover on a band |
+| `--c-edge` / `--c-edge-strong` | `#e8e6e2` / `#d8d5d0` | `#353432` / `#484644` | Hairlines |
+| `--c-edge-field` | `#8b8883` | `#7b7874` | A control's own outline — 3:1 |
+| `--c-ink` / `-muted` / `-faint` | `#1c1b1a` / `#53504c` / `#5e5b56` | `#f2f1ee` / `#c3c0bb` / `#a9a5a0` | Words |
+| `--c-cta` (`-hover`, `-ink`) | `#ad4824` (`#963b1b`, white) | `#e57d55` (`#ee9470`, `#1a0f08`) | **The accent: Export and focus only** |
+| `--c-focus` | = cta | = cta | Focus ring, a field's focus |
+| `--c-accent` (`-hover`, `-ink`) | = ink (`#3a3936`, white) | = ink (`#d9d7d3`, `#1c1b1a`) | Kept name, now **emphasis in ink**: chosen, on, a panel's one primary |
+| `--c-accent-soft` | `#ebeae7` | `#33322f` | A chosen row's grey tint |
+| `--c-stage` | `#d9d9d9` | `#2c2c2c` | **True grey**, no hue |
+| `--c-field-*` | transparent | transparent | No colour field behind the work |
+| `--c-select-*` | white line, `rgb(0 0 0 / .55)` keylines, `#1c1b1a` grip edge | same | The selection on the canvas |
+
+Shadows and the scrim lose their warmth too (`rgb(20 20 20 / …)`); an ink primary has no
+glow (`--btn-primary-shadow: none`); the CTA keeps its soft one (`--btn-cta-shadow`).
+
+### Contrast in the studio (WCAG 2.1, computed from the hex values)
+
+The glass rows are the frost over the page, approximated as solid (`#fbfbfa`, `#1e1e1d`).
+Nothing fails; the lowest in each theme is in bold.
+
+| Text on → | bg | panel | panel-alt | sunk | sunk-hover | accent-soft | glass | stage |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Light** ink | 15.78 | 16.90 | 15.78 | 14.82 | 13.64 | 14.30 | 16.61 | 12.18 |
+| Light ink-muted | 7.36 | 7.88 | 7.36 | 6.91 | 6.36 | 6.66 | 7.74 | 5.68 |
+| Light ink-faint | 6.20 | 6.64 | 6.20 | 5.83 | 5.36 | 5.62 | 6.53 | **4.79** |
+| Light cta | 5.17 | 5.53 | — | **4.85** | — | — | 5.44 | — |
+| **Dark** ink | 15.73 | 14.57 | 13.03 | 12.86 | 11.17 | 11.35 | 14.77 | 12.36 |
+| Dark ink-muted | 9.80 | 9.07 | 8.11 | 8.01 | 6.96 | 7.07 | 9.20 | 7.70 |
+| Dark ink-faint | 7.26 | 6.72 | 6.01 | 5.93 | **5.15** | 5.24 | 6.81 | 5.70 |
+| Dark cta | 6.26 | 5.80 | — | **5.11** | — | — | 5.88 | — |
+
+| Pair | Light | Dark | Needs |
+| --- | --- | --- | --- |
+| cta-ink on cta (Export) | 5.63 | 6.63 | 4.5 |
+| cta-ink on cta-hover | 7.15 | 8.16 | 4.5 |
+| accent-ink on accent (an ink primary, a chosen chip) | 17.20 | 15.23 | 4.5 |
+| accent-ink on accent-hover | 11.55 | 11.97 | 4.5 |
+| danger on panel / panel-alt | 6.46 / 6.03 | 6.65 / 5.94 | 4.5 |
+| pro on pro-soft / panel | 5.70 / 6.39 | 7.36 / 8.93 | 4.5 |
+| danger on pro-soft (Not saved) | 5.76 | 5.48 | 4.5 |
+| edge-field on panel / panel-alt / bg / sunk | 3.47 / 3.24 / 3.24 / 3.04 | 3.75 / 3.35 / 4.05 / 3.31 | 3 |
+| focus ring (cta) on stage | 3.99 | 4.92 | 3 |
+| ink (a chosen border) on panel | 16.90 | 14.57 | 3 |
+
+### The accent budget
+
+In the studio the accent is spent on **Export** (`ui-btn--cta`, the top bar's and the
+phone's, and the export window's own Export) and the **focus ring** (`--c-focus`: the
+outline, a field's border and ring, a pane resizer reached by keyboard). Nothing else, by
+default. Everything that says "chosen", "on" or "the main thing in this panel" says it in
+ink and grey:
+
+| Moved to ink or grey | How |
+| --- | --- |
+| A panel's one primary: Save this as my brand, + Add text, + Add photos, Change sticker… | `ui-btn--primary` → ink fill, light words, no glow. At most one per panel. |
+| + Photos and the add bar's chips, + Motion when ready | `ui-chip--accent` / `--ready` → ink words, a darker hairline, a grey tint |
+| Use this frame, Reset frame, + Video mode (phone) | `ui-btn--secondary`: hairline pill, ink words |
+| Try another, Replace… | secondary, as before |
+| Sliders (`ui-range`), the scrub bar, native checkboxes (`accent-color`) | ink thumb ringed in panel |
+| Switches on, chosen tab's rule, chosen look tile, chosen rows and cards | ink |
+| The timeline's chosen clip, the playhead, reorder marker, picture-moment mark | ink outline on the grey tint; ink line |
+| A notice's dot | `ink-muted`; `danger` when urgent |
+| The pane resizer | `edge-field` on hover, ink while dragged, focus colour by keyboard |
+
+Keep **danger** red for what destroys. Example: in the Style tab, *Save this as my brand*
+is the panel's ink primary and *Try another* a secondary; the only terracotta on the
+screen is Export. Don't: a terracotta *+ Add text* beside a terracotta Export.
+
+### The stage
+
+A true grey, no hue (`#d9d9d9` light, `#2c2c2c` dark), so a design's colours read as they
+export. Mid-light in light mode, so a white design still has an edge and a black one sits
+calmly; a dark grey a step above the panels in dark mode, so a black design has an edge.
+Never tinted, never a gradient, never the colour field.
+
+### The selection on the canvas
+
+Neither the accent nor the chrome's ink, and the same in both themes, because the design
+under it can be any colour: a **white 1.5px line between two dark keylines**
+(`--c-select-line`, `--c-select-keyline`), **white grips with a dark edge and a small
+shadow** (`--c-select-grip-edge`, `--c-select-grip-shadow`). The hover outline, the snap
+guides and the motion path use the same pair. It shows on a white poster, a black one and
+a photograph alike.
+
 ## Components
 
 Each is a class in `@layer components`, so a utility beside it (a size, a margin) still
@@ -127,7 +233,8 @@ wins. Give every control hover (on devices that hover), active and `:focus-visib
 
 | Component | Class | Rule |
 | --- | --- | --- |
-| Primary button | `ui-btn ui-btn--primary` | Terracotta pill, white words, a soft shadow of its own colour. One per place. |
+| CTA button | `ui-btn ui-btn--cta` | The screen's one main action — Export. Terracotta pill, white words, a soft shadow of its own colour. The only accent button in the studio (D-176). |
+| Primary button | `ui-btn ui-btn--primary` | A panel's one main action. Terracotta on the landing page; an ink pill in the studio. One per place. |
 | Secondary | `ui-btn ui-btn--secondary` | Panel pill with a hairline; hover deepens the hairline. |
 | Quiet | `ui-btn ui-btn--quiet` | No fill until hovered (`--c-sunk`). Close, Cancel in a bar. |
 | Danger | `ui-btn ui-btn--danger` | Hairline pill, danger words; hover tints. Never filled red. |
@@ -143,7 +250,7 @@ wins. Give every control hover (on devices that hover), active and `:focus-visib
 | Menu | `glass ui-menu` + `ui-menu-item` | Strong frost, `--r-lg`, items with their own radius and a sunk hover. |
 | Dialog | `glass ui-dialog` over `scrim` | Strong frost, `--r-xl`, Archivo title, actions as pills. |
 | Bottom sheet | `glass ui-dialog` (phone: `rounded-t-2xl`) | Strong frost, grab bar, round close. |
-| Notice | `glass ui-toast` | Strong frost pill; a dot in the accent (danger when urgent). |
+| Notice | `glass ui-toast` | Strong frost pill; an ink-muted dot (danger when urgent). Sits centred at the foot of the stage (`data-toast-anchor`), over the picture's margin, never over a control (D-176). |
 | Bars | `glass-bar` | Top bar, phone top bar, phone toolbar and selection rows: the frost's tint over the colour field, hairline, no shadow, no blur (nothing passes under a bar) and no stacking context (it would trap the windows a bar opens). |
 
 ## Motion
@@ -177,7 +284,9 @@ wins. Give every control hover (on devices that hover), active and `:focus-visib
 
 | Do | Don't |
 | --- | --- |
-| One terracotta primary per panel or dialog. | Terracotta badges on every card, or two primaries side by side. |
+| In the studio, terracotta on Export and focus only. | A terracotta "+ Add text", tab rule or slider in the studio. |
+| One primary per panel or dialog (ink in the studio). | Terracotta badges on every card, or two primaries side by side. |
+| A true-grey stage; white-and-keyline selection. | A tinted stage, or a selection in the accent that vanishes on a red design. |
 | Ink fill for "chosen" filters and labels. | Accent fill for every chosen state. |
 | Frost the bar, the menu, the sheet. | Frost a panel, a card or a field. |
 | Solid panel under any text people read at length. | Text straight on the colour field. |
@@ -191,9 +300,10 @@ wins. Give every control hover (on devices that hover), active and `:focus-visib
 
 - **UX1** — the landing page can use the colour field at full strength, `font-headline`
   at display sizes (tighten to `-0.035em`), and the glass for the product pictures.
-- **UX2** — the studio frame: the panels (library, inspector), the timeline and the
-  phone's transport (`PhoneLayout`) still use their own markup; move them onto these
-  classes. The pane resizers and the scrub bar need the `ui-range` look.
+- **UX2** — done (D-176): Studio calm, the accent budget, the true-grey stage, the
+  neutral selection; the phone's transport and timeline summary, the scrub bar
+  (`ui-range ui-range--scrub`) and the pane resizers on the shared classes; notices at
+  the foot of the stage.
 - **UX3** — the pickers (element, sound, effect, photos), the export window and the
   projects list have their own filter chips and cards: move them to `ui-chip`/`chip-on`,
   `glass ui-dialog` and the card rule (panel, hairline, `--r-lg`, `--shadow-md` on hover).

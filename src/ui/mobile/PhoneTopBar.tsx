@@ -67,7 +67,8 @@ export function PhoneTopBar(): React.JSX.Element {
         data-tour="export"
         className="flex h-11 shrink-0 items-center"
       >
-        <span className="ui-btn ui-btn--primary min-h-8 px-4 text-[13px]">Export</span>
+        {/* The one main action, in the accent (D-176). */}
+        <span className="ui-btn ui-btn--cta min-h-8 px-4 text-[13px]">Export</span>
       </button>
     </header>
   );

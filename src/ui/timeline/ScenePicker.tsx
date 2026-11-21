@@ -175,7 +175,7 @@ export function ScenePicker({
             onChange={(event) => { setQuery(event.target.value); }}
             placeholder={mode === 'add' && source === 'mine' ? 'Search your images' : 'Search designs'}
             aria-label={mode === 'add' && source === 'mine' ? 'Search your images' : 'Search designs'}
-            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-accent focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
+            className="order-last min-h-11 w-full rounded-md border border-edge bg-panel-alt px-2 py-1.5 text-[14px] sm:min-h-0 focus:border-focus focus:outline-none sm:order-none sm:w-48 sm:py-1 sm:text-[12px]"
           />
           <button
             type="button"

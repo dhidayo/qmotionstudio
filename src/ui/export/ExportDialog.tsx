@@ -331,7 +331,8 @@ export function ExportDialog({ onClose }: { onClose: () => void }): React.JSX.El
           ) : (
             <>
               <Button onClick={onClose}>Close</Button>
-              <Button variant="accent" onClick={run} disabled={blocked || formats === null}>
+              {/* The window's one main action keeps the accent, as Export does in the bar (D-176). */}
+              <Button variant="cta" onClick={run} disabled={blocked || formats === null}>
                 {phase.kind === 'done' ? 'Export again' : 'Export'}
               </Button>
             </>
@@ -602,7 +603,7 @@ function ImageExport({
 
       <div className="flex gap-1">
         <Button onClick={onClose}>Close</Button>
-        <Button variant="accent" onClick={run} disabled={state.kind === 'running' || locked}>
+        <Button variant="cta" onClick={run} disabled={state.kind === 'running' || locked}>
           {state.kind === 'done' ? 'Export again' : 'Export image'}
         </Button>
       </div>

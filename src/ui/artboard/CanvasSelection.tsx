@@ -980,7 +980,7 @@ export function CanvasSelection({
             key={`hover-${target.key}`}
             aria-hidden
             className="pointer-events-none absolute rounded-[2px] border border-dashed"
-            style={{ ...boxStyle(target.box, px), borderColor: 'var(--c-accent)', opacity: 0.6 }}
+            style={{ ...boxStyle(target.box, px), borderColor: 'var(--c-select-line)', boxShadow: HOVER_KEYLINES, opacity: 0.75 }}
           />
         ),
       )}
@@ -993,8 +993,8 @@ export function CanvasSelection({
           className="pointer-events-none absolute"
           style={
             guide.axis === 'x'
-              ? { left: px(guide.at), top: 0, width: 1, height: '100%', background: 'var(--c-accent)' }
-              : { top: px(guide.at), left: 0, height: 1, width: '100%', background: 'var(--c-accent)' }
+              ? { left: px(guide.at), top: 0, width: 1, height: '100%', background: 'var(--c-select-line)', boxShadow: GUIDE_KEYLINE }
+              : { top: px(guide.at), left: 0, height: 1, width: '100%', background: 'var(--c-select-line)', boxShadow: GUIDE_KEYLINE }
           }
         />
       ))}
@@ -1023,7 +1023,7 @@ export function CanvasSelection({
           <span
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-[2px]"
-            style={{ outline: '1.5px solid var(--c-accent)', outlineOffset: -1 }}
+            style={{ outline: '1.5px solid var(--c-select-line)', outlineOffset: -1, boxShadow: BOX_KEYLINES }}
           />
 
           {gripsOf(selected).corners.map((corner) => (
@@ -1041,8 +1041,9 @@ export function CanvasSelection({
                   top: -ROTATE_OFFSET_PX - 5,
                   width: 10,
                   height: 10,
-                  background: 'var(--c-accent)',
-                  borderColor: 'var(--c-panel)',
+                  background: 'var(--c-select-line)',
+                  borderColor: 'var(--c-select-grip-edge)',
+                  boxShadow: 'var(--c-select-grip-shadow)',
                   transform: `rotate(${-selected.box.rotation}deg)`,
                 }}
               />
@@ -1143,6 +1144,17 @@ function findSlotText(layers: readonly Layer[], key: string, styleOf?: string): 
  * second, subtly different hit test in the DOM — one that is 8px wide when the
  * finger needs 13 — and the two would disagree at exactly the edges.
  */
+/*
+ * The selection is neither the accent nor the chrome's ink (D-176): a white
+ * line between two dark keylines, and white grips with a dark edge, so it
+ * shows on any design — a white poster, a black one, a photograph. "The work
+ * area shouldn't be distracting", and a design's own colours must not hide
+ * what is chosen. The same in both themes, since the design under it is.
+ */
+const BOX_KEYLINES = '0 0 0 1.5px var(--c-select-keyline), inset 0 0 0 2px var(--c-select-keyline)';
+const HOVER_KEYLINES = '0 0 0 1px var(--c-select-keyline), inset 0 0 0 1px var(--c-select-keyline)';
+const GUIDE_KEYLINE = '0 0 0 0.5px var(--c-select-keyline)';
+
 function Dot({ grip, rotation }: { grip: Grip; rotation: number }): React.JSX.Element {
   const d = DIRECTION[grip];
   return (
@@ -1155,8 +1167,9 @@ function Dot({ grip, rotation }: { grip: Grip; rotation: number }): React.JSX.El
         top: `calc(${((d.y + 1) / 2) * 100}% - 4px)`,
         width: 8,
         height: 8,
-        background: 'var(--c-panel)',
-        borderColor: 'var(--c-accent)',
+        background: 'var(--c-select-line)',
+        borderColor: 'var(--c-select-grip-edge)',
+        boxShadow: 'var(--c-select-grip-shadow)',
         // Keeps the dots round and level however the box is turned.
         transform: `rotate(${-rotation}deg)`,
       }}
@@ -1499,7 +1512,9 @@ function MotionPath({
         <polyline
           points={points.map((point) => `${point.x},${point.y}`).join(' ')}
           fill="none"
-          stroke="var(--c-accent)"
+          stroke="var(--c-select-line)"
+          // The dark keyline as a shadow of the one line, so it reads on light designs too (D-176).
+          style={{ filter: 'drop-shadow(0 0 1px var(--c-select-keyline))' }}
           strokeWidth={1.5}
           strokeDasharray="5 4"
           opacity={0.85}
@@ -1512,8 +1527,8 @@ function MotionPath({
           cx={point.x}
           cy={point.y}
           r={index === here ? 5 : 3.5}
-          fill={index === here ? 'var(--c-accent)' : 'var(--c-panel)'}
-          stroke="var(--c-accent)"
+          fill={index === here ? 'var(--c-select-grip-edge)' : 'var(--c-select-line)'}
+          stroke={index === here ? 'var(--c-select-line)' : 'var(--c-select-grip-edge)'}
           strokeWidth={1.5}
         />
       ))}

@@ -18,6 +18,8 @@
   --color-accent-hover: var(--c-accent-hover);
   --color-accent-ink: var(--c-accent-ink);
   --color-accent-soft: var(--c-accent-soft);
+  --color-cta: var(--c-cta);
+  --color-focus: var(--c-focus);
   --color-pro: var(--c-pro);
   --color-pro-soft: var(--c-pro-soft);
   --color-danger: var(--c-danger);
@@ -194,6 +196,16 @@
     color: var(--btn-primary-ink);
     box-shadow: var(--btn-primary-shadow);
   }
+  /*
+   * The screen's one main action (D-176): Export. In the studio the accent is
+   * spent here and on the focus ring only, so a panel's own primary is ink;
+   * outside it the two look the same.
+   */
+  .ui-btn--cta {
+    background-color: var(--c-cta);
+    color: var(--c-cta-ink);
+    box-shadow: var(--btn-cta-shadow);
+  }
   .ui-btn--secondary {
     background-color: var(--btn-secondary-bg);
     border-color: var(--btn-secondary-edge);
@@ -211,6 +223,9 @@
   @media (hover: hover) {
     .ui-btn--primary:hover:not(:disabled) {
       background-color: var(--btn-primary-bg-hover);
+    }
+    .ui-btn--cta:hover:not(:disabled) {
+      background-color: var(--c-cta-hover);
     }
     .ui-btn--secondary:hover:not(:disabled) {
       background-color: var(--c-panel-alt);
@@ -345,13 +360,14 @@
   .ui-field::placeholder {
     color: var(--c-ink-faint);
   }
+  /* A field's focus is the focus ring's colour, the accent (D-176). */
   .ui-field:focus {
     outline: none;
-    border-color: var(--c-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-accent) 22%, transparent);
+    border-color: var(--c-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-focus) 22%, transparent);
   }
 
-  /* ── Slider: a hairline track and a soft thumb in the accent ── */
+  /* ── Slider: a hairline track and a soft thumb in the accent (ink in the studio, D-176) ── */
   .ui-range {
     -webkit-appearance: none;
     appearance: none;
@@ -394,18 +410,23 @@
   .ui-range:focus-visible {
     outline-offset: 1px;
   }
+  /*
+   * The scrub bar's slider (`ui-range--scrub`, D-176) keeps its 16px thumb on
+   * touch too: the picture moment's mark is placed against a thumb of that
+   * size, and on a phone the whole 28px-tall track is there to land on.
+   */
   @media (pointer: coarse) {
     .ui-range {
       height: 32px;
     }
-    .ui-range::-webkit-slider-thumb {
+    .ui-range:not(.ui-range--scrub)::-webkit-slider-thumb {
       width: 22px;
       height: 22px;
       margin-top: -9px;
     }
   }
 
-  /* ── Tabs: words, the chosen one in ink over an accent rule ── */
+  /* ── Tabs: words, the chosen one in ink over an accent rule (ink in the studio, D-176) ── */
   .ui-tab {
     color: var(--c-ink-faint);
     box-shadow: inset 0 -2px 0 transparent;

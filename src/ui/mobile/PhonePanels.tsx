@@ -215,7 +215,7 @@ function ProjectPanel({ onClose }: { onClose: () => void }): React.JSX.Element {
         onChange={(event) => { setDraft(event.target.value); }}
         onBlur={() => { void rename(draft); }}
         onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }}
-        className="mt-1 w-full rounded-lg border border-edge bg-panel-alt px-3 py-2 text-[15px] focus:border-accent focus:outline-none"
+        className="mt-1 w-full rounded-lg border border-edge bg-panel-alt px-3 py-2 text-[15px] focus:border-focus focus:outline-none"
       />
 
       <div className="mt-4 text-[12px] text-ink-muted">Mode</div>

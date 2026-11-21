@@ -138,7 +138,7 @@ export function LibraryRail({
             onChange={(e) => { setSearch(e.target.value); }}
             placeholder="Search designs"
             aria-label="Search templates"
-            className={`min-w-0 flex-1 rounded-md border border-edge bg-panel-alt px-2 ${sheet ? 'h-10 text-[15px]' : 'h-8 text-[12px]'} placeholder:text-ink-faint focus:border-accent focus:outline-none`}
+            className={`min-w-0 flex-1 rounded-md border border-edge bg-panel-alt px-2 ${sheet ? 'h-10 text-[15px]' : 'h-8 text-[12px]'} placeholder:text-ink-faint focus:border-focus focus:outline-none`}
           />
           <button
             type="button"
@@ -397,9 +397,9 @@ function TemplateCard({
       )}
       {template.isNew === true && !locked && (
         <span
-          className="pointer-events-none absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide"
           // Ink, not the accent (D-174): a label on every card must not outshout the designs.
-          style={{ background: 'var(--chip-on-bg)', color: 'var(--chip-on-ink)' }}
+          // Ink words on the panel (D-176): an ink fill on every card was a white pill in dark mode.
+          className="pointer-events-none absolute right-1 top-1 rounded-full bg-panel px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-ink shadow-sm"
         >
           New
         </span>

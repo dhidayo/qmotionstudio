@@ -275,6 +275,162 @@
   --scrim: rgb(0 0 0 / 0.5);
 }
 
+/*
+ * Studio calm (D-176). The owner, after seeing Clay in the studio: "Think
+ * well if that color works perfectly for the work area; I guess it is perfect
+ * for landing page. But, the work area shouldn't be distracting … I need a
+ * product that will resonate well with a larger audience."
+ *
+ * So Clay's warmth stays on the landing page, and the studio — which sets
+ * data-surface="studio" on <html> while it is open (AppShell) — re-points the
+ * semantic layer once more:
+ *   - the chrome is near-neutral: off-white panels with only a whisper of
+ *     warmth, hairlines, ink words; a neutral charcoal in dark, not brown;
+ *   - the stage is a true grey, with no hue at all, so a design's colours
+ *     read as they will export, light designs and dark ones alike;
+ *   - the accent budget: terracotta is spent on the screen's one main action
+ *     (Export, `ui-btn--cta`, `--c-cta`) and on the focus ring, and nowhere
+ *     else. Everything that used to say "accent" for chosen, on or primary —
+ *     sliders, switches, chosen tiles and rows, the timeline's chosen clip,
+ *     the playhead, a panel's one primary button — now says it in ink: the
+ *     `accent` names are kept and re-pointed to ink, so no component changes
+ *     its markup to follow;
+ *   - the selection on the canvas is neither: a white line between two dark
+ *     keylines and white grips with a dark edge (--c-select-*), which shows
+ *     on any design, light or dark.
+ * It is on <html> rather than a wrapper so the menus, dialogs and notices the
+ * studio portals to <body> follow it too. Every pair is in DESIGN.md.
+ */
+:root {
+  /* Stone: the studio's off-whites, only a whisper of warmth. */
+  --p-stone-0: #fdfdfc;
+  --p-stone-0-rgb: 253 253 252;
+  --p-stone-50: #f6f5f3;
+  --p-stone-100: #efeeeb;
+  --p-stone-150: #ebeae7;
+  --p-stone-200: #e8e6e2;
+  --p-stone-250: #e6e5e1;
+  --p-stone-400: #d8d5d0;
+  --p-stone-600: #8b8883;
+  --p-stone-750: #5e5b56;
+  --p-stone-800: #53504c;
+  --p-stone-850: #3a3936;
+  --p-stone-950: #1c1b1a;
+
+  /* Graphite: the studio's dark surfaces, a neutral charcoal. */
+  --p-graphite-950: #181817;
+  --p-graphite-900: #201f1e;
+  --p-graphite-900-rgb: 32 31 30;
+  --p-graphite-850: #292827;
+  --p-graphite-840: #2a2928;
+  --p-graphite-800: #33322f;
+  --p-graphite-780: #343331;
+  --p-graphite-760: #353432;
+  --p-graphite-700: #484644;
+  --p-graphite-500: #7b7874;
+  --p-graphite-300: #a9a5a0;
+  --p-graphite-200: #c3c0bb;
+  --p-graphite-100: #d9d7d3;
+  --p-graphite-50: #f2f1ee;
+
+  /* True greys for the stage: no hue to argue with a design's colours. A
+     mid-light grey in light, so a white design has an edge and a black one
+     sits calmly; a dark grey in dark, a step above the panels. */
+  --p-grey-stage-light: #d9d9d9;
+  --p-grey-stage-dark: #2c2c2c;
+
+  /* Outside the studio the main action is simply the accent. */
+  --c-cta: var(--c-accent);
+  --c-cta-hover: var(--c-accent-hover);
+  --c-cta-ink: var(--c-accent-ink);
+  --btn-cta-shadow: var(--btn-primary-shadow);
+
+  /* The selection on the canvas: the same in both themes, because the
+     design under it can be any colour. */
+  --c-select-line: #ffffff;
+  --c-select-keyline: rgb(0 0 0 / 0.55);
+  --c-select-grip-edge: #1c1b1a;
+  --c-select-grip-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+:root[data-surface='studio'] {
+  --c-bg: var(--p-stone-50);
+  --c-panel: var(--p-stone-0);
+  --c-panel-rgb: var(--p-stone-0-rgb);
+  --c-panel-alt: var(--p-stone-50);
+  --c-sunk: var(--p-stone-100);
+  --c-sunk-hover: var(--p-stone-250);
+  --c-edge: var(--p-stone-200);
+  --c-edge-strong: var(--p-stone-400);
+  --c-edge-field: var(--p-stone-600);
+  --c-ink: var(--p-stone-950);
+  --c-ink-muted: var(--p-stone-800);
+  --c-ink-faint: var(--p-stone-750);
+
+  /* The one accent, for Export and focus only. */
+  --c-cta: var(--p-clay-600);
+  --c-cta-hover: var(--p-clay-700);
+  --c-cta-ink: #ffffff;
+  --c-focus: var(--c-cta);
+
+  /* "Accent" in the studio is emphasis in ink: chosen, on, a panel's primary. */
+  --c-accent: var(--c-ink);
+  --c-accent-hover: var(--p-stone-850);
+  --c-accent-ink: #ffffff;
+  --c-accent-soft: var(--p-stone-150);
+
+  --c-stage: var(--p-grey-stage-light);
+
+  /* No colour field behind the work. */
+  --c-field-accent: transparent;
+  --c-field-warm: transparent;
+
+  /* Shadows lose their warmth too. */
+  --shadow-sm: 0 1px 2px rgb(20 20 20 / 0.06);
+  --shadow-md: 0 1px 2px rgb(20 20 20 / 0.05), 0 8px 22px -12px rgb(20 20 20 / 0.22);
+  --shadow-lg: 0 2px 6px rgb(20 20 20 / 0.06), 0 26px 50px -22px rgb(20 20 20 / 0.34);
+  --shadow-lip: inset 0 1px 0 rgb(255 255 255 / 0.65);
+  --glass-shadow: var(--shadow-lip), 0 18px 40px -24px rgb(20 20 20 / 0.38);
+  --scrim: rgb(20 20 20 / 0.28);
+
+  /* An ink primary needs no glow; the one CTA keeps a soft one. */
+  --btn-primary-shadow: none;
+  --btn-cta-shadow: 0 8px 18px -12px var(--c-cta);
+}
+
+:root[data-surface='studio'][data-theme='dark'] {
+  --c-bg: var(--p-graphite-950);
+  --c-panel: var(--p-graphite-900);
+  --c-panel-rgb: var(--p-graphite-900-rgb);
+  --c-panel-alt: var(--p-graphite-850);
+  --c-sunk: var(--p-graphite-840);
+  --c-sunk-hover: var(--p-graphite-780);
+  --c-edge: var(--p-graphite-760);
+  --c-edge-strong: var(--p-graphite-700);
+  --c-edge-field: var(--p-graphite-500);
+  --c-ink: var(--p-graphite-50);
+  --c-ink-muted: var(--p-graphite-200);
+  --c-ink-faint: var(--p-graphite-300);
+
+  --c-cta: var(--p-clay-400);
+  --c-cta-hover: var(--p-clay-300);
+  --c-cta-ink: var(--p-clay-950);
+
+  --c-accent-hover: var(--p-graphite-100);
+  --c-accent-ink: var(--p-stone-950);
+  --c-accent-soft: var(--p-graphite-800);
+
+  --c-stage: var(--p-grey-stage-dark);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 0.4), 0 10px 24px -12px rgb(0 0 0 / 0.7);
+  --shadow-lg: 0 2px 8px rgb(0 0 0 / 0.45), 0 28px 54px -22px rgb(0 0 0 / 0.85);
+  --shadow-lip: inset 0 1px 0 rgb(255 255 255 / 0.05);
+  --glass-edge: rgb(255 255 255 / 0.08);
+  --glass-shadow: var(--shadow-lip), 0 22px 48px -22px rgb(0 0 0 / 0.8);
+  --scrim: rgb(0 0 0 / 0.5);
+}
+
 /* Where the browser cannot blur, or the person asks for less transparency,
    what floats is solid: legibility first. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {

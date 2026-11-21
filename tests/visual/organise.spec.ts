@@ -58,9 +58,10 @@ test('a section folds under its header band and stays folded after a reload', as
   const bar = page.getByRole('button', { name: 'Looks', exact: true });
   await expect(bar).toHaveAttribute('aria-expanded', 'true');
   await expect(page.locator('[data-look="cream"]')).toBeVisible();
-  // D-174: the soft editorial header band (the sunk paper, --c-sunk), where D-130 had navy.
+  // D-174: the soft editorial header band (--c-sunk), where D-130 had navy; in the
+  // studio's calm palette (D-176) the near-neutral stone, not the warm paper.
   const band = await bar.evaluate((el) => getComputedStyle(el.closest('.brand-surface') ?? el).backgroundColor);
-  expect(band).toBe('rgb(241, 235, 226)');
+  expect(band).toBe('rgb(239, 238, 235)');
 
   await bar.click();
   await expect(bar).toHaveAttribute('aria-expanded', 'false');

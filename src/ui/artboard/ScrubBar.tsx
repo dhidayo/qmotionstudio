@@ -146,7 +146,8 @@ export function ScrubBar({
             }}
             aria-label="Scrub"
             // A phone's thumb needs something taller than a hairline to land on.
-            className={`${phone ? 'h-7' : 'h-1'} w-full accent-[var(--c-accent)]`}
+            // The shared slider (D-176), its thumb in ink: the accent is for Export.
+            className={`ui-range ui-range--scrub ${phone ? 'h-7' : 'h-1'} w-full`}
           />
           {pictureMs !== null && durationMs > 0 && (
             <PictureMark
@@ -269,9 +270,10 @@ function FrameButtons({
           data-use-frame
           onClick={onUse}
           title="Rest the design on this frame, and save it when you export an image"
-          className="flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-accent bg-accent-soft px-2.5 text-[12px] font-semibold text-accent transition-colors hover:bg-accent hover:text-accent-ink"
+          // A secondary pill in ink (D-176): one action among several, not the screen's main one.
+          className="ui-btn ui-btn--secondary ui-btn--sm min-h-7 shrink-0 whitespace-nowrap text-[12px]"
         >
-          <span aria-hidden className="block size-2 rotate-45 rounded-[2px]" style={{ background: 'var(--c-accent)' }} />
+          <span aria-hidden className="block size-2 rotate-45 rounded-[2px] bg-ink" />
           Use this frame
         </button>
       )}
@@ -281,7 +283,7 @@ function FrameButtons({
           data-reset-frame
           onClick={onReset}
           title="Go back to the design’s own picture moment"
-          className="flex h-7 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-strong bg-panel px-2.5 text-[12px] font-medium text-ink transition-colors hover:border-accent hover:bg-accent-soft"
+          className="ui-btn ui-btn--secondary ui-btn--sm min-h-7 shrink-0 whitespace-nowrap text-[12px] font-medium"
         >
           Reset frame
         </button>

@@ -127,13 +127,17 @@ export function AddBar({
  * colour of the words and border differs, and they all hover alike, to the
  * accent's soft tint with an accent border. + Photos used to be a solid
  * accent button whose hover the shared one overrode, white on white.
+ *
+ * In the studio "accent" is ink (D-176): "the work area shouldn't be
+ * distracting", so + Photos is told apart by its ink words, weight and
+ * darker border, and the terracotta is kept for Export alone.
  */
 const CHIP = 'ui-chip h-7 shrink-0 px-3 text-[12px] font-medium';
 /** Templates, and every add item that is not lit: ink, with a clear border. */
 const PLAIN = '';
-/** + Photos, the main action, and + Video mode: the accent's words and border, nothing filled. */
+/** + Photos, the main action, and + Video mode: the accent's words and border (ink in the studio), nothing filled. */
 const ACCENT = 'ui-chip--accent';
-/** + Motion with something selected: the accent, tinted, so it says it is ready. */
+/** + Motion with something selected: the accent, tinted (ink on grey in the studio), so it says it is ready. */
 const READY = 'ui-chip--ready';
 
 /**

@@ -437,14 +437,19 @@ export function Button({
 }: {
   onClick: () => void;
   children: ReactNode;
-  variant?: 'default' | 'danger' | 'accent';
+  variant?: 'default' | 'danger' | 'accent' | 'cta';
   disabled?: boolean;
 }): React.JSX.Element {
-  // The shared buttons (D-174): a hairline secondary, a danger, and the accent for the one main action.
+  /*
+   * The shared buttons (D-174): a hairline secondary, a danger, a panel's one
+   * primary (`accent`, ink in the studio), and `cta` for the screen's one main
+   * action, Export, the only one in the accent (D-176).
+   */
   const styles: Record<string, string> = {
     default: 'ui-btn--secondary',
     danger: 'ui-btn--danger',
     accent: 'ui-btn--primary',
+    cta: 'ui-btn--cta',
   };
 
   return (
