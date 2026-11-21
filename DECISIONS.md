@@ -4084,4 +4084,19 @@ Rejected:
 - Lowering §9's export-size rule, which would make exports soft.
 - Caching drawn shadows to raise the frame rate on this GPU-less machine: not contained, and not representative of a phone.
 
+## D-173 — a phone downloads the phone's editor, and the rest when it is wanted
 
+Cold load on a phone (`npm run measure:phone`: 390×844, CPU 4×, Fast 3G, production build) went from 4.38s to 3.91s, median of five runs. The entry chunk went from 282KB to 184KB compressed, and a cold load from 403KB to 341KB.
+
+**Each device's layout is a chunk of its own** (`src/ui/shell/layouts.ts`). The phone's layout and the wide one (library, inspector, top bar) are chosen by `useLayout`. The build names each in the page as a `modulepreload` behind a media query matching `useLayout`'s breaks (`deploy/layouts.ts`, checked by `useLayout.test.ts`), so a device fetches only its own, alongside the editor. The start-up screen stays until the layout has arrived, so the editor still appears whole. A layout change after opening keeps the current layout on screen until the other has downloaded.
+
+**Everything a tap opens is fetched on first use or when idle** (`src/ui/shell/parts.tsx`, `prefetch.ts`): the export window, project list, effect, element, photo and sound pickers, shortcuts, a video's timeline and the phone's panels. Most likely first, one at a time, 1.5s after the first frame, never when the browser asks to save data. A part already here draws in the same frame. One that did not download says so: a window closes with the D-171 notice, a layout or the timeline shows the message in its place, both with Reload. The service worker precaches every new chunk, and `offline.spec` passes.
+
+**Fonts are unchanged.** The interface uses the system font. The canvas needs both faces, which the opening designs use, and both are already the only files preloaded.
+
+**2.5s is not reachable this way on Fast 3G.** Of the 3.9s, the page is 0.6s, the downloads about 2.7s (184KB editor, 37KB layout and opening design, 82KB fonts, 9KB CSS) and running the script and drawing about 0.55s. The budget allows about 170KB before the first frame, and fonts and CSS are already 100KB. Brotli on the real host saves about another 34KB. Next would be loading effect and sticker art on demand, with a load-before-drawing step like the templates have (D-029), including in the export worker.
+
+Rejected:
+- Deferring Inter or Archivo: every design draws with them, and §3E forbids a frame in a fallback face.
+- A lazy catalogue: the library and the design list read it synchronously (D-029).
+- Lazy-loading the context menu: it tracks the pointer that opens it.
